@@ -42,6 +42,4 @@ jobs:
           git push origin :refs/tags/data-latest >/dev/null 2>&1 || true
           gh release create data-latest "$ZIP" "$SUM" \
             --title "ExitTrace data pack (latest)" \
-            --notes "$NOTES
-
-Same bytes as data-${DATE}."
+            --notes "${NOTES} Same bytes as data-${DATE}."

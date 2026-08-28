@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import fs from "fs";
+import path from "path";
 import { test } from "node:test";
+import { fileURLToPath } from "url";
 
-// Patterns are encoded so this file does not contain the raw host strings.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Encoded so this file does not contain the raw host strings.
 const PATTERNS = [
   "tail" + "scale",
   "Grok" + "Build",
@@ -20,34 +24,27 @@ const PATTERNS = [
   "Wire" + "Guard",
 ];
 
+const SKIP_DIR = new Set([".git", "node_modules", "dist"]);
+const SKIP_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+
+function walk(dir, out = []) {
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP_DIR.has(ent.name)) continue;
+    const p = path.join(dir, ent.name);
+    if (ent.isDirectory()) walk(p, out);
+    else if (!SKIP_EXT.has(path.extname(ent.name).toLowerCase())) out.push(p);
+  }
+  return out;
+}
+
 test("public tree has no private-host strings", () => {
-  const args = [
-    "-n",
-    "-F",
-    "--hidden",
-    "-g",
-    "!node_modules/**",
-    "-g",
-    "!.git/**",
-    "-g",
-    "!dist/**",
-    "-g",
-    "!*.jpg",
-    "-g",
-    "!*.png",
-    "-g",
-    "!*.webp",
-    "-g",
-    "!tests/sanitize.test.mjs",
-  ];
-  for (const p of PATTERNS) {
-    args.push("-e", p);
+  const hits = [];
+  for (const file of walk(ROOT)) {
+    if (file.endsWith(`${path.sep}tests${path.sep}sanitize.test.mjs`)) continue;
+    const text = fs.readFileSync(file, "utf8");
+    for (const pat of PATTERNS) {
+      if (text.includes(pat)) hits.push(`${path.relative(ROOT, file)}: ${pat}`);
+    }
   }
-  try {
-    const out = execFileSync("rg", args, { encoding: "utf8" });
-    assert.equal(out, "", `sanitize hits:\n${out}`);
-  } catch (err) {
-    if (err.status === 1) return;
-    throw err;
-  }
+  assert.equal(hits.join("\n"), "", hits.join("\n"));
 });
