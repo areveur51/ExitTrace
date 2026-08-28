@@ -1,0 +1,2136 @@
+{
+  "meta": {
+    "title": "ExitTrace seed",
+    "since": "2017",
+    "note": "Verified seed only. Not exhaustive. Two news citations on each person row. Dog-comm source URLs are citations; snapshots are stored locally.",
+    "generated": "2026-08-28"
+  },
+  "people": [
+    {
+      "id": "james-comey",
+      "category": "firings",
+      "name": "James Comey",
+      "role": "Director, Federal Bureau of Investigation",
+      "event_date": "2017-05-09",
+      "death_date": null,
+      "photo": "/media/people/james-comey.jpg",
+      "photo_credit": "FBI official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Removed as FBI director by President Trump.",
+      "sources": [
+        {
+          "title": "F.B.I. Director James Comey Is Fired by Trump",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/05/09/us/politics/james-comey-fired-fbi.html",
+          "date": "2017-05-09"
+        },
+        {
+          "title": "FBI Director James Comey sacked by Trump",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-39866767",
+          "date": "2017-05-10"
+        }
+      ]
+    },
+    {
+      "id": "matt-lauer",
+      "category": "firings",
+      "name": "Matt Lauer",
+      "role": "Co-anchor, NBC Today",
+      "event_date": "2017-11-29",
+      "death_date": null,
+      "photo": "/media/people/matt-lauer.jpg",
+      "photo_credit": "David Shankbone, CC BY 3.0, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Fired by NBC News after a workplace complaint.",
+      "sources": [
+        {
+          "title": "Matt Lauer, Longtime ‘Today’ Anchor, Is Fired",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/11/29/business/media/matt-lauer-fired.html",
+          "date": "2017-11-29"
+        },
+        {
+          "title": "Matt Lauer fired from Today show",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-42170102",
+          "date": "2017-11-29"
+        }
+      ]
+    },
+    {
+      "id": "rex-tillerson",
+      "category": "firings",
+      "name": "Rex Tillerson",
+      "role": "U.S. Secretary of State",
+      "event_date": "2018-03-13",
+      "death_date": null,
+      "photo": "/media/people/rex-tillerson.jpg",
+      "photo_credit": "U.S. Department of State official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located for the exit date.",
+      "net_worth_source": "",
+      "summary": "Dismissed as secretary of state; Mike Pompeo was nominated as successor.",
+      "sources": [
+        {
+          "title": "Trump Ousts Tillerson, and Will Replace Him With C.I.A. Chief Pompeo",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/03/13/us/politics/tillerson-trump-pompeo.html",
+          "date": "2018-03-13"
+        },
+        {
+          "title": "Rex Tillerson: Trump fires secretary of state",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-43388614",
+          "date": "2018-03-13"
+        }
+      ]
+    },
+    {
+      "id": "andrew-mccabe",
+      "category": "firings",
+      "name": "Andrew McCabe",
+      "role": "Deputy Director, Federal Bureau of Investigation",
+      "event_date": "2018-03-16",
+      "death_date": null,
+      "photo": "/media/people/andrew-mccabe.jpg",
+      "photo_credit": "FBI official photo, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Fired hours before he was eligible to retire, after a Justice Department inspector general report.",
+      "sources": [
+        {
+          "title": "F.B.I. Official Andrew McCabe Is Fired, and His Retirement Benefits Are in Question",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/03/16/us/politics/andrew-mccabe-fbi-fired.html",
+          "date": "2018-03-16"
+        },
+        {
+          "title": "FBI's McCabe fired by Sessions days before retirement",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/us-usa-trump-mccabe-idUSKCN1GS1F1",
+          "date": "2018-03-17"
+        }
+      ]
+    },
+    {
+      "id": "les-moonves",
+      "category": "firings",
+      "name": "Leslie Moonves",
+      "role": "Chairman and CEO, CBS",
+      "event_date": "2018-09-09",
+      "death_date": null,
+      "photo": "/media/people/les-moonves.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Stepped down after The New Yorker published new sexual-misconduct allegations.",
+      "sources": [
+        {
+          "title": "Leslie Moonves Resigns From CBS After New Sexual Misconduct Claims",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/09/09/business/les-moonves-cbs.html",
+          "date": "2018-09-09"
+        },
+        {
+          "title": "Leslie Moonves: CBS boss steps down amid allegations",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-45471450",
+          "date": "2018-09-10"
+        }
+      ]
+    },
+    {
+      "id": "john-bolton",
+      "category": "firings",
+      "name": "John Bolton",
+      "role": "U.S. National Security Advisor",
+      "event_date": "2019-09-10",
+      "death_date": null,
+      "photo": "/media/people/john-bolton.jpg",
+      "photo_credit": "White House official photo, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Told by President Trump that his services were no longer needed.",
+      "sources": [
+        {
+          "title": "Trump Says He Fired John Bolton Amid Continuing Policy Clashes",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2019/09/10/us/politics/john-bolton-national-security-advisor.html",
+          "date": "2019-09-10"
+        },
+        {
+          "title": "John Bolton: Trump fires national security adviser",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-49650916",
+          "date": "2019-09-10"
+        }
+      ]
+    },
+    {
+      "id": "steve-easterbrook",
+      "category": "firings",
+      "name": "Steve Easterbrook",
+      "role": "President and CEO, McDonald's",
+      "event_date": "2019-11-03",
+      "death_date": null,
+      "photo": "",
+      "photo_credit": "World Economic Forum, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Fired for violating company policy after a relationship with an employee.",
+      "sources": [
+        {
+          "title": "McDonald’s Fires C.E.O. Steve Easterbrook After Relationship With Employee",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2019/11/03/business/mcdonalds-ceo-fired-steve-easterbrook.html",
+          "date": "2019-11-03"
+        },
+        {
+          "title": "McDonald's fires CEO Steve Easterbrook over relationship with employee",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/us-mcdonalds-ceo-idUSKBN1XD0FS",
+          "date": "2019-11-04"
+        }
+      ]
+    },
+    {
+      "id": "chris-cuomo",
+      "category": "firings",
+      "name": "Chris Cuomo",
+      "role": "Anchor, CNN",
+      "event_date": "2021-12-04",
+      "death_date": null,
+      "photo": "/media/people/chris-cuomo.jpg",
+      "photo_credit": "Gage Skidmore, CC BY-SA, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Fired after an investigation into help he gave his brother during a harassment scandal.",
+      "sources": [
+        {
+          "title": "CNN Fires Chris Cuomo",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2021/12/04/business/media/chris-cuomo-fired-cnn.html",
+          "date": "2021-12-04"
+        },
+        {
+          "title": "Chris Cuomo fired by CNN",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-59528524",
+          "date": "2021-12-05"
+        }
+      ]
+    },
+    {
+      "id": "jeff-zucker",
+      "category": "firings",
+      "name": "Jeff Zucker",
+      "role": "President, CNN Worldwide",
+      "event_date": "2022-02-02",
+      "death_date": null,
+      "photo": "",
+      "photo_credit": "David Shankbone, CC BY 3.0, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Resigned after failing to disclose a relationship with a colleague.",
+      "sources": [
+        {
+          "title": "Jeff Zucker Resigns From CNN",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/02/02/business/media/jeff-zucker-cnn.html",
+          "date": "2022-02-02"
+        },
+        {
+          "title": "CNN president Jeff Zucker resigns over relationship with colleague",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/us/cnn-president-jeff-zucker-resigns-over-relationship-with-colleague-2022-02-02/",
+          "date": "2022-02-02"
+        }
+      ]
+    },
+    {
+      "id": "bob-chapek",
+      "category": "firings",
+      "name": "Bob Chapek",
+      "role": "Chief Executive, The Walt Disney Company",
+      "event_date": "2022-11-20",
+      "death_date": null,
+      "photo": "/media/people/bob-chapek.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Board replaced him; Bob Iger returned as CEO.",
+      "sources": [
+        {
+          "title": "Disney Fires Bob Chapek and Brings Back Bob Iger as C.E.O.",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/11/20/business/disney-ceo-bob-iger.html",
+          "date": "2022-11-20"
+        },
+        {
+          "title": "Disney CEO Bob Chapek steps down, Bob Iger returns",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/business/media-telecom/disney-ceo-bob-chapek-steps-down-iger-returns-2022-11-20/",
+          "date": "2022-11-21"
+        }
+      ]
+    },
+    {
+      "id": "tucker-carlson",
+      "category": "firings",
+      "name": "Tucker Carlson",
+      "role": "Host, Fox News",
+      "event_date": "2023-04-24",
+      "death_date": null,
+      "photo": "/media/people/tucker-carlson.jpg",
+      "photo_credit": "Gage Skidmore / Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Fox News said he was no longer with the network.",
+      "sources": [
+        {
+          "title": "Fox News Fires Tucker Carlson",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/04/24/business/media/tucker-carlson-fox-news.html",
+          "date": "2023-04-24"
+        },
+        {
+          "title": "Tucker Carlson: Fox News announces host's departure",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-65377116",
+          "date": "2023-04-24"
+        }
+      ]
+    },
+    {
+      "id": "sam-altman",
+      "category": "firings",
+      "name": "Sam Altman",
+      "role": "Chief Executive, OpenAI",
+      "event_date": "2023-11-17",
+      "death_date": null,
+      "photo": "",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No contemporaneous Forbes or Bloomberg net-worth figure used here.",
+      "net_worth_source": "",
+      "summary": "Board removed him; he was reinstated days later. Row records the firing date.",
+      "sources": [
+        {
+          "title": "OpenAI’s Board Pushes Out Sam Altman, Its High-Profile C.E.O.",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/11/17/technology/openai-sam-altman-ousted.html",
+          "date": "2023-11-17"
+        },
+        {
+          "title": "OpenAI CEO Sam Altman ousted, outgoing chair says",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/technology/openai-ceo-sam-altman-stepping-down-2023-11-18/",
+          "date": "2023-11-18"
+        }
+      ]
+    },
+    {
+      "id": "travis-kalanick",
+      "category": "resignations",
+      "name": "Travis Kalanick",
+      "role": "Chief Executive, Uber",
+      "event_date": "2017-06-21",
+      "death_date": null,
+      "photo": "/media/people/travis-kalanick.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 2500000000,
+      "net_worth_note": "Forbes estimate around the 2017 exit year.",
+      "net_worth_source": "https://www.forbes.com/profile/travis-kalanick/",
+      "summary": "Resigned after investors demanded he step down.",
+      "sources": [
+        {
+          "title": "Uber Founder Travis Kalanick Resigns as C.E.O.",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/06/21/technology/uber-ceo-travis-kalanick.html",
+          "date": "2017-06-21"
+        },
+        {
+          "title": "Uber CEO Travis Kalanick resigns following months of crisis",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/us-uber-ceo-idUSKBN19C06B",
+          "date": "2017-06-21"
+        }
+      ]
+    },
+    {
+      "id": "sean-spicer",
+      "category": "resignations",
+      "name": "Sean Spicer",
+      "role": "White House Press Secretary",
+      "event_date": "2017-07-21",
+      "death_date": null,
+      "photo": "",
+      "photo_credit": "White House / Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Resigned after Anthony Scaramucci was named communications director.",
+      "sources": [
+        {
+          "title": "Sean Spicer Resigns as White House Press Secretary",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/07/21/us/politics/sean-spicer-resigns-as-white-house-press-secretary.html",
+          "date": "2017-07-21"
+        },
+        {
+          "title": "Sean Spicer resigns as White House press secretary",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-40685747",
+          "date": "2017-07-21"
+        }
+      ]
+    },
+    {
+      "id": "jeff-sessions",
+      "category": "resignations",
+      "name": "Jeff Sessions",
+      "role": "U.S. Attorney General",
+      "event_date": "2018-11-07",
+      "death_date": null,
+      "photo": "/media/people/jeff-sessions.jpg",
+      "photo_credit": "DOJ official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Official financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Submitted a resignation at the president's request.",
+      "sources": [
+        {
+          "title": "Jeff Sessions Is Forced Out as Attorney General as Trump Installs Loyalist",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/11/07/us/politics/jeff-sessions-resigns.html",
+          "date": "2018-11-07"
+        },
+        {
+          "title": "Jeff Sessions forced out as US attorney general",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-46136212",
+          "date": "2018-11-07"
+        }
+      ]
+    },
+    {
+      "id": "jim-mattis",
+      "category": "resignations",
+      "name": "Jim Mattis",
+      "role": "U.S. Secretary of Defense",
+      "event_date": "2018-12-20",
+      "death_date": null,
+      "photo": "/media/people/jim-mattis.jpg",
+      "photo_credit": "Department of Defense official photo, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Official financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Resigned, citing disagreement over Syria withdrawal and alliances.",
+      "sources": [
+        {
+          "title": "Jim Mattis, Defense Secretary, Resigns in Protest of Trump’s Syria Decision",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/12/20/us/politics/jim-mattis-defense-secretary-trump.html",
+          "date": "2018-12-20"
+        },
+        {
+          "title": "Jim Mattis: US defence secretary resigns",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-46644841",
+          "date": "2018-12-21"
+        }
+      ]
+    },
+    {
+      "id": "theresa-may",
+      "category": "resignations",
+      "name": "Theresa May",
+      "role": "Prime Minister of the United Kingdom",
+      "event_date": "2019-06-07",
+      "death_date": null,
+      "photo": "/media/people/theresa-may.jpg",
+      "photo_credit": "UK Government official portrait, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Announced she would resign as Conservative leader after failing to pass a Brexit deal.",
+      "sources": [
+        {
+          "title": "Theresa May resigns over Brexit: What happened?",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/uk-politics-48550821",
+          "date": "2019-06-07"
+        },
+        {
+          "title": "UK PM May to resign on June 7 after Brexit failure",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/uk-britain-eu-may-idUKKCN1T80NN",
+          "date": "2019-05-24"
+        }
+      ]
+    },
+    {
+      "id": "andrew-cuomo",
+      "category": "resignations",
+      "name": "Andrew Cuomo",
+      "role": "Governor of New York",
+      "event_date": "2021-08-10",
+      "death_date": null,
+      "photo": "/media/people/andrew-cuomo.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "State financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Announced resignation after a state attorney general report on sexual harassment.",
+      "sources": [
+        {
+          "title": "Cuomo Resigns Amid Scandals, Ending Decade-Long Run in Disgrace",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2021/08/10/nyregion/andrew-cuomo-resigns.html",
+          "date": "2021-08-10"
+        },
+        {
+          "title": "Andrew Cuomo: New York governor to resign after harassment claims",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-58155263",
+          "date": "2021-08-10"
+        }
+      ]
+    },
+    {
+      "id": "boris-johnson",
+      "category": "resignations",
+      "name": "Boris Johnson",
+      "role": "Prime Minister of the United Kingdom",
+      "event_date": "2022-07-07",
+      "death_date": null,
+      "photo": "/media/people/boris-johnson.jpg",
+      "photo_credit": "UK Government official portrait, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Announced he would resign as Conservative leader after a wave of ministerial resignations.",
+      "sources": [
+        {
+          "title": "Boris Johnson resigns: PM quits after cabinet revolt",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/uk-politics-62079686",
+          "date": "2022-07-07"
+        },
+        {
+          "title": "UK's Johnson quits as PM, triggering contest to succeed him",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/uk/uks-johnson-expected-quit-after-wave-resignations-2022-07-07/",
+          "date": "2022-07-07"
+        }
+      ]
+    },
+    {
+      "id": "liz-truss",
+      "category": "resignations",
+      "name": "Liz Truss",
+      "role": "Prime Minister of the United Kingdom",
+      "event_date": "2022-10-20",
+      "death_date": null,
+      "photo": "/media/people/liz-truss.jpg",
+      "photo_credit": "UK Parliament official portrait, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Resigned after 45 days in office following market reaction to a mini-budget.",
+      "sources": [
+        {
+          "title": "Liz Truss resigns as prime minister after Tory revolt",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/uk-politics-63312057",
+          "date": "2022-10-20"
+        },
+        {
+          "title": "UK PM Truss resigns after failed budget blows up her government",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/uk/uk-pm-truss-face-questions-over-future-after-minister-resigns-2022-10-20/",
+          "date": "2022-10-20"
+        }
+      ]
+    },
+    {
+      "id": "jacinda-ardern",
+      "category": "resignations",
+      "name": "Jacinda Ardern",
+      "role": "Prime Minister of New Zealand",
+      "event_date": "2023-01-19",
+      "death_date": null,
+      "photo": "/media/people/jacinda-ardern.jpg",
+      "photo_credit": "New Zealand Government, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Announced she would resign, saying she no longer had enough in the tank.",
+      "sources": [
+        {
+          "title": "Jacinda Ardern: New Zealand PM resigns",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-asia-64327180",
+          "date": "2023-01-19"
+        },
+        {
+          "title": "New Zealand PM Ardern to resign, says she has 'nothing left in the tank'",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/asia-pacific/nz-pm-ardern-resign-2023-01-19/",
+          "date": "2023-01-19"
+        }
+      ]
+    },
+    {
+      "id": "nicola-sturgeon",
+      "category": "resignations",
+      "name": "Nicola Sturgeon",
+      "role": "First Minister of Scotland",
+      "event_date": "2023-02-15",
+      "death_date": null,
+      "photo": "/media/people/nicola-sturgeon.jpg",
+      "photo_credit": "Scottish Government / Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Announced she would stand down after more than eight years in office.",
+      "sources": [
+        {
+          "title": "Nicola Sturgeon: Scotland's first minister to resign",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/uk-scotland-64657576",
+          "date": "2023-02-15"
+        },
+        {
+          "title": "Scotland's Sturgeon says she will stand down as first minister",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/uk/scotlands-sturgeon-say-she-will-stand-down-first-minister-bbc-2023-02-15/",
+          "date": "2023-02-15"
+        }
+      ]
+    },
+    {
+      "id": "liz-magill",
+      "category": "resignations",
+      "name": "Liz Magill",
+      "role": "President, University of Pennsylvania",
+      "event_date": "2023-12-09",
+      "death_date": null,
+      "photo": "/media/people/liz-magill.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Resigned after congressional testimony on campus antisemitism drew a backlash.",
+      "sources": [
+        {
+          "title": "Penn’s President and Board Chair Resign After Furor Over Testimony",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/12/09/us/university-of-pennsylvania-president-resigns.html",
+          "date": "2023-12-09"
+        },
+        {
+          "title": "UPenn president Liz Magill resigns after backlash over testimony",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/us/upenn-president-liz-magill-resigns-after-backlash-over-testimony-antisemitism-2023-12-09/",
+          "date": "2023-12-09"
+        }
+      ]
+    },
+    {
+      "id": "claudine-gay",
+      "category": "resignations",
+      "name": "Claudine Gay",
+      "role": "President, Harvard University",
+      "event_date": "2024-01-02",
+      "death_date": null,
+      "photo": "",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Resigned after controversy over congressional testimony and plagiarism allegations.",
+      "sources": [
+        {
+          "title": "Harvard President Claudine Gay Resigns",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2024/01/02/us/harvard-claudine-gay-resign.html",
+          "date": "2024-01-02"
+        },
+        {
+          "title": "Harvard president Claudine Gay resigns amid plagiarism, antisemitism row",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/us/harvard-president-claudine-gay-resigns-amid-plagiarism-antisemitism-row-2024-01-03/",
+          "date": "2024-01-03"
+        }
+      ]
+    },
+    {
+      "id": "reince-priebus",
+      "category": "government_stepdowns",
+      "name": "Reince Priebus",
+      "role": "White House Chief of Staff",
+      "event_date": "2017-07-28",
+      "death_date": null,
+      "photo": "/media/people/reince-priebus.jpg",
+      "photo_credit": "White House official photo, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Official financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Left the chief-of-staff post; John Kelly was named successor the same day.",
+      "sources": [
+        {
+          "title": "Reince Priebus Is Ousted Amid Stormy Days for White House",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/07/28/us/politics/reince-priebus-white-house-trump.html",
+          "date": "2017-07-28"
+        },
+        {
+          "title": "Reince Priebus out as White House chief of staff",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-40755185",
+          "date": "2017-07-28"
+        }
+      ]
+    },
+    {
+      "id": "john-kelly",
+      "category": "government_stepdowns",
+      "name": "John Kelly",
+      "role": "White House Chief of Staff",
+      "event_date": "2018-12-08",
+      "death_date": null,
+      "photo": "/media/people/john-kelly.jpg",
+      "photo_credit": "White House official photo, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Official financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Announced he would leave the chief-of-staff job at the end of the year.",
+      "sources": [
+        {
+          "title": "John Kelly to Leave White House, and Mick Mulvaney Steps In",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/12/08/us/politics/john-kelly-chief-of-staff.html",
+          "date": "2018-12-08"
+        },
+        {
+          "title": "John Kelly to leave White House as chief of staff",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-46498147",
+          "date": "2018-12-09"
+        }
+      ]
+    },
+    {
+      "id": "kirstjen-nielsen",
+      "category": "government_stepdowns",
+      "name": "Kirstjen Nielsen",
+      "role": "U.S. Secretary of Homeland Security",
+      "event_date": "2019-04-07",
+      "death_date": null,
+      "photo": "",
+      "photo_credit": "DHS official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Official financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Resigned after clashes with the president over border policy.",
+      "sources": [
+        {
+          "title": "Kirstjen Nielsen, Official in Charge of Border Policy, Is Out",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2019/04/07/us/politics/kirstjen-nielsen-dhs.html",
+          "date": "2019-04-07"
+        },
+        {
+          "title": "Kirstjen Nielsen: Trump's homeland security chief resigns",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-47849263",
+          "date": "2019-04-08"
+        }
+      ]
+    },
+    {
+      "id": "betsy-devos",
+      "category": "government_stepdowns",
+      "name": "Betsy DeVos",
+      "role": "U.S. Secretary of Education",
+      "event_date": "2021-01-07",
+      "death_date": null,
+      "photo": "/media/people/betsy-devos.jpg",
+      "photo_credit": "Department of Education official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Family wealth is widely reported; no single Forbes figure used for this row.",
+      "net_worth_source": "",
+      "summary": "Resigned after the January 6 attack on the U.S. Capitol.",
+      "sources": [
+        {
+          "title": "Betsy DeVos Resigns as Education Secretary",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2021/01/07/us/politics/betsy-devos-resigns.html",
+          "date": "2021-01-07"
+        },
+        {
+          "title": "Betsy DeVos resigns as education secretary after Capitol violence",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-55578424",
+          "date": "2021-01-08"
+        }
+      ]
+    },
+    {
+      "id": "elaine-chao",
+      "category": "government_stepdowns",
+      "name": "Elaine Chao",
+      "role": "U.S. Secretary of Transportation",
+      "event_date": "2021-01-07",
+      "death_date": null,
+      "photo": "/media/people/elaine-chao.jpg",
+      "photo_credit": "DOT official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Official financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Resigned after the January 6 attack on the U.S. Capitol.",
+      "sources": [
+        {
+          "title": "Elaine Chao Resigns as Transportation Secretary",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2021/01/07/us/politics/elaine-chao-resigns.html",
+          "date": "2021-01-07"
+        },
+        {
+          "title": "U.S. Transportation Secretary Chao resigns after Capitol violence",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/us-usa-trump-chao-idUSKBN29C2T3",
+          "date": "2021-01-08"
+        }
+      ]
+    },
+    {
+      "id": "giuseppe-conte",
+      "category": "government_stepdowns",
+      "name": "Giuseppe Conte",
+      "role": "Prime Minister of Italy",
+      "event_date": "2021-01-26",
+      "death_date": null,
+      "photo": "/media/people/giuseppe-conte.jpg",
+      "photo_credit": "Italian Government official portrait, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Resigned after a coalition rupture, opening the way for a new government.",
+      "sources": [
+        {
+          "title": "Italy PM Conte resigns in bid to gain new mandate",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-europe-55805126",
+          "date": "2021-01-26"
+        },
+        {
+          "title": "Italy PM Conte resigns, setting stage for possible Draghi government",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/us-italy-politics-idUSKBN29V2C8",
+          "date": "2021-01-26"
+        }
+      ]
+    },
+    {
+      "id": "yoshihide-suga",
+      "category": "government_stepdowns",
+      "name": "Yoshihide Suga",
+      "role": "Prime Minister of Japan",
+      "event_date": "2021-09-03",
+      "death_date": null,
+      "photo": "/media/people/yoshihide-suga.jpg",
+      "photo_credit": "Cabinet Public Affairs Office, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Said he would not run in the ruling-party leadership race, ending his premiership.",
+      "sources": [
+        {
+          "title": "Yoshihide Suga: Japanese PM announces he will not stand for re-election",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-asia-58437943",
+          "date": "2021-09-03"
+        },
+        {
+          "title": "Japan PM Suga to step down, will not run in party leadership race",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/asia-pacific/japan-pm-suga-says-he-will-not-run-ruling-party-leadership-race-2021-09-03/",
+          "date": "2021-09-03"
+        }
+      ]
+    },
+    {
+      "id": "sebastian-kurz",
+      "category": "government_stepdowns",
+      "name": "Sebastian Kurz",
+      "role": "Chancellor of Austria",
+      "event_date": "2021-10-09",
+      "death_date": null,
+      "photo": "/media/people/sebastian-kurz.jpg",
+      "photo_credit": "Austrian Government / Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Announced he would resign after a prosecutors' investigation and coalition pressure.",
+      "sources": [
+        {
+          "title": "Sebastian Kurz: Austrian leader resigns amid corruption inquiry",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-europe-58837755",
+          "date": "2021-10-09"
+        },
+        {
+          "title": "Austria's Kurz says he will resign as chancellor",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/europe/austrias-kurz-says-he-will-resign-chancellor-2021-10-09/",
+          "date": "2021-10-09"
+        }
+      ]
+    },
+    {
+      "id": "scott-morrison",
+      "category": "government_stepdowns",
+      "name": "Scott Morrison",
+      "role": "Prime Minister of Australia",
+      "event_date": "2022-05-21",
+      "death_date": null,
+      "photo": "/media/people/scott-morrison.jpg",
+      "photo_credit": "Official portrait, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Conceded the federal election, ending his term as prime minister.",
+      "sources": [
+        {
+          "title": "Australia election: Anthony Albanese leads Labor to victory",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-australia-61522812",
+          "date": "2022-05-21"
+        },
+        {
+          "title": "Australia's Morrison concedes election defeat as Labor poised to win",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/asia-pacific/australia-pm-morrison-concedes-defeat-election-as-labor-poised-win-2022-05-21/",
+          "date": "2022-05-21"
+        }
+      ]
+    },
+    {
+      "id": "nancy-pelosi",
+      "category": "government_stepdowns",
+      "name": "Nancy Pelosi",
+      "role": "Speaker of the U.S. House of Representatives",
+      "event_date": "2022-11-17",
+      "death_date": null,
+      "photo": "/media/people/nancy-pelosi.jpg",
+      "photo_credit": "U.S. House official photo, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Periodic disclosure filings exist; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Said she would not seek another term as Democratic leader in the House.",
+      "sources": [
+        {
+          "title": "Nancy Pelosi Will Step Down as House Democratic Leader",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/11/17/us/politics/nancy-pelosi-speaker.html",
+          "date": "2022-11-17"
+        },
+        {
+          "title": "Nancy Pelosi to step down as Democrats' leader in House",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-63661511",
+          "date": "2022-11-17"
+        }
+      ]
+    },
+    {
+      "id": "kevin-mccarthy",
+      "category": "government_stepdowns",
+      "name": "Kevin McCarthy",
+      "role": "Speaker of the U.S. House of Representatives",
+      "event_date": "2023-10-03",
+      "death_date": null,
+      "photo": "",
+      "photo_credit": "U.S. House official photo, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Periodic disclosure filings exist; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Removed from the speakership by a House floor vote.",
+      "sources": [
+        {
+          "title": "McCarthy Ousted as Speaker, Leaving House in Chaos",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/10/03/us/politics/kevin-mccarthy-ousted-speaker.html",
+          "date": "2023-10-03"
+        },
+        {
+          "title": "Kevin McCarthy ousted as US House speaker",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-67001366",
+          "date": "2023-10-04"
+        }
+      ]
+    },
+    {
+      "id": "justin-trudeau",
+      "category": "government_stepdowns",
+      "name": "Justin Trudeau",
+      "role": "Prime Minister of Canada",
+      "event_date": "2025-03-14",
+      "death_date": null,
+      "photo": "/media/people/justin-trudeau.jpg",
+      "photo_credit": "Official portrait, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Left office after announcing in January that he would step down as Liberal leader.",
+      "sources": [
+        {
+          "title": "Canada's Prime Minister Justin Trudeau resigns",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/articles/c878ryr04p8o",
+          "date": "2025-01-06"
+        },
+        {
+          "title": "Canada's Trudeau to step down as Liberal leader",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/americas/canadas-trudeau-step-down-liberal-leader-2025-01-06/",
+          "date": "2025-01-06"
+        }
+      ]
+    },
+    {
+      "id": "mary-tyler-moore",
+      "category": "death_celebrity",
+      "name": "Mary Tyler Moore",
+      "role": "Actor",
+      "event_date": "2017-01-25",
+      "death_date": "2017-01-25",
+      "photo": "/media/people/mary-tyler-moore.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Estate figures vary; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 80 in Greenwich, Connecticut.",
+      "sources": [
+        {
+          "title": "Mary Tyler Moore, Who Incarnated the Modern Woman on TV, Dies at 80",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/01/25/arts/mary-tyler-moore-dead.html",
+          "date": "2017-01-25"
+        },
+        {
+          "title": "Mary Tyler Moore, TV legend, dies aged 80",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/entertainment-arts-38749008",
+          "date": "2017-01-25"
+        }
+      ]
+    },
+    {
+      "id": "chuck-berry",
+      "category": "death_celebrity",
+      "name": "Chuck Berry",
+      "role": "Musician",
+      "event_date": "2017-03-18",
+      "death_date": "2017-03-18",
+      "photo": "/media/people/chuck-berry.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Estate figures vary; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 90 in St. Charles County, Missouri.",
+      "sources": [
+        {
+          "title": "Chuck Berry, Father of Rock ’n’ Roll, Dies at 90",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/03/18/arts/music/chuck-berry-dead.html",
+          "date": "2017-03-18"
+        },
+        {
+          "title": "Chuck Berry: Father of rock and roll dies aged 90",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/entertainment-arts-39325181",
+          "date": "2017-03-19"
+        }
+      ]
+    },
+    {
+      "id": "aretha-franklin",
+      "category": "death_celebrity",
+      "name": "Aretha Franklin",
+      "role": "Musician",
+      "event_date": "2018-08-16",
+      "death_date": "2018-08-16",
+      "photo": "/media/people/aretha-franklin.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Estate was later litigated; no Forbes figure used.",
+      "net_worth_source": "",
+      "summary": "Died at 76 in Detroit.",
+      "sources": [
+        {
+          "title": "Aretha Franklin, the ‘Queen of Soul,’ Dies at 76",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/08/16/obituaries/aretha-franklin-dead.html",
+          "date": "2018-08-16"
+        },
+        {
+          "title": "Aretha Franklin: Queen of Soul dies at 76",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/entertainment-arts-45208646",
+          "date": "2018-08-16"
+        }
+      ]
+    },
+    {
+      "id": "stan-lee",
+      "category": "death_celebrity",
+      "name": "Stan Lee",
+      "role": "Writer and publisher",
+      "event_date": "2018-11-12",
+      "death_date": "2018-11-12",
+      "photo": "/media/people/stan-lee.jpg",
+      "photo_credit": "Gage Skidmore, CC BY-SA, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Estate disputes followed; no Forbes figure used.",
+      "net_worth_source": "",
+      "summary": "Died at 95 in Los Angeles.",
+      "sources": [
+        {
+          "title": "Stan Lee Is Dead at 95; Superhero of Marvel Comics",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/11/12/obituaries/stan-lee-dead.html",
+          "date": "2018-11-12"
+        },
+        {
+          "title": "Stan Lee: Marvel comic book genius dies at 95",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/entertainment-arts-46184927",
+          "date": "2018-11-12"
+        }
+      ]
+    },
+    {
+      "id": "kobe-bryant",
+      "category": "death_celebrity",
+      "name": "Kobe Bryant",
+      "role": "Basketball player",
+      "event_date": "2020-01-26",
+      "death_date": "2020-01-26",
+      "photo": "/media/people/kobe-bryant.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 600000000,
+      "net_worth_note": "Forbes estimate of Bryant's fortune near the time of his death.",
+      "net_worth_source": "https://www.forbes.com/sites/kurtbadenhausen/2020/01/26/kobe-bryants-600-million-fortune-how-he-got-so-rich/",
+      "summary": "Died with eight others, including his daughter Gianna, in a helicopter crash in Calabasas, California.",
+      "sources": [
+        {
+          "title": "Kobe Bryant’s Sudden Death Stuns the Sports World",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2020/01/26/sports/basketball/kobe-bryant-dead.html",
+          "date": "2020-01-26"
+        },
+        {
+          "title": "Kobe Bryant: Basketball legend dies in helicopter crash",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-51259918",
+          "date": "2020-01-26"
+        }
+      ]
+    },
+    {
+      "id": "chadwick-boseman",
+      "category": "death_celebrity",
+      "name": "Chadwick Boseman",
+      "role": "Actor",
+      "event_date": "2020-08-28",
+      "death_date": "2020-08-28",
+      "photo": "/media/people/chadwick-boseman.jpg",
+      "photo_credit": "Gage Skidmore, CC BY-SA, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Died at 43 after a private cancer diagnosis.",
+      "sources": [
+        {
+          "title": "Chadwick Boseman, ‘Black Panther’ Star, Dies at 43",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2020/08/28/movies/chadwick-boseman-dead.html",
+          "date": "2020-08-28"
+        },
+        {
+          "title": "Chadwick Boseman: Black Panther star dies at 43 of cancer",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-53954673",
+          "date": "2020-08-29"
+        }
+      ]
+    },
+    {
+      "id": "betty-white",
+      "category": "death_celebrity",
+      "name": "Betty White",
+      "role": "Actor",
+      "event_date": "2021-12-31",
+      "death_date": "2021-12-31",
+      "photo": "/media/people/betty-white.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Estate figures vary; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 99, weeks before her 100th birthday.",
+      "sources": [
+        {
+          "title": "Betty White, a Television Golden Girl From the Start, Is Dead at 99",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2021/12/31/arts/television/betty-white-dead.html",
+          "date": "2021-12-31"
+        },
+        {
+          "title": "Betty White: US comedy legend dies aged 99",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/entertainment-arts-59838872",
+          "date": "2022-01-01"
+        }
+      ]
+    },
+    {
+      "id": "sidney-poitier",
+      "category": "death_celebrity",
+      "name": "Sidney Poitier",
+      "role": "Actor",
+      "event_date": "2022-01-06",
+      "death_date": "2022-01-06",
+      "photo": "/media/people/sidney-poitier.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Died at 94 in the Bahamas.",
+      "sources": [
+        {
+          "title": "Sidney Poitier, Who Paved the Way for Black Actors in Film, Dies at 94",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/01/07/movies/sidney-poitier-dead.html",
+          "date": "2022-01-07"
+        },
+        {
+          "title": "Sidney Poitier: First black Best Actor Oscar winner dies aged 94",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/entertainment-arts-59910128",
+          "date": "2022-01-07"
+        }
+      ]
+    },
+    {
+      "id": "pele",
+      "category": "death_celebrity",
+      "name": "Pelé",
+      "role": "Footballer",
+      "event_date": "2022-12-29",
+      "death_date": "2022-12-29",
+      "photo": "",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 82 in São Paulo.",
+      "sources": [
+        {
+          "title": "Pelé, Brazil’s Mighty King of ‘Beautiful Game,’ Dies at 82",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/12/29/sports/soccer/pele-dead.html",
+          "date": "2022-12-29"
+        },
+        {
+          "title": "Pele: Brazil football legend dies aged 82",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/lifestyle/sports/brazils-football-legend-pele-dies-82-2022-12-29/",
+          "date": "2022-12-29"
+        }
+      ]
+    },
+    {
+      "id": "tina-turner",
+      "category": "death_celebrity",
+      "name": "Tina Turner",
+      "role": "Musician",
+      "event_date": "2023-05-24",
+      "death_date": "2023-05-24",
+      "photo": "/media/people/tina-turner.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Widely reported estate figures vary; no Forbes figure used.",
+      "net_worth_source": "",
+      "summary": "Died at 83 in Switzerland.",
+      "sources": [
+        {
+          "title": "Tina Turner, Magnetic Singer of Explosive Power, Is Dead at 83",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/05/24/arts/music/tina-turner-dead.html",
+          "date": "2023-05-24"
+        },
+        {
+          "title": "Tina Turner: Music legend dies aged 83",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/entertainment-arts-65699194",
+          "date": "2023-05-24"
+        }
+      ]
+    },
+    {
+      "id": "matthew-perry",
+      "category": "death_celebrity",
+      "name": "Matthew Perry",
+      "role": "Actor",
+      "event_date": "2023-10-28",
+      "death_date": "2023-10-28",
+      "photo": "/media/people/matthew-perry.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Died at 54 at his home in Los Angeles.",
+      "sources": [
+        {
+          "title": "Matthew Perry, Star of ‘Friends,’ Dies at 54",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/10/29/arts/television/matthew-perry-dead.html",
+          "date": "2023-10-29"
+        },
+        {
+          "title": "Matthew Perry: Friends star dies aged 54",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-67255776",
+          "date": "2023-10-29"
+        }
+      ]
+    },
+    {
+      "id": "james-earl-jones",
+      "category": "death_celebrity",
+      "name": "James Earl Jones",
+      "role": "Actor",
+      "event_date": "2024-09-09",
+      "death_date": "2024-09-09",
+      "photo": "/media/people/james-earl-jones.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Died at 93 at his home in Dutchess County, New York.",
+      "sources": [
+        {
+          "title": "James Earl Jones, Voice of Darth Vader and Mufasa, Dies at 93",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2024/09/09/obituaries/james-earl-jones-dead.html",
+          "date": "2024-09-09"
+        },
+        {
+          "title": "James Earl Jones, voice of Darth Vader, dies aged 93",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/articles/ce81rkg87w8o",
+          "date": "2024-09-10"
+        }
+      ]
+    },
+    {
+      "id": "liu-xiaobo",
+      "category": "death_official",
+      "name": "Liu Xiaobo",
+      "role": "Writer and Nobel Peace Prize laureate",
+      "event_date": "2017-07-13",
+      "death_date": "2017-07-13",
+      "photo": "",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Died of liver cancer while serving an 11-year sentence in China.",
+      "sources": [
+        {
+          "title": "Liu Xiaobo, Chinese Dissident Who Won Nobel Peace Prize, Dies at 61",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/07/13/world/asia/liu-xiaobo-dead.html",
+          "date": "2017-07-13"
+        },
+        {
+          "title": "Liu Xiaobo: Nobel laureate dies in custody in China",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-asia-china-40586572",
+          "date": "2017-07-13"
+        }
+      ]
+    },
+    {
+      "id": "john-mccain",
+      "category": "death_official",
+      "name": "John McCain",
+      "role": "U.S. senator",
+      "event_date": "2018-08-25",
+      "death_date": "2018-08-25",
+      "photo": "/media/people/john-mccain.jpg",
+      "photo_credit": "U.S. Senate official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Senate financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 81 at his ranch in Arizona after a glioblastoma diagnosis.",
+      "sources": [
+        {
+          "title": "John McCain, War Hero, Senator, Presidential Contender, Dies at 81",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/08/25/obituaries/john-mccain-dead.html",
+          "date": "2018-08-25"
+        },
+        {
+          "title": "John McCain: Vietnam war hero and US senator dies",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-45304627",
+          "date": "2018-08-26"
+        }
+      ]
+    },
+    {
+      "id": "george-hw-bush",
+      "category": "death_official",
+      "name": "George H. W. Bush",
+      "role": "41st president of the United States",
+      "event_date": "2018-11-30",
+      "death_date": "2018-11-30",
+      "photo": "/media/people/george-hw-bush.jpg",
+      "photo_credit": "White House official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No contemporaneous Forbes figure used.",
+      "net_worth_source": "",
+      "summary": "Died at 94 in Houston.",
+      "sources": [
+        {
+          "title": "George Bush, Who Steered Nation in Tumultuous Times, Is Dead at 94",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/11/30/us/politics/george-hw-bush-dies.html",
+          "date": "2018-11-30"
+        },
+        {
+          "title": "George HW Bush: Former US president dies aged 94",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-45824671",
+          "date": "2018-12-01"
+        }
+      ]
+    },
+    {
+      "id": "john-lewis",
+      "category": "death_official",
+      "name": "John Lewis",
+      "role": "U.S. representative",
+      "event_date": "2020-07-17",
+      "death_date": "2020-07-17",
+      "photo": "/media/people/john-lewis.jpg",
+      "photo_credit": "U.S. House official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "House financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 80 after a pancreatic cancer diagnosis.",
+      "sources": [
+        {
+          "title": "John Lewis, Towering Figure of Civil Rights Era, Dies at 80",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2020/07/17/us/john-lewis-dead.html",
+          "date": "2020-07-17"
+        },
+        {
+          "title": "John Lewis: Civil rights giant dies at 80",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-53440114",
+          "date": "2020-07-18"
+        }
+      ]
+    },
+    {
+      "id": "ruth-bader-ginsburg",
+      "category": "death_official",
+      "name": "Ruth Bader Ginsburg",
+      "role": "Associate justice, U.S. Supreme Court",
+      "event_date": "2020-09-18",
+      "death_date": "2020-09-18",
+      "photo": "/media/people/ruth-bader-ginsburg.jpg",
+      "photo_credit": "Supreme Court official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 87 from complications of metastatic pancreatic cancer.",
+      "sources": [
+        {
+          "title": "Justice Ruth Bader Ginsburg Dies at 87",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2020/09/18/us/ruth-bader-ginsburg-dead.html",
+          "date": "2020-09-18"
+        },
+        {
+          "title": "Ruth Bader Ginsburg: US Supreme Court judge dies at 87",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-54210559",
+          "date": "2020-09-19"
+        }
+      ]
+    },
+    {
+      "id": "colin-powell",
+      "category": "death_official",
+      "name": "Colin Powell",
+      "role": "U.S. secretary of state and chairman of the Joint Chiefs of Staff",
+      "event_date": "2021-10-18",
+      "death_date": "2021-10-18",
+      "photo": "/media/people/colin-powell.jpg",
+      "photo_credit": "Department of State official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 84 from COVID-19 complications; he had been treated for multiple myeloma.",
+      "sources": [
+        {
+          "title": "Colin Powell, Who Shaped U.S. National Security, Dies at 84",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2021/10/18/us/colin-powell-dead.html",
+          "date": "2021-10-18"
+        },
+        {
+          "title": "Colin Powell: Former US secretary of state dies of Covid complications",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-58953548",
+          "date": "2021-10-18"
+        }
+      ]
+    },
+    {
+      "id": "madeleine-albright",
+      "category": "death_official",
+      "name": "Madeleine Albright",
+      "role": "U.S. secretary of state",
+      "event_date": "2022-03-23",
+      "death_date": "2022-03-23",
+      "photo": "/media/people/madeleine-albright.jpg",
+      "photo_credit": "Department of State official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 84 of cancer.",
+      "sources": [
+        {
+          "title": "Madeleine Albright, First Woman to Serve as Secretary of State, Dies at 84",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/03/23/us/madeleine-albright-dead.html",
+          "date": "2022-03-23"
+        },
+        {
+          "title": "Madeleine Albright: First female US secretary of state dies at 84",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-60849774",
+          "date": "2022-03-23"
+        }
+      ]
+    },
+    {
+      "id": "mikhail-gorbachev",
+      "category": "death_official",
+      "name": "Mikhail Gorbachev",
+      "role": "Last leader of the Soviet Union",
+      "event_date": "2022-08-30",
+      "death_date": "2022-08-30",
+      "photo": "/media/people/mikhail-gorbachev.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 91 in Moscow.",
+      "sources": [
+        {
+          "title": "Mikhail Gorbachev, Reformist Soviet Leader, Is Dead at 91",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/08/30/world/europe/mikhail-gorbachev-dead.html",
+          "date": "2022-08-30"
+        },
+        {
+          "title": "Mikhail Gorbachev: Last Soviet leader dies aged 91",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-europe-62733744",
+          "date": "2022-08-30"
+        }
+      ]
+    },
+    {
+      "id": "elizabeth-ii",
+      "category": "death_official",
+      "name": "Elizabeth II",
+      "role": "Queen of the United Kingdom",
+      "event_date": "2022-09-08",
+      "death_date": "2022-09-08",
+      "photo": "/media/people/elizabeth-ii.jpg",
+      "photo_credit": "Official portrait / Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Sovereign wealth is not a personal Forbes listing in the ordinary sense; left blank.",
+      "net_worth_source": "",
+      "summary": "Died at 96 at Balmoral Castle.",
+      "sources": [
+        {
+          "title": "Queen Elizabeth II, Longest-Reigning British Monarch, Dies at 96",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/09/08/world/europe/queen-elizabeth-dead.html",
+          "date": "2022-09-08"
+        },
+        {
+          "title": "Queen Elizabeth II has died",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/uk-61585886",
+          "date": "2022-09-08"
+        }
+      ]
+    },
+    {
+      "id": "dianne-feinstein",
+      "category": "death_official",
+      "name": "Dianne Feinstein",
+      "role": "U.S. senator",
+      "event_date": "2023-09-29",
+      "death_date": "2023-09-29",
+      "photo": "/media/people/dianne-feinstein.jpg",
+      "photo_credit": "U.S. Senate official photo, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Senate financial disclosure; no Forbes/Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 90 at her home in Washington.",
+      "sources": [
+        {
+          "title": "Dianne Feinstein, Longest-Serving Female U.S. Senator, Dies at 90",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/09/29/us/politics/dianne-feinstein-dead.html",
+          "date": "2023-09-29"
+        },
+        {
+          "title": "Dianne Feinstein: Longest-serving female US senator dies at 90",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-66959555",
+          "date": "2023-09-29"
+        }
+      ]
+    },
+    {
+      "id": "henry-kissinger",
+      "category": "death_official",
+      "name": "Henry Kissinger",
+      "role": "U.S. secretary of state and national security advisor",
+      "event_date": "2023-11-29",
+      "death_date": "2023-11-29",
+      "photo": "/media/people/henry-kissinger.jpg",
+      "photo_credit": "White House official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 100 at his home in Connecticut.",
+      "sources": [
+        {
+          "title": "Henry Kissinger Is Dead at 100; Shaped the Nation’s Cold War History",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/11/29/us/henry-kissinger-dead.html",
+          "date": "2023-11-29"
+        },
+        {
+          "title": "Henry Kissinger, American diplomat, dies aged 100",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-67576221",
+          "date": "2023-11-30"
+        }
+      ]
+    },
+    {
+      "id": "jimmy-carter",
+      "category": "death_official",
+      "name": "Jimmy Carter",
+      "role": "39th president of the United States",
+      "event_date": "2024-12-29",
+      "death_date": "2024-12-29",
+      "photo": "/media/people/jimmy-carter.jpg",
+      "photo_credit": "White House official portrait, U.S. government work, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No contemporaneous Forbes figure used.",
+      "net_worth_source": "",
+      "summary": "Died at 100 in Plains, Georgia.",
+      "sources": [
+        {
+          "title": "Jimmy Carter, Peacemaking President Amid Oil Shocks, Dies at 100",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2024/12/29/us/jimmy-carter-dead.html",
+          "date": "2024-12-29"
+        },
+        {
+          "title": "Jimmy Carter, oldest of all US presidents, dies aged 100",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/articles/cpww85w5p30o",
+          "date": "2024-12-30"
+        }
+      ]
+    },
+    {
+      "id": "david-rockefeller",
+      "category": "death_ceo",
+      "name": "David Rockefeller",
+      "role": "Chairman, Chase Manhattan Bank",
+      "event_date": "2017-03-20",
+      "death_date": "2017-03-20",
+      "photo": "/media/people/david-rockefeller.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 3300000000,
+      "net_worth_note": "Forbes estimate at death.",
+      "net_worth_source": "https://www.forbes.com/profile/david-rockefeller/",
+      "summary": "Died at 101 in Pocantico Hills, New York.",
+      "sources": [
+        {
+          "title": "David Rockefeller, Philanthropist and Head of Chase Manhattan, Dies at 101",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/03/20/business/david-rockefeller-dead-chase-manhattan-banker.html",
+          "date": "2017-03-20"
+        },
+        {
+          "title": "David Rockefeller, last surviving grandson of John D. Rockefeller, dies at 101",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/us-people-rockefeller-idUSKBN16R1G1",
+          "date": "2017-03-20"
+        }
+      ]
+    },
+    {
+      "id": "liliane-bettencourt",
+      "category": "death_ceo",
+      "name": "Liliane Bettencourt",
+      "role": "Principal shareholder, L'Oréal",
+      "event_date": "2017-09-21",
+      "death_date": "2017-09-21",
+      "photo": "",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 39500000000,
+      "net_worth_note": "Forbes estimate near the time of her death.",
+      "net_worth_source": "https://www.forbes.com/profile/liliane-bettencourt/",
+      "summary": "Died at 94 in Neuilly-sur-Seine, France.",
+      "sources": [
+        {
+          "title": "Liliane Bettencourt, L’Oréal Heiress Embrolied in Scandal, Dies at 94",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2017/09/21/business/liliane-bettencourt-dead-loreal.html",
+          "date": "2017-09-21"
+        },
+        {
+          "title": "L'Oreal heiress Liliane Bettencourt dies at 94",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-europe-41350991",
+          "date": "2017-09-21"
+        }
+      ]
+    },
+    {
+      "id": "ingvar-kamprad",
+      "category": "death_ceo",
+      "name": "Ingvar Kamprad",
+      "role": "Founder, IKEA",
+      "event_date": "2018-01-27",
+      "death_date": "2018-01-27",
+      "photo": "/media/people/ingvar-kamprad.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Forbes dropped him after asset transfers; no end-of-life list figure used.",
+      "net_worth_source": "",
+      "summary": "Died at 91 in Småland, Sweden.",
+      "sources": [
+        {
+          "title": "Ingvar Kamprad, Founder of IKEA and Home Furnishings Pioneer, Dies at 91",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/01/28/obituaries/ingvar-kamprad-dies.html",
+          "date": "2018-01-28"
+        },
+        {
+          "title": "Ingvar Kamprad: IKEA founder dies at 91",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/business-42837779",
+          "date": "2018-01-28"
+        }
+      ]
+    },
+    {
+      "id": "paul-allen",
+      "category": "death_ceo",
+      "name": "Paul Allen",
+      "role": "Co-founder, Microsoft",
+      "event_date": "2018-10-15",
+      "death_date": "2018-10-15",
+      "photo": "/media/people/paul-allen.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 20300000000,
+      "net_worth_note": "Forbes estimate at death.",
+      "net_worth_source": "https://www.forbes.com/profile/paul-allen/",
+      "summary": "Died at 65 from complications of non-Hodgkin's lymphoma.",
+      "sources": [
+        {
+          "title": "Paul G. Allen, Microsoft’s Co-Founder, Is Dead at 65",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2018/10/15/obituaries/paul-allen-dead.html",
+          "date": "2018-10-15"
+        },
+        {
+          "title": "Paul Allen: Microsoft co-founder dies aged 65",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-45869927",
+          "date": "2018-10-16"
+        }
+      ]
+    },
+    {
+      "id": "herb-kelleher",
+      "category": "death_ceo",
+      "name": "Herb Kelleher",
+      "role": "Co-founder and longtime CEO, Southwest Airlines",
+      "event_date": "2019-01-03",
+      "death_date": "2019-01-03",
+      "photo": "/media/people/herb-kelleher.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No published Forbes or Bloomberg estimate located.",
+      "net_worth_source": "",
+      "summary": "Died at 87 in Dallas.",
+      "sources": [
+        {
+          "title": "Herb Kelleher, Whose Southwest Airlines Reshaped the Industry, Dies at 87",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2019/01/03/obituaries/herb-kelleher-dead.html",
+          "date": "2019-01-03"
+        },
+        {
+          "title": "Southwest Airlines founder Herb Kelleher dies at 87",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/us-people-kelleher-idUSKCN1OX1G2",
+          "date": "2019-01-04"
+        }
+      ]
+    },
+    {
+      "id": "sumner-redstone",
+      "category": "death_ceo",
+      "name": "Sumner Redstone",
+      "role": "Controlling shareholder, National Amusements / ViacomCBS",
+      "event_date": "2020-08-11",
+      "death_date": "2020-08-11",
+      "photo": "/media/people/sumner-redstone.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 2600000000,
+      "net_worth_note": "Forbes estimate near the time of his death.",
+      "net_worth_source": "https://www.forbes.com/profile/sumner-redstone/",
+      "summary": "Died at 97 in Los Angeles.",
+      "sources": [
+        {
+          "title": "Sumner M. Redstone, a Media Giant Who Never Stopped Fighting, Dies at 97",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2020/08/12/business/media/sumner-redstone-dead.html",
+          "date": "2020-08-12"
+        },
+        {
+          "title": "Sumner Redstone: US media mogul dies at 97",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/world-us-canada-53754155",
+          "date": "2020-08-12"
+        }
+      ]
+    },
+    {
+      "id": "sheldon-adelson",
+      "category": "death_ceo",
+      "name": "Sheldon Adelson",
+      "role": "Chairman and CEO, Las Vegas Sands",
+      "event_date": "2021-01-11",
+      "death_date": "2021-01-11",
+      "photo": "/media/people/sheldon-adelson.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 33500000000,
+      "net_worth_note": "Forbes estimate at death.",
+      "net_worth_source": "https://www.forbes.com/profile/sheldon-adelson/",
+      "summary": "Died at 87 after treatment for non-Hodgkin's lymphoma.",
+      "sources": [
+        {
+          "title": "Sheldon Adelson, Casino Magnate and G.O.P. Donor, Is Dead at 87",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2021/01/12/business/sheldon-adelson-dead.html",
+          "date": "2021-01-12"
+        },
+        {
+          "title": "Sheldon Adelson: Casino tycoon and Republican donor dies at 87",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/business-55630847",
+          "date": "2021-01-12"
+        }
+      ]
+    },
+    {
+      "id": "arne-sorenson",
+      "category": "death_ceo",
+      "name": "Arne Sorenson",
+      "role": "President and CEO, Marriott International",
+      "event_date": "2021-02-15",
+      "death_date": "2021-02-15",
+      "photo": "",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Compensation was disclosed; no Forbes net-worth estimate used.",
+      "net_worth_source": "",
+      "summary": "Died at 62 after a pancreatic cancer diagnosis.",
+      "sources": [
+        {
+          "title": "Arne Sorenson, Marriott’s C.E.O. During Hotel Industry’s Worst Year, Dies at 62",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2021/02/16/business/arne-sorenson-dead.html",
+          "date": "2021-02-16"
+        },
+        {
+          "title": "Marriott CEO Arne Sorenson dies at 62 after cancer battle",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/article/us-marriott-intl-sorenson-idUSKBN2AG1Y4",
+          "date": "2021-02-16"
+        }
+      ]
+    },
+    {
+      "id": "dietrich-mateschitz",
+      "category": "death_ceo",
+      "name": "Dietrich Mateschitz",
+      "role": "Co-founder, Red Bull",
+      "event_date": "2022-10-22",
+      "death_date": "2022-10-22",
+      "photo": "",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 27500000000,
+      "net_worth_note": "Bloomberg Billionaires estimate near the time of his death.",
+      "net_worth_source": "https://www.bloomberg.com/billionaires/profiles/dietrich-mateschitz/",
+      "summary": "Died at 78 in Austria.",
+      "sources": [
+        {
+          "title": "Dietrich Mateschitz, Who Made Red Bull a Masculine Ideal, Dies at 78",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2022/10/22/business/dietrich-mateschitz-dead.html",
+          "date": "2022-10-22"
+        },
+        {
+          "title": "Red Bull co-founder Dietrich Mateschitz dies aged 78",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/business-63361513",
+          "date": "2022-10-23"
+        }
+      ]
+    },
+    {
+      "id": "charlie-munger",
+      "category": "death_ceo",
+      "name": "Charlie Munger",
+      "role": "Vice chairman, Berkshire Hathaway",
+      "event_date": "2023-11-28",
+      "death_date": "2023-11-28",
+      "photo": "/media/people/charlie-munger.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": 2600000000,
+      "net_worth_note": "Forbes estimate at death.",
+      "net_worth_source": "https://www.forbes.com/profile/charles-munger/",
+      "summary": "Died at 99 in California.",
+      "sources": [
+        {
+          "title": "Charlie Munger, Warren Buffett’s Longtime Business Partner, Dies at 99",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2023/11/28/business/charlie-munger-dead.html",
+          "date": "2023-11-28"
+        },
+        {
+          "title": "Charlie Munger, Warren Buffett's right-hand man, dies at 99",
+          "publisher": "Reuters",
+          "url": "https://www.reuters.com/world/us/berkshire-vice-chairman-charlie-munger-dies-99-2023-11-28/",
+          "date": "2023-11-28"
+        }
+      ]
+    },
+    {
+      "id": "ratan-tata",
+      "category": "death_ceo",
+      "name": "Ratan Tata",
+      "role": "Chairman, Tata Group",
+      "event_date": "2024-10-09",
+      "death_date": "2024-10-09",
+      "photo": "/media/people/ratan-tata.jpg",
+      "photo_credit": "Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "Personal wealth estimates vary because of Tata trusts; left blank.",
+      "net_worth_source": "",
+      "summary": "Died at 86 in Mumbai.",
+      "sources": [
+        {
+          "title": "Ratan Tata, Who Transformed a Conglomerate and an Economy, Dies at 86",
+          "publisher": "The New York Times",
+          "url": "https://www.nytimes.com/2024/10/09/world/asia/ratan-tata-dead.html",
+          "date": "2024-10-09"
+        },
+        {
+          "title": "Indian tycoon Ratan Tata dies aged 86",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.com/news/articles/cjd5835mp4ko",
+          "date": "2024-10-10"
+        }
+      ]
+    }
+  ],
+  "dog_comms": [
+    {
+      "id": "dod-k9-2020",
+      "posted_at": "2020-03-13",
+      "handle": "@DeptofDefense",
+      "account_name": "Department of Defense",
+      "text": "Today we celebrate #NationalK9VeteransDay and recognize the contributions of #MilitaryWorkingDogs throughout our country's history. #KnowYourMil",
+      "still": "/media/dog-comms/dod-k9-2020.jpg",
+      "still_credit": "U.S. military working-dog photograph, U.S. government work, via Wikimedia Commons",
+      "source_url": "https://x.com/DeptofDefense/status/1238449733884149760",
+      "snapshot": {
+        "captured_at": "2026-08-28",
+        "handle": "@DeptofDefense",
+        "account_name": "Department of Defense",
+        "posted_at": "2020-03-13",
+        "text": "Today we celebrate #NationalK9VeteransDay and recognize the contributions of #MilitaryWorkingDogs throughout our country's history. #KnowYourMil"
+      }
+    },
+    {
+      "id": "army-k9-2020",
+      "posted_at": "2020-03-13",
+      "handle": "@USArmy",
+      "account_name": "U.S. Army",
+      "text": "Today, we celebrate our four-legged companions -- there with us through thick and thin. #NationalK9VeteransDay is a day set aside to commemorate the service and sacrifice of the American military, working and therapy dog.",
+      "still": "/media/dog-comms/army-k9-2020.jpg",
+      "still_credit": "U.S. Army photograph, U.S. government work, via Wikimedia Commons",
+      "source_url": "https://x.com/USArmy/status/1238450739665657856",
+      "snapshot": {
+        "captured_at": "2026-08-28",
+        "handle": "@USArmy",
+        "account_name": "U.S. Army",
+        "posted_at": "2020-03-13",
+        "text": "Today, we celebrate our four-legged companions -- there with us through thick and thin. #NationalK9VeteransDay is a day set aside to commemorate the service and sacrifice of the American military, working and therapy dog."
+      }
+    },
+    {
+      "id": "82nd-k9-2020",
+      "posted_at": "2020-03-13",
+      "handle": "@82ndABNDiv",
+      "account_name": "All American Division",
+      "text": "Today is National K9 Veterans Day and we celebrate the more than 6,000 military working dogs that have supported the All American Division in combat. These dogs serve many purposes to our troops and veterans. Help us recognize our four-legged warriors. #NationalK9VeteransDay",
+      "still": "/media/dog-comms/82nd-k9-2020.jpg",
+      "still_credit": "U.S. Army photograph, U.S. government work, via Wikimedia Commons",
+      "source_url": "https://x.com/82ndABNDiv/status/1238450152534355968",
+      "snapshot": {
+        "captured_at": "2026-08-28",
+        "handle": "@82ndABNDiv",
+        "account_name": "All American Division",
+        "posted_at": "2020-03-13",
+        "text": "Today is National K9 Veterans Day and we celebrate the more than 6,000 military working dogs that have supported the All American Division in combat. These dogs serve many purposes to our troops and veterans. Help us recognize our four-legged warriors. #NationalK9VeteransDay"
+      }
+    },
+    {
+      "id": "flotus-champ-major",
+      "posted_at": "2021-01-25",
+      "handle": "@FLOTUS",
+      "account_name": "The First Lady",
+      "text": "Champ and Major have joined us in the White House! 💕🐾",
+      "still": "/media/dog-comms/flotus-champ-major.jpg",
+      "still_credit": "Official White House photograph (Adam Schultz), U.S. government work, via Wikimedia Commons",
+      "source_url": "https://x.com/FLOTUS/status/1353750624446394369",
+      "snapshot": {
+        "captured_at": "2026-08-28",
+        "handle": "@FLOTUS",
+        "account_name": "The First Lady",
+        "posted_at": "2021-01-25",
+        "text": "Champ and Major have joined us in the White House! 💕🐾"
+      }
+    },
+    {
+      "id": "dha-k9-2021",
+      "posted_at": "2021-03-13",
+      "handle": "@DoD_DHA",
+      "account_name": "Defense Health Agency",
+      "text": "Today, we are honoring our 4-legged warriors. Happy National K9 Veterans Day! #NationalK9VeteransDay",
+      "still": "/media/dog-comms/dha-k9-2021.jpg",
+      "still_credit": "U.S. Department of Defense photograph, U.S. government work, via Wikimedia Commons",
+      "source_url": "https://x.com/DoD_DHA/status/1370733392640217105",
+      "snapshot": {
+        "captured_at": "2026-08-28",
+        "handle": "@DoD_DHA",
+        "account_name": "Defense Health Agency",
+        "posted_at": "2021-03-13",
+        "text": "Today, we are honoring our 4-legged warriors. Happy National K9 Veterans Day! #NationalK9VeteransDay"
+      }
+    },
+    {
+      "id": "potus-champ",
+      "posted_at": "2021-06-19",
+      "handle": "@POTUS",
+      "account_name": "President Biden",
+      "text": "Our family lost our loving companion Champ today. I will miss him.",
+      "still": "/media/dog-comms/potus-champ.jpg",
+      "still_credit": "Official White House photograph (Adam Schultz), U.S. government work, via Wikimedia Commons",
+      "source_url": "https://x.com/POTUS/status/1406273358187044868",
+      "snapshot": {
+        "captured_at": "2026-08-28",
+        "handle": "@POTUS",
+        "account_name": "President Biden",
+        "posted_at": "2021-06-19",
+        "text": "Our family lost our loving companion Champ today. I will miss him."
+      }
+    },
+    {
+      "id": "potus-commander",
+      "posted_at": "2021-12-20",
+      "handle": "@POTUS",
+      "account_name": "President Biden",
+      "text": "Meet the newest Biden.",
+      "still": "/media/dog-comms/potus-commander.jpg",
+      "still_credit": "Official White House photograph, U.S. government work, via Wikimedia Commons",
+      "source_url": "https://x.com/POTUS/status/1473057147017744390",
+      "snapshot": {
+        "captured_at": "2026-08-28",
+        "handle": "@POTUS",
+        "account_name": "President Biden",
+        "posted_at": "2021-12-20",
+        "text": "Meet the newest Biden."
+      }
+    },
+    {
+      "id": "flotus-haney-commander",
+      "posted_at": "2022-10-04",
+      "handle": "@FLOTUS",
+      "account_name": "The First Lady",
+      "text": "Today marks 50 years of Dale Haney’s service to the gardens and grounds of the White House. He has served ten Administrations, caring for thousands of flowers and acres of lawns. Joe and I are forever grateful for his continued service.",
+      "still": "/media/dog-comms/flotus-haney-commander.jpg",
+      "still_credit": "Official White House photograph with Commander, U.S. government work, via Wikimedia Commons",
+      "source_url": "https://x.com/FLOTUS/status/1577448330208346113",
+      "snapshot": {
+        "captured_at": "2026-08-28",
+        "handle": "@FLOTUS",
+        "account_name": "The First Lady",
+        "posted_at": "2022-10-04",
+        "text": "Today marks 50 years of Dale Haney’s service to the gardens and grounds of the White House. He has served ten Administrations, caring for thousands of flowers and acres of lawns. Joe and I are forever grateful for his continued service."
+      }
+    }
+  ]
+}

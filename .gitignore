@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Local secrets and machine config — never commit
+.env
+.env.local
+.env.*.local
+*.pem
+auth.json
+
+# Process / logs
+*.log
+*.pid
+*.supervise.pid
+
+# Generated file-store copy (seed JSON in data/seed.json is the portable import)
+data/store.json
+
+# Packaged release zip — published via GitHub Releases, not git
+dist/
+*.zip
+*.zip.sha256
+
+# Local TLS material
+tls/*.key
+tls/*.crt
+
+.DS_Store

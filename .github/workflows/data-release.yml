@@ -1,0 +1,47 @@
+name: data-release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pack zip
+        run: bash scripts/pack-data.sh
+
+      - name: Publish data-YYYYMMDD and data-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          DATE="$(date -u +%Y%m%d)"
+          ZIP="dist/exittrace-data-${DATE}.zip"
+          SUM="dist/exittrace-data-${DATE}.zip.sha256"
+          NOTES="Portable ExitTrace seed: data/seed.json plus stored media/. Not exhaustive. SHA-256 in the companion file."
+
+          if gh release view "data-${DATE}" >/dev/null 2>&1; then
+            gh release upload "data-${DATE}" "$ZIP" "$SUM" --clobber
+          else
+            gh release create "data-${DATE}" "$ZIP" "$SUM" \
+              --title "ExitTrace data pack ${DATE}" \
+              --notes "$NOTES"
+          fi
+
+          if gh release view data-latest >/dev/null 2>&1; then
+            gh release delete data-latest --yes --cleanup-tag
+          fi
+          git push origin :refs/tags/data-latest >/dev/null 2>&1 || true
+          gh release create data-latest "$ZIP" "$SUM" \
+            --title "ExitTrace data pack (latest)" \
+            --notes "$NOTES
+
+Same bytes as data-${DATE}."
