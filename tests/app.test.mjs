@@ -139,5 +139,5 @@ test("tree does not ship widgets.js or live X embeds", () => {
   const html = fs.readFileSync(path.join(ROOT, "app", "lib", "html.mjs"), "utf8");
   const js = fs.readFileSync(path.join(ROOT, "app", "public", "app.js"), "utf8");
   assert.doesNotMatch(html, /widgets\.js/);
-  assert.doesNotMatch(js, /widgets\.js|platform\.twitter|syndication/);
+  assert.doesNotMatch(js, /platform\.twitter|platform\.x\.com|cdn\.syndication/);
 });

@@ -1,4 +1,4 @@
-// Local UI only. No widgets.js, no live X / Wikimedia / news fetches.
+// Local UI only. No third-party embed scripts. No live X, Wikimedia, or news fetches.
 document.addEventListener("DOMContentLoaded", () => {
   for (const img of document.querySelectorAll("img.portrait, img.still")) {
     img.addEventListener("error", () => {
