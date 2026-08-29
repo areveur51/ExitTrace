@@ -221,12 +221,13 @@ test("every category list page ships a pager", async () => {
   }
 });
 
-test("dog-comms page paginates stored rows and opens local snapshots on detail", async () => {
+test("dog-comms page paginates stored rows and opens person-format detail", async () => {
   const dogs = newestFirst(seed.dog_comms, "posted_at");
   const res = await get("/dog-comms");
   assert.equal(res.status, 200);
   assert.match(res.body, /class="pager"/);
   assert.match(res.body, /dog-card/);
+  assert.match(res.body, /tui-row/);
   assert.match(res.body, new RegExp(dogs[0].handle.replace("@", "@")));
   assert.match(res.body, new RegExp(`/dog-comms/${dogs[0].id}`));
   assert.doesNotMatch(res.body, /widgets\.js/);
@@ -234,11 +235,33 @@ test("dog-comms page paginates stored rows and opens local snapshots on detail",
     assert.match(res.body, /Page 1 of 1/);
     assert.equal(countClass(res.body, "dog-card"), dogs.length);
   }
-  const detail = await get(`/dog-comms/${dogs[0].id}`);
+
+  const row = seed.dog_comms.find((r) => r.id === "flotus-haney-commander") || dogs[0];
+  const detail = await get(`/dog-comms/${row.id}`);
+  const person = await get("/people/tucker-carlson");
   assert.equal(detail.status, 200);
-  assert.match(detail.body, /Citation:/);
-  assert.match(detail.body, /stored snapshot/);
-  assert.doesNotMatch(detail.body, /widgets\.js/);
+  assert.equal(person.status, 200);
+  for (const body of [detail.body, person.body]) {
+    assert.match(body, /<article class="detail">/);
+    assert.match(body, /class="[^"]*\bmeta-box\b/);
+    assert.match(body, />Metadata</);
+    assert.match(body, /class="[^"]*\bsources-pane\b/);
+    assert.match(body, /Sources · \d+ available/);
+    assert.match(body, /<ol class="sources">/);
+    assert.match(body, /class="source-link"/);
+    assert.match(body, /class="tui-n">detail</);
+    assert.match(body, /<h3 class="pane-h">Synopsis<\/h3>/);
+    assert.doesNotMatch(body, /snapshot-pane|dog-snapshot|View snapshot|stored snapshot/);
+    assert.doesNotMatch(body, /widgets\.js/);
+  }
+  assert.match(detail.body, new RegExp(row.handle.replace("@", "@")));
+  assert.match(detail.body, /Official government post/);
+  assert.match(detail.body, new RegExp(row.source_url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(detail.body, /class="detail-photo"/);
+  assert.match(detail.body, new RegExp(row.still.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(detail.body, new RegExp(row.text.slice(0, 40).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  const missing = await get("/dog-comms/not-a-real-dog");
+  assert.equal(missing.status, 404);
 });
 
 test("home is TUI chrome with local search and tap-friendly catalog keys", async () => {
