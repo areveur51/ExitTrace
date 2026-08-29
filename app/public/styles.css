@@ -270,6 +270,7 @@ img.still.thumb {
 .keychip[data-key="1"] { color: var(--purple); }
 .keychip[data-key="2"] { color: var(--rose); }
 .keychip[data-key="3"] { color: var(--gold); }
+.keychip[data-key="u"] { color: var(--gold); }
 .keychip[data-key="c"] { color: var(--rose); }
 .keychip[data-key="w"] { color: var(--muted); }
 .keychip[data-key="h"] { color: var(--ink); }

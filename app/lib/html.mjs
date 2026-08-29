@@ -66,6 +66,7 @@ function keymapItems(activePath) {
     { key: "g", href: "/government", label: "Gov" },
     { key: "a", href: "/arrests", label: "Arrests" },
     { key: "d", href: "/deaths", label: "Deaths" },
+    { key: "u", href: "/unsorted", label: "Unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ];
@@ -73,7 +74,7 @@ function keymapItems(activePath) {
     keys.splice(
       4,
       1,
-      { key: "d", href: "/deaths", label: "Unsorted" },
+      { key: "d", href: "/deaths", label: "Deaths" },
       { key: "1", href: "/deaths/celebrities", label: "Celebs" },
       { key: "2", href: "/deaths/officials", label: "Officials" },
       { key: "3", href: "/deaths/ceos", label: "CEOs" },
@@ -313,6 +314,11 @@ export function catalogList(items, { showDeath } = {}) {
   })}</div>`;
 }
 
+export function sourcePostList(rows) {
+  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
+  return `<div class="people-list tui-list">${groupByYear(rows, "posted_at", sourcePostRow)}</div>`;
+}
+
 export function deathsIndexNav() {
   return `<nav class="death-nav" aria-label="Sorted death lists">
     <a class="keychip" href="/deaths/celebrities">Celebrities</a>
@@ -396,7 +402,7 @@ export function homeBody({ version }) {
     <form class="tui-search" action="/search" method="get" role="search">
       <label class="tui-search-label">
         <span class="chev" aria-hidden="true">〉</span>
-        <input type="search" name="q" placeholder="Search people and dog comms..." autocomplete="off" enterkeyhint="search">
+        <input type="search" name="q" placeholder="Search people, dog comms, and unsorted posts..." autocomplete="off" enterkeyhint="search">
       </label>
     </form>
     <p class="home-tag">Sourced public-role exits and official government dog-comms since 2017. A seed set, not a census.</p>`;
@@ -523,17 +529,34 @@ export function searchBody(items, q) {
   if (!items.length) {
     return `<p class="empty">No seeded rows match that query.</p>`;
   }
+  const people = [];
+  const dogs = [];
+  const sources = [];
+  for (const item of items) {
+    if (item.type === "source") sources.push(item);
+    else if (item.type === "dog") dogs.push(item);
+    else people.push(item);
+  }
   let first = true;
-  const rows = items
-    .map((item) => {
-      const selected = first;
-      first = false;
-      if (item.type === "dog") return dogListRow(item.row, { selected });
-      if (item.type === "source") return sourcePostRow(item.row, { selected });
-      return personRow(item.row, { selected, showDeath: isDeathCategory(item.row.category) });
-    })
-    .join("");
-  return `<div class="tui-list search-list">${rows}</div>`;
+  const render = (item) => {
+    const selected = first;
+    first = false;
+    if (item.type === "dog") return dogListRow(item.row, { selected });
+    if (item.type === "source") return sourcePostRow(item.row, { selected });
+    return personRow(item.row, { selected, showDeath: isDeathCategory(item.row.category) });
+  };
+  const blocks = [];
+  if (people.length) blocks.push(people.map(render).join(""));
+  if (dogs.length) blocks.push(dogs.map(render).join(""));
+  if (sources.length) {
+    blocks.push(
+      `<section class="tui-group unsorted-group">
+      <h2 class="tui-group-h">Unsorted</h2>
+      ${sources.map(render).join("")}
+    </section>`,
+    );
+  }
+  return `<div class="tui-list search-list">${blocks.join("")}</div>`;
 }
 
 export function downloadsBody() {

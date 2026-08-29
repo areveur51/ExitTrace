@@ -7,11 +7,11 @@ import { sourcePostDetail, sourcePostRow } from "../app/lib/html.mjs";
 import { importSourcePostsText } from "../app/lib/import-posts.mjs";
 import { handle } from "../app/server.mjs";
 import {
-  countCatalog,
   countDogComms,
   countPeople,
+  countSourcePosts,
   getMemory,
-  listCatalog,
+  listPeople,
   listSourcePosts,
   loadSeedFile,
   setMemory,
@@ -102,8 +102,10 @@ test("fixture import keeps gold 71/8 and parks standalone source rows", async ()
     standalone: true,
   });
   assert.equal(deaths.length, 1);
-  assert.equal(await countCatalog("death_celebrity"), 12);
-  assert.equal(await countCatalog("death_unspecified"), 1);
+  assert.equal(await countPeople("death_celebrity"), 12);
+  assert.equal(await countPeople("death_unspecified"), 0);
+  assert.equal(await countSourcePosts({ standalone: true }), 4);
+  assert.equal(await countSourcePosts({ category: "death_unspecified", standalone: true }), 1);
 
   const second = await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
   assert.equal(await countPeople(), 71);
@@ -141,45 +143,74 @@ test("empty subject and event_date render as em dash; poster is not the subject"
   assert.match(detail, /https:\/\/example\.com\/n\/arrest-1/);
 });
 
-test("listCatalog mixes gold people with parked posts and leaves typed deaths alone", async () => {
+test("people lists stay people-only; all standalone posts list on Unsorted", async () => {
   const seed = goldSeed();
   setMemory(seed);
   await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
 
-  const firings = await listCatalog("firings");
-  const people = firings.filter((i) => i.type === "person");
-  const posts = firings.filter((i) => i.type === "source");
-  assert.equal(people.length, 12);
-  assert.equal(posts.length, 1);
-  assert.equal(posts[0].row.poster_handle, "@example_biz");
-  assert.ok(people.every((i) => i.row.event_date));
-  assert.ok(!posts[0].row.event_date);
+  const firings = await listPeople("firings");
+  assert.equal(firings.length, 12);
+  assert.ok(firings.every((row) => row.event_date && row.name));
 
-  const celebs = await listCatalog("death_celebrity");
-  assert.ok(celebs.every((i) => i.type === "person"));
-  const unsorted = await listCatalog("death_unspecified");
-  assert.equal(unsorted.length, 1);
-  assert.equal(unsorted[0].type, "source");
+  const celebs = await listPeople("death_celebrity");
+  assert.equal(celebs.length, 12);
+  assert.ok(celebs.every((row) => row.category === "death_celebrity"));
+
+  const parked = await listSourcePosts({ standalone: true });
+  assert.equal(parked.length, 4);
+  assert.ok(parked.some((row) => row.poster_handle === "@example_biz"));
+  assert.ok(parked.some((row) => row.category === "death_unspecified"));
+  assert.ok(parked.every((row) => !row.gold_person_id));
 });
 
-test("Arrests and deaths pages render parked posts with em dashes", async () => {
+test("Arrests has no source-card; parked posts render on Unsorted", async () => {
   const seed = goldSeed();
   setMemory(seed);
   await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
   const arrests = await listSourcePosts({ category: "arrests", standalone: true });
   const page = await requestPage("/arrests");
   assert.equal(page.status, 200);
-  assert.match(page.body, /source-card/);
-  assert.match(page.body, /posted/);
-  assert.match(page.body, /poster @example_desk/);
-  assert.match(page.body, new RegExp(`href="/posts/${arrests[0].id}"`));
+  assert.doesNotMatch(page.body, /source-card/);
+  assert.doesNotMatch(page.body, /poster @example_desk/);
   assert.match(page.body, /data-key="a"/);
+  assert.match(page.body, /href="\/unsorted"/);
+
+  const firings = await requestPage("/firings");
+  assert.equal(firings.status, 200);
+  assert.doesNotMatch(firings.body, /source-card/);
+  assert.doesNotMatch(firings.body, /poster @example_biz/);
+  assert.match(firings.body, /person-card/);
+  assert.match(firings.body, / · Firings · /);
+
+  const unsorted = await requestPage("/unsorted");
+  assert.equal(unsorted.status, 200);
+  assert.match(unsorted.body, /source-card/);
+  assert.match(unsorted.body, /posted/);
+  assert.match(unsorted.body, /poster @example_desk/);
+  assert.match(unsorted.body, /poster @example_biz/);
+  assert.match(unsorted.body, /poster @example_obit/);
+  assert.match(unsorted.body, /poster @example_pol/);
+  assert.match(unsorted.body, new RegExp(`href="/posts/${arrests[0].id}"`));
+  assert.match(unsorted.body, /data-key="u"/);
+  assert.match(unsorted.body, /Arrests/);
+
   const detail = await requestPage(`/posts/${arrests[0].id}`);
   assert.equal(detail.status, 200);
   assert.match(detail.body, /Event date · —/);
   assert.match(detail.body, /<h2 class="detail-title">—<\/h2>/);
+
   const deaths = await requestPage("/deaths");
   assert.equal(deaths.status, 200);
-  assert.match(deaths.body, /poster @example_obit/);
+  assert.doesNotMatch(deaths.body, /source-card/);
+  assert.doesNotMatch(deaths.body, /poster @example_obit/);
   assert.match(deaths.body, /href="\/deaths\/celebrities"/);
+  assert.match(deaths.body, /href="\/deaths\/officials"/);
+  assert.match(deaths.body, /href="\/deaths\/ceos"/);
+
+  const search = await requestPage("/search?q=example_desk");
+  assert.equal(search.status, 200);
+  assert.match(search.body, /unsorted-group/);
+  assert.match(search.body, /source-card/);
+  assert.match(search.body, /poster @example_desk/);
+  assert.doesNotMatch(search.body, /class="tui-row person-card"/);
 });

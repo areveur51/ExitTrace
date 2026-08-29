@@ -122,3 +122,60 @@ test("non-death list previews keep date · category and do not add a died suffix
   assert.match(row, /Firings/);
   assert.doesNotMatch(row, /died /);
 });
+
+test("identified people use officials-style person-card markup", () => {
+  const official = personRow(
+    {
+      id: "liu-xiaobo",
+      category: "death_official",
+      name: "Liu Xiaobo",
+      event_date: "2017-07-13",
+      death_date: "2017-07-13",
+      photo: "/media/people/liu.jpg",
+      net_worth_usd: null,
+    },
+    { showDeath: true },
+  );
+  const firingRow = personRow(firing());
+  const died = formatDate("2017-07-13");
+  const fired = formatDate("2017-05-09");
+
+  for (const row of [official, firingRow]) {
+    assert.match(row, /class="tui-row person-card"/);
+    assert.match(row, /class="portrait thumb"/);
+    assert.doesNotMatch(row, /source-card/);
+    assert.doesNotMatch(row, /died /);
+  }
+  assert.match(official, new RegExp(`<div class="tui-title">Liu Xiaobo</div>`));
+  assert.match(official, new RegExp(`<time datetime="2017-07-13">${died}</time> · Officials · —`));
+  assert.match(firingRow, new RegExp(`<time datetime="2017-05-09">${fired}</time> · Firings · —`));
+});
+
+test("search keeps people cards and groups posted hits under Unsorted", () => {
+  const html = searchBody(
+    [
+      { type: "person", row: firing() },
+      {
+        type: "source",
+        row: {
+          id: "sp-arrest",
+          category: "arrests",
+          poster_handle: "@example_desk",
+          posted_at: "2024-03-01",
+        },
+      },
+    ],
+    "example",
+  );
+  assert.match(html, /class="tui-row person-card/);
+  assert.match(html, /James Comey/);
+  assert.match(html, /unsorted-group/);
+  assert.match(html, /<h2 class="tui-group-h">Unsorted<\/h2>/);
+  assert.match(html, /source-card/);
+  assert.match(html, /posted · poster @example_desk/);
+  assert.doesNotMatch(html, /<div class="tui-title">@example_desk/);
+  const personIdx = html.indexOf("person-card");
+  const groupIdx = html.indexOf("Unsorted");
+  const sourceIdx = html.indexOf("source-card");
+  assert.ok(personIdx < groupIdx && groupIdx < sourceIdx);
+});

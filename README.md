@@ -1,6 +1,6 @@
 # ExitTrace
 
-Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, arrests, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Category pages may also park public source posts that are not yet identified. Not exhaustive.
+Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, arrests, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Unidentified public source posts live on Unsorted. Not exhaustive.
 
 **Repo:** [https://github.com/areveur51/ExitTrace](https://github.com/areveur51/ExitTrace)
 
@@ -59,20 +59,21 @@ Releases:
 
 | Page | What it lists |
 |--|--|
-| `/firings` | Public-role dismissals |
-| `/resignations` | Announced resignations |
-| `/government` | Officials leaving a government post |
-| `/arrests` | Public-role arrests |
-| `/deaths` | Unsorted death posts (not dumped into celebrity / official / CEO) |
+| `/firings` | Public-role dismissals (identified people) |
+| `/resignations` | Announced resignations (identified people) |
+| `/government` | Officials leaving a government post (identified people) |
+| `/arrests` | Public-role arrests (identified people) |
+| `/deaths` | Index of identified death lists (celebrities / officials / CEOs) |
 | `/deaths/celebrities` | Deaths of public figures in arts, sport, and entertainment |
 | `/deaths/officials` | Deaths of officials and heads of state |
 | `/deaths/ceos` | Deaths of chief executives and controlling founders |
+| `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
 | `/downloads` | How the GitHub Release zip is named |
 
-Each person row has name, event date, death date (death categories only), a stored Wikimedia or official `.gov` photo or initials, two news sources, and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank. Source posts parked on a category page keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), and posted date. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
+Each person row has name, event date, death date (death categories only), a stored Wikimedia or official `.gov` photo or initials, two news sources, and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
 
-Person and dog-comm lists paginate (`?page=`, 10 rows per page, newest event first). The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
+Identified people use the same list card on every people page: portrait thumb, name, and one date · category · net worth (or em dash). Source posts that still render as posted (em dash title, poster handle) live only on Unsorted. Person, unsorted, and dog-comm lists paginate (`?page=`, 10 rows per page, newest event first). The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person, source post, or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
 
 Dog comms store the post text, poster handle, date, and a local still when one is freely licensed. The source URL is a citation only. Tap a dog-comm row to open the stored snapshot. The pages do not load `widgets.js` and do not fetch X, Wikimedia, or news sites at view time.
 
@@ -82,7 +83,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 |--|--|
 | `GET /health` | HTML health page |
 | `GET /api/health` | `{ ok, ready, backend, people, dog_comms, source_posts }` |
-| `GET /search?q=` | Local catalog search |
+| `GET /search?q=` | Local catalog search (people keep person cards; posted hits group under Unsorted) |
 | `GET /people/:id` | One person row |
 | `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm snapshot |

@@ -118,6 +118,7 @@ test("html pages render", async () => {
     "/deaths/celebrities",
     "/deaths/officials",
     "/deaths/ceos",
+    "/unsorted",
     "/dog-comms",
     "/downloads",
     "/health",
@@ -215,6 +216,7 @@ test("every category list page ships a pager", async () => {
     "/deaths/celebrities",
     "/deaths/officials",
     "/deaths/ceos",
+    "/unsorted",
     "/dog-comms",
   ];
   for (const p of paths) {
@@ -255,6 +257,8 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /class="keychip"/);
   assert.match(res.body, /href="\/firings"/);
   assert.match(res.body, /href="\/arrests"/);
+  assert.match(res.body, /href="\/unsorted"/);
+  assert.match(res.body, /data-key="u"/);
   assert.doesNotMatch(res.body, /widgets\.js/);
 });
 
@@ -382,6 +386,43 @@ test("death lists and people search show one death date without a died suffix", 
   assert.match(firingPage.body, / · Firings · /);
   assert.doesNotMatch(firingPage.body, /died /);
   assert.match(firingPage.body, new RegExp(`datetime="${newestFiring.event_date}"`));
+});
+
+test("firings people rows match officials person-card markup", async () => {
+  const newest = newestFirst(
+    seed.people.filter((r) => r.category === "firings"),
+    "event_date",
+  )[0];
+  const officials = newestFirst(
+    seed.people.filter((r) => r.category === "death_official" && r.photo),
+    "event_date",
+  )[0];
+  assert.ok(newest);
+  assert.ok(officials);
+
+  const firings = await get("/firings");
+  const officialPage = await get("/deaths/officials");
+  assert.equal(firings.status, 200);
+  assert.equal(officialPage.status, 200);
+
+  assert.match(firings.body, /class="tui-row person-card/);
+  assert.match(firings.body, /class="portrait thumb"/);
+  assert.match(officialPage.body, /class="tui-row person-card/);
+  assert.match(officialPage.body, /class="portrait thumb"/);
+
+  const fired = newest.event_date;
+  assert.match(firings.body, new RegExp(`<div class="tui-title">${newest.name}</div>`));
+  assert.match(
+    firings.body,
+    new RegExp(`<time datetime="${fired}">[^<]+</time> · Firings · `),
+  );
+  assert.doesNotMatch(firings.body, /source-card/);
+  assert.doesNotMatch(firings.body, /posted · poster /);
+  assert.doesNotMatch(firings.body, /died /);
+
+  assert.match(officialPage.body, / · Officials · /);
+  assert.doesNotMatch(officialPage.body, /died /);
+  assert.doesNotMatch(officialPage.body, /source-card/);
 });
 
 test("optional API page= uses the same window without inventing rows", async () => {
