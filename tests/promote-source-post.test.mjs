@@ -131,8 +131,8 @@ test("promote fixture source post adds one officials-style person", async () => 
   assert.equal(await countPeople(), beforePeople + 1);
   assert.equal(await countSourcePosts(), beforePosts);
 
-  const leftover = goldFingerprint(getMemory().people.filter((r) => r.id !== "casey-vale"));
-  assert.deepEqual(leftover, beforeGold);
+  const otherStore = goldFingerprint(getMemory().people.filter((r) => r.id !== "casey-vale"));
+  assert.deepEqual(otherStore, beforeGold);
 
   const stillParked = await listSourcePosts({ standalone: true });
   assert.equal(stillParked.length, standalone.length);
