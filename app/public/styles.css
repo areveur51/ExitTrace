@@ -324,7 +324,7 @@ pre {
   .meta-pane { flex-direction: column; }
   .pager-controls { width: 100%; }
   .pager-btn { flex: 1 1 auto; }
-  .keymap .keychip { flex: 1 1 auto; }
+  .keymap .keychip { flex: 1 1 calc(50% - 0.4rem); }
 }
 
 @media (min-width: 721px) and (max-width: 1100px) {
