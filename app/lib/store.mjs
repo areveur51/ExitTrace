@@ -1,6 +1,14 @@
 import fs from "fs";
 import path from "path";
 import { databaseUrl } from "./env.mjs";
+import {
+  PromoteError,
+  buildPersonRow,
+  citeRecords,
+  findGoldMatch,
+  mergeCites,
+  validatePromoteInput,
+} from "./promote.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 let pool = null;
@@ -139,6 +147,41 @@ export function writeFileStore(dataDir, seed) {
   const out = path.join(dataDir, "store.json");
   fs.writeFileSync(out, JSON.stringify(seed, null, 2) + "\n");
   return out;
+}
+
+/** Seed wins name/date/category; extra store people and extra cites are kept. */
+export function mergeGoldPeople(seedPeople, priorPeople) {
+  const priorById = new Map((priorPeople || []).map((row) => [row.id, row]));
+  const out = [];
+  const seen = new Set();
+  for (const gold of seedPeople || []) {
+    seen.add(gold.id);
+    const prior = priorById.get(gold.id);
+    if (!prior) {
+      out.push(normalizePerson(gold));
+      continue;
+    }
+    out.push(
+      normalizePerson({
+        ...gold,
+        sources: mergeCites(gold.sources, prior.sources).sources,
+      }),
+    );
+  }
+  for (const prior of priorPeople || []) {
+    if (!seen.has(prior.id)) out.push(normalizePerson(prior));
+  }
+  return out;
+}
+
+export function hydrateFileMemory(dataDir, seed) {
+  const prior = loadFileStore(dataDir);
+  return setMemory({
+    people: mergeGoldPeople(seed.people, prior.people),
+    dog_comms: seed.dog_comms,
+    source_posts: prior.source_posts,
+    meta: seed.meta,
+  });
 }
 
 export async function importSeed(p, seed) {
@@ -424,6 +467,149 @@ export async function getSourcePost(id) {
   if (!p) return (getMemory().source_posts || []).find((r) => r.id === id) || null;
   const q = await p.query("SELECT * FROM source_posts WHERE id = $1", [id]);
   return q.rows[0] ? normalizeSourcePost(q.rows[0]) : null;
+}
+
+export async function findSourcePost({ id, source_url } = {}) {
+  const canonical = source_url ? canonicalPublicUrl(source_url) : "";
+  if (id) {
+    const row = await getSourcePost(id);
+    if (!row) {
+      throw new PromoteError(`source post not found: ${id}`, "source_not_found");
+    }
+    if (
+      canonical &&
+      row.canonical_url !== canonical &&
+      canonicalPublicUrl(row.source_url) !== canonical
+    ) {
+      throw new PromoteError(
+        "source id and source_url do not match one post",
+        "source_mismatch",
+      );
+    }
+    return row;
+  }
+  if (!canonical) return null;
+  const p = await getPool();
+  if (!p) {
+    const row = (getMemory().source_posts || []).find(
+      (r) => r.canonical_url === canonical || r.source_url === source_url,
+    );
+    if (!row) {
+      throw new PromoteError(
+        `source post not found: ${source_url}`,
+        "source_not_found",
+      );
+    }
+    return row;
+  }
+  const q = await p.query(
+    "SELECT * FROM source_posts WHERE canonical_url = $1 OR source_url = $2",
+    [canonical, source_url],
+  );
+  if (!q.rows[0]) {
+    throw new PromoteError(
+      `source post not found: ${source_url}`,
+      "source_not_found",
+    );
+  }
+  return normalizeSourcePost(q.rows[0]);
+}
+
+function personValues(row) {
+  const person = normalizePerson(row);
+  return [
+    person.id,
+    person.category,
+    person.name,
+    person.role,
+    person.event_date,
+    person.death_date,
+    person.photo,
+    person.photo_credit,
+    person.net_worth_usd,
+    person.net_worth_note,
+    person.net_worth_source,
+    JSON.stringify(person.sources || []),
+    person.summary,
+  ];
+}
+
+export async function insertPerson(row) {
+  const person = normalizePerson(row);
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    if (mem.people.some((r) => r.id === person.id)) {
+      throw new PromoteError(`person exists: ${person.id}`, "id_collision");
+    }
+    mem.people.push(person);
+    return person;
+  }
+  await p.query(
+    `INSERT INTO people (
+       id, category, name, role, event_date, death_date, photo, photo_credit,
+       net_worth_usd, net_worth_note, net_worth_source, sources, summary
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13
+     )`,
+    personValues(person),
+  );
+  return person;
+}
+
+export async function appendPersonSources(id, incoming) {
+  const person = await getPerson(id);
+  if (!person) {
+    throw new PromoteError(`person not found: ${id}`, "person_not_found");
+  }
+  const merged = mergeCites(person.sources, incoming);
+  if (!merged.added.length) {
+    return { person, added: [] };
+  }
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    const i = mem.people.findIndex((r) => r.id === id);
+    mem.people[i] = { ...person, sources: merged.sources };
+    return { person: mem.people[i], added: merged.added };
+  }
+  await p.query("UPDATE people SET sources = $1::jsonb WHERE id = $2", [
+    JSON.stringify(merged.sources),
+    id,
+  ]);
+  return { person: { ...person, sources: merged.sources }, added: merged.added };
+}
+
+export async function promoteSourcePost(input) {
+  const parsed = validatePromoteInput(input);
+  const sourcePost = await findSourcePost({
+    id: parsed.id,
+    source_url: parsed.source_url,
+  });
+  if (!sourcePost) {
+    throw new PromoteError("source post not found", "source_not_found");
+  }
+  const people = await listPeople();
+  const existing = findGoldMatch(people, parsed);
+  const incoming = citeRecords(parsed.cite_urls, parsed.event_date);
+  if (existing) {
+    const annotated = await appendPersonSources(existing.id, incoming);
+    return {
+      action: "annotated",
+      person: annotated.person,
+      added_cites: annotated.added.length,
+      source_post: sourcePost,
+      people: await countPeople(),
+    };
+  }
+  const person = await insertPerson(buildPersonRow(parsed, people));
+  return {
+    action: "created",
+    person,
+    added_cites: person.sources.length,
+    source_post: sourcePost,
+    people: await countPeople(),
+  };
 }
 
 export async function upsertSourcePosts(rows) {
