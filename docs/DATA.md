@@ -12,6 +12,8 @@ node scripts/import-source-posts.mjs path/to/posts.jsonl
 ./exittracectl.sh import-posts path/to/posts.jsonl
 ```
 
+The script only reads the path you pass. A host-local pack may live under `var/` (gitignored). Do not commit extract files.
+
 Each line is public fields only:
 
 ```json
