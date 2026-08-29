@@ -38,6 +38,35 @@ CREATE TABLE IF NOT EXISTS dog_comms (
 
 CREATE INDEX IF NOT EXISTS dog_comms_posted_at_idx ON dog_comms (posted_at DESC);
 
+-- Parked public posts (not identified people). Gold people stay in `people`.
+CREATE TABLE IF NOT EXISTS source_posts (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  canonical_url TEXT NOT NULL UNIQUE,
+  quoted_url TEXT,
+  card_url TEXT,
+  text TEXT,
+  poster_handle TEXT,
+  poster_name TEXT,
+  posted_at DATE,
+  media_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+  gold_person_id TEXT,
+  CHECK (
+    category IN (
+      'firings',
+      'resignations',
+      'government_stepdowns',
+      'arrests',
+      'death_unspecified'
+    )
+  )
+);
+
+CREATE INDEX IF NOT EXISTS source_posts_category_idx ON source_posts (category);
+CREATE INDEX IF NOT EXISTS source_posts_posted_at_idx ON source_posts (posted_at DESC);
+CREATE INDEX IF NOT EXISTS source_posts_gold_idx ON source_posts (gold_person_id);
+
 CREATE TABLE IF NOT EXISTS et_meta (
   k TEXT PRIMARY KEY,
   v JSONB NOT NULL

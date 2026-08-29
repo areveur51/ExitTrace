@@ -24,6 +24,14 @@ export const CATEGORIES = [
     blurb: "Officials leaving a government post by ouster, resignation from office, or election loss that ended the role.",
   },
   {
+    id: "arrests",
+    kind: "person",
+    title: "Arrests",
+    nav: "Arrests",
+    path: "/arrests",
+    blurb: "Public-role arrests recorded by contemporaneous news reports.",
+  },
+  {
     id: "death_celebrity",
     kind: "person",
     title: "Deaths — celebrities",
@@ -48,6 +56,14 @@ export const CATEGORIES = [
     blurb: "Deaths of chief executives, chairs, and controlling founders of major firms.",
   },
   {
+    id: "death_unspecified",
+    kind: "person",
+    title: "Deaths",
+    nav: "Unsorted",
+    path: "/deaths",
+    blurb: "Public posts about deaths that are not yet sorted into celebrity, official, or CEO lists.",
+  },
+  {
     id: "dog_comms",
     kind: "dog",
     title: "Dog comms",
@@ -58,6 +74,41 @@ export const CATEGORIES = [
 ];
 
 export const PERSON_CATEGORIES = CATEGORIES.filter((c) => c.kind === "person");
+
+/** Categories the JSONL import will park. Commentary dog posts are skipped. */
+export const IMPORT_CATEGORY_IDS = [
+  "firings",
+  "resignations",
+  "government_stepdowns",
+  "arrests",
+  "death_unspecified",
+];
+
+const IMPORT_ALIASES = {
+  firings: "firings",
+  firing: "firings",
+  resignations: "resignations",
+  resignation: "resignations",
+  government_stepdowns: "government_stepdowns",
+  government: "government_stepdowns",
+  arrests: "arrests",
+  arrest: "arrests",
+  death_unspecified: "death_unspecified",
+  death: "death_unspecified",
+  deaths: "death_unspecified",
+};
+
+export function mapImportCategory(raw) {
+  const key = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (!key) return null;
+  if (key === "dog_comms" || key === "dog" || key === "dog_comm" || key === "dogcomms") {
+    return null;
+  }
+  return IMPORT_ALIASES[key] || null;
+}
 
 export function categoryById(id) {
   return CATEGORIES.find((c) => c.id === id) || null;
