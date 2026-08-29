@@ -5,14 +5,13 @@ import {
   handleKey,
   hostOf,
   isGovHost,
-  isOfficialCiteUrl,
   isOfficialGovAccountOrUrl,
   isOfficialGovHandle,
   isOfficialGovPostUrl,
   isSocialHost,
   normalizeHandle,
   parseHttpUrl,
-  unofficialSocialReason,
+  partitionCiteUrls,
 } from "./official.mjs";
 import {
   CITE_FLOOR,
@@ -169,30 +168,16 @@ export function officialCiteUrls(raw) {
     }
     throw err;
   }
-  const official = [];
-  const seen = new Set();
-  for (const cite of parsed) {
-    if (!isOfficialCiteUrl(cite.raw) && !isOfficialCiteUrl(cite.canonical)) {
-      const why = unofficialSocialReason(cite.raw);
-      if (why) {
-        throw new AddError(
-          `${why}: ${cite.raw}`,
-          "unofficial_cite",
-        );
-      }
-      throw new AddError(
-        `cite is not published news or official gov/news-org social: ${cite.raw}`,
-        "unofficial_cite",
-      );
-    }
-    if (seen.has(cite.canonical)) continue;
-    seen.add(cite.canonical);
-    official.push(cite);
-  }
-  return official;
+  return partitionCiteUrls(parsed);
 }
 
 export function validateProcessPersonInput(input = {}) {
+  if (!String(input.event_date || "").trim() && String(input.posted_at || "").trim()) {
+    throw new AddError(
+      "event_date is required as YYYY-MM-DD (calendar date, not posted_at)",
+      "missing_event_date",
+    );
+  }
   let parsed;
   try {
     parsed = validateIdentifiedPersonInput(input);
@@ -202,14 +187,18 @@ export function validateProcessPersonInput(input = {}) {
     }
     throw err;
   }
-  const cite_urls = officialCiteUrls(parsed.cite_urls.map((c) => c.raw));
-  if (cite_urls.length < CITE_FLOOR) {
+  const { official, extra } = officialCiteUrls(
+    Array.isArray(input.cite_urls) && input.cite_urls.length
+      ? input.cite_urls
+      : parsed.cite_urls.map((c) => c.raw),
+  );
+  if (official.length < CITE_FLOOR) {
     throw new AddError(
       `need at least ${CITE_FLOOR} published-news or official gov/news-org social cite URLs`,
       "cites_floor",
     );
   }
-  return { ...parsed, cite_urls };
+  return { ...parsed, cite_urls: official, extra_urls: extra };
 }
 
 export function validateProcessDogInput(input = {}) {
@@ -294,6 +283,9 @@ export function mergeProcessOverlay(request, overlay = {}) {
     subject: String(overlay.subject || request.subject || "").trim(),
     category: String(overlay.category || request.category || "").trim(),
     event_date: String(overlay.event_date || request.event_date || "").trim(),
+    extra_urls: Array.isArray(overlay.extra_urls)
+      ? overlay.extra_urls
+      : request.extra_urls || [],
     hint_url: String(overlay.hint_url || request.hint_url || "").trim(),
     handle: String(overlay.handle || request.handle || "").trim(),
     source_url: String(
@@ -370,8 +362,10 @@ async function applyQueuedPerson(merged) {
   const cite_urls = citeUrlList(parsed.cite_urls);
   const hint = String(merged.hint_url || merged.source_url || "").trim();
   const sourcePost = hint ? await lookupSourcePost({ source_url: hint }) : null;
+  const extra_urls = citeUrlList(parsed.extra_urls);
+  let result;
   if (sourcePost) {
-    return promoteSourcePost({
+    result = await promoteSourcePost({
       id: sourcePost.id,
       source_url: sourcePost.source_url,
       subject: parsed.subject,
@@ -383,17 +377,19 @@ async function applyQueuedPerson(merged) {
       photo: parsed.photo,
       photo_credit: parsed.photo_credit,
     });
+  } else {
+    result = await applyIdentifiedPerson({
+      subject: parsed.subject,
+      event_date: parsed.event_date,
+      category: parsed.category,
+      cite_urls,
+      summary: parsed.summary,
+      role: parsed.role,
+      photo: parsed.photo,
+      photo_credit: parsed.photo_credit,
+    });
   }
-  return applyIdentifiedPerson({
-    subject: parsed.subject,
-    event_date: parsed.event_date,
-    category: parsed.category,
-    cite_urls,
-    summary: parsed.summary,
-    role: parsed.role,
-    photo: parsed.photo,
-    photo_credit: parsed.photo_credit,
-  });
+  return { ...result, extra_urls };
 }
 
 async function applyQueuedDog(merged) {
@@ -457,6 +453,7 @@ export async function processAddRequest({ id, next, overlay } = {}) {
       request.kind === "dog" ? await applyQueuedDog(merged) : await applyQueuedPerson(merged);
     const updated = await updateAddRequest(request.id, {
       ...merged,
+      extra_urls: result.extra_urls || merged.extra_urls || [],
       status: "applied",
       error: "",
       result: {
@@ -464,6 +461,7 @@ export async function processAddRequest({ id, next, overlay } = {}) {
         person_id: result.person?.id || "",
         dog_id: result.dog?.id || "",
         added_cites: result.added_cites || 0,
+        extra_urls: result.extra_urls || [],
         people: result.people,
         dog_comms: result.dog_comms,
       },

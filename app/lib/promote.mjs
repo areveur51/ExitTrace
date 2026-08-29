@@ -1,4 +1,5 @@
 import { PROMOTE_CATEGORY_IDS, isDeathCategory } from "./categories.mjs";
+import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 export const CITE_FLOOR = 2;
@@ -142,10 +143,11 @@ export function validateIdentifiedPersonInput(input = {}) {
       "invalid_category",
     );
   }
-  const cite_urls = parseCiteUrls(input.cite_urls);
-  if (cite_urls.length < CITE_FLOOR) {
+  const parsedCites = parseCiteUrls(input.cite_urls);
+  const { official, extra } = partitionCiteUrls(parsedCites);
+  if (official.length < CITE_FLOOR) {
     throw new PromoteError(
-      `need at least ${CITE_FLOOR} http(s) cite URLs`,
+      `need at least ${CITE_FLOOR} published-news or official gov/news-org social cite URLs`,
       "cites_floor",
     );
   }
@@ -157,7 +159,8 @@ export function validateIdentifiedPersonInput(input = {}) {
     subject,
     event_date,
     category,
-    cite_urls,
+    cite_urls: official,
+    extra_urls: extra,
     slug,
     summary: String(input.summary || "").trim(),
     role: String(input.role || "").trim(),

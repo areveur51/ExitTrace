@@ -41,7 +41,7 @@ node scripts/promote-source-post.mjs \
 
 `--id <sp-…>` may replace `--source-url`. Optional: `--summary`, `--role`, `--photo`, `--photo-credit`.
 
-Fail-closed: the caller supplies subject, `event_date` (YYYY-MM-DD, not `posted_at`), category, and ≥2 `http`/`https` cite URLs. The poster handle is never copied as the subject. The post date is never copied as the event date. Cites are not invented. A Wikimedia portrait is optional; omit `--photo` to keep initials / em dash.
+Fail-closed: the caller supplies subject, `event_date` (YYYY-MM-DD, not `posted_at`), category, and ≥2 verified official news or official government / news-org social cite URLs. The poster handle is never copied as the subject. The post date is never copied as the event date. Cites are not invented. Unofficial or commentary social is extra only — it is not a cite. A Wikimedia portrait is optional; omit `--photo` to keep initials / em dash.
 
 Allowed `--category` values: `firings`, `resignations`, `government_stepdowns`, `death_celebrity`, `death_official`, `death_ceo`, `arrests`. `dog_comms` is a catalog page, not a person row.
 
@@ -63,9 +63,11 @@ node scripts/process-add-request.mjs --next \
 ./exittracectl.sh add-process --id ar-… --cite-url … --cite-url …
 ```
 
-People: named subject, calendar `event_date`, catalog category, and ≥2 published-news or official news-org / government social URLs. Random social is rejected. If the request `hint_url` matches an Unsorted source post, the promote path is reused; otherwise the same fail-closed insert writes an identified person. Gold rows stay annotate-only.
+Host-side hook (scratch directory, two turns, one envelope): look up official/news/gov cites, then apply `add-process` with the envelope flags. The catalog UI does not invent cites.
 
-Dog comms: official government handle + official post URL + date. Unofficial social is rejected. Snapshot text/media is copied only if it is already in the local store. The command does not fetch X.
+People: named subject, calendar `event_date` (never copied from `posted_at`), catalog category (including `arrests`), and ≥2 verified official news or official government / news-org social URLs. Unofficial or commentary social is extra only, not a cite. If the request `hint_url` matches one parked Unsorted source post, the same fail-closed insert helper is reused. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path. Gold rows stay annotate-only (name, date, category, and existing cites are not overwritten). The committed seed stays 72 people; a live store may already have 73.
+
+Dog comms: official government handle or official post URL, plus date. Unofficial or commentary social is rejected. Snapshot text/media is copied only if it is already in the local store. The command does not fetch X.
 
 Idempotent. Does not write `data/seed.json`.
 

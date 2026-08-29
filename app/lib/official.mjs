@@ -237,10 +237,35 @@ export function isOfficialCiteUrl(raw) {
   return isOfficialGovHandle(handle) || isOfficialNewsHandle(handle);
 }
 
+export function isUnofficialOrCommentarySocial(raw) {
+  const parsed = parseHttpUrl(raw);
+  if (!parsed) return false;
+  if (!isSocialHost(hostOf(parsed))) return false;
+  return !isOfficialCiteUrl(raw);
+}
+
 export function unofficialSocialReason(raw) {
   const parsed = parseHttpUrl(raw);
   if (!parsed) return "cite is not an http(s) URL";
   if (!isSocialHost(hostOf(parsed))) return "";
   if (isOfficialCiteUrl(raw)) return "";
-  return "random social does not count as a cite";
+  return "unofficial or commentary social is extra only, not a cite";
+}
+
+/** Official/news/gov URLs count as cites. Unofficial or commentary social is extra only. */
+export function partitionCiteUrls(parsedCites) {
+  const official = [];
+  const extra = [];
+  const seen = new Set();
+  for (const cite of parsedCites || []) {
+    const canonical = cite.canonical || "";
+    if (!canonical || seen.has(canonical)) continue;
+    seen.add(canonical);
+    if (isOfficialCiteUrl(cite.raw) || isOfficialCiteUrl(cite.canonical)) {
+      official.push(cite);
+    } else {
+      extra.push(cite);
+    }
+  }
+  return { official, extra };
 }

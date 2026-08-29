@@ -101,12 +101,14 @@ test("/add renders person and dog modes in TUI chrome", async () => {
     assert.match(res.body, /class="keymap"/);
     assert.match(res.body, /href="\/add"/);
     assert.match(res.body, /data-key="n"/);
-    assert.match(res.body, /Official news and official government social count/);
-    assert.match(res.body, /Random social/);
+    assert.match(res.body, /verified official news or official government social/);
+    assert.match(res.body, /Unofficial or commentary social is extra only/);
     assert.doesNotMatch(res.body, /widgets\.js/);
   }
   assert.match(person.body, /name="subject"/);
   assert.match(person.body, /name="category"/);
+  assert.match(person.body, /value="arrests"/);
+  assert.match(person.body, />Arrests</);
   assert.match(person.body, /name="event_date"/);
   assert.match(person.body, /name="hint_url"/);
   assert.match(person.body, /value="person"/);
@@ -199,6 +201,49 @@ test("process with two official cites creates a person; one cite is rejected", a
   assert.equal(replay.action, "created");
   assert.equal(replay.replayed, true);
   assert.equal(await countPeople(), 73);
+  assert.equal(goldSeed().people.length, 72);
+});
+
+test("unofficial commentary social is extra only and posted_at is never event_date", async () => {
+  setMemory(goldSeed());
+  const unofficial = "https://x.com/RandomCat/status/99";
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const created = await processAddRequest({
+    id: queued.request.id,
+    overlay: { cite_urls: [...CITES, unofficial] },
+  });
+  assert.equal(created.action, "created");
+  const urls = created.person.sources.map((s) => s.url);
+  assert.deepEqual(urls, CITES);
+  assert.ok(!urls.includes(unofficial));
+  assert.equal(created.extra_urls.length, 1);
+  assert.equal(created.extra_urls[0], unofficial);
+  assert.equal(created.person.event_date, "2024-06-15");
+  assert.notEqual(created.person.event_date, "2024-03-01");
+
+  const noDate = await queueAddRequest({
+    kind: "person",
+    subject: "Riley Chen",
+    category: "firings",
+  });
+  await assert.rejects(
+    () =>
+      processAddRequest({
+        id: noDate.request.id,
+        overlay: {
+          posted_at: "2024-03-01",
+          cite_urls: CITES,
+          category: "firings",
+        },
+      }),
+    (err) => err instanceof AddError && err.code === "missing_event_date",
+  );
+  assert.equal(await getPerson("riley-chen"), null);
   assert.equal(goldSeed().people.length, 72);
 });
 

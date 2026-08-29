@@ -122,6 +122,11 @@ function normalizeAddRequest(row) {
     source_url: row.source_url || "",
     posted_at: asDate(row.posted_at) || "",
     cite_urls: Array.isArray(row.cite_urls) ? row.cite_urls : [],
+    extra_urls: Array.isArray(row.extra_urls)
+      ? row.extra_urls
+      : Array.isArray(payload.extra_urls)
+        ? payload.extra_urls
+        : [],
     account_name: row.account_name || payload.account_name || "",
     text: row.text || payload.text || "",
     still: row.still || payload.still || "",
@@ -976,6 +981,7 @@ function addRequestValues(row) {
       role: req.role,
       photo: req.photo,
       photo_credit: req.photo_credit,
+      extra_urls: req.extra_urls || [],
     }),
     req.error || null,
     req.result ? JSON.stringify(req.result) : null,

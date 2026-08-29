@@ -32,14 +32,20 @@ function usage(exitCode = 0) {
   [--source-url <https://…>] [--handle @Official] [--posted-at YYYY-MM-DD]
   [--text "…"] [--account-name "…"] [--still <path>] [--still-credit "…"]
 
-Process one queued add request (or the next pending). Fail-closed:
-  people need subject + event_date + at least ${CITE_FLOOR} published-news
-  or official gov/news-org social cite URLs. Cites are not invented.
-  dog comms need an official government handle, official post URL, and date.
+Host-side process hook (scratch directory, two turns, one envelope):
+  look up official/news/gov cites, then apply this command with the envelope
+  flags. The catalog UI does not invent cites.
 
-If the request has a hint URL that matches an Unsorted source post, the
-existing promote path is used. Otherwise an identified person is inserted
-the same fail-closed way. Existing people/dogs are annotate-only.
+Fail-closed:
+  people need subject + event_date + at least ${CITE_FLOOR} verified
+  official news or official gov/news-org social cite URLs.
+  Do not invent cites. Do not copy posted_at into event_date.
+  Unofficial or commentary social is extra only, not a cite.
+  dog comms need an official government handle or official post URL, plus date.
+
+The Unsorted classify walk stays a separate path (import-posts / promote).
+If a queued hint URL happens to match one parked post, the same fail-closed
+insert helper is reused. Gold rows are annotate-only.
 
 Idempotent. Writes Postgres when DATABASE_URL is set; otherwise the file store.
 Does not write data/seed.json.`);

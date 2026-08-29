@@ -70,7 +70,9 @@ node scripts/process-add-request.mjs --next \
 ./exittracectl.sh add-process --id ar-… --cite-url … --cite-url …
 ```
 
-Fail-closed: people need a named subject, a calendar event date, and two or more published-news or official government / news-org social URLs. Random social does not count. Dog comms need an official government handle, official post URL, and date. If the person or dog already exists, only extra cites are attached. Does not write `data/seed.json`.
+Fail-closed: people need a named subject, a calendar `event_date` (not `posted_at`), and two or more verified official news or official government / news-org social URLs. Cites are not invented. Unofficial or commentary social is extra only — it is not a cite. Dog comms need an official government handle or official post URL, plus date; unofficial or commentary social is rejected. Gold rows stay annotate-only. The committed seed stays 72 people (live may already be 73). Does not write `data/seed.json`.
+
+The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
 
 ## Data pack
 

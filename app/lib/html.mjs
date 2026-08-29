@@ -95,7 +95,7 @@ export function keymapFooter(activePath) {
         }><span class="br">[</span>${esc(k.key)}<span class="br">]</span> ${esc(k.label)}</a>`;
       })
       .join("")}
-    <p class="fineprint">Neutral record. Two published news citations on every person row. Official news and official government social count; random social does not. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <p class="fineprint">Neutral record. Two published news citations on every person row. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -602,7 +602,7 @@ const ADD_CATEGORIES = [
 ];
 
 export function addCiteRule() {
-  return `<p class="cite-rule">Person rows need two or more citations. Official news and official government social count. Random social posts do not. This form does not invent cites — it only queues a request. A host process looks up published sources and applies the row.</p>`;
+  return `<p class="cite-rule">Person rows need two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. This form does not invent cites or copy a post date into the event date. A host process looks up published sources and applies the row.</p>`;
 }
 
 export function addBody({
