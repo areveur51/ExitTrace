@@ -16,20 +16,33 @@ import {
   ensureSchema,
   getPool,
   importSeed,
+  countDogComms,
+  countPeople,
+  getDogComm,
+  getPerson,
   listDogComms,
   listPeople,
   loadSeedFile,
+  searchCatalog,
   setMemory,
   writeFileStore,
 } from "./lib/store.mjs";
 import {
-  dogCard,
+  dogDetail,
+  dogList,
   downloadsBody,
   healthBody,
   homeBody,
   layout,
-  peopleTable,
+  listHead,
+  listSection,
+  pager,
+  peopleList,
+  personDetail,
+  searchBody,
+  tuiCount,
 } from "./lib/html.mjs";
+import { PAGE_SIZE, paginate, parsePage } from "./lib/paginate.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -41,6 +54,9 @@ const port = Number(process.env.PORT || 5220);
 const host = process.env.HOST || "0.0.0.0";
 const { mediaDir, dataDir } = resolveRoot(ROOT);
 const seedPath = path.join(dataDir, "seed.json");
+const APP_VERSION = JSON.parse(
+  fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
+).version;
 const bootstrapSql = fs.readFileSync(
   path.join(ROOT, "scripts", "bootstrap-db.sql"),
   "utf8",
@@ -78,6 +94,20 @@ function sendJson(res, status, obj) {
 
 function sendHtml(res, html) {
   send(res, 200, html, { "Content-Type": "text/html; charset=utf-8" });
+}
+
+function safeId(raw) {
+  const id = decodeURIComponent(String(raw || ""));
+  return /^[a-z0-9][a-z0-9-]*$/i.test(id) ? id : null;
+}
+
+function countText(title, meta, pageCount) {
+  return tuiCount({
+    title,
+    total: meta.total,
+    index: 1,
+    of: pageCount || meta.limit,
+  });
 }
 
 function safeJoin(root, reqPath) {
@@ -130,6 +160,8 @@ async function handle(req, res) {
         title: "Health",
         path: "/health",
         heading: "Health",
+        query: "health",
+        countLabel: "ready",
         lede: "Process is up. Counts come from the local store.",
         body: healthBody(payload),
       }),
@@ -137,39 +169,99 @@ async function handle(req, res) {
   }
 
   if (p === "/api/people") {
-    const category = url.searchParams.get("category");
-    return sendJson(res, 200, { people: await listPeople(category || undefined) });
+    const category = url.searchParams.get("category") || undefined;
+    if (url.searchParams.has("page")) {
+      const total = await countPeople(category);
+      const meta = paginate({ total, page: parsePage(url.searchParams) });
+      return sendJson(res, 200, {
+        people: await listPeople({
+          category,
+          limit: meta.limit,
+          offset: meta.offset,
+        }),
+        ...meta,
+      });
+    }
+    return sendJson(res, 200, { people: await listPeople(category) });
   }
   if (p === "/api/dog-comms") {
+    if (url.searchParams.has("page")) {
+      const total = await countDogComms();
+      const meta = paginate({ total, page: parsePage(url.searchParams) });
+      return sendJson(res, 200, {
+        dog_comms: await listDogComms({
+          limit: meta.limit,
+          offset: meta.offset,
+        }),
+        ...meta,
+      });
+    }
     return sendJson(res, 200, { dog_comms: await listDogComms() });
   }
 
   if (p === "/styles.css" || p === "/app.js") {
-    return serveFile(res, path.join(PUBLIC, p.slice(1)));
+    const filePath = path.join(PUBLIC, p.slice(1));
+    if (!fs.existsSync(filePath)) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    send(res, 200, fs.readFileSync(filePath), {
+      "Content-Type": MIME[ext] || "application/octet-stream",
+      "Cache-Control": "no-store",
+    });
+    return;
   }
   if (p.startsWith("/media/")) {
     return serveFile(res, safeJoin(mediaDir, p.slice("/media/".length)));
   }
 
   if (p === "/") {
-    const [c, people, dogs] = await Promise.all([
-      counts(),
-      listPeople(),
-      listDogComms(),
-    ]);
-    const peoplePreview = people.slice(0, 8);
     return sendHtml(
       res,
       layout({
         title: "Home",
         path: "/",
-        heading: "A sourced clip file",
-        lede: "Firings, resignations, government step-downs, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs. Two news citations on every person row.",
-        body: homeBody({
-          counts: c,
-          peoplePreview,
-          dogsPreview: dogs.slice(0, 5),
-        }),
+        heading: "ExitTrace",
+        mode: "home",
+        body: homeBody({ version: APP_VERSION }),
+      }),
+    );
+  }
+
+  if (p === "/search") {
+    const q = (url.searchParams.get("q") || "").trim();
+    const all = q ? await searchCatalog(q) : [];
+    const meta = paginate({
+      total: all.length,
+      page: parsePage(url.searchParams),
+      pageSize: PAGE_SIZE,
+    });
+    const windowed = all.slice(meta.offset, meta.offset + meta.limit);
+    const searchPath = q ? `/search?q=${encodeURIComponent(q)}` : "/search";
+    return sendHtml(
+      res,
+      layout({
+        title: q ? `Search · ${q}` : "Search",
+        path: "/search",
+        heading: "Search",
+        query: q || "search",
+        countLabel: q ? countText(q, meta, windowed.length) : "local",
+        lede: "Matches names, roles, summaries, handles, and stored post text in the local catalog.",
+        body: listSection(
+          searchBody(windowed, q),
+          q
+            ? pager(meta, { basePath: searchPath, noun: "results" })
+            : "",
+          q
+            ? listHead({
+                title: q,
+                total: meta.total,
+                index: 1,
+                of: windowed.length,
+              })
+            : "",
+        ),
       }),
     );
   }
@@ -181,36 +273,119 @@ async function handle(req, res) {
         title: "Downloads",
         path: "/downloads",
         heading: "Data pack",
+        query: "downloads",
+        countLabel: "pack",
         lede: "GitHub Releases publish the zip. This page does not fetch it.",
         body: downloadsBody(),
       }),
     );
   }
 
+  if (p.startsWith("/people/")) {
+    const id = safeId(p.slice("/people/".length));
+    const row = id ? await getPerson(id) : null;
+    if (!row) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    return sendHtml(
+      res,
+      layout({
+        title: row.name,
+        path: `/people/${row.id}`,
+        heading: row.name,
+        query: row.name,
+        countLabel: "detail",
+        body: personDetail(row),
+      }),
+    );
+  }
+
+  if (p.startsWith("/dog-comms/") && p !== "/dog-comms/") {
+    const id = safeId(p.slice("/dog-comms/".length));
+    const row = id ? await getDogComm(id) : null;
+    if (!row) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    return sendHtml(
+      res,
+      layout({
+        title: row.handle,
+        path: `/dog-comms/${row.id}`,
+        heading: row.handle,
+        query: row.handle,
+        countLabel: "snapshot",
+        body: dogDetail(row),
+      }),
+    );
+  }
+
   const cat = categoryByPath(p);
   if (cat && cat.kind === "person") {
-    const rows = await listPeople(cat.id);
+    const total = await countPeople(cat.id);
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize: PAGE_SIZE,
+    });
+    const rows = await listPeople({
+      category: cat.id,
+      limit: meta.limit,
+      offset: meta.offset,
+    });
     return sendHtml(
       res,
       layout({
         title: cat.title,
         path: cat.path,
         heading: cat.title,
+        query: cat.title,
+        countLabel: countText(cat.title, meta, rows.length),
         lede: `${cat.blurb} Seeded rows only — not exhaustive.`,
-        body: peopleTable(rows, { showDeath: isDeathCategory(cat.id) }),
+        body: listSection(
+          peopleList(rows, { showDeath: isDeathCategory(cat.id) }),
+          pager(meta, { basePath: cat.path, noun: "people" }),
+          listHead({
+            title: cat.title,
+            total: meta.total,
+            index: 1,
+            of: rows.length,
+          }),
+        ),
       }),
     );
   }
   if (cat && cat.kind === "dog") {
-    const rows = await listDogComms();
+    const total = await countDogComms();
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize: PAGE_SIZE,
+    });
+    const rows = await listDogComms({
+      limit: meta.limit,
+      offset: meta.offset,
+    });
     return sendHtml(
       res,
       layout({
         title: cat.title,
         path: cat.path,
         heading: cat.title,
+        query: cat.title,
+        countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
-        body: `<div class="dog-page">${rows.map(dogCard).join("")}</div>`,
+        body: listSection(
+          dogList(rows),
+          pager(meta, { basePath: cat.path, noun: "posts" }),
+          listHead({
+            title: cat.title,
+            total: meta.total,
+            index: 1,
+            of: rows.length,
+          }),
+        ),
       }),
     );
   }

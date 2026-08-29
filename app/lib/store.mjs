@@ -198,47 +198,247 @@ export async function importSeed(p, seed) {
   return { people: seed.people.length, dog_comms: seed.dog_comms.length };
 }
 
-export async function listPeople(category) {
+function parseListArgs(categoryOrOpts, maybeOpts) {
+  if (categoryOrOpts && typeof categoryOrOpts === "object") {
+    return {
+      category: categoryOrOpts.category || undefined,
+      limit: categoryOrOpts.limit,
+      offset: categoryOrOpts.offset ?? 0,
+    };
+  }
+  return {
+    category: categoryOrOpts || undefined,
+    limit: maybeOpts?.limit,
+    offset: maybeOpts?.offset ?? 0,
+  };
+}
+
+function finiteInt(v, fallback = null) {
+  if (v === null || v === undefined || v === "") return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : fallback;
+}
+
+function comparePeople(a, b) {
+  const d = String(b.event_date).localeCompare(String(a.event_date));
+  if (d !== 0) return d;
+  return String(a.name).localeCompare(String(b.name));
+}
+
+function compareDogs(a, b) {
+  const d = String(b.posted_at).localeCompare(String(a.posted_at));
+  if (d !== 0) return d;
+  return String(a.handle).localeCompare(String(b.handle));
+}
+
+function applyWindow(rows, limit, offset) {
+  if (limit != null) return rows.slice(offset, offset + limit);
+  return offset ? rows.slice(offset) : rows;
+}
+
+export async function listPeople(categoryOrOpts, maybeOpts) {
+  const args = parseListArgs(categoryOrOpts, maybeOpts);
+  const limit = finiteInt(args.limit, null);
+  const offset = finiteInt(args.offset, 0);
+  const category = args.category;
   const p = await getPool();
   if (!p) {
-    const rows = getMemory().people;
-    return (category ? rows.filter((r) => r.category === category) : rows).slice().sort(
-      (a, b) => String(b.event_date).localeCompare(String(a.event_date)),
-    );
+    let rows = getMemory().people;
+    if (category) rows = rows.filter((r) => r.category === category);
+    return applyWindow(rows.slice().sort(comparePeople), limit, offset);
   }
-  const q = category
-    ? await p.query(
-        "SELECT * FROM people WHERE category = $1 ORDER BY event_date DESC, name ASC",
-        [category],
-      )
-    : await p.query("SELECT * FROM people ORDER BY event_date DESC, name ASC");
+  const params = [];
+  let sql = "SELECT * FROM people";
+  if (category) {
+    params.push(category);
+    sql += ` WHERE category = $${params.length}`;
+  }
+  sql += " ORDER BY event_date DESC, name ASC";
+  if (limit != null) {
+    params.push(limit);
+    sql += ` LIMIT $${params.length}`;
+    params.push(offset);
+    sql += ` OFFSET $${params.length}`;
+  } else if (offset) {
+    params.push(offset);
+    sql += ` OFFSET $${params.length}`;
+  }
+  const q = await p.query(sql, params);
   return q.rows.map(normalizePerson);
 }
 
-export async function listDogComms() {
+export async function listDogComms(opts = {}) {
+  const limit = finiteInt(opts.limit, null);
+  const offset = finiteInt(opts.offset, 0);
   const p = await getPool();
   if (!p) {
-    return getMemory()
-      .dog_comms.slice()
-      .sort((a, b) => String(b.posted_at).localeCompare(String(a.posted_at)));
+    return applyWindow(
+      getMemory().dog_comms.slice().sort(compareDogs),
+      limit,
+      offset,
+    );
   }
-  const q = await p.query("SELECT * FROM dog_comms ORDER BY posted_at DESC, handle ASC");
+  const params = [];
+  let sql = "SELECT * FROM dog_comms ORDER BY posted_at DESC, handle ASC";
+  if (limit != null) {
+    params.push(limit);
+    sql += ` LIMIT $${params.length}`;
+    params.push(offset);
+    sql += ` OFFSET $${params.length}`;
+  } else if (offset) {
+    params.push(offset);
+    sql += ` OFFSET $${params.length}`;
+  }
+  const q = await p.query(sql, params);
   return q.rows.map(normalizeDog);
 }
 
-export async function counts() {
-  const people = await listPeople();
-  const dogs = await listDogComms();
-  const byCategory = {};
-  for (const row of people) {
-    byCategory[row.category] = (byCategory[row.category] || 0) + 1;
+export async function countPeople(category) {
+  const p = await getPool();
+  if (!p) {
+    const rows = getMemory().people;
+    return category ? rows.filter((r) => r.category === category).length : rows.length;
   }
-  byCategory.dog_comms = dogs.length;
+  const q = category
+    ? await p.query("SELECT COUNT(*)::int AS n FROM people WHERE category = $1", [
+        category,
+      ])
+    : await p.query("SELECT COUNT(*)::int AS n FROM people");
+  return q.rows[0].n;
+}
+
+export async function countDogComms() {
+  const p = await getPool();
+  if (!p) return getMemory().dog_comms.length;
+  const q = await p.query("SELECT COUNT(*)::int AS n FROM dog_comms");
+  return q.rows[0].n;
+}
+
+export async function counts() {
+  const p = await getPool();
+  if (!p) {
+    const people = getMemory().people;
+    const dogs = getMemory().dog_comms;
+    const byCategory = {};
+    for (const row of people) {
+      byCategory[row.category] = (byCategory[row.category] || 0) + 1;
+    }
+    byCategory.dog_comms = dogs.length;
+    return {
+      people: people.length,
+      dog_comms: dogs.length,
+      byCategory,
+    };
+  }
+  const [peopleCount, dogCount, grouped] = await Promise.all([
+    p.query("SELECT COUNT(*)::int AS n FROM people"),
+    p.query("SELECT COUNT(*)::int AS n FROM dog_comms"),
+    p.query("SELECT category, COUNT(*)::int AS n FROM people GROUP BY category"),
+  ]);
+  const byCategory = {};
+  for (const row of grouped.rows) byCategory[row.category] = row.n;
+  byCategory.dog_comms = dogCount.rows[0].n;
   return {
-    people: people.length,
-    dog_comms: dogs.length,
+    people: peopleCount.rows[0].n,
+    dog_comms: dogCount.rows[0].n,
     byCategory,
   };
+}
+
+export async function getPerson(id) {
+  if (!id) return null;
+  const p = await getPool();
+  if (!p) return getMemory().people.find((r) => r.id === id) || null;
+  const q = await p.query("SELECT * FROM people WHERE id = $1", [id]);
+  return q.rows[0] ? normalizePerson(q.rows[0]) : null;
+}
+
+export async function getDogComm(id) {
+  if (!id) return null;
+  const p = await getPool();
+  if (!p) return getMemory().dog_comms.find((r) => r.id === id) || null;
+  const q = await p.query("SELECT * FROM dog_comms WHERE id = $1", [id]);
+  return q.rows[0] ? normalizeDog(q.rows[0]) : null;
+}
+
+function likeNeedle(q) {
+  return `%${String(q).replace(/[%_\\]/g, "\\$&")}%`;
+}
+
+function matchesPerson(row, needle) {
+  return [row.name, row.role, row.summary]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
+
+function matchesDog(row, needle) {
+  return [row.handle, row.account_name, row.text]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
+
+export async function searchPeople(q) {
+  const raw = String(q || "").trim();
+  if (!raw) return [];
+  const p = await getPool();
+  if (!p) {
+    const needle = raw.toLowerCase();
+    return getMemory()
+      .people.filter((r) => matchesPerson(r, needle))
+      .slice()
+      .sort(comparePeople);
+  }
+  const res = await p.query(
+    `SELECT * FROM people
+     WHERE name ILIKE $1 ESCAPE '\\'
+        OR role ILIKE $1 ESCAPE '\\'
+        OR summary ILIKE $1 ESCAPE '\\'
+     ORDER BY event_date DESC, name ASC`,
+    [likeNeedle(raw)],
+  );
+  return res.rows.map(normalizePerson);
+}
+
+export async function searchDogComms(q) {
+  const raw = String(q || "").trim();
+  if (!raw) return [];
+  const p = await getPool();
+  if (!p) {
+    const needle = raw.toLowerCase();
+    return getMemory()
+      .dog_comms.filter((r) => matchesDog(r, needle))
+      .slice()
+      .sort(compareDogs);
+  }
+  const res = await p.query(
+    `SELECT * FROM dog_comms
+     WHERE handle ILIKE $1 ESCAPE '\\'
+        OR account_name ILIKE $1 ESCAPE '\\'
+        OR text ILIKE $1 ESCAPE '\\'
+     ORDER BY posted_at DESC, handle ASC`,
+    [likeNeedle(raw)],
+  );
+  return res.rows.map(normalizeDog);
+}
+
+export async function searchCatalog(q) {
+  const [people, dogs] = await Promise.all([searchPeople(q), searchDogComms(q)]);
+  const items = [
+    ...people.map((row) => ({ type: "person", date: row.event_date, row })),
+    ...dogs.map((row) => ({ type: "dog", date: row.posted_at, row })),
+  ];
+  items.sort((a, b) => {
+    const d = String(b.date).localeCompare(String(a.date));
+    if (d !== 0) return d;
+    const an = a.type === "person" ? a.row.name : a.row.handle;
+    const bn = b.type === "person" ? b.row.name : b.row.handle;
+    return String(an).localeCompare(String(bn));
+  });
+  return items;
 }
 
 export async function closeStore() {

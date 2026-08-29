@@ -5,6 +5,7 @@ import path from "path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "url";
 import { spawn } from "node:child_process";
+import { PAGE_SIZE } from "../app/lib/paginate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 15220;
@@ -140,4 +141,155 @@ test("tree does not ship widgets.js or live X embeds", () => {
   const js = fs.readFileSync(path.join(ROOT, "app", "public", "app.js"), "utf8");
   assert.doesNotMatch(html, /widgets\.js/);
   assert.doesNotMatch(js, /platform\.twitter|platform\.x\.com|cdn\.syndication/);
+});
+
+function newestFirst(rows, dateKey) {
+  return rows
+    .slice()
+    .sort((a, b) => {
+      const d = String(b[dateKey]).localeCompare(String(a[dateKey]));
+      if (d !== 0) return d;
+      const tie = dateKey === "event_date" ? "name" : "handle";
+      return String(a[tie]).localeCompare(String(b[tie]));
+    });
+}
+
+function countClass(html, className) {
+  return (html.match(new RegExp(`class="[^"]*\\b${className}\\b`, "g")) || []).length;
+}
+
+test("people list pages paginate newest-first with shareable ?page=", async () => {
+  const firings = newestFirst(
+    seed.people.filter((r) => r.category === "firings"),
+    "event_date",
+  );
+  assert.ok(firings.length > PAGE_SIZE, "seed must have more than one page of firings");
+
+  const first = await get("/firings");
+  const second = await get("/firings?page=2");
+  const clamped = await get("/firings?page=99");
+  const junk = await get("/firings?page=nope");
+
+  for (const res of [first, second, clamped, junk]) {
+    assert.equal(res.status, 200);
+    assert.match(res.body, /class="pager"/);
+    assert.match(res.body, /person-card/);
+    assert.match(res.body, /tui-row/);
+    assert.doesNotMatch(res.body, /widgets\.js/);
+  }
+
+  const page1Cards = countClass(first.body, "person-card");
+  const page2Cards = countClass(second.body, "person-card");
+  assert.equal(page1Cards, PAGE_SIZE);
+  assert.equal(page2Cards, firings.length - PAGE_SIZE);
+  assert.match(first.body, /Page 1 of 2/);
+  assert.match(second.body, /Page 2 of 2/);
+  assert.match(first.body, /12 available/);
+  assert.match(first.body, /1\/10/);
+  assert.match(first.body, /tui-toast/);
+  assert.match(first.body, /tui-modal/);
+  assert.match(first.body, /rel="next"/);
+  assert.match(second.body, /rel="prev"/);
+  assert.match(first.body, /href="\/firings\?page=2"/);
+  assert.match(second.body, /href="\/firings"/);
+
+  assert.match(first.body, new RegExp(firings[0].name));
+  assert.doesNotMatch(first.body, new RegExp(firings[PAGE_SIZE].name));
+  assert.match(second.body, new RegExp(firings[PAGE_SIZE].name));
+  assert.doesNotMatch(second.body, new RegExp(firings[0].name));
+
+  assert.match(clamped.body, /Page 2 of 2/);
+  assert.match(junk.body, /Page 1 of 2/);
+  assert.match(junk.body, new RegExp(firings[0].name));
+});
+
+test("every category list page ships a pager", async () => {
+  const paths = [
+    "/firings",
+    "/resignations",
+    "/government",
+    "/deaths/celebrities",
+    "/deaths/officials",
+    "/deaths/ceos",
+    "/dog-comms",
+  ];
+  for (const p of paths) {
+    const res = await get(p);
+    assert.equal(res.status, 200, p);
+    assert.match(res.body, /class="pager"/, p);
+    assert.match(res.body, /Page 1 of /);
+  }
+});
+
+test("dog-comms page paginates stored rows and opens local snapshots on detail", async () => {
+  const dogs = newestFirst(seed.dog_comms, "posted_at");
+  const res = await get("/dog-comms");
+  assert.equal(res.status, 200);
+  assert.match(res.body, /class="pager"/);
+  assert.match(res.body, /dog-card/);
+  assert.match(res.body, new RegExp(dogs[0].handle.replace("@", "@")));
+  assert.match(res.body, new RegExp(`/dog-comms/${dogs[0].id}`));
+  assert.doesNotMatch(res.body, /widgets\.js/);
+  if (dogs.length <= PAGE_SIZE) {
+    assert.match(res.body, /Page 1 of 1/);
+    assert.equal(countClass(res.body, "dog-card"), dogs.length);
+  }
+  const detail = await get(`/dog-comms/${dogs[0].id}`);
+  assert.equal(detail.status, 200);
+  assert.match(detail.body, /Citation:/);
+  assert.match(detail.body, /stored snapshot/);
+  assert.doesNotMatch(detail.body, /widgets\.js/);
+});
+
+test("home is TUI chrome with local search and tap-friendly catalog keys", async () => {
+  const res = await get("/");
+  assert.equal(res.status, 200);
+  assert.match(res.body, /pixel-wordmark/);
+  assert.match(res.body, /EXITTRACE|ExitTrace/);
+  assert.match(res.body, /action="\/search"/);
+  assert.match(res.body, /class="keymap"/);
+  assert.match(res.body, /class="keychip"/);
+  assert.match(res.body, /href="\/firings"/);
+  assert.doesNotMatch(res.body, /widgets\.js/);
+});
+
+test("person detail keeps net worth and two sources without inventing figures", async () => {
+  const row = seed.people.find((r) => r.id === "james-comey");
+  const res = await get("/people/james-comey");
+  assert.equal(res.status, 200);
+  assert.match(res.body, /James Comey/);
+  assert.match(res.body, /Net worth \(published estimate\)/);
+  assert.match(res.body, /The New York Times/);
+  assert.match(res.body, /BBC News/);
+  assert.match(res.body, /source-link/);
+  assert.match(res.body, /box-pane/);
+  assert.equal(row.net_worth_usd, null);
+  assert.match(res.body, /—/);
+  const missing = await get("/people/not-a-real-person");
+  assert.equal(missing.status, 404);
+});
+
+test("search stays local and does not invent rows", async () => {
+  const res = await get("/search?q=Comey");
+  assert.equal(res.status, 200);
+  assert.match(res.body, /James Comey/);
+  assert.match(res.body, /href="\/people\/james-comey"/);
+  const empty = await get("/search?q=xyzzy-no-such-seed-row");
+  assert.equal(empty.status, 200);
+  assert.match(empty.body, /No seeded rows match/);
+  assert.doesNotMatch(empty.body, /href="\/people\//);
+});
+
+test("optional API page= uses the same window without inventing rows", async () => {
+  const firings = newestFirst(
+    seed.people.filter((r) => r.category === "firings"),
+    "event_date",
+  );
+  const res = await get("/api/people?category=firings&page=1");
+  assert.equal(res.status, 200);
+  const json = JSON.parse(res.body);
+  assert.equal(json.total, firings.length);
+  assert.equal(json.people.length, Math.min(PAGE_SIZE, firings.length));
+  assert.equal(json.people[0].id, firings[0].id);
+  assert.equal(json.people[0].name, firings[0].name);
 });

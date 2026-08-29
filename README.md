@@ -70,7 +70,9 @@ Releases:
 
 Each person row has name, event date, death date (death categories only), a stored Wikimedia or official `.gov` photo or initials, two news sources, and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank.
 
-Dog comms store the post text, poster handle, date, and a local still when one is freely licensed. The source URL is a citation only. Hover a compact row on the home page for the stored snapshot. The pages do not load `widgets.js` and do not fetch X, Wikimedia, or news sites at view time.
+Person and dog-comm lists paginate (`?page=`, 10 rows per page, newest event first). The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
+
+Dog comms store the post text, poster handle, date, and a local still when one is freely licensed. The source URL is a citation only. Tap a dog-comm row to open the stored snapshot. The pages do not load `widgets.js` and do not fetch X, Wikimedia, or news sites at view time.
 
 ## HTTP
 
@@ -78,6 +80,9 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 |--|--|
 | `GET /health` | HTML health page |
 | `GET /api/health` | `{ ok, ready, backend, people, dog_comms }` |
+| `GET /search?q=` | Local catalog search |
+| `GET /people/:id` | One person row |
+| `GET /dog-comms/:id` | One stored dog-comm snapshot |
 | `GET /api/people?category=` | Seeded person rows |
 | `GET /api/dog-comms` | Stored official posts |
 | `GET /media/...` | Files on disk |
