@@ -188,9 +188,12 @@ a:hover { color: var(--ink); }
   font-size: 0.82rem;
 }
 
-.thumb {
+.thumb,
+.portrait,
+img.still.thumb {
   width: 40px;
   height: 52px;
+  max-width: 40px;
   object-fit: cover;
   flex: 0 0 auto;
   background: var(--bg-sel);
@@ -422,7 +425,14 @@ a:hover { color: var(--ink); }
 .handle { font-weight: 700; }
 .acct, .credit, .cite { color: var(--muted); font-size: 0.85rem; }
 .post-text { white-space: pre-wrap; }
-.still { display: block; width: min(100%, 320px); height: auto; margin: 0.6rem 0; background: var(--bg-sel); }
+.still:not(.thumb) { display: block; width: min(100%, 320px); height: auto; margin: 0.6rem 0; background: var(--bg-sel); }
+img.still.thumb {
+  display: block;
+  width: 40px;
+  height: 52px;
+  max-width: 40px;
+  margin: 0;
+}
 .cite { word-break: break-all; }
 
 .facts { display: grid; grid-template-columns: 10rem 1fr; gap: 0.4rem 1rem; max-width: 44rem; }
@@ -446,6 +456,16 @@ pre {
   .tui-n { text-align: left; }
   .pixel-wordmark { width: min(94vw, 22rem); }
   .meta-pane { flex-direction: column; }
+  .tui-row .thumb,
+  .tui-row img.still.thumb,
+  .tui-row img.portrait {
+    width: 40px;
+    height: 52px;
+    max-width: 40px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    margin: 0;
+  }
   .pager-controls { width: 100%; }
   .pager-btn { flex: 1 1 auto; }
   .keymap .keychip { flex: 1 1 calc(50% - 0.4rem); }
