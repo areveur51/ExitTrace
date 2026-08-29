@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { personDetail } from "../app/lib/html.mjs";
 import { importSourcePostsText } from "../app/lib/import-posts.mjs";
+import { MISSING_NET_WORTH_NOTE } from "../app/lib/net-worth.mjs";
 import {
   CITE_FLOOR,
   findGoldMatch,
@@ -61,6 +62,9 @@ function goldFingerprint(people) {
         event_date: row.event_date,
         death_date: row.death_date,
         photo: row.photo,
+        net_worth_usd: row.net_worth_usd,
+        net_worth_note: row.net_worth_note,
+        net_worth_source: row.net_worth_source,
         sources: row.sources,
         summary: row.summary,
       }),
@@ -125,6 +129,9 @@ test("promote fixture source post adds one officials-style person", async () => 
   assert.notEqual(result.person.name, arrest.poster_name);
   assert.equal(result.person.category, "arrests");
   assert.equal(result.person.photo, "");
+  assert.equal(result.person.net_worth_usd, null);
+  assert.equal(result.person.net_worth_note, MISSING_NET_WORTH_NOTE);
+  assert.equal(result.person.net_worth_source, "");
   assert.equal(result.person.death_date, null);
   assert.equal(result.person.sources.length, 2);
   assert.equal(result.person.sources[0].url, CITES[0]);
@@ -176,6 +183,8 @@ test("existing gold person is annotate-only", async () => {
     name: comey.name,
     event_date: comey.event_date,
     category: comey.category,
+    photo: comey.photo,
+    photo_credit: comey.photo_credit,
     sources: comey.sources,
   });
   const extra = "https://www.example.com/n/comey-extra";
@@ -193,6 +202,11 @@ test("existing gold person is annotate-only", async () => {
   assert.equal(after.name, "James Comey");
   assert.equal(after.event_date, comey.event_date);
   assert.equal(after.category, comey.category);
+  assert.equal(after.photo, "/media/people/james-comey.jpg");
+  assert.equal(after.photo_credit, comey.photo_credit);
+  assert.equal(after.net_worth_usd, comey.net_worth_usd);
+  assert.equal(after.net_worth_note, comey.net_worth_note);
+  assert.equal(after.net_worth_source, comey.net_worth_source);
   assert.deepEqual(after.sources.slice(0, comey.sources.length), comey.sources);
   assert.equal(after.sources.at(-1).url, extra);
   assert.equal(after.sources.length, comey.sources.length + 1);
@@ -200,11 +214,48 @@ test("existing gold person is annotate-only", async () => {
     name: after.name,
     event_date: after.event_date,
     category: after.category,
+    photo: after.photo,
+    photo_credit: after.photo_credit,
     sources: after.sources.slice(0, comey.sources.length),
   });
   assert.equal(frozen, before);
   const others = (await listPeople()).filter((r) => r.id !== "james-comey");
   assert.equal(others.length, 71);
+});
+
+test("promote attaches a same-id local still and leaves a missing still blank", async () => {
+  await parkedFixture();
+  const media = fs.mkdtempSync(path.join(os.tmpdir(), "et-promote-media-"));
+  fs.mkdirSync(path.join(media, "people"), { recursive: true });
+  fs.writeFileSync(path.join(media, "people", "casey-vale.jpg"), "portrait-bytes");
+
+  const created = await promoteSourcePost({
+    source_url: "https://example.com/n/arrest-1",
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    category: "arrests",
+    cite_urls: CITES,
+    mediaDir: media,
+    net_worth_usd: "2500000000",
+    net_worth_source: "https://www.forbes.com/profile/casey-vale/",
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.person.photo, "/media/people/casey-vale.jpg");
+  assert.equal(created.person.net_worth_usd, 2500000000);
+  assert.equal(created.person.net_worth_source, "https://www.forbes.com/profile/casey-vale/");
+
+  const blankMedia = fs.mkdtempSync(path.join(os.tmpdir(), "et-promote-blank-"));
+  const death = await promoteSourcePost({
+    source_url: "https://example.com/n/death-1",
+    subject: "Riley Chen",
+    event_date: "2024-05-10",
+    category: "death_official",
+    cite_urls: CITES,
+    photo: "https://x.com/RandomCat/photo.jpg",
+    mediaDir: blankMedia,
+  });
+  assert.equal(death.person.photo, "");
+  assert.equal(death.person.photo_credit, "");
 });
 
 test("reject missing subject, missing date, and fewer than two cites", async () => {
@@ -325,6 +376,7 @@ test("one-shot CLI writes the file store and stays idempotent", async () => {
   assert.equal(first.code, 0, first.stderr);
   assert.match(first.stdout, /promote created person=casey-vale people=73/);
   assert.match(first.stdout, /unsorted/);
+  assert.match(first.stdout, /display ok list=\/arrests detail=\/people\/casey-vale/);
 
   const store = JSON.parse(fs.readFileSync(path.join(tmp, "store.json"), "utf8"));
   assert.equal(store.people.length, 73);
@@ -337,6 +389,7 @@ test("one-shot CLI writes the file store and stays idempotent", async () => {
   const second = await runPromote(flags, { DATA_DIR: tmp });
   assert.equal(second.code, 0, second.stderr);
   assert.match(second.stdout, /promote annotated person=casey-vale people=73 cites=2 added=0/);
+  assert.match(second.stdout, /display ok list=\/arrests detail=\/people\/casey-vale/);
   const again = JSON.parse(fs.readFileSync(path.join(tmp, "store.json"), "utf8"));
   assert.equal(again.people.length, 73);
   assert.equal(again.people.find((r) => r.id === "casey-vale").sources.length, 2);

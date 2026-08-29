@@ -1,4 +1,5 @@
 import { PROMOTE_CATEGORY_IDS, isDeathCategory } from "./categories.mjs";
+import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 export const CITE_FLOOR = 2;
@@ -48,7 +49,10 @@ export function parseCiteUrls(raw) {
   const urls = [];
   const seen = new Set();
   for (const item of list) {
-    const text = String(item || "").trim();
+    const text =
+      item && typeof item === "object"
+        ? String(item.raw || item.url || item.canonical || "").trim()
+        : String(item || "").trim();
     if (!text) continue;
     const canonical = canonicalPublicUrl(text);
     if (!canonical) {
@@ -114,7 +118,7 @@ export function nextPersonId(people, slug, eventDate) {
   );
 }
 
-export function validatePromoteInput(input = {}) {
+export function validateIdentifiedPersonInput(input = {}) {
   const subject = String(input.subject || "").trim();
   if (!subject) {
     throw new PromoteError(
@@ -139,13 +143,37 @@ export function validatePromoteInput(input = {}) {
       "invalid_category",
     );
   }
-  const cite_urls = parseCiteUrls(input.cite_urls);
-  if (cite_urls.length < CITE_FLOOR) {
+  const parsedCites = parseCiteUrls(input.cite_urls);
+  const { official, extra } = partitionCiteUrls(parsedCites);
+  if (official.length < CITE_FLOOR) {
     throw new PromoteError(
-      `need at least ${CITE_FLOOR} http(s) cite URLs`,
+      `need at least ${CITE_FLOOR} published-news or official gov/news-org social cite URLs`,
       "cites_floor",
     );
   }
+  const slug = personSlug(subject);
+  if (!slug) {
+    throw new PromoteError("subject did not yield a person id", "invalid_subject");
+  }
+  return {
+    subject,
+    event_date,
+    category,
+    cite_urls: official,
+    extra_urls: extra,
+    slug,
+    summary: String(input.summary || "").trim(),
+    role: String(input.role || "").trim(),
+    photo: String(input.photo || "").trim(),
+    photo_credit: String(input.photo_credit || "").trim(),
+    net_worth_usd: input.net_worth_usd,
+    net_worth_source: String(input.net_worth_source || "").trim(),
+    net_worth_note: String(input.net_worth_note || "").trim(),
+  };
+}
+
+export function validatePromoteInput(input = {}) {
+  const person = validateIdentifiedPersonInput(input);
   const id = String(input.id || "").trim();
   const source_url = String(input.source_url || "").trim();
   if (!id && !source_url) {
@@ -160,23 +188,7 @@ export function validatePromoteInput(input = {}) {
       "invalid_source_url",
     );
   }
-  const slug = personSlug(subject);
-  if (!slug) {
-    throw new PromoteError("subject did not yield a person id", "invalid_subject");
-  }
-  return {
-    id,
-    source_url,
-    subject,
-    event_date,
-    category,
-    cite_urls,
-    slug,
-    summary: String(input.summary || "").trim(),
-    role: String(input.role || "").trim(),
-    photo: String(input.photo || "").trim(),
-    photo_credit: String(input.photo_credit || "").trim(),
-  };
+  return { ...person, id, source_url };
 }
 
 export function buildPersonRow(input, people) {

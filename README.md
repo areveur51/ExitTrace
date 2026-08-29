@@ -55,6 +55,25 @@ node scripts/promote-source-post.mjs \
 
 If that person already exists, only new cites are attached. See `docs/DATA.md`.
 
+## Add a person or official dog-comm
+
+`/add` queues a request. It does not invent cites, photos, or net-worth figures. An optional Wikimedia or official `.gov` portrait URL and an optional published Forbes or Bloomberg estimate may be queued; a host process looks up published sources, supplies cite URLs, and applies the row. If an eligible still exists it is stored under `/media/people/`. A missing still stays blank. Existing gold photos are not overwritten. If no Forbes/Bloomberg estimate is supplied, USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten.
+
+```bash
+# after look-up, apply the next pending request:
+node scripts/process-add-request.mjs --next \
+  --cite-url https://www.example.com/news/casey-vale-held \
+  --cite-url https://www.example.net/world/casey-vale-arrest \
+  --event-date 2024-06-15 \
+  --category arrests
+# or:
+./exittracectl.sh add-process --id ar-… --cite-url … --cite-url …
+```
+
+Fail-closed: people need a named subject, a calendar `event_date` (not `posted_at`), and two or more verified official news or official government / news-org social URLs. Cites are not invented. Unofficial or commentary social is extra only — it is not a cite. Portraits are attached only from an eligible Wikimedia or official-gov still already present (or supplied as that URL); they are not invented, and gold photos are not overwritten. Net worth is filled only from a published Forbes or Bloomberg estimate; it is not invented, and gold net-worth is not overwritten. If none, USD is null and the note says no published Forbes/Bloomberg estimate was located. Dog comms need an official government handle or official post URL, plus date; unofficial or commentary social is rejected. Gold rows stay annotate-only. The committed seed stays 72 people (live may already be 73). Does not write `data/seed.json`.
+
+The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. After insert or promote, the host is not done until live HTML shows the row on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
+
 ## Data pack
 
 Portraits and dog-comm stills live under `media/` and are served at `/media/`. A zip of the seed plus media is published on GitHub Releases — it is not fetched when you open `/downloads`.
@@ -85,6 +104,7 @@ Releases:
 | `/deaths/ceos` | Deaths of chief executives and controlling founders |
 | `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
+| `/add` | Queue a person name or official government dog-comm |
 | `/downloads` | How the GitHub Release zip is named |
 
 Each person row has name, event date, death date (death categories only), a stored Wikimedia or official `.gov` photo or initials, two news sources, and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
@@ -103,6 +123,8 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /people/:id` | One person row |
 | `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm snapshot |
+| `GET /add` | Queue a person or official dog-comm |
+| `POST /add` | Store a pending add request |
 | `GET /api/people?category=` | Seeded person rows |
 | `GET /api/source-posts?category=` | Parked public posts |
 | `GET /api/dog-comms` | Stored official posts |
@@ -128,9 +150,10 @@ media/                      portraits and dog-comm stills
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/promote-source-post.mjs  promote one Unsorted post to a person row
+scripts/process-add-request.mjs  apply one queued add request (cites from caller)
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
-exittracectl.sh             start | stop | status | seed | import-posts | promote | pack
+exittracectl.sh             start | stop | status | seed | import-posts | promote | add-process | pack
 ```
 
 ## License

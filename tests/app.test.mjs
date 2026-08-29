@@ -120,6 +120,8 @@ test("html pages render", async () => {
     "/deaths/ceos",
     "/unsorted",
     "/dog-comms",
+    "/add",
+    "/add?mode=dog",
     "/downloads",
     "/health",
   ];

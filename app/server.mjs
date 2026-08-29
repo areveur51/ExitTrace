@@ -27,10 +27,12 @@ import {
   listSourcePosts,
   hydrateFileMemory,
   loadSeedFile,
+  persistAddRequests,
   searchCatalog,
   writeFileStore,
 } from "./lib/store.mjs";
 import {
+  addBody,
   deathsIndexNav,
   dogDetail,
   dogList,
@@ -48,6 +50,7 @@ import {
   sourcePostList,
   tuiCount,
 } from "./lib/html.mjs";
+import { AddError, queueAddRequest } from "./lib/add-request.mjs";
 import { PAGE_SIZE, paginate, parsePage } from "./lib/paginate.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -102,6 +105,40 @@ function sendHtml(res, html) {
   send(res, 200, html, { "Content-Type": "text/html; charset=utf-8" });
 }
 
+async function readBody(req, limit = 32_000) {
+  if (typeof req.body === "string") return req.body;
+  const chunks = [];
+  let n = 0;
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    n += buf.length;
+    if (n > limit) throw new Error("body too large");
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function parseForm(body) {
+  const params = new URLSearchParams(body);
+  const out = {};
+  for (const [key, value] of params.entries()) out[key] = value;
+  return out;
+}
+
+function addPage({ mode, queued, error, values }) {
+  return layout({
+    title: queued ? "Queued" : "Add",
+    path: "/add",
+    heading: queued ? "Queued" : "Add",
+    query: queued ? "queued" : mode === "dog" ? "add dog" : "add person",
+    countLabel: queued ? "queued" : "add",
+    lede: queued
+      ? "The request is stored. A host process supplies cites and applies the row."
+      : "Queue a person or an official government dog-comm. Cites are not invented here.",
+    body: addBody({ mode, queued, error, values }),
+  });
+}
+
 function safeId(raw) {
   const id = decodeURIComponent(String(raw || ""));
   return /^[a-z0-9][a-z0-9-]*$/i.test(id) ? id : null;
@@ -152,6 +189,26 @@ async function healthPayload() {
 async function handle(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
   const p = url.pathname;
+
+  if (p === "/add" && req.method === "POST") {
+    let fields = {};
+    try {
+      fields = parseForm(await readBody(req));
+    } catch {
+      send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    const mode = fields.kind === "dog" ? "dog" : "person";
+    try {
+      const { request } = await queueAddRequest(fields);
+      if (!databaseUrl()) persistAddRequests(dataDir);
+      return sendHtml(res, addPage({ mode, queued: request }));
+    } catch (err) {
+      const message =
+        err instanceof AddError ? err.message : "Could not queue that request.";
+      return sendHtml(res, addPage({ mode, error: message, values: fields }));
+    }
+  }
 
   if (req.method !== "GET" && req.method !== "HEAD") {
     send(res, 405, "Method not allowed\n", { "Content-Type": "text/plain; charset=utf-8" });
@@ -305,6 +362,11 @@ async function handle(req, res) {
         body: downloadsBody(),
       }),
     );
+  }
+
+  if (p === "/add") {
+    const mode = url.searchParams.get("mode") === "dog" ? "dog" : "person";
+    return sendHtml(res, addPage({ mode }));
   }
 
   if (p.startsWith("/people/")) {

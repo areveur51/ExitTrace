@@ -16,6 +16,7 @@
     "seed": "node scripts/import-seed.mjs",
     "import-posts": "node scripts/import-source-posts.mjs",
     "promote": "node scripts/promote-source-post.mjs",
+    "add-process": "node scripts/process-add-request.mjs",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "pack": "bash scripts/pack-data.sh",
     "fetch-data": "bash scripts/fetch-data.sh"

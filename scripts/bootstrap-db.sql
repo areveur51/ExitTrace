@@ -71,3 +71,25 @@ CREATE TABLE IF NOT EXISTS et_meta (
   k TEXT PRIMARY KEY,
   v JSONB NOT NULL
 );
+
+-- Queued add requests. Cites are supplied at process time, not invent at submit.
+CREATE TABLE IF NOT EXISTS add_requests (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('person', 'dog')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'applied', 'rejected')),
+  subject TEXT,
+  category TEXT,
+  event_date DATE,
+  hint_url TEXT,
+  handle TEXT,
+  source_url TEXT,
+  posted_at DATE,
+  cite_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error TEXT,
+  result JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  processed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS add_requests_status_idx ON add_requests (status, created_at ASC);
