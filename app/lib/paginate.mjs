@@ -33,7 +33,7 @@ export function paginate({ total, page, pageSize = PAGE_SIZE }) {
 export function pageHref(basePath, page) {
   const path = basePath || "/";
   if (!page || page <= 1) return path;
-  return `${path}?page=${page}`;
+  return path.includes("?") ? `${path}&page=${page}` : `${path}?page=${page}`;
 }
 
 /** Compact page list that stays usable as totals grow (1 … 4 5 6 … 40). */

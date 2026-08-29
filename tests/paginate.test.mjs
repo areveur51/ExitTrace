@@ -47,6 +47,8 @@ test("pageHref omits page=1 so the first page URL stays clean", () => {
   assert.equal(pageHref("/firings", 1), "/firings");
   assert.equal(pageHref("/firings", 2), "/firings?page=2");
   assert.equal(pageHref("/dog-comms", 4), "/dog-comms?page=4");
+  assert.equal(pageHref("/search?q=comey", 2), "/search?q=comey&page=2");
+  assert.equal(pageHref("/search?q=comey", 1), "/search?q=comey");
 });
 
 test("pageWindow inserts gaps when there are many pages", () => {

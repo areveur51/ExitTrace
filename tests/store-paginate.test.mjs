@@ -6,6 +6,7 @@ import {
   countPeople,
   listDogComms,
   listPeople,
+  searchCatalog,
   setMemory,
 } from "../app/lib/store.mjs";
 
@@ -102,6 +103,23 @@ test("listDogComms windows stay newest-first as posts grow", async () => {
       "dog comms must stay newest post first",
     );
   }
+});
+
+test("searchCatalog matches local fields and invents nothing", async () => {
+  setMemory({
+    people: [person(1, "firings"), person(2, "resignations")],
+    dog_comms: [dog(3)],
+  });
+  const hits = await searchCatalog("Person 001");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].row.id, "p-firings-1");
+  const dogs = await searchCatalog("acct3");
+  assert.equal(dogs.length, 1);
+  assert.equal(dogs[0].type, "dog");
+  const none = await searchCatalog("definitely-not-in-the-catalog");
+  assert.equal(none.length, 0);
+  const blank = await searchCatalog("   ");
+  assert.equal(blank.length, 0);
 });
 
 test("countPeople can filter by category without loading every row's page", async () => {

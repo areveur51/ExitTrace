@@ -155,7 +155,7 @@ function newestFirst(rows, dateKey) {
 }
 
 function countClass(html, className) {
-  return (html.match(new RegExp(`class="${className}"`, "g")) || []).length;
+  return (html.match(new RegExp(`class="[^"]*\\b${className}\\b`, "g")) || []).length;
 }
 
 test("people list pages paginate newest-first with shareable ?page=", async () => {
@@ -173,8 +173,8 @@ test("people list pages paginate newest-first with shareable ?page=", async () =
   for (const res of [first, second, clamped, junk]) {
     assert.equal(res.status, 200);
     assert.match(res.body, /class="pager"/);
-    assert.match(res.body, /class="person-card"/);
-    assert.match(res.body, /Net worth \(published estimate\)/);
+    assert.match(res.body, /person-card/);
+    assert.match(res.body, /tui-row/);
     assert.doesNotMatch(res.body, /widgets\.js/);
   }
 
@@ -217,29 +217,61 @@ test("every category list page ships a pager", async () => {
   }
 });
 
-test("dog-comms page paginates stored cards and keeps local snapshots", async () => {
+test("dog-comms page paginates stored rows and opens local snapshots on detail", async () => {
   const dogs = newestFirst(seed.dog_comms, "posted_at");
   const res = await get("/dog-comms");
   assert.equal(res.status, 200);
   assert.match(res.body, /class="pager"/);
-  assert.match(res.body, /class="dog-card"/);
+  assert.match(res.body, /dog-card/);
   assert.match(res.body, new RegExp(dogs[0].handle.replace("@", "@")));
-  assert.match(res.body, /Citation:/);
+  assert.match(res.body, new RegExp(`/dog-comms/${dogs[0].id}`));
   assert.doesNotMatch(res.body, /widgets\.js/);
   if (dogs.length <= PAGE_SIZE) {
     assert.match(res.body, /Page 1 of 1/);
     assert.equal(countClass(res.body, "dog-card"), dogs.length);
   }
+  const detail = await get(`/dog-comms/${dogs[0].id}`);
+  assert.equal(detail.status, 200);
+  assert.match(detail.body, /Citation:/);
+  assert.match(detail.body, /stored snapshot/);
+  assert.doesNotMatch(detail.body, /widgets\.js/);
 });
 
-test("home dog-comm previews are tap targets, not hover-only", async () => {
+test("home is TUI chrome with local search and tap-friendly catalog keys", async () => {
   const res = await get("/");
   assert.equal(res.status, 200);
-  assert.match(res.body, /dog-row-toggle/);
-  assert.match(res.body, /View snapshot/);
-  assert.match(res.body, /Hover or tap/);
-  assert.match(res.body, /aria-expanded="false"/);
-  assert.match(res.body, /class="person-card"/);
+  assert.match(res.body, /pixel-wordmark/);
+  assert.match(res.body, /EXITTRACE|ExitTrace/);
+  assert.match(res.body, /action="\/search"/);
+  assert.match(res.body, /class="keymap"/);
+  assert.match(res.body, /class="keychip"/);
+  assert.match(res.body, /href="\/firings"/);
+  assert.doesNotMatch(res.body, /widgets\.js/);
+});
+
+test("person detail keeps net worth and two sources without inventing figures", async () => {
+  const row = seed.people.find((r) => r.id === "james-comey");
+  const res = await get("/people/james-comey");
+  assert.equal(res.status, 200);
+  assert.match(res.body, /James Comey/);
+  assert.match(res.body, /Net worth \(published estimate\)/);
+  assert.match(res.body, /The New York Times/);
+  assert.match(res.body, /BBC News/);
+  assert.equal(row.net_worth_usd, null);
+  assert.match(res.body, /—/);
+  const missing = await get("/people/not-a-real-person");
+  assert.equal(missing.status, 404);
+});
+
+test("search stays local and does not invent rows", async () => {
+  const res = await get("/search?q=Comey");
+  assert.equal(res.status, 200);
+  assert.match(res.body, /James Comey/);
+  assert.match(res.body, /href="\/people\/james-comey"/);
+  const empty = await get("/search?q=xyzzy-no-such-seed-row");
+  assert.equal(empty.status, 200);
+  assert.match(empty.body, /No seeded rows match/);
+  assert.doesNotMatch(empty.body, /href="\/people\//);
 });
 
 test("optional API page= uses the same window without inventing rows", async () => {

@@ -345,6 +345,102 @@ export async function counts() {
   };
 }
 
+export async function getPerson(id) {
+  if (!id) return null;
+  const p = await getPool();
+  if (!p) return getMemory().people.find((r) => r.id === id) || null;
+  const q = await p.query("SELECT * FROM people WHERE id = $1", [id]);
+  return q.rows[0] ? normalizePerson(q.rows[0]) : null;
+}
+
+export async function getDogComm(id) {
+  if (!id) return null;
+  const p = await getPool();
+  if (!p) return getMemory().dog_comms.find((r) => r.id === id) || null;
+  const q = await p.query("SELECT * FROM dog_comms WHERE id = $1", [id]);
+  return q.rows[0] ? normalizeDog(q.rows[0]) : null;
+}
+
+function likeNeedle(q) {
+  return `%${String(q).replace(/[%_\\]/g, "\\$&")}%`;
+}
+
+function matchesPerson(row, needle) {
+  return [row.name, row.role, row.summary]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
+
+function matchesDog(row, needle) {
+  return [row.handle, row.account_name, row.text]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
+
+export async function searchPeople(q) {
+  const raw = String(q || "").trim();
+  if (!raw) return [];
+  const p = await getPool();
+  if (!p) {
+    const needle = raw.toLowerCase();
+    return getMemory()
+      .people.filter((r) => matchesPerson(r, needle))
+      .slice()
+      .sort(comparePeople);
+  }
+  const res = await p.query(
+    `SELECT * FROM people
+     WHERE name ILIKE $1 ESCAPE '\\'
+        OR role ILIKE $1 ESCAPE '\\'
+        OR summary ILIKE $1 ESCAPE '\\'
+     ORDER BY event_date DESC, name ASC`,
+    [likeNeedle(raw)],
+  );
+  return res.rows.map(normalizePerson);
+}
+
+export async function searchDogComms(q) {
+  const raw = String(q || "").trim();
+  if (!raw) return [];
+  const p = await getPool();
+  if (!p) {
+    const needle = raw.toLowerCase();
+    return getMemory()
+      .dog_comms.filter((r) => matchesDog(r, needle))
+      .slice()
+      .sort(compareDogs);
+  }
+  const res = await p.query(
+    `SELECT * FROM dog_comms
+     WHERE handle ILIKE $1 ESCAPE '\\'
+        OR account_name ILIKE $1 ESCAPE '\\'
+        OR text ILIKE $1 ESCAPE '\\'
+     ORDER BY posted_at DESC, handle ASC`,
+    [likeNeedle(raw)],
+  );
+  return res.rows.map(normalizeDog);
+}
+
+export async function searchCatalog(q) {
+  const [people, dogs] = await Promise.all([searchPeople(q), searchDogComms(q)]);
+  const items = [
+    ...people.map((row) => ({ type: "person", date: row.event_date, row })),
+    ...dogs.map((row) => ({ type: "dog", date: row.posted_at, row })),
+  ];
+  items.sort((a, b) => {
+    const d = String(b.date).localeCompare(String(a.date));
+    if (d !== 0) return d;
+    const an = a.type === "person" ? a.row.name : a.row.handle;
+    const bn = b.type === "person" ? b.row.name : b.row.handle;
+    return String(an).localeCompare(String(bn));
+  });
+  return items;
+}
+
 export async function closeStore() {
   if (pool) {
     await pool.end();
