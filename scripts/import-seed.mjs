@@ -8,10 +8,9 @@ import {
   ensureSchema,
   getMemory,
   getPool,
+  hydrateFileMemory,
   importSeed,
-  loadFileStore,
   loadSeedFile,
-  setMemory,
   writeFileStore,
 } from "../app/lib/store.mjs";
 
@@ -32,13 +31,7 @@ if (databaseUrl()) {
   console.log(`imported postgres people=${n.people} dog_comms=${n.dog_comms}`);
   await closeStore();
 } else {
-  const prior = loadFileStore(dataDir);
-  setMemory({
-    people: seed.people,
-    dog_comms: seed.dog_comms,
-    source_posts: prior.source_posts,
-    meta: seed.meta,
-  });
+  hydrateFileMemory(dataDir, seed);
   writeFileStore(dataDir, getMemory());
   const mem = getMemory();
   console.log(

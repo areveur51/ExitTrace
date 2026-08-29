@@ -9,10 +9,9 @@ import {
   ensureSchema,
   getMemory,
   getPool,
+  hydrateFileMemory,
   importSeed,
-  loadFileStore,
   loadSeedFile,
-  setMemory,
   writeFileStore,
 } from "../app/lib/store.mjs";
 
@@ -44,13 +43,7 @@ if (databaseUrl()) {
   await ensureSchema(pool, bootstrapSql);
   await importSeed(pool, seed);
 } else {
-  const prior = loadFileStore(dataDir);
-  setMemory({
-    people: seed.people,
-    dog_comms: seed.dog_comms,
-    source_posts: prior.source_posts,
-    meta: seed.meta,
-  });
+  hydrateFileMemory(dataDir, seed);
 }
 
 const result = await importSourcePostsText(text);

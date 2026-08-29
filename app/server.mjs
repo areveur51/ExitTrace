@@ -25,10 +25,9 @@ import {
   listDogComms,
   listPeople,
   listSourcePosts,
-  loadFileStore,
+  hydrateFileMemory,
   loadSeedFile,
   searchCatalog,
-  setMemory,
   writeFileStore,
 } from "./lib/store.mjs";
 import {
@@ -488,13 +487,7 @@ async function boot() {
       `[exittrace] postgres people=${imported.people} dog_comms=${imported.dog_comms}`,
     );
   } else {
-    const prior = loadFileStore(dataDir);
-    const mem = setMemory({
-      people: seed.people,
-      dog_comms: seed.dog_comms,
-      source_posts: prior.source_posts,
-      meta: seed.meta,
-    });
+    const mem = hydrateFileMemory(dataDir, seed);
     writeFileStore(dataDir, mem);
     console.log(
       `[exittrace] file store people=${mem.people.length} dog_comms=${mem.dog_comms.length} source_posts=${mem.source_posts.length}`,

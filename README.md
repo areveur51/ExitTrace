@@ -23,7 +23,7 @@ npm test
 ./exittracectl.sh stop
 ```
 
-The committed `data/seed.json` is enough to click through every page. When `DATABASE_URL` is unset the app uses that JSON file store.
+The committed `data/seed.json` is enough to click through every page. When `DATABASE_URL` is unset the app uses that JSON file store. Promoted people that are not in the seed stay in the file store across restarts.
 
 ## Optional Postgres
 
@@ -38,6 +38,22 @@ npm start
 ```
 
 `scripts/bootstrap-db.sql` is `CREATE TABLE IF NOT EXISTS` and safe to re-run. Do not commit `.env`. Copy `.env.example` only if you need to change defaults.
+
+## Promote one Unsorted post
+
+Fail-closed: named subject, calendar `event_date`, catalog category, and two or more `http(s)` cite URLs you already have. Does not invent cites or a portrait. Leaves the source post on Unsorted.
+
+```bash
+node scripts/promote-source-post.mjs \
+  --source-url https://example.com/n/arrest-1 \
+  --subject "Casey Vale" \
+  --event-date 2024-06-15 \
+  --category arrests \
+  --cite-url https://www.example.com/news/casey-vale-held \
+  --cite-url https://www.example.net/world/casey-vale-arrest
+```
+
+If that person already exists, only new cites are attached. See `docs/DATA.md`.
 
 ## Data pack
 
@@ -111,9 +127,10 @@ data/seed.json              portable import
 media/                      portraits and dog-comm stills
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
+scripts/promote-source-post.mjs  promote one Unsorted post to a person row
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
-exittracectl.sh             start | stop | status | seed | import-posts | pack
+exittracectl.sh             start | stop | status | seed | import-posts | promote | pack
 ```
 
 ## License

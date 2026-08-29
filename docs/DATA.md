@@ -22,6 +22,31 @@ Each line is public fields only:
 
 Accepted `category` values: `firings`, `resignations`, `government_stepdowns`, `arrests`, `death_unspecified`. Commentary dog posts are skipped. Dedup is by canonical public URL. A URL that already sits on a gold person row is stored as an annotation only — the gold person is not overwritten. The import is idempotent against Postgres or the file fallback.
 
+## Promote one source post
+
+Once a parked Unsorted post has a named subject, a calendar event date, a catalog category, and at least two published-news or official-account cite URLs, write an identified person row:
+
+```bash
+node scripts/promote-source-post.mjs \
+  --source-url https://example.com/n/arrest-1 \
+  --subject "Casey Vale" \
+  --event-date 2024-06-15 \
+  --category arrests \
+  --cite-url https://www.example.com/news/casey-vale-held \
+  --cite-url https://www.example.net/world/casey-vale-arrest
+# or:
+./exittracectl.sh promote --source-url … --subject "…" --event-date YYYY-MM-DD \
+  --category arrests --cite-url … --cite-url …
+```
+
+`--id <sp-…>` may replace `--source-url`. Optional: `--summary`, `--role`, `--photo`, `--photo-credit`.
+
+Fail-closed: the caller supplies subject, `event_date` (YYYY-MM-DD, not `posted_at`), category, and ≥2 `http`/`https` cite URLs. The poster handle is never copied as the subject. The post date is never copied as the event date. Cites are not invented. A Wikimedia portrait is optional; omit `--photo` to keep initials / em dash.
+
+Allowed `--category` values: `firings`, `resignations`, `government_stepdowns`, `death_celebrity`, `death_official`, `death_ceo`, `arrests`. `dog_comms` is a catalog page, not a person row.
+
+If the same person already exists (id/slug, or the same subject with `event_date` within three days), only new cites are attached. Name, date, category, and existing cites stay as they are. The source post stays on Unsorted (it is not deleted). The command is idempotent on Postgres and on the file store. It does not write `data/seed.json`.
+
 GitHub Releases publish a zip of those two directories. The `/downloads` page describes the zip and does not fetch it.
 
 ## Publish

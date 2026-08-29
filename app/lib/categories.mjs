@@ -92,6 +92,17 @@ export const IMPORT_CATEGORY_IDS = [
   "death_unspecified",
 ];
 
+/** Person categories a promote may write. dog_comms is catalog-only, not a person row. */
+export const PROMOTE_CATEGORY_IDS = [
+  "firings",
+  "resignations",
+  "government_stepdowns",
+  "death_celebrity",
+  "death_official",
+  "death_ceo",
+  "arrests",
+];
+
 const IMPORT_ALIASES = {
   firings: "firings",
   firing: "firings",
