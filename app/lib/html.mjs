@@ -1,4 +1,5 @@
 import { CATEGORIES, formatDate, formatUsd, initials } from "./categories.mjs";
+import { pageHref, pageWindow } from "./paginate.mjs";
 
 function esc(s) {
   return String(s ?? "")
@@ -14,7 +15,7 @@ function nav(activePath) {
     ...CATEGORIES.map((c) => ({ href: c.path, label: c.nav })),
     { href: "/downloads", label: "Downloads" },
   ];
-  return `<nav class="nav">${links
+  return `<nav class="nav" aria-label="Sections">${links
     .map((l) => {
       const on = l.href === activePath;
       return `<a href="${esc(l.href)}"${on ? ' aria-current="page"' : ""}>${esc(l.label)}</a>`;
@@ -84,6 +85,37 @@ function netWorthCell(row) {
   }`;
 }
 
+function personCard(row, { showDeath } = {}) {
+  const death = showDeath
+    ? `<div><dt>Death date</dt><dd><time datetime="${esc(row.death_date)}">${esc(formatDate(row.death_date))}</time></dd></div>`
+    : "";
+  return `<article class="person-card">
+    <div class="person-card-top">
+      ${photoCell(row)}
+      <div class="person-card-id">
+        <h3>${esc(row.name)}</h3>
+        <p class="role">${esc(row.role)}</p>
+      </div>
+    </div>
+    ${row.summary ? `<p class="summary">${esc(row.summary)}</p>` : ""}
+    <dl class="person-meta">
+      <div>
+        <dt>Event date</dt>
+        <dd><time datetime="${esc(row.event_date)}">${esc(formatDate(row.event_date))}</time></dd>
+      </div>
+      ${death}
+      <div>
+        <dt>Net worth (published estimate)</dt>
+        <dd class="col-nw">${netWorthCell(row)}</dd>
+      </div>
+    </dl>
+    <div class="person-sources">
+      <h3>Sources</h3>
+      ${sourceList(row.sources)}
+    </div>
+  </article>`;
+}
+
 export function peopleTable(rows, { showDeath } = {}) {
   const deathCol = showDeath
     ? `<th scope="col">Death date</th>`
@@ -91,19 +123,19 @@ export function peopleTable(rows, { showDeath } = {}) {
   const body = rows
     .map((row) => {
       const death = showDeath
-        ? `<td><time datetime="${esc(row.death_date)}">${esc(formatDate(row.death_date))}</time></td>`
+        ? `<td data-label="Death date"><time datetime="${esc(row.death_date)}">${esc(formatDate(row.death_date))}</time></td>`
         : "";
       return `<tr>
-        <td class="col-photo">${photoCell(row)}</td>
-        <td>
+        <td class="col-photo" data-label="Photo">${photoCell(row)}</td>
+        <td data-label="Name">
           <strong>${esc(row.name)}</strong>
           <div class="role">${esc(row.role)}</div>
           ${row.summary ? `<p class="summary">${esc(row.summary)}</p>` : ""}
         </td>
-        <td><time datetime="${esc(row.event_date)}">${esc(formatDate(row.event_date))}</time></td>
+        <td data-label="Event date"><time datetime="${esc(row.event_date)}">${esc(formatDate(row.event_date))}</time></td>
         ${death}
-        <td class="col-nw">${netWorthCell(row)}</td>
-        <td>${sourceList(row.sources)}</td>
+        <td class="col-nw" data-label="Net worth (published estimate)">${netWorthCell(row)}</td>
+        <td data-label="Sources">${sourceList(row.sources)}</td>
       </tr>`;
     })
     .join("");
@@ -120,6 +152,55 @@ export function peopleTable(rows, { showDeath } = {}) {
     </thead>
     <tbody>${body}</tbody>
   </table></div>`;
+}
+
+export function peopleList(rows, { showDeath } = {}) {
+  if (!rows.length) {
+    return `<p class="empty">No rows on this page.</p>`;
+  }
+  return `<div class="people-list">
+    <div class="person-cards">${rows.map((row) => personCard(row, { showDeath })).join("")}</div>
+    ${peopleTable(rows, { showDeath })}
+  </div>`;
+}
+
+export function pager(meta, { basePath, noun = "rows" } = {}) {
+  const { page, totalPages, total, hasPrev, hasNext } = meta;
+  const status = `Page ${page} of ${totalPages} · ${total} ${noun}`;
+  const prev = hasPrev
+    ? `<a class="pager-btn" href="${esc(pageHref(basePath, page - 1))}" rel="prev">Previous</a>`
+    : `<span class="pager-btn is-disabled" aria-disabled="true">Previous</span>`;
+  const next = hasNext
+    ? `<a class="pager-btn" href="${esc(pageHref(basePath, page + 1))}" rel="next">Next</a>`
+    : `<span class="pager-btn is-disabled" aria-disabled="true">Next</span>`;
+  const nums = pageWindow(page, totalPages);
+  const items = [];
+  let prevN = 0;
+  for (const n of nums) {
+    if (prevN && n > prevN + 1) {
+      items.push(`<li class="pager-gap" aria-hidden="true">…</li>`);
+    }
+    if (n === page) {
+      items.push(
+        `<li><a href="${esc(pageHref(basePath, n))}" aria-current="page">${n}</a></li>`,
+      );
+    } else {
+      items.push(`<li><a href="${esc(pageHref(basePath, n))}">${n}</a></li>`);
+    }
+    prevN = n;
+  }
+  return `<nav class="pager" aria-label="Pagination">
+    <p class="pager-status">${esc(status)}</p>
+    <div class="pager-controls">
+      ${prev}
+      <ol class="pager-pages">${items.join("")}</ol>
+      ${next}
+    </div>
+  </nav>`;
+}
+
+export function listSection(listHtml, pagerHtml) {
+  return `${pagerHtml}${listHtml}${pagerHtml}`;
 }
 
 export function dogCard(row) {
@@ -143,13 +224,17 @@ export function dogCard(row) {
 }
 
 export function dogRow(row) {
-  return `<li class="dog-row" data-snapshot-id="${esc(row.id)}" tabindex="0">
-    <div class="dog-row-main">
-      <span class="handle">${esc(row.handle)}</span>
-      <time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time>
-      <p>${esc(row.text)}</p>
-    </div>
-    <div class="hover-preview" hidden>
+  const previewId = `preview-${esc(row.id)}`;
+  return `<li class="dog-row" data-snapshot-id="${esc(row.id)}">
+    <button type="button" class="dog-row-toggle" aria-expanded="false" aria-controls="${previewId}">
+      <div class="dog-row-main">
+        <span class="handle">${esc(row.handle)}</span>
+        <time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time>
+        <p>${esc(row.text)}</p>
+      </div>
+      <span class="preview-hint">View snapshot</span>
+    </button>
+    <div class="hover-preview" id="${previewId}" hidden>
       ${dogCard(row)}
     </div>
   </li>`;
@@ -169,11 +254,11 @@ export function homeBody({ counts, peoplePreview, dogsPreview }) {
     <section class="cards">${cards}</section>
     <section>
       <h2>Recent exits in the seed</h2>
-      ${peopleTable(peoplePreview, { showDeath: true })}
+      ${peopleList(peoplePreview, { showDeath: true })}
     </section>
     <section>
       <h2>Recent dog comms</h2>
-      <p class="hint">Hover a row for the stored snapshot. Nothing is fetched from X at view time.</p>
+      <p class="hint">Hover or tap a row for the stored snapshot. Nothing is fetched from X at view time.</p>
       <ul class="dog-list">${dogsPreview.map(dogRow).join("")}</ul>
     </section>`;
 }

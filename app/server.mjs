@@ -16,6 +16,8 @@ import {
   ensureSchema,
   getPool,
   importSeed,
+  countDogComms,
+  countPeople,
   listDogComms,
   listPeople,
   loadSeedFile,
@@ -28,8 +30,11 @@ import {
   healthBody,
   homeBody,
   layout,
-  peopleTable,
+  listSection,
+  pager,
+  peopleList,
 } from "./lib/html.mjs";
+import { PAGE_SIZE, paginate, parsePage } from "./lib/paginate.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -137,10 +142,33 @@ async function handle(req, res) {
   }
 
   if (p === "/api/people") {
-    const category = url.searchParams.get("category");
-    return sendJson(res, 200, { people: await listPeople(category || undefined) });
+    const category = url.searchParams.get("category") || undefined;
+    if (url.searchParams.has("page")) {
+      const total = await countPeople(category);
+      const meta = paginate({ total, page: parsePage(url.searchParams) });
+      return sendJson(res, 200, {
+        people: await listPeople({
+          category,
+          limit: meta.limit,
+          offset: meta.offset,
+        }),
+        ...meta,
+      });
+    }
+    return sendJson(res, 200, { people: await listPeople(category) });
   }
   if (p === "/api/dog-comms") {
+    if (url.searchParams.has("page")) {
+      const total = await countDogComms();
+      const meta = paginate({ total, page: parsePage(url.searchParams) });
+      return sendJson(res, 200, {
+        dog_comms: await listDogComms({
+          limit: meta.limit,
+          offset: meta.offset,
+        }),
+        ...meta,
+      });
+    }
     return sendJson(res, 200, { dog_comms: await listDogComms() });
   }
 
@@ -152,12 +180,11 @@ async function handle(req, res) {
   }
 
   if (p === "/") {
-    const [c, people, dogs] = await Promise.all([
+    const [c, peoplePreview, dogsPreview] = await Promise.all([
       counts(),
-      listPeople(),
-      listDogComms(),
+      listPeople({ limit: 8 }),
+      listDogComms({ limit: 5 }),
     ]);
-    const peoplePreview = people.slice(0, 8);
     return sendHtml(
       res,
       layout({
@@ -168,7 +195,7 @@ async function handle(req, res) {
         body: homeBody({
           counts: c,
           peoplePreview,
-          dogsPreview: dogs.slice(0, 5),
+          dogsPreview,
         }),
       }),
     );
@@ -189,7 +216,17 @@ async function handle(req, res) {
 
   const cat = categoryByPath(p);
   if (cat && cat.kind === "person") {
-    const rows = await listPeople(cat.id);
+    const total = await countPeople(cat.id);
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize: PAGE_SIZE,
+    });
+    const rows = await listPeople({
+      category: cat.id,
+      limit: meta.limit,
+      offset: meta.offset,
+    });
     return sendHtml(
       res,
       layout({
@@ -197,12 +234,24 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         lede: `${cat.blurb} Seeded rows only — not exhaustive.`,
-        body: peopleTable(rows, { showDeath: isDeathCategory(cat.id) }),
+        body: listSection(
+          peopleList(rows, { showDeath: isDeathCategory(cat.id) }),
+          pager(meta, { basePath: cat.path, noun: "people" }),
+        ),
       }),
     );
   }
   if (cat && cat.kind === "dog") {
-    const rows = await listDogComms();
+    const total = await countDogComms();
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize: PAGE_SIZE,
+    });
+    const rows = await listDogComms({
+      limit: meta.limit,
+      offset: meta.offset,
+    });
     return sendHtml(
       res,
       layout({
@@ -210,7 +259,10 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         lede: cat.blurb,
-        body: `<div class="dog-page">${rows.map(dogCard).join("")}</div>`,
+        body: listSection(
+          `<div class="dog-page">${rows.map(dogCard).join("")}</div>`,
+          pager(meta, { basePath: cat.path, noun: "posts" }),
+        ),
       }),
     );
   }
