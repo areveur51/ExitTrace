@@ -200,7 +200,17 @@ async function handle(req, res) {
   }
 
   if (p === "/styles.css" || p === "/app.js") {
-    return serveFile(res, path.join(PUBLIC, p.slice(1)));
+    const filePath = path.join(PUBLIC, p.slice(1));
+    if (!fs.existsSync(filePath)) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    send(res, 200, fs.readFileSync(filePath), {
+      "Content-Type": MIME[ext] || "application/octet-stream",
+      "Cache-Control": "no-store",
+    });
+    return;
   }
   if (p.startsWith("/media/")) {
     return serveFile(res, safeJoin(mediaDir, p.slice("/media/".length)));

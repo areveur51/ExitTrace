@@ -82,39 +82,65 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener("click", closeModal);
   });
 
-  document.addEventListener("click", (e) => {
-    const src = e.target.closest(".source-link");
-    if (src) {
+  function previewSource(src) {
+    const label = src.getAttribute("data-label") || src.textContent;
+    const title = src.getAttribute("data-title") || "";
+    const date = src.getAttribute("data-date") || "";
+    const href = src.getAttribute("href") || "";
+    openModal({
+      title: "Source preview",
+      href,
+      mode: "link",
+      toast: "source preview",
+      bodyHtml: `<p><strong>${escText(label)}</strong></p>
+        ${title ? `<p>${escText(title)}</p>` : ""}
+        ${date ? `<p>${escText(date)}</p>` : ""}
+        <p class="cite">Citation only. This app does not fetch the page.</p>
+        <p class="cite">${escText(href)}</p>`,
+    });
+  }
+
+  function previewSnapshot() {
+    const store = document.querySelector(".snapshot-store");
+    openModal({
+      title: "Stored snapshot",
+      mode: "snapshot",
+      toast: "snapshot opened",
+      bodyHtml: store ? store.innerHTML : "<p>No stored snapshot.</p>",
+    });
+  }
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const src = e.target.closest?.(".source-link");
+      if (src) {
+        e.preventDefault();
+        e.stopPropagation();
+        previewSource(src);
+        return;
+      }
+      const snap = e.target.closest?.("[data-snapshot-open]");
+      if (snap) {
+        e.preventDefault();
+        e.stopPropagation();
+        previewSnapshot();
+      }
+    },
+    true,
+  );
+  for (const a of document.querySelectorAll(".source-link")) {
+    a.addEventListener("click", (e) => {
       e.preventDefault();
-      const label = src.getAttribute("data-label") || src.textContent;
-      const title = src.getAttribute("data-title") || "";
-      const date = src.getAttribute("data-date") || "";
-      const href = src.getAttribute("href") || "";
-      openModal({
-        title: "Source preview",
-        href,
-        mode: "link",
-        toast: "source preview",
-        bodyHtml: `<p><strong>${escText(label)}</strong></p>
-          ${title ? `<p>${escText(title)}</p>` : ""}
-          ${date ? `<p>${escText(date)}</p>` : ""}
-          <p class="cite">Citation only. This app does not fetch the page.</p>
-          <p class="cite">${escText(href)}</p>`,
-      });
-      return;
-    }
-    const snap = e.target.closest("[data-snapshot-open]");
-    if (snap) {
+      previewSource(a);
+    });
+  }
+  for (const btn of document.querySelectorAll("[data-snapshot-open]")) {
+    btn.addEventListener("click", (e) => {
       e.preventDefault();
-      const store = document.querySelector(".snapshot-store");
-      openModal({
-        title: "Stored snapshot",
-        mode: "snapshot",
-        toast: "snapshot opened",
-        bodyHtml: store ? store.innerHTML : "<p>No stored snapshot.</p>",
-      });
-    }
-  });
+      previewSnapshot();
+    });
+  }
 
   const rows = [...document.querySelectorAll(".tui-row")];
   function selectRow(row) {
