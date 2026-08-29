@@ -336,7 +336,7 @@ test("one-shot CLI writes the file store and stays idempotent", async () => {
 
   const second = await runPromote(flags, { DATA_DIR: tmp });
   assert.equal(second.code, 0, second.stderr);
-  assert.match(second.stdout, /promote annotated person=casey-vale people=73 added=0/);
+  assert.match(second.stdout, /promote annotated person=casey-vale people=73 cites=2 added=0/);
   const again = JSON.parse(fs.readFileSync(path.join(tmp, "store.json"), "utf8"));
   assert.equal(again.people.length, 73);
   assert.equal(again.people.find((r) => r.id === "casey-vale").sources.length, 2);
