@@ -253,6 +253,32 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.doesNotMatch(res.body, /widgets\.js/);
 });
 
+test("TUI palette uses imagine-cli tokens, not MovieBox purple/cyan", async () => {
+  const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
+  const html = fs.readFileSync(path.join(ROOT, "app", "lib", "html.mjs"), "utf8");
+  const home = await get("/");
+  const list = await get("/firings");
+  const detail = await get("/people/james-comey");
+
+  assert.match(css, /--bg:\s*#0d0d12/);
+  assert.match(css, /--bg-2:\s*#1a1a20/);
+  assert.match(css, /--ink:\s*#c9d1d9/);
+  assert.match(css, /--gold:\s*#e6c384/);
+  assert.match(css, /--green:\s*#98bb6c/);
+  assert.match(css, /--blue:\s*#5d81f7/);
+  assert.match(css, /--amber:\s*#d19a66/);
+  assert.match(css, /--rule:\s*#21262d/);
+  assert.doesNotMatch(css, /box-shadow/);
+  assert.doesNotMatch(css, /#c4b5fd|#4c1d95|#7c3aed|#67e8f9|#1e1f2b|#fbbf24/);
+  assert.doesNotMatch(css, /--cyan\b/);
+  assert.match(html, /fill="#e6c384"/);
+  assert.doesNotMatch(html, /#c4b5fd|#4c1d95|#67e8f9/);
+  assert.match(home.body, /fill="#e6c384"/);
+  assert.doesNotMatch(home.body, /#c4b5fd|#4c1d95/);
+  assert.match(list.body, /list-head/);
+  assert.match(detail.body, /box-pane/);
+});
+
 test("person detail keeps net worth and two sources without inventing figures", async () => {
   const row = seed.people.find((r) => r.id === "james-comey");
   const res = await get("/people/james-comey");
