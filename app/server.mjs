@@ -34,11 +34,13 @@ import {
   healthBody,
   homeBody,
   layout,
+  listHead,
   listSection,
   pager,
   peopleList,
   personDetail,
   searchBody,
+  tuiCount,
 } from "./lib/html.mjs";
 import { PAGE_SIZE, paginate, parsePage } from "./lib/paginate.mjs";
 
@@ -99,8 +101,13 @@ function safeId(raw) {
   return /^[a-z0-9][a-z0-9-]*$/i.test(id) ? id : null;
 }
 
-function countText(meta, noun = "results") {
-  return `${meta.total} ${noun} · page ${meta.page}/${meta.totalPages}`;
+function countText(title, meta, pageCount) {
+  return tuiCount({
+    title,
+    total: meta.total,
+    index: 1,
+    of: pageCount || meta.limit,
+  });
 }
 
 function safeJoin(root, reqPath) {
@@ -229,12 +236,20 @@ async function handle(req, res) {
         path: "/search",
         heading: "Search",
         query: q || "search",
-        countLabel: q ? countText(meta) : "local",
+        countLabel: q ? countText(q, meta, windowed.length) : "local",
         lede: "Matches names, roles, summaries, handles, and stored post text in the local catalog.",
         body: listSection(
           searchBody(windowed, q),
           q
             ? pager(meta, { basePath: searchPath, noun: "results" })
+            : "",
+          q
+            ? listHead({
+                title: q,
+                total: meta.total,
+                index: 1,
+                of: windowed.length,
+              })
             : "",
         ),
       }),
@@ -316,11 +331,17 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         query: cat.title,
-        countLabel: countText(meta),
+        countLabel: countText(cat.title, meta, rows.length),
         lede: `${cat.blurb} Seeded rows only — not exhaustive.`,
         body: listSection(
           peopleList(rows, { showDeath: isDeathCategory(cat.id) }),
           pager(meta, { basePath: cat.path, noun: "people" }),
+          listHead({
+            title: cat.title,
+            total: meta.total,
+            index: 1,
+            of: rows.length,
+          }),
         ),
       }),
     );
@@ -343,11 +364,17 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         query: cat.title,
-        countLabel: countText(meta, "results"),
+        countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: listSection(
           dogList(rows),
           pager(meta, { basePath: cat.path, noun: "posts" }),
+          listHead({
+            title: cat.title,
+            total: meta.total,
+            index: 1,
+            of: rows.length,
+          }),
         ),
       }),
     );

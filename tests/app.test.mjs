@@ -184,6 +184,10 @@ test("people list pages paginate newest-first with shareable ?page=", async () =
   assert.equal(page2Cards, firings.length - PAGE_SIZE);
   assert.match(first.body, /Page 1 of 2/);
   assert.match(second.body, /Page 2 of 2/);
+  assert.match(first.body, /12 available/);
+  assert.match(first.body, /1\/10/);
+  assert.match(first.body, /tui-toast/);
+  assert.match(first.body, /tui-modal/);
   assert.match(first.body, /rel="next"/);
   assert.match(second.body, /rel="prev"/);
   assert.match(first.body, /href="\/firings\?page=2"/);
@@ -257,6 +261,8 @@ test("person detail keeps net worth and two sources without inventing figures", 
   assert.match(res.body, /Net worth \(published estimate\)/);
   assert.match(res.body, /The New York Times/);
   assert.match(res.body, /BBC News/);
+  assert.match(res.body, /source-link/);
+  assert.match(res.body, /box-pane/);
   assert.equal(row.net_worth_usd, null);
   assert.match(res.body, /—/);
   const missing = await get("/people/not-a-real-person");

@@ -18,6 +18,104 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  const toastEl = document.getElementById("tui-toast");
+  const toastMsg = toastEl?.querySelector(".toast-msg");
+  let toastTimer;
+  function showToast(text) {
+    if (!toastEl || !toastMsg || !text) return;
+    toastMsg.textContent = text;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastEl.hidden = true;
+    }, 2200);
+  }
+  showToast(document.body.getAttribute("data-toast") || "page loaded");
+
+  const modal = document.getElementById("tui-modal");
+  const modalTitle = document.getElementById("modal-title");
+  const modalBody = document.getElementById("modal-body");
+  const modalOk = document.getElementById("modal-ok");
+  let modalHref = "";
+  let modalMode = "link";
+
+  function closeModal() {
+    if (!modal) return;
+    modal.hidden = true;
+    modalHref = "";
+    modalMode = "link";
+  }
+
+  function escText(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function openModal({ title, bodyHtml, href, mode, toast }) {
+    if (!modal || !modalTitle || !modalBody || !modalOk) return;
+    modalTitle.textContent = title;
+    modalBody.innerHTML = bodyHtml;
+    modalHref = href || "";
+    modalMode = mode || "link";
+    modalOk.hidden = !modalHref && mode !== "snapshot";
+    modal.hidden = false;
+    modalOk.focus();
+    if (toast) showToast(toast);
+  }
+
+  function confirmModal() {
+    if (modalMode === "snapshot") {
+      closeModal();
+      return;
+    }
+    if (modalHref) {
+      window.open(modalHref, "_blank", "noopener,noreferrer");
+    }
+    closeModal();
+  }
+
+  modalOk?.addEventListener("click", confirmModal);
+  modal?.querySelectorAll("[data-close-modal]").forEach((el) => {
+    el.addEventListener("click", closeModal);
+  });
+
+  document.addEventListener("click", (e) => {
+    const src = e.target.closest(".source-link");
+    if (src) {
+      e.preventDefault();
+      const label = src.getAttribute("data-label") || src.textContent;
+      const title = src.getAttribute("data-title") || "";
+      const date = src.getAttribute("data-date") || "";
+      const href = src.getAttribute("href") || "";
+      openModal({
+        title: "Source preview",
+        href,
+        mode: "link",
+        toast: "source preview",
+        bodyHtml: `<p><strong>${escText(label)}</strong></p>
+          ${title ? `<p>${escText(title)}</p>` : ""}
+          ${date ? `<p>${escText(date)}</p>` : ""}
+          <p class="cite">Citation only. This app does not fetch the page.</p>
+          <p class="cite">${escText(href)}</p>`,
+      });
+      return;
+    }
+    const snap = e.target.closest("[data-snapshot-open]");
+    if (snap) {
+      e.preventDefault();
+      const store = document.querySelector(".snapshot-store");
+      openModal({
+        title: "Stored snapshot",
+        mode: "snapshot",
+        toast: "snapshot opened",
+        bodyHtml: store ? store.innerHTML : "<p>No stored snapshot.</p>",
+      });
+    }
+  });
+
   const rows = [...document.querySelectorAll(".tui-row")];
   function selectRow(row) {
     for (const r of rows) r.classList.remove("is-selected");
@@ -25,6 +123,10 @@ document.addEventListener("DOMContentLoaded", () => {
       row.classList.add("is-selected");
       row.focus({ preventScroll: true });
       row.scrollIntoView({ block: "nearest" });
+      const idx = rows.indexOf(row) + 1;
+      for (const el of document.querySelectorAll("[data-list-pos]")) {
+        el.textContent = `${idx}/${rows.length}`;
+      }
     }
   }
 
@@ -43,6 +145,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typingInField(document.activeElement)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
+    if (!modal?.hidden) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeModal();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        confirmModal();
+      }
+      return;
+    }
+
     const key = e.key;
     if (key === "ArrowDown" || key === "ArrowUp") {
       if (!rows.length) return;
@@ -60,6 +173,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (sel && sel.href) {
         e.preventDefault();
         window.location.href = sel.href;
+      }
+      return;
+    }
+    if (key === "v") {
+      const btn = document.querySelector("[data-snapshot-open]");
+      if (btn) {
+        e.preventDefault();
+        btn.click();
       }
       return;
     }

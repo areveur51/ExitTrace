@@ -35,7 +35,9 @@ export function pixelWordmark(text = "EXITTRACE") {
   const letterW = cols * cell + (cols - 1) * gap;
   const width = letters.length * letterW + (letters.length - 1) * letterGap;
   const height = rows * cell + (rows - 1) * gap;
-  const rects = [];
+  const extra = 4;
+  const shadow = [];
+  const ink = [];
   letters.forEach((ch, li) => {
     const glyph = PIXELS[ch];
     if (!glyph) return;
@@ -43,13 +45,18 @@ export function pixelWordmark(text = "EXITTRACE") {
     glyph.forEach((line, y) => {
       [...line].forEach((bit, x) => {
         if (bit !== "1") return;
-        rects.push(
-          `<rect x="${ox + x * (cell + gap)}" y="${y * (cell + gap)}" width="${cell}" height="${cell}"/>`,
+        const px = ox + x * (cell + gap);
+        const py = y * (cell + gap);
+        shadow.push(
+          `<rect x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="#4c1d95"/>`,
+        );
+        ink.push(
+          `<rect x="${px}" y="${py}" width="${cell}" height="${cell}" fill="#c4b5fd"/>`,
         );
       });
     });
   });
-  return `<svg class="pixel-wordmark" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="ExitTrace" xmlns="http://www.w3.org/2000/svg">${rects.join("")}</svg>`;
+  return `<svg class="pixel-wordmark" viewBox="0 0 ${width + extra} ${height + extra}" width="${width + extra}" height="${height + extra}" role="img" aria-label="ExitTrace" xmlns="http://www.w3.org/2000/svg">${shadow.join("")}${ink.join("")}</svg>`;
 }
 
 function keymapItems(activePath) {
@@ -88,11 +95,56 @@ export function keymapFooter(activePath) {
   </footer>`;
 }
 
+export function boxFrame(title, inner, { active = false, extraClass = "" } = {}) {
+  const t = title ? `<span class="box-title">${title}</span>` : "";
+  return `<div class="box-pane${active ? " is-active" : ""}${extraClass ? ` ${extraClass}` : ""}">
+    <div class="box-h" aria-hidden="true"><span class="box-c">┌</span>${t}<span class="box-dash"></span><span class="box-c">┐</span></div>
+    <div class="box-mid"><span class="box-c box-side" aria-hidden="true">│</span><div class="box-inner">${inner}</div><span class="box-c box-side" aria-hidden="true">│</span></div>
+    <div class="box-f" aria-hidden="true"><span class="box-c">└</span><span class="box-dash"></span><span class="box-c">┘</span></div>
+  </div>`;
+}
+
+export function listHead({ title, total, index = 1, of = 1 }) {
+  const n = Math.max(0, Number(total) || 0);
+  const ofN = Math.max(n ? 1 : 0, Number(of) || 0);
+  const i = ofN ? Math.min(ofN, Math.max(1, Number(index) || 1)) : 0;
+  return `<p class="list-head"><span class="dot">•</span> ${esc(title)} <span class="sep">•</span> ${n} available <span class="sep">•</span> <span data-list-pos>${i}/${ofN || 0}</span></p>`;
+}
+
+export function tuiCount({ title, total, index = 1, of = 1 }) {
+  const n = Math.max(0, Number(total) || 0);
+  const ofN = Math.max(n ? 1 : 0, Number(of) || 0);
+  const i = ofN ? Math.min(ofN, Math.max(1, Number(index) || 1)) : 0;
+  return `• ${esc(title)} • ${n} available • ${i}/${ofN || 0}`;
+}
+
+function chromeWidgets() {
+  return `
+  <div id="tui-toast" class="tui-toast" hidden role="status" aria-live="polite">
+    ${boxFrame("INFO", `<p class="toast-msg"></p>`, { extraClass: "toast-box" })}
+  </div>
+  <div id="tui-modal" class="tui-modal" hidden>
+    <div class="tui-modal-scrim" data-close-modal></div>
+    <div class="tui-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      ${boxFrame(
+        `<span id="modal-title">Preview</span>`,
+        `<div id="modal-body"></div>
+        <hr class="hr">
+        <div class="modal-keys">
+          <button type="button" class="keychip" id="modal-ok"><span class="br">[</span>Enter<span class="br">]</span> Open</button>
+          <button type="button" class="keychip" id="modal-cancel" data-close-modal><span class="br">[</span>Esc<span class="br">]</span> Back</button>
+        </div>`,
+        { active: true, extraClass: "modal-box" },
+      )}
+    </div>
+  </div>`;
+}
+
 function topBar({ query, countLabel }) {
   return `<header class="tui-top">
     <div class="tui-q"><span class="chev" aria-hidden="true">❯</span> ${esc(query || "")}</div>
     <div class="tui-app">exittrace</div>
-    <div class="tui-n">${esc(countLabel || "")}</div>
+    <div class="tui-n">${countLabel || ""}</div>
   </header>`;
 }
 
@@ -115,7 +167,7 @@ export function layout({
   <title>${esc(title)} · ExitTrace</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body class="tui${home ? " tui-home" : ""}">
+<body class="tui${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">
   ${home ? "" : topBar({ query: query || heading, countLabel })}
   <main class="${home ? "home-stage" : "tui-main"}">
     ${home ? "" : `<h1 class="vh">${esc(heading || title)}</h1>`}
@@ -123,6 +175,7 @@ export function layout({
     ${body}
   </main>
   ${keymapFooter(path)}
+  ${chromeWidgets()}
   <script src="/app.js" defer></script>
 </body>
 </html>`;
@@ -139,7 +192,7 @@ function sourceList(sources) {
   return `<ol class="sources">${(sources || [])
     .map((s) => {
       const label = s.publisher || s.title || s.url;
-      return `<li><a href="${esc(s.url)}" rel="noopener noreferrer">${esc(label)}</a>${
+      return `<li><a class="source-link" href="${esc(s.url)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="${esc(s.title || "")}" data-date="${esc(s.date || "")}">${esc(label)}</a>${
         s.date ? ` <time datetime="${esc(s.date)}">${esc(formatDate(s.date))}</time>` : ""
       }</li>`;
     })
@@ -266,8 +319,8 @@ export function pager(meta, { basePath, noun = "rows" } = {}) {
   </nav>`;
 }
 
-export function listSection(listHtml, pagerHtml) {
-  return `${pagerHtml}${listHtml}${pagerHtml}`;
+export function listSection(listHtml, pagerHtml, headHtml = "") {
+  return `${headHtml}${pagerHtml}${listHtml}${pagerHtml}`;
 }
 
 export function dogCard(row) {
@@ -286,7 +339,7 @@ export function dogCard(row) {
     <p class="post-text">${esc(row.text)}</p>
     ${still}
     ${credit}
-    <p class="cite">Citation: <a href="${esc(row.source_url)}" rel="noopener noreferrer">${esc(row.source_url)}</a></p>
+    <p class="cite">Citation: <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Citation" data-title="Stored snapshot citation" data-date="${esc(row.posted_at)}">${esc(row.source_url)}</a></p>
   </article>`;
 }
 
@@ -318,21 +371,27 @@ export function personDetail(row) {
     : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name))}</span>`;
   const sources = row.sources || [];
   return `<article class="detail">
-    <section class="pane meta-pane">
+    ${boxFrame(
+      "Metadata",
+      `<div class="meta-pane">
       ${photo}
       <div class="detail-copy">
         <h2 class="detail-title">${esc(row.name)}</h2>
-        <p class="rating">◆ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
+        <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
         <p class="meta-line"><time datetime="${esc(row.event_date)}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role)} · ${esc(kind)}</p>
         ${death}
+        <hr class="hr">
         <h3 class="pane-h">Synopsis</h3>
         <p class="synopsis">${esc(row.summary || "")}</p>
       </div>
-    </section>
-    <section class="pane sources-pane">
-      <h3 class="pane-h">● Sources · ${sources.length}</h3>
-      ${sourceList(sources)}
-    </section>
+    </div>`,
+      { extraClass: "meta-box" },
+    )}
+    ${boxFrame(
+      `● Sources · ${sources.length} available · 1/${sources.length || 0}`,
+      sourceList(sources),
+      { active: true, extraClass: "sources-pane" },
+    )}
   </article>`;
 }
 
@@ -341,21 +400,28 @@ export function dogDetail(row) {
     ? `<img class="detail-photo" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="120" height="150">`
     : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.handle))}</span>`;
   return `<article class="detail">
-    <section class="pane meta-pane">
+    ${boxFrame(
+      "Metadata",
+      `<div class="meta-pane">
       ${photo}
       <div class="detail-copy">
         <h2 class="detail-title">${esc(row.handle)}</h2>
-        <p class="rating">◆ stored snapshot</p>
+        <p class="rating">★ stored snapshot</p>
         <p class="meta-line"><time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · ${esc(row.account_name)} · Dog comms</p>
+        <hr class="hr">
         <h3 class="pane-h">Synopsis</h3>
         <p class="synopsis post-text">${esc(row.text)}</p>
       </div>
-    </section>
-    <section class="pane sources-pane snapshot-pane">
-      <h3 class="pane-h">● Snapshot · local</h3>
-      <p class="hint">Tap opens this stored card. Nothing is fetched from X at view time.</p>
-      ${dogCard(row)}
-    </section>
+    </div>`,
+      { extraClass: "meta-box" },
+    )}
+    ${boxFrame(
+      "● Snapshot · 1 available · 1/1",
+      `<p class="hint">Tap opens this stored card. Nothing is fetched from X at view time.</p>
+      <button type="button" class="keychip snapshot-open" data-snapshot-open><span class="br">[</span>v<span class="br">]</span> View snapshot</button>
+      <div class="snapshot-store" hidden>${dogCard(row)}</div>`,
+      { active: true, extraClass: "sources-pane snapshot-pane" },
+    )}
   </article>`;
 }
 
@@ -380,9 +446,9 @@ export function searchBody(items, q) {
 
 export function downloadsBody() {
   return `
-    <section class="pane">
-      <h2 class="pane-h">● Data pack</h2>
-      <p>The media pack (portraits, dog-comm stills, and the JSON seed) is published as a GitHub Release zip. This page describes that pack. It does not download or fetch the zip when you open it.</p>
+    ${boxFrame(
+      "● Data pack",
+      `<p>The media pack (portraits, dog-comm stills, and the JSON seed) is published as a GitHub Release zip. This page describes that pack. It does not download or fetch the zip when you open it.</p>
       <dl class="facts">
         <dt>Moving tag</dt>
         <dd><code>data-latest</code></dd>
@@ -397,11 +463,14 @@ export function downloadsBody() {
       <pre><code>./scripts/fetch-data.sh
 # or pass a zip URL:
 ./scripts/fetch-data.sh https://github.com/areveur51/ExitTrace/releases/download/data-latest/exittrace-data-YYYYMMDD.zip</code></pre>
-      <p>The committed <code>data/seed.json</code> is enough to run the app. The zip is for redistributing the same seed plus <code>media/</code>.</p>
-    </section>`;
+      <p>The committed <code>data/seed.json</code> is enough to run the app. The zip is for redistributing the same seed plus <code>media/</code>.</p>`,
+      { active: true },
+    )}`;
 }
 
 export function healthBody(payload) {
-  return `<pre class="health pane">${esc(JSON.stringify(payload, null, 2))}</pre>`;
+  return boxFrame("Health", `<pre class="health">${esc(JSON.stringify(payload, null, 2))}</pre>`, {
+    active: true,
+  });
 }
 
