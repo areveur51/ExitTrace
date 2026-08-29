@@ -315,7 +315,7 @@ async function handle(req, res) {
         path: `/dog-comms/${row.id}`,
         heading: row.handle,
         query: row.handle,
-        countLabel: "snapshot",
+        countLabel: "detail",
         body: dogDetail(row),
       }),
     );

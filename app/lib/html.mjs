@@ -91,7 +91,7 @@ export function keymapFooter(activePath) {
         }><span class="br">[</span>${esc(k.key)}<span class="br">]</span> ${esc(k.label)}</a>`;
       })
       .join("")}
-    <p class="fineprint">Neutral record. Two published news citations on every person row. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <p class="fineprint">Neutral record. Two published news citations on every person row. Net-worth figures are published estimates or left blank. Dog-comm stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -323,28 +323,56 @@ export function listSection(listHtml, pagerHtml, headHtml = "") {
   return `${headHtml}${pagerHtml}${listHtml}${pagerHtml}`;
 }
 
-export function dogCard(row) {
-  const still = row.still
-    ? `<img class="still" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="320" height="200">`
-    : "";
-  const credit = row.still_credit
-    ? `<p class="credit">${esc(row.still_credit)}</p>`
-    : "";
-  return `<article class="dog-snapshot" data-snapshot-id="${esc(row.id)}">
-    <header>
-      <span class="handle">${esc(row.handle)}</span>
-      <span class="acct">${esc(row.account_name)}</span>
-      <time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time>
-    </header>
-    <p class="post-text">${esc(row.text)}</p>
-    ${still}
-    ${credit}
-    <p class="cite">Citation: <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Citation" data-title="Stored snapshot citation" data-date="${esc(row.posted_at)}">${esc(row.source_url)}</a></p>
+export function dogRow(row) {
+  return dogListRow(row, {});
+}
+
+function detailPhoto(src, label) {
+  if (src) {
+    return `<img class="detail-photo" src="${esc(src)}" alt="${esc(label)}" width="120" height="150">`;
+  }
+  return `<span class="initials detail-photo" aria-hidden="true">${esc(initials(label))}</span>`;
+}
+
+function catalogDetail({ photoHtml, title, ratingHtml, ratingNote, metaLine, extraMeta = "", synopsis, sources }) {
+  const cites = sources || [];
+  return `<article class="detail">
+    ${boxFrame(
+      "Metadata",
+      `<div class="meta-pane">
+      ${photoHtml}
+      <div class="detail-copy">
+        <h2 class="detail-title">${esc(title)}</h2>
+        <p class="rating">★ ${ratingHtml}${
+          ratingNote ? ` <span class="muted">${esc(ratingNote)}</span>` : ""
+        }</p>
+        <p class="meta-line">${metaLine}</p>
+        ${extraMeta}
+        <hr class="hr">
+        <h3 class="pane-h">Synopsis</h3>
+        <p class="synopsis">${esc(synopsis || "")}</p>
+      </div>
+    </div>`,
+      { extraClass: "meta-box" },
+    )}
+    ${boxFrame(
+      `● Sources · ${cites.length} available · 1/${cites.length || 0}`,
+      sourceList(cites),
+      { active: true, extraClass: "sources-pane" },
+    )}
   </article>`;
 }
 
-export function dogRow(row) {
-  return dogListRow(row, {});
+function dogSources(row) {
+  if (!row?.source_url) return [];
+  return [
+    {
+      publisher: row.handle,
+      title: row.text || "Official post",
+      url: row.source_url,
+      date: row.posted_at,
+    },
+  ];
 }
 
 export function homeBody({ version }) {
@@ -366,63 +394,28 @@ export function personDetail(row) {
   const death = isDeathCategory(row.category)
     ? `<p class="meta-line">Death date · <time datetime="${esc(row.death_date)}">${esc(formatDate(row.death_date))}</time></p>`
     : "";
-  const photo = row.photo
-    ? `<img class="detail-photo" src="${esc(row.photo)}" alt="${esc(row.name)}" width="120" height="150">`
-    : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name))}</span>`;
-  const sources = row.sources || [];
-  return `<article class="detail">
-    ${boxFrame(
-      "Metadata",
-      `<div class="meta-pane">
-      ${photo}
-      <div class="detail-copy">
-        <h2 class="detail-title">${esc(row.name)}</h2>
-        <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
-        <p class="meta-line"><time datetime="${esc(row.event_date)}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role)} · ${esc(kind)}</p>
-        ${death}
-        <hr class="hr">
-        <h3 class="pane-h">Synopsis</h3>
-        <p class="synopsis">${esc(row.summary || "")}</p>
-      </div>
-    </div>`,
-      { extraClass: "meta-box" },
-    )}
-    ${boxFrame(
-      `● Sources · ${sources.length} available · 1/${sources.length || 0}`,
-      sourceList(sources),
-      { active: true, extraClass: "sources-pane" },
-    )}
-  </article>`;
+  return catalogDetail({
+    photoHtml: detailPhoto(row.photo, row.name),
+    title: row.name,
+    ratingHtml: netWorthCell(row),
+    ratingNote: "Net worth (published estimate)",
+    metaLine: `<time datetime="${esc(row.event_date)}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role)} · ${esc(kind)}`,
+    extraMeta: death,
+    synopsis: row.summary || "",
+    sources: row.sources || [],
+  });
 }
 
 export function dogDetail(row) {
-  const photo = row.still
-    ? `<img class="detail-photo" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="120" height="150">`
-    : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.handle))}</span>`;
-  return `<article class="detail">
-    ${boxFrame(
-      "Metadata",
-      `<div class="meta-pane">
-      ${photo}
-      <div class="detail-copy">
-        <h2 class="detail-title">${esc(row.handle)}</h2>
-        <p class="rating">★ stored snapshot</p>
-        <p class="meta-line"><time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · ${esc(row.account_name)} · Dog comms</p>
-        <hr class="hr">
-        <h3 class="pane-h">Synopsis</h3>
-        <p class="synopsis post-text">${esc(row.text)}</p>
-      </div>
-    </div>`,
-      { extraClass: "meta-box" },
-    )}
-    ${boxFrame(
-      "● Snapshot · 1 available · 1/1",
-      `<p class="hint">Tap opens this stored card. Nothing is fetched from X at view time.</p>
-      <button type="button" class="keychip snapshot-open" data-snapshot-open><span class="br">[</span>v<span class="br">]</span> View snapshot</button>
-      <div class="snapshot-store" hidden>${dogCard(row)}</div>`,
-      { active: true, extraClass: "sources-pane snapshot-pane" },
-    )}
-  </article>`;
+  return catalogDetail({
+    photoHtml: detailPhoto(row.still, row.handle),
+    title: row.handle,
+    ratingHtml: `<span class="nw">${esc("—")}</span>`,
+    ratingNote: "Official government post",
+    metaLine: `<time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · ${esc(row.account_name)} · Dog comms`,
+    synopsis: row.text || "",
+    sources: dogSources(row),
+  });
 }
 
 export function searchBody(items, q) {

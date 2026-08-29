@@ -37,13 +37,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const modalBody = document.getElementById("modal-body");
   const modalOk = document.getElementById("modal-ok");
   let modalHref = "";
-  let modalMode = "link";
 
   function closeModal() {
     if (!modal) return;
     modal.hidden = true;
     modalHref = "";
-    modalMode = "link";
   }
 
   function escText(s) {
@@ -54,23 +52,18 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/"/g, "&quot;");
   }
 
-  function openModal({ title, bodyHtml, href, mode, toast }) {
+  function openModal({ title, bodyHtml, href, toast }) {
     if (!modal || !modalTitle || !modalBody || !modalOk) return;
     modalTitle.textContent = title;
     modalBody.innerHTML = bodyHtml;
     modalHref = href || "";
-    modalMode = mode || "link";
-    modalOk.hidden = !modalHref && mode !== "snapshot";
+    modalOk.hidden = !modalHref;
     modal.hidden = false;
     modalOk.focus();
     if (toast) showToast(toast);
   }
 
   function confirmModal() {
-    if (modalMode === "snapshot") {
-      closeModal();
-      return;
-    }
     if (modalHref) {
       window.open(modalHref, "_blank", "noopener,noreferrer");
     }
@@ -90,23 +83,12 @@ document.addEventListener("DOMContentLoaded", () => {
     openModal({
       title: "Source preview",
       href,
-      mode: "link",
       toast: "source preview",
       bodyHtml: `<p><strong>${escText(label)}</strong></p>
         ${title ? `<p>${escText(title)}</p>` : ""}
         ${date ? `<p>${escText(date)}</p>` : ""}
         <p class="cite">Citation only. This app does not fetch the page.</p>
         <p class="cite">${escText(href)}</p>`,
-    });
-  }
-
-  function previewSnapshot() {
-    const store = document.querySelector(".snapshot-store");
-    openModal({
-      title: "Stored snapshot",
-      mode: "snapshot",
-      toast: "snapshot opened",
-      bodyHtml: store ? store.innerHTML : "<p>No stored snapshot.</p>",
     });
   }
 
@@ -118,13 +100,6 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         e.stopPropagation();
         previewSource(src);
-        return;
-      }
-      const snap = e.target.closest?.("[data-snapshot-open]");
-      if (snap) {
-        e.preventDefault();
-        e.stopPropagation();
-        previewSnapshot();
       }
     },
     true,
@@ -133,12 +108,6 @@ document.addEventListener("DOMContentLoaded", () => {
     a.addEventListener("click", (e) => {
       e.preventDefault();
       previewSource(a);
-    });
-  }
-  for (const btn of document.querySelectorAll("[data-snapshot-open]")) {
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      previewSnapshot();
     });
   }
 
@@ -202,15 +171,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       return;
     }
-    if (key === "v") {
-      const btn = document.querySelector("[data-snapshot-open]");
-      if (btn) {
-        e.preventDefault();
-        btn.click();
-      }
-      return;
-    }
-
     const chip = document.querySelector(`.keychip[data-key="${CSS.escape(key)}"]`);
     if (chip && chip.href) {
       e.preventDefault();
