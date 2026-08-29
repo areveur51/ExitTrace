@@ -327,6 +327,63 @@ test("search stays local and does not invent rows", async () => {
   assert.doesNotMatch(empty.body, /href="\/people\//);
 });
 
+test("dog-comm list and search cards use still.thumb, not the large snapshot still", async () => {
+  const dogs = newestFirst(seed.dog_comms, "posted_at");
+  const list = await get("/dog-comms");
+  const search = await get(`/search?q=${encodeURIComponent(dogs[0].handle.replace("@", ""))}`);
+  const detail = await get(`/dog-comms/${dogs[0].id}`);
+
+  assert.equal(list.status, 200);
+  assert.match(list.body, /class="still thumb"/);
+  assert.match(list.body, /width="48" height="64"/);
+  assert.doesNotMatch(list.body, /class="still"(?![^"]*\bthumb\b)/);
+
+  assert.equal(search.status, 200);
+  assert.match(search.body, /class="still thumb"/);
+  assert.match(search.body, /width="48" height="64"/);
+
+  assert.equal(detail.status, 200);
+  assert.match(detail.body, /class="still"/);
+  assert.match(detail.body, /width="320" height="200"/);
+});
+
+test("death lists and people search show one death date without a died suffix", async () => {
+  const celeb = newestFirst(
+    seed.people.filter((r) => r.category === "death_celebrity"),
+    "event_date",
+  )[0];
+  const newestFiring = newestFirst(
+    seed.people.filter((r) => r.category === "firings"),
+    "event_date",
+  )[0];
+  assert.ok(celeb && celeb.death_date);
+  assert.ok(newestFiring);
+
+  const paths = ["/deaths", "/deaths/celebrities", "/deaths/officials", "/deaths/ceos"];
+  for (const p of paths) {
+    const res = await get(p);
+    assert.equal(res.status, 200, p);
+    assert.doesNotMatch(res.body, /died /, p);
+  }
+
+  const celebs = await get("/deaths/celebrities");
+  assert.match(celebs.body, new RegExp(`datetime="${celeb.death_date}"`));
+  assert.doesNotMatch(celebs.body, /died /);
+
+  const celebSearch = await get(`/search?q=${encodeURIComponent(celeb.name)}`);
+  assert.equal(celebSearch.status, 200);
+  assert.match(celebSearch.body, new RegExp(celeb.name));
+  assert.doesNotMatch(celebSearch.body, /died /);
+  assert.match(celebSearch.body, new RegExp(`datetime="${celeb.death_date}"`));
+  assert.doesNotMatch(celebSearch.body, /died ${celeb.death_date}|died [A-Z]/);
+
+  const firingPage = await get("/firings");
+  assert.equal(firingPage.status, 200);
+  assert.match(firingPage.body, / · Firings · /);
+  assert.doesNotMatch(firingPage.body, /died /);
+  assert.match(firingPage.body, new RegExp(`datetime="${newestFiring.event_date}"`));
+});
+
 test("optional API page= uses the same window without inventing rows", async () => {
   const firings = newestFirst(
     seed.people.filter((r) => r.category === "firings"),

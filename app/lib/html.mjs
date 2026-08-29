@@ -219,15 +219,13 @@ function kindLabel(row) {
 
 export function personRow(row, { selected, showDeath } = {}) {
   const href = `/people/${encodeURIComponent(row.id)}`;
-  const death =
-    showDeath && row.death_date
-      ? ` · died ${esc(formatDate(row.death_date))}`
-      : "";
+  const previewDate =
+    showDeath && row.death_date ? row.death_date : row.event_date;
   return `<a class="tui-row person-card${selected ? " is-selected" : ""}" href="${esc(href)}">
     ${thumb(row.photo, row.name)}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.name || "—")}</div>
-      <div class="tui-meta"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(kindLabel(row))}${death} · ${esc(formatUsd(row.net_worth_usd))}</div>
+      <div class="tui-meta"><time datetime="${esc(previewDate || "")}">${esc(formatDate(previewDate))}</time> · ${esc(kindLabel(row))} · ${esc(formatUsd(row.net_worth_usd))}</div>
     </div>
   </a>`;
 }
