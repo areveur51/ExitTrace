@@ -111,6 +111,10 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   assert.match(person.body, />Arrests</);
   assert.match(person.body, /name="event_date"/);
   assert.match(person.body, /name="hint_url"/);
+  assert.match(person.body, /name="photo"/);
+  assert.match(person.body, /Wikimedia Commons or official \.gov/);
+  assert.match(person.body, /do not invent a photo/i);
+  assert.match(person.body, /Existing gold photos are not overwritten/);
   assert.match(person.body, /value="person"/);
   assert.match(dog.body, /name="handle"/);
   assert.match(dog.body, /name="source_url"/);
@@ -383,4 +387,125 @@ test("add-process CLI applies next pending with cite flags", async () => {
 
   const hydrated = hydrateFileMemory(tmp, goldSeed());
   assert.equal(hydrated.people.length, 73);
+});
+
+function writeStill(dir, name, bytes = "portrait-bytes") {
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, bytes);
+  return file;
+}
+
+test("local eligible still attaches; missing or ineligible still stays blank", async () => {
+  setMemory(goldSeed());
+  const media = fs.mkdtempSync(path.join(os.tmpdir(), "et-media-"));
+  writeStill(path.join(media, "people"), "casey-vale.jpg");
+
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const created = await processAddRequest({
+    id: queued.request.id,
+    overlay: { cite_urls: CITES, mediaDir: media },
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.person.photo, "/media/people/casey-vale.jpg");
+  assert.ok(fs.existsSync(path.join(media, "people", "casey-vale.jpg")));
+
+  const blankMedia = fs.mkdtempSync(path.join(os.tmpdir(), "et-media-blank-"));
+  const blank = await queueAddRequest({
+    kind: "person",
+    subject: "Riley Chen",
+    category: "firings",
+    event_date: "2024-08-01",
+  });
+  const empty = await processAddRequest({
+    id: blank.request.id,
+    overlay: {
+      cite_urls: CITES,
+      photo: "https://example.com/selfie.jpg",
+      mediaDir: blankMedia,
+    },
+  });
+  assert.equal(empty.person.photo, "");
+  assert.equal(empty.person.photo_credit, "");
+  assert.equal(fs.existsSync(path.join(blankMedia, "people", "riley-chen.jpg")), false);
+  assert.equal(goldSeed().people.length, 72);
+});
+
+test("/add rejects ineligible portrait URL and stores an eligible one", async () => {
+  setMemory(goldSeed());
+  const bad = await requestPage("/add", {
+    method: "POST",
+    body: new URLSearchParams({
+      kind: "person",
+      subject: "Casey Vale",
+      category: "arrests",
+      event_date: "2024-06-15",
+      photo: "https://x.com/RandomCat/photo.jpg",
+    }).toString(),
+  });
+  assert.equal(bad.status, 200);
+  assert.match(bad.body, /Wikimedia or official government still/i);
+  assert.equal((await listAddRequests({ status: "pending" })).length, 0);
+
+  const wiki =
+    "https://upload.wikimedia.org/wikipedia/commons/a/a9/Example.jpg";
+  const ok = await requestPage("/add", {
+    method: "POST",
+    body: new URLSearchParams({
+      kind: "person",
+      subject: "Casey Vale",
+      category: "arrests",
+      event_date: "2024-06-15",
+      photo: wiki,
+    }).toString(),
+  });
+  assert.equal(ok.status, 200);
+  assert.match(ok.body, /queued/i);
+  const pending = await listAddRequests({ status: "pending" });
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].photo, wiki);
+  assert.equal(await countPeople(), 72);
+  assert.equal(goldSeed().people.length, 72);
+});
+
+test("annotate does not overwrite a gold photo", async () => {
+  setMemory(goldSeed());
+  const media = fs.mkdtempSync(path.join(os.tmpdir(), "et-media-gold-"));
+  writeStill(path.join(media, "people"), "james-comey.jpg", "not-the-gold-bytes");
+  writeStill(path.join(media, "people"), "imposter.jpg", "wrong-person");
+  const comey = await getPerson("james-comey");
+  assert.equal(comey.photo, "/media/people/james-comey.jpg");
+  const credit = comey.photo_credit;
+
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "James Comey",
+    category: "firings",
+    event_date: "2017-05-09",
+  });
+  const annotated = await processAddRequest({
+    id: queued.request.id,
+    overlay: {
+      cite_urls: [
+        "https://www.example.com/news/comey-follow",
+        "https://www.example.net/world/comey-follow",
+      ],
+      photo: "/media/people/imposter.jpg",
+      photo_credit: "Should not win",
+      mediaDir: media,
+    },
+  });
+  assert.equal(annotated.action, "annotated");
+  assert.equal(annotated.person.photo, "/media/people/james-comey.jpg");
+  assert.equal(annotated.person.photo_credit, credit);
+  assert.equal(annotated.person.name, "James Comey");
+  assert.equal(annotated.person.event_date, "2017-05-09");
+  assert.equal((await getPerson("james-comey")).photo, "/media/people/james-comey.jpg");
+  assert.equal(await countPeople(), 72);
+  assert.equal(JSON.parse(fs.readFileSync(SEED, "utf8")).people.find((r) => r.id === "james-comey").photo, "/media/people/james-comey.jpg");
 });

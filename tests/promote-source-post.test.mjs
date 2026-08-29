@@ -176,6 +176,8 @@ test("existing gold person is annotate-only", async () => {
     name: comey.name,
     event_date: comey.event_date,
     category: comey.category,
+    photo: comey.photo,
+    photo_credit: comey.photo_credit,
     sources: comey.sources,
   });
   const extra = "https://www.example.com/n/comey-extra";
@@ -193,6 +195,8 @@ test("existing gold person is annotate-only", async () => {
   assert.equal(after.name, "James Comey");
   assert.equal(after.event_date, comey.event_date);
   assert.equal(after.category, comey.category);
+  assert.equal(after.photo, "/media/people/james-comey.jpg");
+  assert.equal(after.photo_credit, comey.photo_credit);
   assert.deepEqual(after.sources.slice(0, comey.sources.length), comey.sources);
   assert.equal(after.sources.at(-1).url, extra);
   assert.equal(after.sources.length, comey.sources.length + 1);
@@ -200,11 +204,44 @@ test("existing gold person is annotate-only", async () => {
     name: after.name,
     event_date: after.event_date,
     category: after.category,
+    photo: after.photo,
+    photo_credit: after.photo_credit,
     sources: after.sources.slice(0, comey.sources.length),
   });
   assert.equal(frozen, before);
   const others = (await listPeople()).filter((r) => r.id !== "james-comey");
   assert.equal(others.length, 71);
+});
+
+test("promote attaches a same-id local still and leaves a missing still blank", async () => {
+  await parkedFixture();
+  const media = fs.mkdtempSync(path.join(os.tmpdir(), "et-promote-media-"));
+  fs.mkdirSync(path.join(media, "people"), { recursive: true });
+  fs.writeFileSync(path.join(media, "people", "casey-vale.jpg"), "portrait-bytes");
+
+  const created = await promoteSourcePost({
+    source_url: "https://example.com/n/arrest-1",
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    category: "arrests",
+    cite_urls: CITES,
+    mediaDir: media,
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.person.photo, "/media/people/casey-vale.jpg");
+
+  const blankMedia = fs.mkdtempSync(path.join(os.tmpdir(), "et-promote-blank-"));
+  const death = await promoteSourcePost({
+    source_url: "https://example.com/n/death-1",
+    subject: "Riley Chen",
+    event_date: "2024-05-10",
+    category: "death_official",
+    cite_urls: CITES,
+    photo: "https://x.com/RandomCat/photo.jpg",
+    mediaDir: blankMedia,
+  });
+  assert.equal(death.person.photo, "");
+  assert.equal(death.person.photo_credit, "");
 });
 
 test("reject missing subject, missing date, and fewer than two cites", async () => {

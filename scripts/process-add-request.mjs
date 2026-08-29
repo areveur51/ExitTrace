@@ -18,7 +18,8 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 loadDotEnv(path.join(ROOT, ".env"));
-const { dataDir } = resolveRoot(ROOT);
+const { dataDir, mediaDir } = resolveRoot(ROOT);
+if (!process.env.MEDIA_DIR) process.env.MEDIA_DIR = mediaDir;
 const seedPath = path.join(dataDir, "seed.json");
 const bootstrapSql = fs.readFileSync(
   path.join(ROOT, "scripts", "bootstrap-db.sql"),
@@ -31,6 +32,7 @@ function usage(exitCode = 0) {
   [--subject "…"] [--event-date YYYY-MM-DD] [--category <id>]
   [--source-url <https://…>] [--handle @Official] [--posted-at YYYY-MM-DD]
   [--text "…"] [--account-name "…"] [--still <path>] [--still-credit "…"]
+  [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"]
 
 Host-side process hook (scratch directory, two turns, one envelope):
   look up official/news/gov cites, then apply this command with the envelope
@@ -41,6 +43,9 @@ Fail-closed:
   official news or official gov/news-org social cite URLs.
   Do not invent cites. Do not copy posted_at into event_date.
   Unofficial or commentary social is extra only, not a cite.
+  Attach a local Wikimedia or official-gov portrait under /media/people/
+  when an eligible still exists. Do not invent a photo. Do not overwrite
+  an existing gold photo. Missing still stays blank.
   dog comms need an official government handle or official post URL, plus date.
 
 The Unsorted classify walk stays a separate path (import-posts / promote).

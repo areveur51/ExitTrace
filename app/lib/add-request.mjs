@@ -21,6 +21,7 @@ import {
   personSlug,
   validateIdentifiedPersonInput,
 } from "./promote.mjs";
+import { isEligiblePortraitUrl, isPeopleMediaHref } from "./portrait.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import {
   applyIdentifiedPerson,
@@ -98,6 +99,22 @@ function optionalUrl(raw, field) {
   return text;
 }
 
+function optionalPortrait(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  if (isPeopleMediaHref(text)) return text;
+  if (!canonicalPublicUrl(text)) {
+    throw new AddError("portrait URL is not an http(s) URL", "invalid_photo");
+  }
+  if (!isEligiblePortraitUrl(text)) {
+    throw new AddError(
+      "portrait must be a Wikimedia or official government still; leave blank if none",
+      "ineligible_photo",
+    );
+  }
+  return text;
+}
+
 export function validateQueueInput(input = {}) {
   const kind = String(input.kind || "person").trim();
   if (!ADD_KINDS.includes(kind)) {
@@ -117,6 +134,7 @@ export function validateQueueInput(input = {}) {
     }
     const event_date = optionalDate(input.event_date, "event_date");
     const hint_url = optionalUrl(input.hint_url || input.source_url, "hint_url");
+    const photo = optionalPortrait(input.photo || input.portrait_url);
     return {
       kind,
       subject,
@@ -127,6 +145,8 @@ export function validateQueueInput(input = {}) {
       source_url: hint_url,
       posted_at: "",
       cite_urls: [],
+      photo,
+      photo_credit: String(input.photo_credit || "").trim(),
     };
   }
 
@@ -300,6 +320,7 @@ export function mergeProcessOverlay(request, overlay = {}) {
     role: String(overlay.role || request.role || "").trim(),
     photo: String(overlay.photo || request.photo || "").trim(),
     photo_credit: String(overlay.photo_credit || request.photo_credit || "").trim(),
+    mediaDir: overlay.mediaDir || request.mediaDir,
     cite_urls: citeFromOverlay.length ? citeFromOverlay : citeFromRequest,
   };
 }
@@ -376,6 +397,7 @@ async function applyQueuedPerson(merged) {
       role: parsed.role,
       photo: parsed.photo,
       photo_credit: parsed.photo_credit,
+      mediaDir: merged.mediaDir,
     });
   } else {
     result = await applyIdentifiedPerson({
@@ -387,6 +409,7 @@ async function applyQueuedPerson(merged) {
       role: parsed.role,
       photo: parsed.photo,
       photo_credit: parsed.photo_credit,
+      mediaDir: merged.mediaDir,
     });
   }
   return { ...result, extra_urls };

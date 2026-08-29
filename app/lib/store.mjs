@@ -10,6 +10,7 @@ import {
   validateIdentifiedPersonInput,
   validatePromoteInput,
 } from "./promote.mjs";
+import { isPeopleMediaHref, resolvePortrait } from "./portrait.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 let pool = null;
@@ -650,21 +651,67 @@ export async function appendPersonSources(id, incoming) {
   return { person: { ...person, sources: merged.sources }, added: merged.added };
 }
 
+export async function setPersonPhoto(id, photo, photo_credit = "") {
+  const person = await getPerson(id);
+  if (!person) {
+    throw new PromoteError(`person not found: ${id}`, "person_not_found");
+  }
+  if (person.photo) return person;
+  const href = String(photo || "").trim();
+  if (!href || !isPeopleMediaHref(href)) return person;
+  const credit = String(photo_credit || person.photo_credit || "").trim();
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    const i = mem.people.findIndex((r) => r.id === id);
+    if (i < 0) return person;
+    mem.people[i] = { ...person, photo: href, photo_credit: credit };
+    return mem.people[i];
+  }
+  await p.query(
+    `UPDATE people
+        SET photo = $1, photo_credit = $2
+      WHERE id = $3 AND (photo IS NULL OR photo = '')`,
+    [href, credit, id],
+  );
+  return getPerson(id);
+}
+
+export async function attachPersonPortrait(person, input = {}) {
+  if (!person || person.photo) return person;
+  const resolved = await resolvePortrait({
+    mediaDir: input.mediaDir || process.env.MEDIA_DIR,
+    personId: person.id,
+    supplied: input.photo || input.supplied || "",
+    photo_credit: input.photo_credit || "",
+  });
+  if (!resolved) return person;
+  return setPersonPhoto(person.id, resolved.href, resolved.credit);
+}
+
 export async function applyIdentifiedPerson(input) {
   const parsed = validateIdentifiedPersonInput(input);
   const people = await listPeople();
   const existing = findGoldMatch(people, parsed);
   const incoming = citeRecords(parsed.cite_urls, parsed.event_date);
+  const portrait = {
+    photo: parsed.photo,
+    photo_credit: parsed.photo_credit,
+    mediaDir: input.mediaDir,
+  };
   if (existing) {
     const annotated = await appendPersonSources(existing.id, incoming);
+    const person = await attachPersonPortrait(annotated.person, portrait);
     return {
       action: "annotated",
-      person: annotated.person,
+      person,
       added_cites: annotated.added.length,
       people: await countPeople(),
     };
   }
-  const person = await insertPerson(buildPersonRow(parsed, people));
+  const row = buildPersonRow({ ...parsed, photo: "", photo_credit: "" }, people);
+  const created = await insertPerson(row);
+  const person = await attachPersonPortrait(created, portrait);
   return {
     action: "created",
     person,
@@ -682,7 +729,10 @@ export async function promoteSourcePost(input) {
   if (!sourcePost) {
     throw new PromoteError("source post not found", "source_not_found");
   }
-  const result = await applyIdentifiedPerson(parsed);
+  const result = await applyIdentifiedPerson({
+    ...parsed,
+    mediaDir: input.mediaDir,
+  });
   return { ...result, source_post: sourcePost };
 }
 
