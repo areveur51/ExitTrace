@@ -72,7 +72,7 @@ node scripts/process-add-request.mjs --next \
 
 Fail-closed: people need a named subject, a calendar `event_date` (not `posted_at`), and two or more verified official news or official government / news-org social URLs. Cites are not invented. Unofficial or commentary social is extra only — it is not a cite. Portraits are attached only from an eligible Wikimedia or official-gov still already present (or supplied as that URL); they are not invented, and gold photos are not overwritten. Net worth is filled only from a published Forbes or Bloomberg estimate; it is not invented, and gold net-worth is not overwritten. If none, USD is null and the note says no published Forbes/Bloomberg estimate was located. Dog comms need an official government handle or official post URL, plus date; unofficial or commentary social is rejected. Gold rows stay annotate-only. The committed seed stays 72 people (live may already be 73). Does not write `data/seed.json`.
 
-The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
+The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. After insert or promote, the host is not done until live HTML shows the row on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
 
 ## Data pack
 

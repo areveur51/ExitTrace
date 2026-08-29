@@ -388,6 +388,7 @@ test("add-process CLI applies next pending with cite flags", async () => {
   );
   assert.equal(ok.code, 0, ok.stderr);
   assert.match(ok.stdout, /add-process created person=casey-vale people=73/);
+  assert.match(ok.stdout, /display ok list=\/arrests detail=\/people\/casey-vale/);
 
   const store = JSON.parse(fs.readFileSync(path.join(tmp, "store.json"), "utf8"));
   assert.equal(store.people.length, 73);

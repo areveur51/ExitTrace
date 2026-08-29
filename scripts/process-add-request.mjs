@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { AddError, processAddRequest } from "../app/lib/add-request.mjs";
+import { DisplayError, assertDisplayed } from "../app/lib/display-check.mjs";
 import { CITE_FLOOR, PromoteError } from "../app/lib/promote.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "../app/lib/env.mjs";
 import {
@@ -56,6 +57,11 @@ Fail-closed:
 The Unsorted classify walk stays a separate path (import-posts / promote).
 If a queued hint URL happens to match one parked post, the same fail-closed
 insert helper is reused. Gold rows are annotate-only.
+
+After a person or dog is written, the host process is not done until live
+HTML shows the row on the list page and the detail page. Health counts
+are not enough. /deaths is an empty index — death rows list on
+/deaths/celebrities, /deaths/officials, or /deaths/ceos.
 
 Idempotent. Writes Postgres when DATABASE_URL is set; otherwise the file store.
 Does not write data/seed.json.`);
@@ -158,4 +164,13 @@ const target = result.person
 console.log(
   `add-process ${result.action} ${target} cites=${result.person?.sources?.length || 0} added=${result.added_cites || 0} request=${result.request.id}`,
 );
+try {
+  const shown = await assertDisplayed(result);
+  console.log(`display ok list=${shown.list} detail=${shown.detail}`);
+} catch (err) {
+  const message = err instanceof DisplayError ? err.message : err;
+  console.error(message);
+  await closeStore();
+  process.exit(1);
+}
 await closeStore();

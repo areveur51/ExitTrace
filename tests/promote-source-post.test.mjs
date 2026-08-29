@@ -376,6 +376,7 @@ test("one-shot CLI writes the file store and stays idempotent", async () => {
   assert.equal(first.code, 0, first.stderr);
   assert.match(first.stdout, /promote created person=casey-vale people=73/);
   assert.match(first.stdout, /unsorted/);
+  assert.match(first.stdout, /display ok list=\/arrests detail=\/people\/casey-vale/);
 
   const store = JSON.parse(fs.readFileSync(path.join(tmp, "store.json"), "utf8"));
   assert.equal(store.people.length, 73);
@@ -388,6 +389,7 @@ test("one-shot CLI writes the file store and stays idempotent", async () => {
   const second = await runPromote(flags, { DATA_DIR: tmp });
   assert.equal(second.code, 0, second.stderr);
   assert.match(second.stdout, /promote annotated person=casey-vale people=73 cites=2 added=0/);
+  assert.match(second.stdout, /display ok list=\/arrests detail=\/people\/casey-vale/);
   const again = JSON.parse(fs.readFileSync(path.join(tmp, "store.json"), "utf8"));
   assert.equal(again.people.length, 73);
   assert.equal(again.people.find((r) => r.id === "casey-vale").sources.length, 2);

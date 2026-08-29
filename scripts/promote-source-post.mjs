@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { PROMOTE_CATEGORY_IDS } from "../app/lib/categories.mjs";
+import { DisplayError, assertDisplayed } from "../app/lib/display-check.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "../app/lib/env.mjs";
 import { CITE_FLOOR, PromoteError } from "../app/lib/promote.mjs";
 import {
@@ -49,6 +50,11 @@ source post on Unsorted.
 
 If the same person already exists (id/slug or same subject + event_date ±3 days),
 new cites are attached only — name, date, category, and existing cites stay put.
+
+After the row is written, the host process is not done until live HTML
+shows it on the list page and the detail page. Health counts are not
+enough. /deaths is an empty index — death rows list on
+/deaths/celebrities, /deaths/officials, or /deaths/ceos.
 
 Idempotent. Writes Postgres when DATABASE_URL is set; otherwise the file store.
 Does not write data/seed.json.`);
@@ -123,4 +129,13 @@ if (!databaseUrl()) {
 console.log(
   `promote ${result.action} person=${result.person.id} people=${result.people} cites=${result.person.sources.length} added=${result.added_cites} source_post=${result.source_post.id} unsorted`,
 );
+try {
+  const shown = await assertDisplayed(result);
+  console.log(`display ok list=${shown.list} detail=${shown.detail}`);
+} catch (err) {
+  const message = err instanceof DisplayError ? err.message : err;
+  console.error(message);
+  await closeStore();
+  process.exit(1);
+}
 await closeStore();

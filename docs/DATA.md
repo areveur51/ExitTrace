@@ -47,6 +47,8 @@ Allowed `--category` values: `firings`, `resignations`, `government_stepdowns`, 
 
 If the same person already exists (id/slug, or the same subject with `event_date` within three days), only new cites are attached. Name, date, category, and existing cites stay as they are. The source post stays on Unsorted (it is not deleted). The command is idempotent on Postgres and on the file store. It does not write `data/seed.json`.
 
+After insert or promote, the host process is not done until live HTML shows the row on the category **list** page and the person **detail** page (`/people/:id`). Health counts (`/health`, `/api/health`) are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. The process scripts run this display check and print `display ok list=… detail=…`.
+
 ## Queue and process an add request
 
 `/add` stores a pending `add_request` (Postgres, or `store.json` when `DATABASE_URL` is unset). Submit does not invent cites.
@@ -68,6 +70,8 @@ Host-side hook (scratch directory, two turns, one envelope): look up official/ne
 People: named subject, calendar `event_date` (never copied from `posted_at`), catalog category (including `arrests`), and ≥2 verified official news or official government / news-org social URLs. Unofficial or commentary social is extra only, not a cite. `/add` may include an optional Wikimedia or official `.gov` portrait URL and an optional published Forbes or Bloomberg net-worth pair; ineligible URLs are rejected at queue. At process time the same create/annotate helper attaches a local file under `/media/people/` when that eligible still exists, and fills net worth when a published Forbes/Bloomberg estimate is supplied. Photos and figures are not invented. Existing gold photos and gold net-worth are not overwritten. A missing still stays blank. A missing estimate leaves USD null with a short note. If the request `hint_url` matches one parked Unsorted source post, the same fail-closed insert helper is reused. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path. Gold rows stay annotate-only (name, date, category, existing cites, existing photos, and existing net-worth are not overwritten). The committed seed stays 72 people; a live store may already have 73.
 
 Dog comms: official government handle or official post URL, plus date. Unofficial or commentary social is rejected. Snapshot text/media is copied only if it is already in the local store. The command does not fetch X.
+
+After the row is applied, the host process is not done until live HTML shows it on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; celebrities, officials, and CEOs are the death list pages. Dog comms use `/dog-comms` and `/dog-comms/:id`. The process script prints `display ok list=… detail=…` when that check passes.
 
 Idempotent. Does not write `data/seed.json`.
 
