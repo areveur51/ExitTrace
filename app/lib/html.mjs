@@ -48,10 +48,10 @@ export function pixelWordmark(text = "EXITTRACE") {
         const px = ox + x * (cell + gap);
         const py = y * (cell + gap);
         shadow.push(
-          `<rect x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="#4c1d95"/>`,
+          `<rect x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="#7a6240"/>`,
         );
         ink.push(
-          `<rect x="${px}" y="${py}" width="${cell}" height="${cell}" fill="#c4b5fd"/>`,
+          `<rect x="${px}" y="${py}" width="${cell}" height="${cell}" fill="#e6c384"/>`,
         );
       });
     });
