@@ -9,7 +9,7 @@ DEFAULT_PORT=5220
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") {start|stop|restart|status|logs|seed|import-posts|promote|pack|help}
+Usage: $(basename "$0") {start|stop|restart|status|logs|seed|import-posts|promote|add-process|pack|help}
 EOF
 }
 
@@ -105,6 +105,11 @@ cmd_promote() {
   "$(find_node)" "${ROOT}/scripts/promote-source-post.mjs" "$@"
 }
 
+cmd_add_process() {
+  load_env
+  "$(find_node)" "${ROOT}/scripts/process-add-request.mjs" "$@"
+}
+
 cmd_pack() {
   bash "${ROOT}/scripts/pack-data.sh"
 }
@@ -118,6 +123,7 @@ case "${1:-help}" in
   seed) cmd_seed ;;
   import-posts) shift || true; cmd_import_posts "${1:-}" ;;
   promote) shift || true; cmd_promote "$@" ;;
+  add-process) shift || true; cmd_add_process "$@" ;;
   pack) cmd_pack ;;
   help|-h|--help) usage ;;
   *) usage; exit 1 ;;

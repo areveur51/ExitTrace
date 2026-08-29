@@ -7,6 +7,7 @@ import {
   citeRecords,
   findGoldMatch,
   mergeCites,
+  validateIdentifiedPersonInput,
   validatePromoteInput,
 } from "./promote.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -101,12 +102,48 @@ function normalizeSourcePost(row) {
   };
 }
 
+function normalizeAddRequest(row) {
+  const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+  const created =
+    row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at || "";
+  const processed =
+    row.processed_at instanceof Date
+      ? row.processed_at.toISOString()
+      : row.processed_at || "";
+  return {
+    id: row.id,
+    kind: row.kind === "dog" ? "dog" : "person",
+    status: row.status || "pending",
+    subject: row.subject || "",
+    category: row.category || "",
+    event_date: asDate(row.event_date) || "",
+    hint_url: row.hint_url || "",
+    handle: row.handle || "",
+    source_url: row.source_url || "",
+    posted_at: asDate(row.posted_at) || "",
+    cite_urls: Array.isArray(row.cite_urls) ? row.cite_urls : [],
+    account_name: row.account_name || payload.account_name || "",
+    text: row.text || payload.text || "",
+    still: row.still || payload.still || "",
+    still_credit: row.still_credit || payload.still_credit || "",
+    summary: row.summary || payload.summary || "",
+    role: row.role || payload.role || "",
+    photo: row.photo || payload.photo || "",
+    photo_credit: row.photo_credit || payload.photo_credit || "",
+    error: row.error || "",
+    result: row.result && typeof row.result === "object" ? row.result : null,
+    created_at: created,
+    processed_at: processed,
+  };
+}
+
 export function loadSeedFile(seedPath) {
   const raw = JSON.parse(fs.readFileSync(seedPath, "utf8"));
   return {
     people: (raw.people || []).map(normalizePerson),
     dog_comms: (raw.dog_comms || []).map(normalizeDog),
     source_posts: (raw.source_posts || []).map(normalizeSourcePost),
+    add_requests: (raw.add_requests || []).map(normalizeAddRequest),
     meta: raw.meta || {},
   };
 }
@@ -119,12 +156,13 @@ export function loadFileStore(dataDir) {
     people: (raw.people || []).map(normalizePerson),
     dog_comms: (raw.dog_comms || []).map(normalizeDog),
     source_posts: (raw.source_posts || []).map(normalizeSourcePost),
+    add_requests: (raw.add_requests || []).map(normalizeAddRequest),
     meta: raw.meta || {},
   };
 }
 
 function emptyMemory() {
-  return { people: [], dog_comms: [], source_posts: [], meta: {} };
+  return { people: [], dog_comms: [], source_posts: [], add_requests: [], meta: {} };
 }
 
 export function setMemory(seed) {
@@ -132,6 +170,7 @@ export function setMemory(seed) {
     people: (seed.people || []).map(normalizePerson),
     dog_comms: (seed.dog_comms || []).map(normalizeDog),
     source_posts: (seed.source_posts || []).map(normalizeSourcePost),
+    add_requests: (seed.add_requests || []).map(normalizeAddRequest),
     meta: seed.meta || {},
   };
   return memory;
@@ -174,12 +213,28 @@ export function mergeGoldPeople(seedPeople, priorPeople) {
   return out;
 }
 
+/** Seed dogs win; extra store dogs are kept. Gold rows are not overwritten. */
+export function mergeGoldDogs(seedDogs, priorDogs) {
+  const goldIds = new Set((seedDogs || []).map((row) => row.id));
+  const goldUrls = new Set(
+    (seedDogs || []).map((row) => canonicalPublicUrl(row.source_url)).filter(Boolean),
+  );
+  const extras = (priorDogs || []).filter((row) => {
+    if (goldIds.has(row.id)) return false;
+    const url = canonicalPublicUrl(row.source_url);
+    if (url && goldUrls.has(url)) return false;
+    return true;
+  });
+  return [...(seedDogs || []).map(normalizeDog), ...extras.map(normalizeDog)];
+}
+
 export function hydrateFileMemory(dataDir, seed) {
   const prior = loadFileStore(dataDir);
   return setMemory({
     people: mergeGoldPeople(seed.people, prior.people),
-    dog_comms: seed.dog_comms,
+    dog_comms: mergeGoldDogs(seed.dog_comms, prior.dog_comms),
     source_posts: prior.source_posts,
+    add_requests: prior.add_requests || [],
     meta: seed.meta,
   });
 }
@@ -515,6 +570,16 @@ export async function findSourcePost({ id, source_url } = {}) {
   return normalizeSourcePost(q.rows[0]);
 }
 
+export async function lookupSourcePost({ id, source_url } = {}) {
+  if (!id && !source_url) return null;
+  try {
+    return await findSourcePost({ id, source_url });
+  } catch (err) {
+    if (err instanceof PromoteError && err.code === "source_not_found") return null;
+    throw err;
+  }
+}
+
 function personValues(row) {
   const person = normalizePerson(row);
   return [
@@ -580,15 +645,8 @@ export async function appendPersonSources(id, incoming) {
   return { person: { ...person, sources: merged.sources }, added: merged.added };
 }
 
-export async function promoteSourcePost(input) {
-  const parsed = validatePromoteInput(input);
-  const sourcePost = await findSourcePost({
-    id: parsed.id,
-    source_url: parsed.source_url,
-  });
-  if (!sourcePost) {
-    throw new PromoteError("source post not found", "source_not_found");
-  }
+export async function applyIdentifiedPerson(input) {
+  const parsed = validateIdentifiedPersonInput(input);
   const people = await listPeople();
   const existing = findGoldMatch(people, parsed);
   const incoming = citeRecords(parsed.cite_urls, parsed.event_date);
@@ -598,7 +656,6 @@ export async function promoteSourcePost(input) {
       action: "annotated",
       person: annotated.person,
       added_cites: annotated.added.length,
-      source_post: sourcePost,
       people: await countPeople(),
     };
   }
@@ -607,9 +664,21 @@ export async function promoteSourcePost(input) {
     action: "created",
     person,
     added_cites: person.sources.length,
-    source_post: sourcePost,
     people: await countPeople(),
   };
+}
+
+export async function promoteSourcePost(input) {
+  const parsed = validatePromoteInput(input);
+  const sourcePost = await findSourcePost({
+    id: parsed.id,
+    source_url: parsed.source_url,
+  });
+  if (!sourcePost) {
+    throw new PromoteError("source post not found", "source_not_found");
+  }
+  const result = await applyIdentifiedPerson(parsed);
+  return { ...result, source_post: sourcePost };
 }
 
 export async function upsertSourcePosts(rows) {
@@ -756,6 +825,219 @@ export async function getDogComm(id) {
   if (!p) return getMemory().dog_comms.find((r) => r.id === id) || null;
   const q = await p.query("SELECT * FROM dog_comms WHERE id = $1", [id]);
   return q.rows[0] ? normalizeDog(q.rows[0]) : null;
+}
+
+export async function findDogMatch({ id, source_url, handle, posted_at } = {}) {
+  const canonical = source_url ? canonicalPublicUrl(source_url) : "";
+  const handleKey = String(handle || "")
+    .trim()
+    .replace(/^@/, "")
+    .toLowerCase();
+  const date = asDate(posted_at);
+  const match = (row) => {
+    if (id && row.id === id) return true;
+    if (canonical && canonicalPublicUrl(row.source_url) === canonical) return true;
+    const rowHandle = String(row.handle || "")
+      .trim()
+      .replace(/^@/, "")
+      .toLowerCase();
+    if (handleKey && date && rowHandle === handleKey && asDate(row.posted_at) === date) {
+      return true;
+    }
+    return false;
+  };
+  const p = await getPool();
+  if (!p) return (getMemory().dog_comms || []).find(match) || null;
+  if (id) {
+    const byId = await getDogComm(id);
+    if (byId) return byId;
+  }
+  if (canonical) {
+    const q = await p.query(
+      "SELECT * FROM dog_comms WHERE source_url = $1",
+      [source_url],
+    );
+    if (q.rows[0]) return normalizeDog(q.rows[0]);
+  }
+  if (handleKey && date) {
+    const q = await p.query(
+      "SELECT * FROM dog_comms WHERE lower(regexp_replace(handle, '^@', '')) = $1 AND posted_at = $2",
+      [handleKey, date],
+    );
+    if (q.rows[0]) return normalizeDog(q.rows[0]);
+  }
+  return null;
+}
+
+export async function insertDogComm(row) {
+  const dog = normalizeDog(row);
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    if (mem.dog_comms.some((r) => r.id === dog.id)) {
+      throw new PromoteError(`dog comm exists: ${dog.id}`, "id_collision");
+    }
+    mem.dog_comms.push(dog);
+    return dog;
+  }
+  await p.query(
+    `INSERT INTO dog_comms (
+       id, posted_at, handle, account_name, text, still, still_credit, source_url, snapshot
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb
+     )`,
+    [
+      dog.id,
+      dog.posted_at,
+      dog.handle,
+      dog.account_name,
+      dog.text,
+      dog.still,
+      dog.still_credit,
+      dog.source_url,
+      JSON.stringify(dog.snapshot || {}),
+    ],
+  );
+  return dog;
+}
+
+export function persistAddRequests(dataDir) {
+  if (databaseUrl()) return null;
+  const file = path.join(dataDir, "store.json");
+  const prior = fs.existsSync(file) ? loadFileStore(dataDir) : emptyMemory();
+  return writeFileStore(dataDir, {
+    ...prior,
+    add_requests: getMemory().add_requests || [],
+  });
+}
+
+export async function listAddRequests(opts = {}) {
+  const p = await getPool();
+  if (!p) {
+    let rows = getMemory().add_requests || [];
+    if (opts.status) rows = rows.filter((r) => r.status === opts.status);
+    return rows.slice().sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  }
+  const params = [];
+  let sql = "SELECT * FROM add_requests";
+  if (opts.status) {
+    params.push(opts.status);
+    sql += ` WHERE status = $${params.length}`;
+  }
+  sql += " ORDER BY created_at ASC";
+  const q = await p.query(sql, params);
+  return q.rows.map(normalizeAddRequest);
+}
+
+export async function getAddRequest(id) {
+  if (!id) return null;
+  const p = await getPool();
+  if (!p) return (getMemory().add_requests || []).find((r) => r.id === id) || null;
+  const q = await p.query("SELECT * FROM add_requests WHERE id = $1", [id]);
+  return q.rows[0] ? normalizeAddRequest(q.rows[0]) : null;
+}
+
+export async function nextPendingAddRequest() {
+  const p = await getPool();
+  if (!p) {
+    return (
+      (getMemory().add_requests || [])
+        .filter((r) => r.status === "pending")
+        .slice()
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))[0] || null
+    );
+  }
+  const q = await p.query(
+    "SELECT * FROM add_requests WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1",
+  );
+  return q.rows[0] ? normalizeAddRequest(q.rows[0]) : null;
+}
+
+function addRequestValues(row) {
+  const req = normalizeAddRequest(row);
+  return [
+    req.id,
+    req.kind,
+    req.status,
+    req.subject || null,
+    req.category || null,
+    req.event_date || null,
+    req.hint_url || null,
+    req.handle || null,
+    req.source_url || null,
+    req.posted_at || null,
+    JSON.stringify(req.cite_urls || []),
+    JSON.stringify({
+      account_name: req.account_name,
+      text: req.text,
+      still: req.still,
+      still_credit: req.still_credit,
+      summary: req.summary,
+      role: req.role,
+      photo: req.photo,
+      photo_credit: req.photo_credit,
+    }),
+    req.error || null,
+    req.result ? JSON.stringify(req.result) : null,
+    req.created_at || new Date().toISOString(),
+    req.processed_at || null,
+  ];
+}
+
+export async function createAddRequest(input) {
+  const now = new Date().toISOString();
+  const row = normalizeAddRequest({
+    ...input,
+    status: input.status || "pending",
+    created_at: input.created_at || now,
+  });
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    if (!mem.add_requests) mem.add_requests = [];
+    const dup = mem.add_requests.find(
+      (r) => r.status === "pending" && r.id === row.id,
+    );
+    if (dup) return dup;
+    mem.add_requests.push(row);
+    return row;
+  }
+  await p.query(
+    `INSERT INTO add_requests (
+       id, kind, status, subject, category, event_date, hint_url, handle, source_url,
+       posted_at, cite_urls, payload, error, result, created_at, processed_at
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14::jsonb,$15,$16
+     )`,
+    addRequestValues(row),
+  );
+  return row;
+}
+
+export async function updateAddRequest(id, patch) {
+  const prior = await getAddRequest(id);
+  if (!prior) {
+    throw new PromoteError(`add request not found: ${id}`, "request_not_found");
+  }
+  const row = normalizeAddRequest({ ...prior, ...patch, id });
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    const i = (mem.add_requests || []).findIndex((r) => r.id === id);
+    if (i < 0) throw new PromoteError(`add request not found: ${id}`, "request_not_found");
+    mem.add_requests[i] = row;
+    return row;
+  }
+  await p.query(
+    `UPDATE add_requests SET
+       kind = $2, status = $3, subject = $4, category = $5, event_date = $6,
+       hint_url = $7, handle = $8, source_url = $9, posted_at = $10,
+       cite_urls = $11::jsonb, payload = $12::jsonb, error = $13, result = $14::jsonb,
+       created_at = $15, processed_at = $16
+     WHERE id = $1`,
+    addRequestValues(row),
+  );
+  return row;
 }
 
 function likeNeedle(q) {

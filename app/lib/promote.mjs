@@ -48,7 +48,10 @@ export function parseCiteUrls(raw) {
   const urls = [];
   const seen = new Set();
   for (const item of list) {
-    const text = String(item || "").trim();
+    const text =
+      item && typeof item === "object"
+        ? String(item.raw || item.url || item.canonical || "").trim()
+        : String(item || "").trim();
     if (!text) continue;
     const canonical = canonicalPublicUrl(text);
     if (!canonical) {
@@ -114,7 +117,7 @@ export function nextPersonId(people, slug, eventDate) {
   );
 }
 
-export function validatePromoteInput(input = {}) {
+export function validateIdentifiedPersonInput(input = {}) {
   const subject = String(input.subject || "").trim();
   if (!subject) {
     throw new PromoteError(
@@ -146,6 +149,25 @@ export function validatePromoteInput(input = {}) {
       "cites_floor",
     );
   }
+  const slug = personSlug(subject);
+  if (!slug) {
+    throw new PromoteError("subject did not yield a person id", "invalid_subject");
+  }
+  return {
+    subject,
+    event_date,
+    category,
+    cite_urls,
+    slug,
+    summary: String(input.summary || "").trim(),
+    role: String(input.role || "").trim(),
+    photo: String(input.photo || "").trim(),
+    photo_credit: String(input.photo_credit || "").trim(),
+  };
+}
+
+export function validatePromoteInput(input = {}) {
+  const person = validateIdentifiedPersonInput(input);
   const id = String(input.id || "").trim();
   const source_url = String(input.source_url || "").trim();
   if (!id && !source_url) {
@@ -160,23 +182,7 @@ export function validatePromoteInput(input = {}) {
       "invalid_source_url",
     );
   }
-  const slug = personSlug(subject);
-  if (!slug) {
-    throw new PromoteError("subject did not yield a person id", "invalid_subject");
-  }
-  return {
-    id,
-    source_url,
-    subject,
-    event_date,
-    category,
-    cite_urls,
-    slug,
-    summary: String(input.summary || "").trim(),
-    role: String(input.role || "").trim(),
-    photo: String(input.photo || "").trim(),
-    photo_credit: String(input.photo_credit || "").trim(),
-  };
+  return { ...person, id, source_url };
 }
 
 export function buildPersonRow(input, people) {

@@ -47,6 +47,28 @@ Allowed `--category` values: `firings`, `resignations`, `government_stepdowns`, 
 
 If the same person already exists (id/slug, or the same subject with `event_date` within three days), only new cites are attached. Name, date, category, and existing cites stay as they are. The source post stays on Unsorted (it is not deleted). The command is idempotent on Postgres and on the file store. It does not write `data/seed.json`.
 
+## Queue and process an add request
+
+`/add` stores a pending `add_request` (Postgres, or `store.json` when `DATABASE_URL` is unset). Submit does not invent cites.
+
+Host process after look-up:
+
+```bash
+node scripts/process-add-request.mjs --next \
+  --cite-url https://www.example.com/news/casey-vale-held \
+  --cite-url https://www.example.net/world/casey-vale-arrest \
+  --event-date 2024-06-15 \
+  --category arrests
+# or one id:
+./exittracectl.sh add-process --id ar-… --cite-url … --cite-url …
+```
+
+People: named subject, calendar `event_date`, catalog category, and ≥2 published-news or official news-org / government social URLs. Random social is rejected. If the request `hint_url` matches an Unsorted source post, the promote path is reused; otherwise the same fail-closed insert writes an identified person. Gold rows stay annotate-only.
+
+Dog comms: official government handle + official post URL + date. Unofficial social is rejected. Snapshot text/media is copied only if it is already in the local store. The command does not fetch X.
+
+Idempotent. Does not write `data/seed.json`.
+
 GitHub Releases publish a zip of those two directories. The `/downloads` page describes the zip and does not fetch it.
 
 ## Publish

@@ -55,6 +55,23 @@ node scripts/promote-source-post.mjs \
 
 If that person already exists, only new cites are attached. See `docs/DATA.md`.
 
+## Add a person or official dog-comm
+
+`/add` queues a request. It does not invent cites. A host process looks up published sources, supplies cite URLs, and applies the row.
+
+```bash
+# after look-up, apply the next pending request:
+node scripts/process-add-request.mjs --next \
+  --cite-url https://www.example.com/news/casey-vale-held \
+  --cite-url https://www.example.net/world/casey-vale-arrest \
+  --event-date 2024-06-15 \
+  --category arrests
+# or:
+./exittracectl.sh add-process --id ar-… --cite-url … --cite-url …
+```
+
+Fail-closed: people need a named subject, a calendar event date, and two or more published-news or official government / news-org social URLs. Random social does not count. Dog comms need an official government handle, official post URL, and date. If the person or dog already exists, only extra cites are attached. Does not write `data/seed.json`.
+
 ## Data pack
 
 Portraits and dog-comm stills live under `media/` and are served at `/media/`. A zip of the seed plus media is published on GitHub Releases — it is not fetched when you open `/downloads`.
@@ -85,6 +102,7 @@ Releases:
 | `/deaths/ceos` | Deaths of chief executives and controlling founders |
 | `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
+| `/add` | Queue a person name or official government dog-comm |
 | `/downloads` | How the GitHub Release zip is named |
 
 Each person row has name, event date, death date (death categories only), a stored Wikimedia or official `.gov` photo or initials, two news sources, and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
@@ -103,6 +121,8 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /people/:id` | One person row |
 | `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm snapshot |
+| `GET /add` | Queue a person or official dog-comm |
+| `POST /add` | Store a pending add request |
 | `GET /api/people?category=` | Seeded person rows |
 | `GET /api/source-posts?category=` | Parked public posts |
 | `GET /api/dog-comms` | Stored official posts |
@@ -128,9 +148,10 @@ media/                      portraits and dog-comm stills
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/promote-source-post.mjs  promote one Unsorted post to a person row
+scripts/process-add-request.mjs  apply one queued add request (cites from caller)
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
-exittracectl.sh             start | stop | status | seed | import-posts | promote | pack
+exittracectl.sh             start | stop | status | seed | import-posts | promote | add-process | pack
 ```
 
 ## License

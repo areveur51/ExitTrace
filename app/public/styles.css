@@ -272,6 +272,9 @@ img.still.thumb {
 .keychip[data-key="3"] { color: var(--gold); }
 .keychip[data-key="u"] { color: var(--gold); }
 .keychip[data-key="c"] { color: var(--rose); }
+.keychip[data-key="n"] { color: var(--green); }
+.keychip[data-key="p"] { color: var(--blue); }
+.keychip[data-key="o"] { color: var(--rose); }
 .keychip[data-key="w"] { color: var(--muted); }
 .keychip[data-key="h"] { color: var(--ink); }
 .keychip[aria-current="page"] {
@@ -447,6 +450,48 @@ pre {
   border: 1px solid var(--rule);
 }
 .health { font-size: 0.85rem; }
+
+.add-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+}
+.tui-form .field {
+  display: block;
+  margin: 0 0 0.75rem;
+}
+.tui-form .field span {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tui-form input,
+.tui-form select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+}
+.tui-form input:focus,
+.tui-form select:focus {
+  outline: 1px solid var(--blue);
+}
+.add-submit {
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  font: inherit;
+  cursor: pointer;
+  min-height: 44px;
+}
+.cite-rule, .queued-msg { color: var(--ink); }
+.form-error { color: var(--rose); margin: 0 0 0.65rem; }
 
 @media (max-width: 720px) {
   .tui-top {

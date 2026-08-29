@@ -68,6 +68,7 @@ function keymapItems(activePath) {
     { key: "d", href: "/deaths", label: "Deaths" },
     { key: "u", href: "/unsorted", label: "Unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
+    { key: "n", href: "/add", label: "Add" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ];
   if (String(activePath).startsWith("/deaths")) {
@@ -94,7 +95,7 @@ export function keymapFooter(activePath) {
         }><span class="br">[</span>${esc(k.key)}<span class="br">]</span> ${esc(k.label)}</a>`;
       })
       .join("")}
-    <p class="fineprint">Neutral record. Two published news citations on every person row. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <p class="fineprint">Neutral record. Two published news citations on every person row. Official news and official government social count; random social does not. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -588,4 +589,103 @@ export function healthBody(payload) {
     active: true,
   });
 }
+
+const ADD_CATEGORIES = [
+  { id: "", label: "Optional" },
+  { id: "firings", label: "Firings" },
+  { id: "resignations", label: "Resignations" },
+  { id: "government_stepdowns", label: "Government step-downs" },
+  { id: "death_celebrity", label: "Deaths — celebrities" },
+  { id: "death_official", label: "Deaths — officials" },
+  { id: "death_ceo", label: "Deaths — CEOs" },
+  { id: "arrests", label: "Arrests" },
+];
+
+export function addCiteRule() {
+  return `<p class="cite-rule">Person rows need two or more citations. Official news and official government social count. Random social posts do not. This form does not invent cites — it only queues a request. A host process looks up published sources and applies the row.</p>`;
+}
+
+export function addBody({
+  mode = "person",
+  queued,
+  error,
+  values = {},
+} = {}) {
+  const person = mode !== "dog";
+  const tabs = `<nav class="add-modes" aria-label="Add mode">
+    <a class="keychip" href="/add"${person ? ' aria-current="page"' : ""} data-key="p"><span class="br">[</span>p<span class="br">]</span> Person</a>
+    <a class="keychip" href="/add?mode=dog"${person ? "" : ' aria-current="page"'} data-key="o"><span class="br">[</span>o<span class="br">]</span> Dog comms</a>
+  </nav>`;
+  if (queued) {
+    return `${tabs}
+    ${boxFrame(
+      "Queued",
+      `<p class="queued-msg">Request <code>${esc(queued.id)}</code> is queued.</p>
+      <p>No row was added yet. Cites are not invented at submit time.</p>
+      <p><a class="keychip" href="/add">Back to Add</a> <a class="keychip" href="/">Home</a></p>
+      ${addCiteRule()}`,
+      { active: true, extraClass: "add-box" },
+    )}`;
+  }
+  const err = error ? `<p class="form-error" role="alert">${esc(error)}</p>` : "";
+  if (person) {
+    return `${tabs}
+    ${boxFrame(
+      "Add a person",
+      `${err}
+      <form class="tui-form add-form" method="post" action="/add">
+        <input type="hidden" name="kind" value="person">
+        <label class="field">
+          <span>Name</span>
+          <input type="text" name="subject" required value="${esc(values.subject || "")}" autocomplete="name">
+        </label>
+        <label class="field">
+          <span>Category</span>
+          <select name="category">
+            ${ADD_CATEGORIES.map(
+              (c) =>
+                `<option value="${esc(c.id)}"${values.category === c.id ? " selected" : ""}>${esc(c.label)}</option>`,
+            ).join("")}
+          </select>
+        </label>
+        <label class="field">
+          <span>Event date</span>
+          <input type="date" name="event_date" value="${esc(values.event_date || "")}">
+        </label>
+        <label class="field">
+          <span>Hint URL</span>
+          <input type="url" name="hint_url" value="${esc(values.hint_url || "")}" placeholder="https://…" inputmode="url">
+        </label>
+        <button type="submit" class="keychip add-submit"><span class="br">[</span>Enter<span class="br">]</span> Queue</button>
+      </form>
+      ${addCiteRule()}`,
+      { active: true, extraClass: "add-box" },
+    )}`;
+  }
+  return `${tabs}
+    ${boxFrame(
+      "Add official dog comms",
+      `${err}
+      <form class="tui-form add-form" method="post" action="/add?mode=dog">
+        <input type="hidden" name="kind" value="dog">
+        <label class="field">
+          <span>Official government handle</span>
+          <input type="text" name="handle" value="${esc(values.handle || "")}" placeholder="@POTUS" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Official post URL</span>
+          <input type="url" name="source_url" value="${esc(values.source_url || "")}" placeholder="https://x.com/…" inputmode="url">
+        </label>
+        <label class="field">
+          <span>Date</span>
+          <input type="date" name="posted_at" value="${esc(values.posted_at || "")}">
+        </label>
+        <p class="hint">Official government accounts only. Unofficial social is rejected.</p>
+        <button type="submit" class="keychip add-submit"><span class="br">[</span>Enter<span class="br">]</span> Queue</button>
+      </form>
+      ${addCiteRule()}`,
+      { active: true, extraClass: "add-box" },
+    )}`;
+}
+
 
