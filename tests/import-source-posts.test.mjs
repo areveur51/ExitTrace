@@ -59,9 +59,9 @@ test("canonical public URL drops tracking and normalizes hosts", () => {
   assert.equal(canonicalPublicUrl(""), "");
 });
 
-test("fixture import keeps gold 71/8 and parks standalone source rows", async () => {
+test("fixture import keeps gold 72/8 and parks standalone source rows", async () => {
   const seed = goldSeed();
-  assert.equal(seed.people.length, 71);
+  assert.equal(seed.people.length, 72);
   assert.equal(seed.dog_comms.length, 8);
   setMemory(seed);
 
@@ -70,9 +70,9 @@ test("fixture import keeps gold 71/8 and parks standalone source rows", async ()
   const comeyDate = comey.event_date;
 
   const first = await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
-  assert.equal(await countPeople(), 71);
+  assert.equal(await countPeople(), 72);
   assert.equal(await countDogComms(), 8);
-  assert.equal(getMemory().people.length, 71);
+  assert.equal(getMemory().people.length, 72);
   assert.equal(getMemory().dog_comms.length, 8);
 
   const after = getMemory().people.find((r) => r.id === "james-comey");
@@ -108,7 +108,7 @@ test("fixture import keeps gold 71/8 and parks standalone source rows", async ()
   assert.equal(await countSourcePosts({ category: "death_unspecified", standalone: true }), 1);
 
   const second = await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
-  assert.equal(await countPeople(), 71);
+  assert.equal(await countPeople(), 72);
   assert.equal(await countDogComms(), 8);
   assert.equal((await listSourcePosts({ standalone: true })).length, 4);
   assert.equal(second.inserted, 0);
