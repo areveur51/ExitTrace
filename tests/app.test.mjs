@@ -348,10 +348,16 @@ test("dog-comm list and search cards use still.thumb, not the large snapshot sti
 });
 
 test("death lists and people search show one death date without a died suffix", async () => {
-  const celeb = seed.people.find((r) => r.category === "death_celebrity");
-  const firing = seed.people.find((r) => r.category === "firings");
+  const celeb = newestFirst(
+    seed.people.filter((r) => r.category === "death_celebrity"),
+    "event_date",
+  )[0];
+  const newestFiring = newestFirst(
+    seed.people.filter((r) => r.category === "firings"),
+    "event_date",
+  )[0];
   assert.ok(celeb && celeb.death_date);
-  assert.ok(firing);
+  assert.ok(newestFiring);
 
   const paths = ["/deaths", "/deaths/celebrities", "/deaths/officials", "/deaths/ceos"];
   for (const p of paths) {
@@ -360,18 +366,22 @@ test("death lists and people search show one death date without a died suffix", 
     assert.doesNotMatch(res.body, /died /, p);
   }
 
-  const celebSearch = await get(`/search?q=${encodeURIComponent(celeb.name.split(" ")[0])}`);
+  const celebs = await get("/deaths/celebrities");
+  assert.match(celebs.body, new RegExp(`datetime="${celeb.death_date}"`));
+  assert.doesNotMatch(celebs.body, /died /);
+
+  const celebSearch = await get(`/search?q=${encodeURIComponent(celeb.name)}`);
   assert.equal(celebSearch.status, 200);
   assert.match(celebSearch.body, new RegExp(celeb.name));
   assert.doesNotMatch(celebSearch.body, /died /);
-  const diedOnce = celebSearch.body.match(new RegExp(celeb.death_date.replace(/-/g, "\\-"), "g")) || [];
-  assert.ok(diedOnce.length >= 1);
+  assert.match(celebSearch.body, new RegExp(`datetime="${celeb.death_date}"`));
+  assert.doesNotMatch(celebSearch.body, /died ${celeb.death_date}|died [A-Z]/);
 
   const firingPage = await get("/firings");
   assert.equal(firingPage.status, 200);
-  assert.match(firingPage.body, /Firings/);
+  assert.match(firingPage.body, / · Firings · /);
   assert.doesNotMatch(firingPage.body, /died /);
-  assert.match(firingPage.body, new RegExp(firing.event_date));
+  assert.match(firingPage.body, new RegExp(`datetime="${newestFiring.event_date}"`));
 });
 
 test("optional API page= uses the same window without inventing rows", async () => {
