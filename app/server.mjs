@@ -16,14 +16,12 @@ import {
   ensureSchema,
   getPool,
   importSeed,
-  countCatalog,
   countDogComms,
   countPeople,
   countSourcePosts,
   getDogComm,
   getPerson,
   getSourcePost,
-  listCatalog,
   listDogComms,
   listPeople,
   listSourcePosts,
@@ -34,7 +32,6 @@ import {
   writeFileStore,
 } from "./lib/store.mjs";
 import {
-  catalogList,
   deathsIndexNav,
   dogDetail,
   dogList,
@@ -45,9 +42,11 @@ import {
   listHead,
   listSection,
   pager,
+  peopleList,
   personDetail,
   searchBody,
   sourcePostDetail,
+  sourcePostList,
   tuiCount,
 } from "./lib/html.mjs";
 import { PAGE_SIZE, paginate, parsePage } from "./lib/paginate.mjs";
@@ -371,13 +370,13 @@ async function handle(req, res) {
 
   const cat = categoryByPath(p);
   if (cat && cat.kind === "person") {
-    const total = await countCatalog(cat.id);
+    const total = await countPeople(cat.id);
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
       pageSize: PAGE_SIZE,
     });
-    const items = await listCatalog({
+    const rows = await listPeople({
       category: cat.id,
       limit: meta.limit,
       offset: meta.offset,
@@ -390,18 +389,52 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         query: cat.title,
-        countLabel: countText(cat.title, meta, items.length),
+        countLabel: countText(cat.title, meta, rows.length),
         lede: `${cat.blurb} Seeded rows only — not exhaustive.`,
         body: `${extra}${listSection(
-          catalogList(items, { showDeath: isDeathCategory(cat.id) }),
+          peopleList(rows, { showDeath: isDeathCategory(cat.id) }),
           pager(meta, { basePath: cat.path, noun: "rows" }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
-            of: items.length,
+            of: rows.length,
           }),
         )}`,
+      }),
+    );
+  }
+  if (cat && cat.kind === "source") {
+    const total = await countSourcePosts({ standalone: true });
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize: PAGE_SIZE,
+    });
+    const rows = await listSourcePosts({
+      standalone: true,
+      limit: meta.limit,
+      offset: meta.offset,
+    });
+    return sendHtml(
+      res,
+      layout({
+        title: cat.title,
+        path: cat.path,
+        heading: cat.title,
+        query: cat.title,
+        countLabel: countText(cat.title, meta, rows.length),
+        lede: cat.blurb,
+        body: listSection(
+          sourcePostList(rows),
+          pager(meta, { basePath: cat.path, noun: "posts" }),
+          listHead({
+            title: cat.title,
+            total: meta.total,
+            index: 1,
+            of: rows.length,
+          }),
+        ),
       }),
     );
   }

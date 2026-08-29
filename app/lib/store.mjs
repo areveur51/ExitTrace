@@ -283,18 +283,6 @@ function compareSources(a, b) {
   );
 }
 
-function catalogLabel(item) {
-  if (item.type === "person") return item.row.name;
-  if (item.type === "dog") return item.row.handle;
-  return item.row.poster_handle || item.row.source_url || "";
-}
-
-function compareCatalog(a, b) {
-  const d = String(b.date || "").localeCompare(String(a.date || ""));
-  if (d !== 0) return d;
-  return String(catalogLabel(a)).localeCompare(String(catalogLabel(b)));
-}
-
 function applyWindow(rows, limit, offset) {
   if (limit != null) return rows.slice(offset, offset + limit);
   return offset ? rows.slice(offset) : rows;
@@ -522,26 +510,16 @@ export async function upsertSourcePosts(rows) {
 
 export async function listCatalog(categoryOrOpts, maybeOpts) {
   const args = parseListArgs(categoryOrOpts, maybeOpts);
-  const limit = finiteInt(args.limit, null);
-  const offset = finiteInt(args.offset, 0);
-  const [people, posts] = await Promise.all([
-    listPeople(args.category),
-    listSourcePosts({ category: args.category, standalone: true }),
-  ]);
-  const items = [
-    ...people.map((row) => ({ type: "person", date: row.event_date || "", row })),
-    ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),
-  ];
-  items.sort(compareCatalog);
-  return applyWindow(items, limit, offset);
+  const people = await listPeople({
+    category: args.category,
+    limit: args.limit,
+    offset: args.offset,
+  });
+  return people.map((row) => ({ type: "person", date: row.event_date || "", row }));
 }
 
 export async function countCatalog(category) {
-  const [people, posts] = await Promise.all([
-    countPeople(category),
-    countSourcePosts({ category, standalone: true }),
-  ]);
-  return people + posts;
+  return countPeople(category);
 }
 
 export async function counts() {
@@ -705,13 +683,11 @@ export async function searchCatalog(q) {
     searchDogComms(q),
     searchSourcePosts(q),
   ]);
-  const items = [
+  return [
     ...people.map((row) => ({ type: "person", date: row.event_date || "", row })),
     ...dogs.map((row) => ({ type: "dog", date: row.posted_at || "", row })),
     ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),
   ];
-  items.sort(compareCatalog);
-  return items;
 }
 
 export async function closeStore() {
