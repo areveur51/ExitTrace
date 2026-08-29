@@ -57,7 +57,7 @@ If that person already exists, only new cites are attached. See `docs/DATA.md`.
 
 ## Add a person or official dog-comm
 
-`/add` queues a request. It does not invent cites or photos. An optional Wikimedia or official `.gov` portrait URL may be queued; a host process looks up published sources, supplies cite URLs, and applies the row. If an eligible still exists it is stored under `/media/people/`. A missing still stays blank. Existing gold photos are not overwritten.
+`/add` queues a request. It does not invent cites, photos, or net-worth figures. An optional Wikimedia or official `.gov` portrait URL and an optional published Forbes or Bloomberg estimate may be queued; a host process looks up published sources, supplies cite URLs, and applies the row. If an eligible still exists it is stored under `/media/people/`. A missing still stays blank. Existing gold photos are not overwritten. If no Forbes/Bloomberg estimate is supplied, USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten.
 
 ```bash
 # after look-up, apply the next pending request:
@@ -70,7 +70,7 @@ node scripts/process-add-request.mjs --next \
 ./exittracectl.sh add-process --id ar-… --cite-url … --cite-url …
 ```
 
-Fail-closed: people need a named subject, a calendar `event_date` (not `posted_at`), and two or more verified official news or official government / news-org social URLs. Cites are not invented. Unofficial or commentary social is extra only — it is not a cite. Portraits are attached only from an eligible Wikimedia or official-gov still already present (or supplied as that URL); they are not invented, and gold photos are not overwritten. Dog comms need an official government handle or official post URL, plus date; unofficial or commentary social is rejected. Gold rows stay annotate-only. The committed seed stays 72 people (live may already be 73). Does not write `data/seed.json`.
+Fail-closed: people need a named subject, a calendar `event_date` (not `posted_at`), and two or more verified official news or official government / news-org social URLs. Cites are not invented. Unofficial or commentary social is extra only — it is not a cite. Portraits are attached only from an eligible Wikimedia or official-gov still already present (or supplied as that URL); they are not invented, and gold photos are not overwritten. Net worth is filled only from a published Forbes or Bloomberg estimate; it is not invented, and gold net-worth is not overwritten. If none, USD is null and the note says no published Forbes/Bloomberg estimate was located. Dog comms need an official government handle or official post URL, plus date; unofficial or commentary social is rejected. Gold rows stay annotate-only. The committed seed stays 72 people (live may already be 73). Does not write `data/seed.json`.
 
 The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
 

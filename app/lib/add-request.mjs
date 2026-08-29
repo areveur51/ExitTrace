@@ -21,6 +21,10 @@ import {
   personSlug,
   validateIdentifiedPersonInput,
 } from "./promote.mjs";
+import {
+  isEligibleNetWorthUrl,
+  parseNetWorthUsd,
+} from "./net-worth.mjs";
 import { isEligiblePortraitUrl, isPeopleMediaHref } from "./portrait.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import {
@@ -115,6 +119,45 @@ function optionalPortrait(raw) {
   return text;
 }
 
+function optionalNetWorth(input = {}) {
+  const source = String(input.net_worth_source || "").trim();
+  const usdRaw = input.net_worth_usd;
+  const hasUsd = usdRaw !== undefined && usdRaw !== null && String(usdRaw).trim() !== "";
+  const note = String(input.net_worth_note || "").trim();
+  if (source) {
+    if (!canonicalPublicUrl(source)) {
+      throw new AddError("net-worth source is not an http(s) URL", "invalid_net_worth_source");
+    }
+    if (!isEligibleNetWorthUrl(source)) {
+      throw new AddError(
+        "net worth must cite a published Forbes or Bloomberg estimate; leave blank if none",
+        "ineligible_net_worth",
+      );
+    }
+  }
+  let usd = null;
+  if (hasUsd) {
+    usd = parseNetWorthUsd(usdRaw);
+    if (usd === null) {
+      throw new AddError(
+        "net_worth_usd must be a non-negative integer USD amount",
+        "invalid_net_worth_usd",
+      );
+    }
+    if (!source) {
+      throw new AddError(
+        "net worth needs a Forbes or Bloomberg source URL; leave both blank if none",
+        "missing_net_worth_source",
+      );
+    }
+  }
+  return {
+    net_worth_usd: hasUsd ? usd : "",
+    net_worth_source: source,
+    net_worth_note: note,
+  };
+}
+
 export function validateQueueInput(input = {}) {
   const kind = String(input.kind || "person").trim();
   if (!ADD_KINDS.includes(kind)) {
@@ -135,6 +178,7 @@ export function validateQueueInput(input = {}) {
     const event_date = optionalDate(input.event_date, "event_date");
     const hint_url = optionalUrl(input.hint_url || input.source_url, "hint_url");
     const photo = optionalPortrait(input.photo || input.portrait_url);
+    const worth = optionalNetWorth(input);
     return {
       kind,
       subject,
@@ -147,6 +191,7 @@ export function validateQueueInput(input = {}) {
       cite_urls: [],
       photo,
       photo_credit: String(input.photo_credit || "").trim(),
+      ...worth,
     };
   }
 
@@ -320,6 +365,16 @@ export function mergeProcessOverlay(request, overlay = {}) {
     role: String(overlay.role || request.role || "").trim(),
     photo: String(overlay.photo || request.photo || "").trim(),
     photo_credit: String(overlay.photo_credit || request.photo_credit || "").trim(),
+    net_worth_usd:
+      overlay.net_worth_usd !== undefined && overlay.net_worth_usd !== ""
+        ? overlay.net_worth_usd
+        : request.net_worth_usd,
+    net_worth_source: String(
+      overlay.net_worth_source || request.net_worth_source || "",
+    ).trim(),
+    net_worth_note: String(
+      overlay.net_worth_note || request.net_worth_note || "",
+    ).trim(),
     mediaDir: overlay.mediaDir || request.mediaDir,
     cite_urls: citeFromOverlay.length ? citeFromOverlay : citeFromRequest,
   };
@@ -397,6 +452,9 @@ async function applyQueuedPerson(merged) {
       role: parsed.role,
       photo: parsed.photo,
       photo_credit: parsed.photo_credit,
+      net_worth_usd: merged.net_worth_usd,
+      net_worth_source: merged.net_worth_source,
+      net_worth_note: merged.net_worth_note,
       mediaDir: merged.mediaDir,
     });
   } else {
@@ -409,6 +467,9 @@ async function applyQueuedPerson(merged) {
       role: parsed.role,
       photo: parsed.photo,
       photo_credit: parsed.photo_credit,
+      net_worth_usd: merged.net_worth_usd,
+      net_worth_source: merged.net_worth_source,
+      net_worth_note: merged.net_worth_note,
       mediaDir: merged.mediaDir,
     });
   }

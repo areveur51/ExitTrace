@@ -602,7 +602,7 @@ const ADD_CATEGORIES = [
 ];
 
 export function addCiteRule() {
-  return `<p class="cite-rule">Person rows need two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. This form does not invent cites or copy a post date into the event date. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. A host process looks up published sources and applies the row.</p>`;
+  return `<p class="cite-rule">Person rows need two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. This form does not invent cites or copy a post date into the event date. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. A host process looks up published sources and applies the row.</p>`;
 }
 
 export function addBody({
@@ -661,6 +661,15 @@ export function addBody({
           <input type="url" name="photo" value="${esc(values.photo || "")}" placeholder="https://upload.wikimedia.org/… or https://….gov/…" inputmode="url">
         </label>
         <p class="hint">Wikimedia Commons or official .gov still only. Leave blank if none — do not invent a photo.</p>
+        <label class="field">
+          <span>Net worth (USD)</span>
+          <input type="text" name="net_worth_usd" inputmode="numeric" value="${esc(values.net_worth_usd || "")}" placeholder="2500000000" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Net worth source</span>
+          <input type="url" name="net_worth_source" value="${esc(values.net_worth_source || "")}" placeholder="https://www.forbes.com/profile/… or https://www.bloomberg.com/…" inputmode="url">
+        </label>
+        <p class="hint">Published Forbes or Bloomberg estimate only. Leave both blank if none — do not invent a figure.</p>
         <button type="submit" class="keychip add-submit"><span class="br">[</span>Enter<span class="br">]</span> Queue</button>
       </form>
       ${addCiteRule()}`,

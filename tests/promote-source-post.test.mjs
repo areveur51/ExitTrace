@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { personDetail } from "../app/lib/html.mjs";
 import { importSourcePostsText } from "../app/lib/import-posts.mjs";
+import { MISSING_NET_WORTH_NOTE } from "../app/lib/net-worth.mjs";
 import {
   CITE_FLOOR,
   findGoldMatch,
@@ -61,6 +62,9 @@ function goldFingerprint(people) {
         event_date: row.event_date,
         death_date: row.death_date,
         photo: row.photo,
+        net_worth_usd: row.net_worth_usd,
+        net_worth_note: row.net_worth_note,
+        net_worth_source: row.net_worth_source,
         sources: row.sources,
         summary: row.summary,
       }),
@@ -125,6 +129,9 @@ test("promote fixture source post adds one officials-style person", async () => 
   assert.notEqual(result.person.name, arrest.poster_name);
   assert.equal(result.person.category, "arrests");
   assert.equal(result.person.photo, "");
+  assert.equal(result.person.net_worth_usd, null);
+  assert.equal(result.person.net_worth_note, MISSING_NET_WORTH_NOTE);
+  assert.equal(result.person.net_worth_source, "");
   assert.equal(result.person.death_date, null);
   assert.equal(result.person.sources.length, 2);
   assert.equal(result.person.sources[0].url, CITES[0]);
@@ -197,6 +204,9 @@ test("existing gold person is annotate-only", async () => {
   assert.equal(after.category, comey.category);
   assert.equal(after.photo, "/media/people/james-comey.jpg");
   assert.equal(after.photo_credit, comey.photo_credit);
+  assert.equal(after.net_worth_usd, comey.net_worth_usd);
+  assert.equal(after.net_worth_note, comey.net_worth_note);
+  assert.equal(after.net_worth_source, comey.net_worth_source);
   assert.deepEqual(after.sources.slice(0, comey.sources.length), comey.sources);
   assert.equal(after.sources.at(-1).url, extra);
   assert.equal(after.sources.length, comey.sources.length + 1);
@@ -226,9 +236,13 @@ test("promote attaches a same-id local still and leaves a missing still blank", 
     category: "arrests",
     cite_urls: CITES,
     mediaDir: media,
+    net_worth_usd: "2500000000",
+    net_worth_source: "https://www.forbes.com/profile/casey-vale/",
   });
   assert.equal(created.action, "created");
   assert.equal(created.person.photo, "/media/people/casey-vale.jpg");
+  assert.equal(created.person.net_worth_usd, 2500000000);
+  assert.equal(created.person.net_worth_source, "https://www.forbes.com/profile/casey-vale/");
 
   const blankMedia = fs.mkdtempSync(path.join(os.tmpdir(), "et-promote-blank-"));
   const death = await promoteSourcePost({

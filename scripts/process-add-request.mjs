@@ -33,6 +33,7 @@ function usage(exitCode = 0) {
   [--source-url <https://…>] [--handle @Official] [--posted-at YYYY-MM-DD]
   [--text "…"] [--account-name "…"] [--still <path>] [--still-credit "…"]
   [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"]
+  [--net-worth <USD>] [--net-worth-source <Forbes|Bloomberg URL>] [--net-worth-note "…"]
 
 Host-side process hook (scratch directory, two turns, one envelope):
   look up official/news/gov cites, then apply this command with the envelope
@@ -46,6 +47,10 @@ Fail-closed:
   Attach a local Wikimedia or official-gov portrait under /media/people/
   when an eligible still exists. Do not invent a photo. Do not overwrite
   an existing gold photo. Missing still stays blank.
+  Fill net_worth_usd / note / source from a published Forbes or Bloomberg
+  estimate when one exists. Do not invent a figure. If none, usd stays
+  null and the note says no published Forbes/Bloomberg estimate was
+  located. Do not overwrite existing gold net-worth.
   dog comms need an official government handle or official post URL, plus date.
 
 The Unsorted classify walk stays a separate path (import-posts / promote).
@@ -88,6 +93,9 @@ function parseArgs(argv) {
     else if (arg === "--role") out.role = take();
     else if (arg === "--photo") out.photo = take();
     else if (arg === "--photo-credit") out.photo_credit = take();
+    else if (arg === "--net-worth" || arg === "--net-worth-usd") out.net_worth_usd = take();
+    else if (arg === "--net-worth-source") out.net_worth_source = take();
+    else if (arg === "--net-worth-note") out.net_worth_note = take();
     else {
       throw new AddError(`unknown argument: ${arg}`, "bad_args");
     }

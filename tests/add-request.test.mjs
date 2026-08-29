@@ -10,6 +10,7 @@ import {
   processAddRequest,
   queueAddRequest,
 } from "../app/lib/add-request.mjs";
+import { MISSING_NET_WORTH_NOTE } from "../app/lib/net-worth.mjs";
 import { addBody } from "../app/lib/html.mjs";
 import { handle } from "../app/server.mjs";
 import {
@@ -115,6 +116,11 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   assert.match(person.body, /Wikimedia Commons or official \.gov/);
   assert.match(person.body, /do not invent a photo/i);
   assert.match(person.body, /Existing gold photos are not overwritten/);
+  assert.match(person.body, /name="net_worth_usd"/);
+  assert.match(person.body, /name="net_worth_source"/);
+  assert.match(person.body, /Published Forbes or Bloomberg estimate only/);
+  assert.match(person.body, /do not invent a figure/i);
+  assert.match(person.body, /Existing gold net-worth is not overwritten/);
   assert.match(person.body, /value="person"/);
   assert.match(dog.body, /name="handle"/);
   assert.match(dog.body, /name="source_url"/);
@@ -195,6 +201,9 @@ test("process with two official cites creates a person; one cite is rejected", a
   assert.equal(created.action, "created");
   assert.equal(created.person.id, "casey-vale");
   assert.equal(created.person.sources.length, 2);
+  assert.equal(created.person.net_worth_usd, null);
+  assert.equal(created.person.net_worth_note, MISSING_NET_WORTH_NOTE);
+  assert.equal(created.person.net_worth_source, "");
   assert.equal(await countPeople(), 73);
   assert.equal((await getPerson("casey-vale")).name, "Casey Vale");
 
@@ -508,4 +517,159 @@ test("annotate does not overwrite a gold photo", async () => {
   assert.equal((await getPerson("james-comey")).photo, "/media/people/james-comey.jpg");
   assert.equal(await countPeople(), 72);
   assert.equal(JSON.parse(fs.readFileSync(SEED, "utf8")).people.find((r) => r.id === "james-comey").photo, "/media/people/james-comey.jpg");
+});
+
+const FORBES = "https://www.forbes.com/profile/casey-vale/";
+
+test("published Forbes estimate fills net worth; ineligible or missing stays blank", async () => {
+  setMemory(goldSeed());
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+    net_worth_usd: "2500000000",
+    net_worth_source: FORBES,
+    net_worth_note: "Forbes estimate around the 2024 exit year.",
+  });
+  assert.equal(queued.request.net_worth_usd, 2500000000);
+  assert.equal(queued.request.net_worth_source, FORBES);
+
+  const created = await processAddRequest({
+    id: queued.request.id,
+    overlay: { cite_urls: CITES },
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.person.net_worth_usd, 2500000000);
+  assert.equal(created.person.net_worth_source, FORBES);
+  assert.equal(created.person.net_worth_note, "Forbes estimate around the 2024 exit year.");
+
+  const blank = await queueAddRequest({
+    kind: "person",
+    subject: "Riley Chen",
+    category: "firings",
+    event_date: "2024-08-01",
+  });
+  const empty = await processAddRequest({
+    id: blank.request.id,
+    overlay: {
+      cite_urls: CITES,
+      net_worth_usd: "999",
+      net_worth_source: "https://example.com/wealth/riley",
+    },
+  });
+  assert.equal(empty.person.net_worth_usd, null);
+  assert.equal(empty.person.net_worth_note, MISSING_NET_WORTH_NOTE);
+  assert.equal(empty.person.net_worth_source, "");
+  assert.equal(goldSeed().people.length, 72);
+});
+
+test("/add rejects ineligible net-worth source and stores a Forbes pair", async () => {
+  setMemory(goldSeed());
+  const bad = await requestPage("/add", {
+    method: "POST",
+    body: new URLSearchParams({
+      kind: "person",
+      subject: "Casey Vale",
+      category: "arrests",
+      event_date: "2024-06-15",
+      net_worth_usd: "2500000000",
+      net_worth_source: "https://example.com/wealth/casey",
+    }).toString(),
+  });
+  assert.equal(bad.status, 200);
+  assert.match(bad.body, /Forbes or Bloomberg estimate/i);
+  assert.equal((await listAddRequests({ status: "pending" })).length, 0);
+
+  const usdOnly = await requestPage("/add", {
+    method: "POST",
+    body: new URLSearchParams({
+      kind: "person",
+      subject: "Casey Vale",
+      category: "arrests",
+      event_date: "2024-06-15",
+      net_worth_usd: "2500000000",
+    }).toString(),
+  });
+  assert.equal(usdOnly.status, 200);
+  assert.match(usdOnly.body, /Forbes or Bloomberg source URL/i);
+  assert.equal((await listAddRequests({ status: "pending" })).length, 0);
+
+  const ok = await requestPage("/add", {
+    method: "POST",
+    body: new URLSearchParams({
+      kind: "person",
+      subject: "Casey Vale",
+      category: "arrests",
+      event_date: "2024-06-15",
+      net_worth_usd: "2500000000",
+      net_worth_source: FORBES,
+    }).toString(),
+  });
+  assert.equal(ok.status, 200);
+  assert.match(ok.body, /queued/i);
+  const pending = await listAddRequests({ status: "pending" });
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].net_worth_usd, 2500000000);
+  assert.equal(pending[0].net_worth_source, FORBES);
+  assert.equal(await countPeople(), 72);
+  assert.equal(goldSeed().people.length, 72);
+});
+
+test("annotate does not overwrite gold net-worth", async () => {
+  setMemory(goldSeed());
+  const kalanick = await getPerson("travis-kalanick");
+  assert.equal(kalanick.net_worth_usd, 2500000000);
+  const comey = await getPerson("james-comey");
+  assert.equal(comey.net_worth_usd, null);
+  assert.equal(comey.net_worth_note, MISSING_NET_WORTH_NOTE);
+
+  const kq = await queueAddRequest({
+    kind: "person",
+    subject: "Travis Kalanick",
+    category: "resignations",
+    event_date: "2017-06-21",
+  });
+  const kAnn = await processAddRequest({
+    id: kq.request.id,
+    overlay: {
+      cite_urls: [
+        "https://www.example.com/news/kalanick-follow",
+        "https://www.example.net/world/kalanick-follow",
+      ],
+      net_worth_usd: "1",
+      net_worth_source: "https://www.forbes.com/profile/should-not-win/",
+      net_worth_note: "Should not win",
+    },
+  });
+  assert.equal(kAnn.action, "annotated");
+  assert.equal(kAnn.person.net_worth_usd, 2500000000);
+  assert.equal(kAnn.person.net_worth_note, kalanick.net_worth_note);
+  assert.equal(kAnn.person.net_worth_source, kalanick.net_worth_source);
+
+  const cq = await queueAddRequest({
+    kind: "person",
+    subject: "James Comey",
+    category: "firings",
+    event_date: "2017-05-09",
+  });
+  const cAnn = await processAddRequest({
+    id: cq.request.id,
+    overlay: {
+      cite_urls: [
+        "https://www.example.com/news/comey-worth",
+        "https://www.example.net/world/comey-worth",
+      ],
+      net_worth_usd: "1",
+      net_worth_source: "https://www.forbes.com/profile/should-not-win/",
+    },
+  });
+  assert.equal(cAnn.action, "annotated");
+  assert.equal(cAnn.person.net_worth_usd, null);
+  assert.equal(cAnn.person.net_worth_note, MISSING_NET_WORTH_NOTE);
+  assert.equal(cAnn.person.net_worth_source, "");
+  assert.equal(await countPeople(), 72);
+  const seedComey = JSON.parse(fs.readFileSync(SEED, "utf8")).people.find((r) => r.id === "james-comey");
+  assert.equal(seedComey.net_worth_usd, null);
+  assert.equal(seedComey.net_worth_note, MISSING_NET_WORTH_NOTE);
 });

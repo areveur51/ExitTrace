@@ -166,6 +166,9 @@ export function validateIdentifiedPersonInput(input = {}) {
     role: String(input.role || "").trim(),
     photo: String(input.photo || "").trim(),
     photo_credit: String(input.photo_credit || "").trim(),
+    net_worth_usd: input.net_worth_usd,
+    net_worth_source: String(input.net_worth_source || "").trim(),
+    net_worth_note: String(input.net_worth_note || "").trim(),
   };
 }
 

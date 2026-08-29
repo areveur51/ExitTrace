@@ -11,6 +11,7 @@ import {
   validatePromoteInput,
 } from "./promote.mjs";
 import { isPeopleMediaHref, resolvePortrait } from "./portrait.mjs";
+import { hasRecordedNetWorth, resolveNetWorth } from "./net-worth.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 let pool = null;
@@ -136,6 +137,14 @@ function normalizeAddRequest(row) {
     role: row.role || payload.role || "",
     photo: row.photo || payload.photo || "",
     photo_credit: row.photo_credit || payload.photo_credit || "",
+    net_worth_usd:
+      row.net_worth_usd !== undefined && row.net_worth_usd !== null && row.net_worth_usd !== ""
+        ? row.net_worth_usd
+        : payload.net_worth_usd !== undefined
+          ? payload.net_worth_usd
+          : "",
+    net_worth_source: row.net_worth_source || payload.net_worth_source || "",
+    net_worth_note: row.net_worth_note || payload.net_worth_note || "",
     error: row.error || "",
     result: row.result && typeof row.result === "object" ? row.result : null,
     created_at: created,
@@ -689,19 +698,59 @@ export async function attachPersonPortrait(person, input = {}) {
   return setPersonPhoto(person.id, resolved.href, resolved.credit);
 }
 
+export async function setPersonNetWorth(id, worth) {
+  const person = await getPerson(id);
+  if (!person) {
+    throw new PromoteError(`person not found: ${id}`, "person_not_found");
+  }
+  if (hasRecordedNetWorth(person)) return person;
+  const resolved = resolveNetWorth(worth);
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    const i = mem.people.findIndex((r) => r.id === id);
+    if (i < 0) return person;
+    mem.people[i] = { ...person, ...resolved };
+    return mem.people[i];
+  }
+  await p.query(
+    `UPDATE people
+        SET net_worth_usd = $1, net_worth_note = $2, net_worth_source = $3
+      WHERE id = $4
+        AND net_worth_usd IS NULL
+        AND (net_worth_note IS NULL OR net_worth_note = '')
+        AND (net_worth_source IS NULL OR net_worth_source = '')`,
+    [resolved.net_worth_usd, resolved.net_worth_note, resolved.net_worth_source, id],
+  );
+  return getPerson(id);
+}
+
+export async function attachPersonNetWorth(person, input = {}) {
+  if (!person || hasRecordedNetWorth(person)) return person;
+  return setPersonNetWorth(person.id, {
+    net_worth_usd: input.net_worth_usd,
+    net_worth_source: input.net_worth_source,
+    net_worth_note: input.net_worth_note,
+  });
+}
+
 export async function applyIdentifiedPerson(input) {
   const parsed = validateIdentifiedPersonInput(input);
   const people = await listPeople();
   const existing = findGoldMatch(people, parsed);
   const incoming = citeRecords(parsed.cite_urls, parsed.event_date);
-  const portrait = {
+  const extras = {
     photo: parsed.photo,
     photo_credit: parsed.photo_credit,
     mediaDir: input.mediaDir,
+    net_worth_usd: parsed.net_worth_usd,
+    net_worth_source: parsed.net_worth_source,
+    net_worth_note: parsed.net_worth_note,
   };
   if (existing) {
     const annotated = await appendPersonSources(existing.id, incoming);
-    const person = await attachPersonPortrait(annotated.person, portrait);
+    let person = await attachPersonPortrait(annotated.person, extras);
+    person = await attachPersonNetWorth(person, extras);
     return {
       action: "annotated",
       person,
@@ -711,7 +760,8 @@ export async function applyIdentifiedPerson(input) {
   }
   const row = buildPersonRow({ ...parsed, photo: "", photo_credit: "" }, people);
   const created = await insertPerson(row);
-  const person = await attachPersonPortrait(created, portrait);
+  let person = await attachPersonPortrait(created, extras);
+  person = await attachPersonNetWorth(person, extras);
   return {
     action: "created",
     person,
@@ -1031,6 +1081,9 @@ function addRequestValues(row) {
       role: req.role,
       photo: req.photo,
       photo_credit: req.photo_credit,
+      net_worth_usd: req.net_worth_usd,
+      net_worth_source: req.net_worth_source,
+      net_worth_note: req.net_worth_note,
       extra_urls: req.extra_urls || [],
     }),
     req.error || null,

@@ -33,14 +33,18 @@ function usage(exitCode = 0) {
   --event-date YYYY-MM-DD \\
   --category <${PROMOTE_CATEGORY_IDS.join("|")}> \\
   --cite-url <https://…> --cite-url <https://…> \\
-  [--summary "…"] [--role "…"] [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"]
+  [--summary "…"] [--role "…"] [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"] \\
+  [--net-worth <USD>] [--net-worth-source <Forbes|Bloomberg URL>] [--net-worth-note "…"]
 
 Promote one Unsorted source post into an identified person row.
 Requires a named subject, a calendar event_date (not posted_at), a catalog
 category, and at least ${CITE_FLOOR} http(s) cite URLs supplied by the
 caller. Does not invent cites or a portrait. Attaches a local Wikimedia or
 official-gov still under /media/people/ when one already exists. Does not
-overwrite an existing gold photo. Missing still stays blank. Leaves the
+overwrite an existing gold photo. Missing still stays blank. Fills net
+worth from a published Forbes or Bloomberg estimate when one exists.
+Does not invent a figure or overwrite existing gold net-worth. If none,
+usd stays null with a short missing-estimate note. Leaves the
 source post on Unsorted.
 
 If the same person already exists (id/slug or same subject + event_date ±3 days),
@@ -74,6 +78,9 @@ function parseArgs(argv) {
     else if (arg === "--role") out.role = take();
     else if (arg === "--photo") out.photo = take();
     else if (arg === "--photo-credit") out.photo_credit = take();
+    else if (arg === "--net-worth" || arg === "--net-worth-usd") out.net_worth_usd = take();
+    else if (arg === "--net-worth-source") out.net_worth_source = take();
+    else if (arg === "--net-worth-note") out.net_worth_note = take();
     else {
       throw new PromoteError(`unknown argument: ${arg}`, "bad_args");
     }
