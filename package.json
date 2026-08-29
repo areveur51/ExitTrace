@@ -14,7 +14,8 @@
   "scripts": {
     "start": "node app/server.mjs",
     "seed": "node scripts/import-seed.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "import-posts": "node scripts/import-source-posts.mjs",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "pack": "bash scripts/pack-data.sh",
     "fetch-data": "bash scripts/fetch-data.sh"
   },

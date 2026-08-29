@@ -16,18 +16,26 @@ import {
   ensureSchema,
   getPool,
   importSeed,
+  countCatalog,
   countDogComms,
   countPeople,
+  countSourcePosts,
   getDogComm,
   getPerson,
+  getSourcePost,
+  listCatalog,
   listDogComms,
   listPeople,
+  listSourcePosts,
+  loadFileStore,
   loadSeedFile,
   searchCatalog,
   setMemory,
   writeFileStore,
 } from "./lib/store.mjs";
 import {
+  catalogList,
+  deathsIndexNav,
   dogDetail,
   dogList,
   downloadsBody,
@@ -37,9 +45,9 @@ import {
   listHead,
   listSection,
   pager,
-  peopleList,
   personDetail,
   searchBody,
+  sourcePostDetail,
   tuiCount,
 } from "./lib/html.mjs";
 import { PAGE_SIZE, paginate, parsePage } from "./lib/paginate.mjs";
@@ -138,6 +146,7 @@ async function healthPayload() {
     port,
     people: c.people,
     dog_comms: c.dog_comms,
+    source_posts: c.source_posts,
     byCategory: c.byCategory,
   };
 }
@@ -197,6 +206,25 @@ async function handle(req, res) {
       });
     }
     return sendJson(res, 200, { dog_comms: await listDogComms() });
+  }
+  if (p === "/api/source-posts") {
+    const category = url.searchParams.get("category") || undefined;
+    if (url.searchParams.has("page")) {
+      const total = await countSourcePosts({ category, standalone: true });
+      const meta = paginate({ total, page: parsePage(url.searchParams) });
+      return sendJson(res, 200, {
+        source_posts: await listSourcePosts({
+          category,
+          standalone: true,
+          limit: meta.limit,
+          offset: meta.offset,
+        }),
+        ...meta,
+      });
+    }
+    return sendJson(res, 200, {
+      source_posts: await listSourcePosts({ category, standalone: true }),
+    });
   }
 
   if (p === "/styles.css" || p === "/app.js") {
@@ -301,6 +329,26 @@ async function handle(req, res) {
     );
   }
 
+  if (p.startsWith("/posts/")) {
+    const id = safeId(p.slice("/posts/".length));
+    const row = id ? await getSourcePost(id) : null;
+    if (!row) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    return sendHtml(
+      res,
+      layout({
+        title: "Source post",
+        path: `/posts/${row.id}`,
+        heading: "Source post",
+        query: row.poster_handle || "source post",
+        countLabel: "detail",
+        body: sourcePostDetail(row),
+      }),
+    );
+  }
+
   if (p.startsWith("/dog-comms/") && p !== "/dog-comms/") {
     const id = safeId(p.slice("/dog-comms/".length));
     const row = id ? await getDogComm(id) : null;
@@ -323,17 +371,18 @@ async function handle(req, res) {
 
   const cat = categoryByPath(p);
   if (cat && cat.kind === "person") {
-    const total = await countPeople(cat.id);
+    const total = await countCatalog(cat.id);
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
       pageSize: PAGE_SIZE,
     });
-    const rows = await listPeople({
+    const items = await listCatalog({
       category: cat.id,
       limit: meta.limit,
       offset: meta.offset,
     });
+    const extra = cat.id === "death_unspecified" ? deathsIndexNav() : "";
     return sendHtml(
       res,
       layout({
@@ -341,18 +390,18 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         query: cat.title,
-        countLabel: countText(cat.title, meta, rows.length),
+        countLabel: countText(cat.title, meta, items.length),
         lede: `${cat.blurb} Seeded rows only — not exhaustive.`,
-        body: listSection(
-          peopleList(rows, { showDeath: isDeathCategory(cat.id) }),
-          pager(meta, { basePath: cat.path, noun: "people" }),
+        body: `${extra}${listSection(
+          catalogList(items, { showDeath: isDeathCategory(cat.id) }),
+          pager(meta, { basePath: cat.path, noun: "rows" }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
-            of: rows.length,
+            of: items.length,
           }),
-        ),
+        )}`,
       }),
     );
   }
@@ -406,10 +455,16 @@ async function boot() {
       `[exittrace] postgres people=${imported.people} dog_comms=${imported.dog_comms}`,
     );
   } else {
-    setMemory(seed);
-    writeFileStore(dataDir, seed);
+    const prior = loadFileStore(dataDir);
+    const mem = setMemory({
+      people: seed.people,
+      dog_comms: seed.dog_comms,
+      source_posts: prior.source_posts,
+      meta: seed.meta,
+    });
+    writeFileStore(dataDir, mem);
     console.log(
-      `[exittrace] file store people=${seed.people.length} dog_comms=${seed.dog_comms.length}`,
+      `[exittrace] file store people=${mem.people.length} dog_comms=${mem.dog_comms.length} source_posts=${mem.source_posts.length}`,
     );
   }
 

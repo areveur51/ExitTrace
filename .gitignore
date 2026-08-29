@@ -16,6 +16,9 @@ auth.json
 # Generated file-store copy (seed JSON in data/seed.json is the portable import)
 data/store.json
 
+# Host-local JSONL import packs. Pass a path to the import script; do not commit.
+var/
+
 # Packaged release zip — published via GitHub Releases, not git
 dist/
 *.zip

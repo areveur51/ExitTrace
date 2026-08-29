@@ -64,14 +64,16 @@ function keymapItems(activePath) {
     { key: "f", href: "/firings", label: "Firings" },
     { key: "r", href: "/resignations", label: "Resignations" },
     { key: "g", href: "/government", label: "Gov" },
-    { key: "d", href: "/deaths/celebrities", label: "Deaths" },
+    { key: "a", href: "/arrests", label: "Arrests" },
+    { key: "d", href: "/deaths", label: "Deaths" },
     { key: "c", href: "/dog-comms", label: "Dog" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ];
   if (String(activePath).startsWith("/deaths")) {
     keys.splice(
-      3,
+      4,
       1,
+      { key: "d", href: "/deaths", label: "Unsorted" },
       { key: "1", href: "/deaths/celebrities", label: "Celebs" },
       { key: "2", href: "/deaths/officials", label: "Officials" },
       { key: "3", href: "/deaths/ceos", label: "CEOs" },
@@ -224,8 +226,26 @@ export function personRow(row, { selected, showDeath } = {}) {
   return `<a class="tui-row person-card${selected ? " is-selected" : ""}" href="${esc(href)}">
     ${thumb(row.photo, row.name)}
     <div class="tui-row-text">
-      <div class="tui-title">${esc(row.name)}</div>
-      <div class="tui-meta"><time datetime="${esc(row.event_date)}">${esc(formatDate(row.event_date))}</time> · ${esc(kindLabel(row))}${death} · ${esc(formatUsd(row.net_worth_usd))}</div>
+      <div class="tui-title">${esc(row.name || "—")}</div>
+      <div class="tui-meta"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(kindLabel(row))}${death} · ${esc(formatUsd(row.net_worth_usd))}</div>
+    </div>
+  </a>`;
+}
+
+function posterLabel(handle) {
+  const raw = String(handle || "").trim();
+  if (!raw) return "—";
+  return raw.startsWith("@") ? raw : `@${raw}`;
+}
+
+export function sourcePostRow(row, { selected } = {}) {
+  const href = `/posts/${encodeURIComponent(row.id)}`;
+  const posted = formatDate(row.posted_at);
+  return `<a class="tui-row source-card${selected ? " is-selected" : ""}" href="${esc(href)}">
+    <span class="initials thumb" aria-hidden="true">—</span>
+    <div class="tui-row-text">
+      <div class="tui-title">—</div>
+      <div class="tui-meta"><time datetime="${esc(row.posted_at || "")}">${esc(posted)}</time> posted · poster ${esc(posterLabel(row.poster_handle))} · ${esc(kindLabel(row))} · —</div>
     </div>
   </a>`;
 }
@@ -242,22 +262,29 @@ export function dogListRow(row, { selected } = {}) {
 }
 
 function groupByYear(rows, dateKey, render) {
+  return groupByYearItems(
+    rows.map((row) => ({ date: row[dateKey], row })),
+    (item, opts) => render(item.row, opts),
+  );
+}
+
+function groupByYearItems(items, render) {
   const groups = new Map();
-  for (const row of rows) {
-    const y = String(row[dateKey] || "").slice(0, 4) || "Undated";
+  for (const item of items) {
+    const y = String(item.date || "").slice(0, 4) || "Undated";
     if (!groups.has(y)) groups.set(y, []);
-    groups.get(y).push(row);
+    groups.get(y).push(item);
   }
   const years = [...groups.keys()].sort((a, b) => b.localeCompare(a));
   let first = true;
   return years
     .map((y) => {
-      const items = groups.get(y);
-      const html = items
-        .map((row, i) => {
+      const bucket = groups.get(y);
+      const html = bucket
+        .map((item, i) => {
           const selected = first && i === 0;
           if (selected) first = false;
-          return render(row, { selected });
+          return render(item, { selected });
         })
         .join("");
       return `<section class="tui-group">
@@ -277,6 +304,23 @@ export function peopleList(rows, { showDeath } = {}) {
   return `<div class="people-list tui-list">${groupByYear(rows, "event_date", (row, opts) =>
     personRow(row, { ...opts, showDeath }),
   )}</div>`;
+}
+
+export function catalogList(items, { showDeath } = {}) {
+  if (!items.length) return `<p class="empty">No rows on this page.</p>`;
+  return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => {
+    if (item.type === "source") return sourcePostRow(item.row, opts);
+    if (item.type === "dog") return dogListRow(item.row, opts);
+    return personRow(item.row, { ...opts, showDeath });
+  })}</div>`;
+}
+
+export function deathsIndexNav() {
+  return `<nav class="death-nav" aria-label="Sorted death lists">
+    <a class="keychip" href="/deaths/celebrities">Celebrities</a>
+    <a class="keychip" href="/deaths/officials">Officials</a>
+    <a class="keychip" href="/deaths/ceos">CEOs</a>
+  </nav>`;
 }
 
 export function dogList(rows) {
@@ -364,11 +408,11 @@ export function personDetail(row) {
   const cat = categoryById(row.category);
   const kind = cat ? cat.title : row.category;
   const death = isDeathCategory(row.category)
-    ? `<p class="meta-line">Death date · <time datetime="${esc(row.death_date)}">${esc(formatDate(row.death_date))}</time></p>`
+    ? `<p class="meta-line">Death date · <time datetime="${esc(row.death_date || "")}">${esc(formatDate(row.death_date))}</time></p>`
     : "";
   const photo = row.photo
     ? `<img class="detail-photo" src="${esc(row.photo)}" alt="${esc(row.name)}" width="120" height="150">`
-    : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name))}</span>`;
+    : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name) || "—")}</span>`;
   const sources = row.sources || [];
   return `<article class="detail">
     ${boxFrame(
@@ -376,13 +420,62 @@ export function personDetail(row) {
       `<div class="meta-pane">
       ${photo}
       <div class="detail-copy">
-        <h2 class="detail-title">${esc(row.name)}</h2>
+        <h2 class="detail-title">${esc(row.name || "—")}</h2>
         <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
-        <p class="meta-line"><time datetime="${esc(row.event_date)}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role)} · ${esc(kind)}</p>
+        <p class="meta-line"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role || "—")} · ${esc(kind)}</p>
         ${death}
         <hr class="hr">
         <h3 class="pane-h">Synopsis</h3>
-        <p class="synopsis">${esc(row.summary || "")}</p>
+        <p class="synopsis">${esc(row.summary || "—")}</p>
+      </div>
+    </div>`,
+      { extraClass: "meta-box" },
+    )}
+    ${boxFrame(
+      `● Sources · ${sources.length} available · 1/${sources.length || 0}`,
+      sourceList(sources),
+      { active: true, extraClass: "sources-pane" },
+    )}
+  </article>`;
+}
+
+function sourceUrlItems(row) {
+  const items = [];
+  if (row.source_url) {
+    items.push({ url: row.source_url, publisher: "Original post", title: "Original post", date: row.posted_at || "" });
+  }
+  if (row.quoted_url) {
+    items.push({ url: row.quoted_url, publisher: "Quoted URL", title: "Quoted URL", date: "" });
+  }
+  if (row.card_url) {
+    items.push({ url: row.card_url, publisher: "Card URL", title: "Card URL", date: "" });
+  }
+  for (const [i, url] of (row.media_urls || []).entries()) {
+    items.push({ url, publisher: `Media ${i + 1}`, title: "Public media", date: "" });
+  }
+  return items;
+}
+
+export function sourcePostDetail(row) {
+  const cat = categoryById(row.category);
+  const kind = cat ? cat.title : row.category;
+  const sources = sourceUrlItems(row);
+  const poster = posterLabel(row.poster_handle);
+  const posterName = row.poster_name ? ` (${row.poster_name})` : "";
+  return `<article class="detail">
+    ${boxFrame(
+      "Metadata",
+      `<div class="meta-pane">
+      <span class="initials detail-photo" aria-hidden="true">—</span>
+      <div class="detail-copy">
+        <h2 class="detail-title">—</h2>
+        <p class="rating">★ ${esc(formatUsd(null))} <span class="muted">Net worth (published estimate)</span></p>
+        <p class="meta-line">Event date · —</p>
+        <p class="meta-line">Posted · <time datetime="${esc(row.posted_at || "")}">${esc(formatDate(row.posted_at))}</time> · ${esc(kind)}</p>
+        <p class="meta-line">Poster · ${esc(poster)}${esc(posterName)}</p>
+        <hr class="hr">
+        <h3 class="pane-h">Synopsis</h3>
+        <p class="synopsis post-text">${esc(row.text || "—")}</p>
       </div>
     </div>`,
       { extraClass: "meta-box" },
@@ -438,6 +531,7 @@ export function searchBody(items, q) {
       const selected = first;
       first = false;
       if (item.type === "dog") return dogListRow(item.row, { selected });
+      if (item.type === "source") return sourcePostRow(item.row, { selected });
       return personRow(item.row, { selected, showDeath: isDeathCategory(item.row.category) });
     })
     .join("");

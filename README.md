@@ -1,6 +1,6 @@
 # ExitTrace
 
-Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Not exhaustive.
+Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, arrests, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Category pages may also park public source posts that are not yet identified. Not exhaustive.
 
 **Repo:** [https://github.com/areveur51/ExitTrace](https://github.com/areveur51/ExitTrace)
 
@@ -62,13 +62,15 @@ Releases:
 | `/firings` | Public-role dismissals |
 | `/resignations` | Announced resignations |
 | `/government` | Officials leaving a government post |
+| `/arrests` | Public-role arrests |
+| `/deaths` | Unsorted death posts (not dumped into celebrity / official / CEO) |
 | `/deaths/celebrities` | Deaths of public figures in arts, sport, and entertainment |
 | `/deaths/officials` | Deaths of officials and heads of state |
 | `/deaths/ceos` | Deaths of chief executives and controlling founders |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
 | `/downloads` | How the GitHub Release zip is named |
 
-Each person row has name, event date, death date (death categories only), a stored Wikimedia or official `.gov` photo or initials, two news sources, and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank.
+Each person row has name, event date, death date (death categories only), a stored Wikimedia or official `.gov` photo or initials, two news sources, and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank. Source posts parked on a category page keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), and posted date. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
 
 Person and dog-comm lists paginate (`?page=`, 10 rows per page, newest event first). The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
 
@@ -79,11 +81,13 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | | |
 |--|--|
 | `GET /health` | HTML health page |
-| `GET /api/health` | `{ ok, ready, backend, people, dog_comms }` |
+| `GET /api/health` | `{ ok, ready, backend, people, dog_comms, source_posts }` |
 | `GET /search?q=` | Local catalog search |
 | `GET /people/:id` | One person row |
+| `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm snapshot |
 | `GET /api/people?category=` | Seeded person rows |
+| `GET /api/source-posts?category=` | Parked public posts |
 | `GET /api/dog-comms` | Stored official posts |
 | `GET /media/...` | Files on disk |
 
@@ -105,9 +109,10 @@ app/lib/store.mjs           Postgres or file fallback
 data/seed.json              portable import
 media/                      portraits and dog-comm stills
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS
+scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
-exittracectl.sh             start | stop | status | seed | pack
+exittracectl.sh             start | stop | status | seed | import-posts | pack
 ```
 
 ## License

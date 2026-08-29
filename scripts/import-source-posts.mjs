@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { databaseUrl, loadDotEnv, resolveRoot } from "../app/lib/env.mjs";
+import { importSourcePostsText } from "../app/lib/import-posts.mjs";
 import {
   closeStore,
   ensureSchema,
@@ -24,13 +25,24 @@ const bootstrapSql = fs.readFileSync(
   "utf8",
 );
 
+const input = process.argv[2];
+if (!input || input === "-h" || input === "--help") {
+  console.log("Usage: node scripts/import-source-posts.mjs <posts.jsonl>");
+  process.exit(input ? 0 : 1);
+}
+
+const jsonlPath = path.resolve(input);
+if (!fs.existsSync(jsonlPath)) {
+  console.error(`Missing JSONL file: ${jsonlPath}`);
+  process.exit(1);
+}
+const text = fs.readFileSync(jsonlPath, "utf8");
 const seed = loadSeedFile(seedPath);
+
 if (databaseUrl()) {
   const pool = await getPool();
   await ensureSchema(pool, bootstrapSql);
-  const n = await importSeed(pool, seed);
-  console.log(`imported postgres people=${n.people} dog_comms=${n.dog_comms}`);
-  await closeStore();
+  await importSeed(pool, seed);
 } else {
   const prior = loadFileStore(dataDir);
   setMemory({
@@ -39,9 +51,14 @@ if (databaseUrl()) {
     source_posts: prior.source_posts,
     meta: seed.meta,
   });
-  writeFileStore(dataDir, getMemory());
-  const mem = getMemory();
-  console.log(
-    `wrote file store people=${mem.people.length} dog_comms=${mem.dog_comms.length} source_posts=${mem.source_posts.length}`,
-  );
 }
+
+const result = await importSourcePostsText(text);
+if (!databaseUrl()) {
+  writeFileStore(dataDir, getMemory());
+}
+
+console.log(
+  `source posts inserted=${result.inserted} updated=${result.updated} annotated=${result.annotated} skipped=${result.skipped}`,
+);
+await closeStore();

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { databaseUrl } from "./env.mjs";
+import { canonicalPublicUrl } from "./urls.mjs";
 
 let pool = null;
 let memory = null;
@@ -74,23 +75,55 @@ function normalizeDog(row) {
   };
 }
 
+function normalizeSourcePost(row) {
+  const sourceUrl = row.source_url || "";
+  return {
+    id: row.id,
+    category: row.category,
+    source_url: sourceUrl,
+    canonical_url: row.canonical_url || canonicalPublicUrl(sourceUrl),
+    quoted_url: row.quoted_url || "",
+    card_url: row.card_url || "",
+    text: row.text || "",
+    poster_handle: row.poster_handle || "",
+    poster_name: row.poster_name || "",
+    posted_at: asDate(row.posted_at),
+    media_urls: Array.isArray(row.media_urls) ? row.media_urls : [],
+    gold_person_id: row.gold_person_id || null,
+  };
+}
+
 export function loadSeedFile(seedPath) {
   const raw = JSON.parse(fs.readFileSync(seedPath, "utf8"));
   return {
     people: (raw.people || []).map(normalizePerson),
     dog_comms: (raw.dog_comms || []).map(normalizeDog),
+    source_posts: (raw.source_posts || []).map(normalizeSourcePost),
+    meta: raw.meta || {},
+  };
+}
+
+export function loadFileStore(dataDir) {
+  const out = path.join(dataDir, "store.json");
+  if (!fs.existsSync(out)) return emptyMemory();
+  const raw = JSON.parse(fs.readFileSync(out, "utf8"));
+  return {
+    people: (raw.people || []).map(normalizePerson),
+    dog_comms: (raw.dog_comms || []).map(normalizeDog),
+    source_posts: (raw.source_posts || []).map(normalizeSourcePost),
     meta: raw.meta || {},
   };
 }
 
 function emptyMemory() {
-  return { people: [], dog_comms: [], meta: {} };
+  return { people: [], dog_comms: [], source_posts: [], meta: {} };
 }
 
 export function setMemory(seed) {
   memory = {
     people: (seed.people || []).map(normalizePerson),
     dog_comms: (seed.dog_comms || []).map(normalizeDog),
+    source_posts: (seed.source_posts || []).map(normalizeSourcePost),
     meta: seed.meta || {},
   };
   return memory;
@@ -110,8 +143,19 @@ export function writeFileStore(dataDir, seed) {
 
 export async function importSeed(p, seed) {
   if (!p) {
-    setMemory(seed);
-    return { people: seed.people.length, dog_comms: seed.dog_comms.length };
+    const existing = getMemory().source_posts || [];
+    const incoming = seed.source_posts || [];
+    setMemory({
+      people: seed.people,
+      dog_comms: seed.dog_comms,
+      source_posts: incoming.length ? incoming : existing,
+      meta: seed.meta,
+    });
+    return {
+      people: seed.people.length,
+      dog_comms: seed.dog_comms.length,
+      source_posts: getMemory().source_posts.length,
+    };
   }
   const client = await p.connect();
   try {
@@ -231,6 +275,26 @@ function compareDogs(a, b) {
   return String(a.handle).localeCompare(String(b.handle));
 }
 
+function compareSources(a, b) {
+  const d = String(b.posted_at || "").localeCompare(String(a.posted_at || ""));
+  if (d !== 0) return d;
+  return String(a.poster_handle || a.source_url || "").localeCompare(
+    String(b.poster_handle || b.source_url || ""),
+  );
+}
+
+function catalogLabel(item) {
+  if (item.type === "person") return item.row.name;
+  if (item.type === "dog") return item.row.handle;
+  return item.row.poster_handle || item.row.source_url || "";
+}
+
+function compareCatalog(a, b) {
+  const d = String(b.date || "").localeCompare(String(a.date || ""));
+  if (d !== 0) return d;
+  return String(catalogLabel(a)).localeCompare(String(catalogLabel(b)));
+}
+
 function applyWindow(rows, limit, offset) {
   if (limit != null) return rows.slice(offset, offset + limit);
   return offset ? rows.slice(offset) : rows;
@@ -314,6 +378,172 @@ export async function countDogComms() {
   return q.rows[0].n;
 }
 
+function sourcePostWhere(opts = {}) {
+  const params = [];
+  const clauses = [];
+  if (opts.category) {
+    params.push(opts.category);
+    clauses.push(`category = $${params.length}`);
+  }
+  if (opts.standalone) {
+    clauses.push("gold_person_id IS NULL");
+  }
+  const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+  return { params, where };
+}
+
+export async function listSourcePosts(opts = {}) {
+  const limit = finiteInt(opts.limit, null);
+  const offset = finiteInt(opts.offset, 0);
+  const p = await getPool();
+  if (!p) {
+    let rows = getMemory().source_posts || [];
+    if (opts.category) rows = rows.filter((r) => r.category === opts.category);
+    if (opts.standalone) rows = rows.filter((r) => !r.gold_person_id);
+    return applyWindow(rows.slice().sort(compareSources), limit, offset);
+  }
+  const { params, where } = sourcePostWhere(opts);
+  let sql = `SELECT * FROM source_posts${where} ORDER BY posted_at DESC NULLS LAST, poster_handle ASC`;
+  if (limit != null) {
+    params.push(limit);
+    sql += ` LIMIT $${params.length}`;
+    params.push(offset);
+    sql += ` OFFSET $${params.length}`;
+  } else if (offset) {
+    params.push(offset);
+    sql += ` OFFSET $${params.length}`;
+  }
+  const q = await p.query(sql, params);
+  return q.rows.map(normalizeSourcePost);
+}
+
+export async function countSourcePosts(opts = {}) {
+  const p = await getPool();
+  if (!p) {
+    let rows = getMemory().source_posts || [];
+    if (opts.category) rows = rows.filter((r) => r.category === opts.category);
+    if (opts.standalone) rows = rows.filter((r) => !r.gold_person_id);
+    return rows.length;
+  }
+  const { params, where } = sourcePostWhere(opts);
+  const q = await p.query(`SELECT COUNT(*)::int AS n FROM source_posts${where}`, params);
+  return q.rows[0].n;
+}
+
+export async function getSourcePost(id) {
+  if (!id) return null;
+  const p = await getPool();
+  if (!p) return (getMemory().source_posts || []).find((r) => r.id === id) || null;
+  const q = await p.query("SELECT * FROM source_posts WHERE id = $1", [id]);
+  return q.rows[0] ? normalizeSourcePost(q.rows[0]) : null;
+}
+
+export async function upsertSourcePosts(rows) {
+  const incoming = (rows || []).map(normalizeSourcePost).filter((r) => r.id && r.canonical_url);
+  let inserted = 0;
+  let updated = 0;
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    if (!mem.source_posts) mem.source_posts = [];
+    for (const row of incoming) {
+      const i = mem.source_posts.findIndex(
+        (r) => r.canonical_url === row.canonical_url || r.id === row.id,
+      );
+      if (i >= 0) {
+        const prev = mem.source_posts[i];
+        mem.source_posts[i] = {
+          ...prev,
+          ...row,
+          gold_person_id: row.gold_person_id || prev.gold_person_id || null,
+        };
+        updated += 1;
+      } else {
+        mem.source_posts.push(row);
+        inserted += 1;
+      }
+    }
+    return { inserted, updated, source_posts: mem.source_posts.length };
+  }
+  const client = await p.connect();
+  try {
+    await client.query("BEGIN");
+    for (const row of incoming) {
+      const existing = await client.query(
+        "SELECT id, gold_person_id FROM source_posts WHERE canonical_url = $1 OR id = $2",
+        [row.canonical_url, row.id],
+      );
+      const goldId = row.gold_person_id || existing.rows[0]?.gold_person_id || null;
+      await client.query(
+        `INSERT INTO source_posts (
+           id, category, source_url, canonical_url, quoted_url, card_url, text,
+           poster_handle, poster_name, posted_at, media_urls, gold_person_id
+         ) VALUES (
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12
+         )
+         ON CONFLICT (canonical_url) DO UPDATE SET
+           category = EXCLUDED.category,
+           source_url = EXCLUDED.source_url,
+           quoted_url = EXCLUDED.quoted_url,
+           card_url = EXCLUDED.card_url,
+           text = EXCLUDED.text,
+           poster_handle = EXCLUDED.poster_handle,
+           poster_name = EXCLUDED.poster_name,
+           posted_at = EXCLUDED.posted_at,
+           media_urls = EXCLUDED.media_urls,
+           gold_person_id = COALESCE(EXCLUDED.gold_person_id, source_posts.gold_person_id)`,
+        [
+          row.id,
+          row.category,
+          row.source_url,
+          row.canonical_url,
+          row.quoted_url,
+          row.card_url,
+          row.text,
+          row.poster_handle,
+          row.poster_name,
+          row.posted_at,
+          JSON.stringify(row.media_urls || []),
+          goldId,
+        ],
+      );
+      if (existing.rows.length) updated += 1;
+      else inserted += 1;
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return { inserted, updated, source_posts: await countSourcePosts() };
+}
+
+export async function listCatalog(categoryOrOpts, maybeOpts) {
+  const args = parseListArgs(categoryOrOpts, maybeOpts);
+  const limit = finiteInt(args.limit, null);
+  const offset = finiteInt(args.offset, 0);
+  const [people, posts] = await Promise.all([
+    listPeople(args.category),
+    listSourcePosts({ category: args.category, standalone: true }),
+  ]);
+  const items = [
+    ...people.map((row) => ({ type: "person", date: row.event_date || "", row })),
+    ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),
+  ];
+  items.sort(compareCatalog);
+  return applyWindow(items, limit, offset);
+}
+
+export async function countCatalog(category) {
+  const [people, posts] = await Promise.all([
+    countPeople(category),
+    countSourcePosts({ category, standalone: true }),
+  ]);
+  return people + posts;
+}
+
 export async function counts() {
   const p = await getPool();
   if (!p) {
@@ -327,12 +557,14 @@ export async function counts() {
     return {
       people: people.length,
       dog_comms: dogs.length,
+      source_posts: (getMemory().source_posts || []).length,
       byCategory,
     };
   }
-  const [peopleCount, dogCount, grouped] = await Promise.all([
+  const [peopleCount, dogCount, postCount, grouped] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM people"),
     p.query("SELECT COUNT(*)::int AS n FROM dog_comms"),
+    p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
     p.query("SELECT category, COUNT(*)::int AS n FROM people GROUP BY category"),
   ]);
   const byCategory = {};
@@ -341,6 +573,7 @@ export async function counts() {
   return {
     people: peopleCount.rows[0].n,
     dog_comms: dogCount.rows[0].n,
+    source_posts: postCount.rows[0].n,
     byCategory,
   };
 }
@@ -375,6 +608,21 @@ function matchesPerson(row, needle) {
 
 function matchesDog(row, needle) {
   return [row.handle, row.account_name, row.text]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
+
+function matchesSource(row, needle) {
+  return [
+    row.poster_handle,
+    row.poster_name,
+    row.text,
+    row.source_url,
+    row.quoted_url,
+    row.card_url,
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
@@ -425,19 +673,44 @@ export async function searchDogComms(q) {
   return res.rows.map(normalizeDog);
 }
 
+export async function searchSourcePosts(q) {
+  const raw = String(q || "").trim();
+  if (!raw) return [];
+  const p = await getPool();
+  if (!p) {
+    const needle = raw.toLowerCase();
+    return (getMemory().source_posts || [])
+      .filter((r) => !r.gold_person_id && matchesSource(r, needle))
+      .slice()
+      .sort(compareSources);
+  }
+  const res = await p.query(
+    `SELECT * FROM source_posts
+     WHERE gold_person_id IS NULL
+       AND (
+         poster_handle ILIKE $1 ESCAPE '\\'
+         OR poster_name ILIKE $1 ESCAPE '\\'
+         OR text ILIKE $1 ESCAPE '\\'
+         OR source_url ILIKE $1 ESCAPE '\\'
+       )
+     ORDER BY posted_at DESC NULLS LAST, poster_handle ASC`,
+    [likeNeedle(raw)],
+  );
+  return res.rows.map(normalizeSourcePost);
+}
+
 export async function searchCatalog(q) {
-  const [people, dogs] = await Promise.all([searchPeople(q), searchDogComms(q)]);
+  const [people, dogs, posts] = await Promise.all([
+    searchPeople(q),
+    searchDogComms(q),
+    searchSourcePosts(q),
+  ]);
   const items = [
-    ...people.map((row) => ({ type: "person", date: row.event_date, row })),
-    ...dogs.map((row) => ({ type: "dog", date: row.posted_at, row })),
+    ...people.map((row) => ({ type: "person", date: row.event_date || "", row })),
+    ...dogs.map((row) => ({ type: "dog", date: row.posted_at || "", row })),
+    ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),
   ];
-  items.sort((a, b) => {
-    const d = String(b.date).localeCompare(String(a.date));
-    if (d !== 0) return d;
-    const an = a.type === "person" ? a.row.name : a.row.handle;
-    const bn = b.type === "person" ? b.row.name : b.row.handle;
-    return String(an).localeCompare(String(bn));
-  });
+  items.sort(compareCatalog);
   return items;
 }
 

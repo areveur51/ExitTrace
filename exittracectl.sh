@@ -9,7 +9,7 @@ DEFAULT_PORT=5220
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") {start|stop|restart|status|logs|seed|pack|help}
+Usage: $(basename "$0") {start|stop|restart|status|logs|seed|import-posts|pack|help}
 EOF
 }
 
@@ -90,6 +90,16 @@ cmd_seed() {
   "$(find_node)" "${ROOT}/scripts/import-seed.mjs"
 }
 
+cmd_import_posts() {
+  load_env
+  local file="${1:-}"
+  if [[ -z "$file" ]]; then
+    echo "Usage: $(basename "$0") import-posts <posts.jsonl>" >&2
+    return 1
+  fi
+  "$(find_node)" "${ROOT}/scripts/import-source-posts.mjs" "$file"
+}
+
 cmd_pack() {
   bash "${ROOT}/scripts/pack-data.sh"
 }
@@ -101,6 +111,7 @@ case "${1:-help}" in
   status) cmd_status ;;
   logs) shift || true; cmd_logs "${1:-80}" ;;
   seed) cmd_seed ;;
+  import-posts) shift || true; cmd_import_posts "${1:-}" ;;
   pack) cmd_pack ;;
   help|-h|--help) usage ;;
   *) usage; exit 1 ;;

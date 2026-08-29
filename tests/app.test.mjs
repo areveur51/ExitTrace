@@ -113,6 +113,8 @@ test("html pages render", async () => {
     "/firings",
     "/resignations",
     "/government",
+    "/arrests",
+    "/deaths",
     "/deaths/celebrities",
     "/deaths/officials",
     "/deaths/ceos",
@@ -208,6 +210,8 @@ test("every category list page ships a pager", async () => {
     "/firings",
     "/resignations",
     "/government",
+    "/arrests",
+    "/deaths",
     "/deaths/celebrities",
     "/deaths/officials",
     "/deaths/ceos",
@@ -250,7 +254,24 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /class="keymap"/);
   assert.match(res.body, /class="keychip"/);
   assert.match(res.body, /href="\/firings"/);
+  assert.match(res.body, /href="\/arrests"/);
   assert.doesNotMatch(res.body, /widgets\.js/);
+});
+
+test("Arrests page uses the same TUI chrome and empty subject is not invented", async () => {
+  const res = await get("/arrests");
+  assert.equal(res.status, 200);
+  assert.match(res.body, /ExitTrace/);
+  assert.match(res.body, /class="pager"/);
+  assert.match(res.body, /class="keymap"/);
+  assert.match(res.body, /href="\/arrests"/);
+  assert.match(res.body, /data-key="a"/);
+  assert.doesNotMatch(res.body, /widgets\.js/);
+  const deaths = await get("/deaths");
+  assert.equal(deaths.status, 200);
+  assert.match(deaths.body, /href="\/deaths\/celebrities"/);
+  assert.match(deaths.body, /href="\/deaths\/officials"/);
+  assert.match(deaths.body, /href="\/deaths\/ceos"/);
 });
 
 test("TUI palette uses imagine-cli tokens, not MovieBox purple/cyan", async () => {

@@ -128,6 +128,12 @@ a:hover { color: var(--ink); }
   padding-right: max(1rem, env(safe-area-inset-right));
 }
 .lede, .hint, .empty { color: var(--muted); }
+.death-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+}
 
 .tui-group { margin: 0 0 0.85rem; }
 .tui-group-h {
@@ -256,6 +262,7 @@ a:hover { color: var(--ink); }
 .keychip[data-key="f"] { color: var(--blue); }
 .keychip[data-key="r"] { color: var(--green); }
 .keychip[data-key="g"] { color: var(--amber); }
+.keychip[data-key="a"] { color: var(--rose); }
 .keychip[data-key="d"],
 .keychip[data-key="1"] { color: var(--purple); }
 .keychip[data-key="2"] { color: var(--rose); }
