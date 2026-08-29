@@ -1687,6 +1687,40 @@
       ]
     },
     {
+      "id": "harald-v",
+      "category": "death_official",
+      "name": "Harald V",
+      "role": "King of Norway",
+      "event_date": "2026-08-28",
+      "death_date": "2026-08-28",
+      "photo": "/media/people/harald-v.jpg",
+      "photo_credit": "Sámediggi – Sametinget, CC BY 2.0, via Wikimedia Commons",
+      "net_worth_usd": null,
+      "net_worth_note": "No contemporaneous Forbes figure used.",
+      "net_worth_source": "",
+      "summary": "Died at 89 at Oslo University Hospital Rikshospitalet.",
+      "sources": [
+        {
+          "title": "Norway's King Harald dies aged 89: A beloved monarch buffeted by family crises",
+          "publisher": "BBC News",
+          "url": "https://www.bbc.co.uk/news/articles/clykn5p5172o",
+          "date": "2026-08-28"
+        },
+        {
+          "title": "Norway’s King Harald V dies and his son becomes King Haakon VIII",
+          "publisher": "AP News",
+          "url": "https://apnews.com/article/king-harald-norway-228366941b7c48c59ececf004cc3c467",
+          "date": "2026-08-28"
+        },
+        {
+          "title": "His Majesty King Harald V Has Passed Away",
+          "publisher": "Norwegian Armed Forces",
+          "url": "https://www.forsvaret.no/en/news/articles/his-majesty-king-harald-v-has-passed-away",
+          "date": "2026-08-28"
+        }
+      ]
+    },
+    {
       "id": "david-rockefeller",
       "category": "death_ceo",
       "name": "David Rockefeller",
