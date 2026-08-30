@@ -341,12 +341,16 @@ test("dog-comm list and search cards use still.thumb, not the large snapshot sti
 
   assert.equal(list.status, 200);
   assert.match(list.body, /class="still thumb"/);
-  assert.match(list.body, /width="48" height="64"/);
+  assert.match(list.body, /width="40" height="52"/);
+  assert.match(list.body, /loading="lazy"/);
+  assert.match(list.body, /\/media\/thumbs\/dog-comms\//);
+  assert.doesNotMatch(list.body, /src="\/media\/dog-comms\//);
   assert.doesNotMatch(list.body, /class="still"(?![^"]*\bthumb\b)/);
 
   assert.equal(search.status, 200);
   assert.match(search.body, /class="still thumb"/);
-  assert.match(search.body, /width="48" height="64"/);
+  assert.match(search.body, /width="40" height="52"/);
+  assert.match(search.body, /\/media\/thumbs\/dog-comms\//);
 
   assert.equal(detail.status, 200);
   assert.match(detail.body, /class="still"/);
@@ -409,8 +413,14 @@ test("firings people rows match officials person-card markup", async () => {
 
   assert.match(firings.body, /class="tui-row person-card/);
   assert.match(firings.body, /class="portrait thumb"/);
+  assert.match(firings.body, /\/media\/thumbs\/people\//);
+  assert.match(firings.body, /width="40" height="52"/);
+  assert.match(firings.body, /loading="lazy"/);
+  assert.doesNotMatch(firings.body, /src="\/media\/people\//);
   assert.match(officialPage.body, /class="tui-row person-card/);
   assert.match(officialPage.body, /class="portrait thumb"/);
+  assert.match(officialPage.body, /\/media\/thumbs\/people\//);
+  assert.doesNotMatch(officialPage.body, /src="\/media\/people\//);
 
   const fired = newest.event_date;
   assert.match(firings.body, new RegExp(`<div class="tui-title">${newest.name}</div>`));
@@ -439,4 +449,39 @@ test("optional API page= uses the same window without inventing rows", async () 
   assert.equal(json.people.length, Math.min(PAGE_SIZE, firings.length));
   assert.equal(json.people[0].id, firings[0].id);
   assert.equal(json.people[0].name, firings[0].name);
+  if (json.people[0].photo) {
+    assert.match(json.people[0].photo, /^\/media\/people\//);
+    assert.doesNotMatch(json.people[0].photo, /\/thumbs\//);
+  }
+});
+
+test("list thumbs are small local JPEGs; detail and cache keep the full still", async () => {
+  const row = newestFirst(
+    seed.people.filter((r) => r.category === "firings" && r.photo),
+    "event_date",
+  )[0];
+  assert.ok(row?.photo);
+  const stem = path.basename(row.photo).replace(/\.[^.]+$/, "");
+  const list = await get("/firings");
+  const detail = await get(`/people/${row.id}`);
+  const thumb = await get(`/media/thumbs/people/${stem}.jpg`);
+  const original = await get(row.photo);
+
+  assert.match(list.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg"`));
+  assert.doesNotMatch(list.body, new RegExp(`src="/media/people/${stem}\\.`));
+  assert.match(detail.body, /class="detail-photo"/);
+  assert.match(detail.body, new RegExp(`src="${row.photo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  assert.doesNotMatch(detail.body, new RegExp(`/media/thumbs/people/${stem}`));
+
+  assert.equal(thumb.status, 200);
+  assert.equal(original.status, 200);
+  assert.match(thumb.headers["content-type"], /image\/jpeg/);
+  assert.match(thumb.headers["cache-control"], /max-age=31536000/);
+  assert.match(thumb.headers["cache-control"], /immutable/);
+  assert.match(original.headers["cache-control"], /max-age=31536000/);
+  const thumbBytes = Number(thumb.headers["content-length"]);
+  const originalBytes = Number(original.headers["content-length"]);
+  assert.ok(thumbBytes > 0 && originalBytes > 0);
+  assert.ok(thumbBytes < originalBytes);
+  assert.ok(thumbBytes < 12_000);
 });

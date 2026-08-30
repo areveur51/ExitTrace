@@ -109,7 +109,7 @@ Releases:
 
 Each person row has name, event date, death date (death categories only), a stored Wikimedia or official `.gov` photo or initials, two news sources, and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
 
-Identified people use the same list card on every people page: portrait thumb, name, and one date · category · net worth (or em dash). Source posts that still render as posted (em dash title, poster handle) live only on Unsorted. Person, unsorted, and dog-comm lists paginate (`?page=`, 10 rows per page, newest event first). The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person, source post, or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
+Identified people use the same list card on every people page: a small local portrait thumb, name, and one date · category · net worth (or em dash). Source posts that still render as posted (em dash title, poster handle) live only on Unsorted. Person, unsorted, and dog-comm lists paginate (`?page=`, 10 rows per page, newest event first). The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person, source post, or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
 
 Dog comms store the post text, poster handle, date, and a local still when one is freely licensed. The source URL is a citation only. Tap a dog-comm row to open the stored snapshot. The pages do not load `widgets.js` and do not fetch X, Wikimedia, or news sites at view time.
 
@@ -128,7 +128,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /api/people?category=` | Seeded person rows |
 | `GET /api/source-posts?category=` | Parked public posts |
 | `GET /api/dog-comms` | Stored official posts |
-| `GET /media/...` | Files on disk |
+| `GET /media/...` | Files on disk (full stills). List rows use `/media/thumbs/...` |
 
 ## Configuration
 
@@ -146,11 +146,13 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 app/server.mjs              HTTP + pages
 app/lib/store.mjs           Postgres or file fallback
 data/seed.json              portable import
-media/                      portraits and dog-comm stills
+media/                      portraits, dog-comm stills, derived list thumbs
+app/lib/thumb.mjs           list-thumb href + local resize
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/promote-source-post.mjs  promote one Unsorted post to a person row
 scripts/process-add-request.mjs  apply one queued add request (cites from caller)
+scripts/build-thumbs.mjs    derive 40×52 list thumbs from stored stills
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
 exittracectl.sh             start | stop | status | seed | import-posts | promote | add-process | pack

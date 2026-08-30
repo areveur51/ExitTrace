@@ -19,6 +19,9 @@ data/store.json
 # Host-local JSONL import packs. Pass a path to the import script; do not commit.
 var/
 
+# In-progress thumb writes
+media/thumbs/**/*.tmp
+
 # Packaged release zip — published via GitHub Releases, not git
 dist/
 *.zip

@@ -52,6 +52,7 @@ import {
 } from "./lib/html.mjs";
 import { AddError, queueAddRequest } from "./lib/add-request.mjs";
 import { PAGE_SIZE, paginate, parsePage } from "./lib/paginate.mjs";
+import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -168,8 +169,19 @@ function serveFile(res, filePath) {
   const ext = path.extname(filePath).toLowerCase();
   send(res, 200, fs.readFileSync(filePath), {
     "Content-Type": MIME[ext] || "application/octet-stream",
-    "Cache-Control": "public, max-age=3600",
+    "Cache-Control": "public, max-age=31536000, immutable",
   });
+}
+
+function serveMedia(res, reqPath) {
+  const rel = decodeURIComponent(String(reqPath || "")).replace(/^\/+/, "");
+  if (rel.startsWith("thumbs/")) {
+    const href = `/media/${rel}`;
+    const thumbRel = thumbRelFromHref(href);
+    const dest = thumbRel ? ensureThumbFile(mediaDir, thumbRel) : null;
+    return serveFile(res, dest);
+  }
+  return serveFile(res, safeJoin(mediaDir, rel));
 }
 
 async function healthPayload() {
@@ -296,7 +308,7 @@ async function handle(req, res) {
     return;
   }
   if (p.startsWith("/media/")) {
-    return serveFile(res, safeJoin(mediaDir, p.slice("/media/".length)));
+    return serveMedia(res, p.slice("/media/".length));
   }
 
   if (p === "/") {
