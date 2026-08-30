@@ -4,7 +4,7 @@ import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { formatDate } from "../app/lib/categories.mjs";
-import { dogListRow, personRow, searchBody } from "../app/lib/html.mjs";
+import { dogDetail, dogListRow, personDetail, personRow, searchBody } from "../app/lib/html.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -60,12 +60,41 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
   );
 
   assert.match(person, /class="portrait thumb"/);
-  assert.match(person, /width="48" height="64"/);
+  assert.match(person, /width="40" height="52"/);
+  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg"/);
+  assert.match(person, /loading="lazy"/);
+  assert.match(person, /decoding="async"/);
+  assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg"/);
   assert.match(dogRow, /class="still thumb"/);
-  assert.match(dogRow, /width="48" height="64"/);
+  assert.match(dogRow, /width="40" height="52"/);
+  assert.match(dogRow, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.match(dogRow, /loading="lazy"/);
+  assert.match(dogRow, /decoding="async"/);
+  assert.doesNotMatch(dogRow, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
   assert.match(search, /class="still thumb"/);
   assert.match(search, /class="portrait thumb"/);
-  assert.equal((search.match(/width="48" height="64"/g) || []).length, 2);
+  assert.equal((search.match(/width="40" height="52"/g) || []).length, 2);
+  assert.doesNotMatch(search, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(search, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
+});
+
+test("detail pages keep the full local still, not the list thumb", () => {
+  const person = personDetail(firing());
+  const dogPage = dogDetail(dog());
+  assert.match(person, /class="detail-photo"/);
+  assert.match(person, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(person, /\/media\/thumbs\//);
+  assert.match(dogPage, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.doesNotMatch(dogPage, /\/media\/thumbs\//);
+});
+
+test("list thumbs drop external hrefs instead of hotlinking", () => {
+  const row = personRow(
+    firing({ photo: "https://upload.wikimedia.org/wikipedia/commons/x.jpg" }),
+  );
+  assert.doesNotMatch(row, /upload\.wikimedia\.org/);
+  assert.doesNotMatch(row, /<img /);
+  assert.match(row, /class="initials thumb"/);
 });
 
 test("CSS keeps list still.thumb at portrait size on all viewports including 720px", () => {

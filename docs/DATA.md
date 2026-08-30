@@ -1,6 +1,6 @@
 # Data pack
 
-The committed `data/seed.json` is the portable gold import (identified people and official dog-comms). `media/` holds stored portraits and dog-comm stills. Public source posts are a separate store (`source_posts`) and are not written into the gold seed. Parked posts keep a category guess for later classify and list on `/unsorted`, not on the people pages.
+The committed `data/seed.json` is the portable gold import (identified people and official dog-comms). `media/` holds stored portraits and dog-comm stills. List pages paint derived local thumbs under `media/thumbs/`; seed `photo` / `still` paths stay the full local file. Public source posts are a separate store (`source_posts`) and are not written into the gold seed. Parked posts keep a category guess for later classify and list on `/unsorted`, not on the people pages.
 
 ## Source-post JSONL
 

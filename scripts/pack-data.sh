@@ -15,7 +15,7 @@ mkdir -p "${STAGE}/${NAME}/data" "${STAGE}/${NAME}/media"
 
 cp "${ROOT}/data/seed.json" "${STAGE}/${NAME}/data/seed.json"
 if [[ -d "${ROOT}/media" ]]; then
-  # Copy stored media; skip leftover pack artifacts if any.
+  # Copy stored media; skip zip files and editor junk if any.
   tar -C "${ROOT}/media" --exclude='*.zip' --exclude='.DS_Store' -cf - . \
     | tar -C "${STAGE}/${NAME}/media" -xf -
 fi

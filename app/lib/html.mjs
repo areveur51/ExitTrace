@@ -6,6 +6,7 @@ import {
   isDeathCategory,
 } from "./categories.mjs";
 import { pageHref, pageWindow } from "./paginate.mjs";
+import { listThumbHref, LIST_THUMB_CSS_H, LIST_THUMB_CSS_W } from "./thumb.mjs";
 
 function esc(s) {
   return String(s ?? "")
@@ -186,8 +187,9 @@ export function layout({
 }
 
 function thumb(src, label, kind = "portrait") {
-  if (src) {
-    return `<img class="${kind} thumb" src="${esc(src)}" alt="${esc(label)}" width="48" height="64">`;
+  const href = listThumbHref(src);
+  if (href) {
+    return `<img class="${kind} thumb" src="${esc(href)}" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async">`;
   }
   return `<span class="initials thumb" aria-hidden="true">${esc(initials(label))}</span>`;
 }
@@ -374,7 +376,7 @@ export function listSection(listHtml, pagerHtml, headHtml = "") {
 
 export function dogCard(row) {
   const still = row.still
-    ? `<img class="still" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="320" height="200">`
+    ? `<img class="still" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="320" height="200" decoding="async">`
     : "";
   const credit = row.still_credit
     ? `<p class="credit">${esc(row.still_credit)}</p>`
@@ -416,7 +418,7 @@ export function personDetail(row) {
     ? `<p class="meta-line">Death date · <time datetime="${esc(row.death_date || "")}">${esc(formatDate(row.death_date))}</time></p>`
     : "";
   const photo = row.photo
-    ? `<img class="detail-photo" src="${esc(row.photo)}" alt="${esc(row.name)}" width="120" height="150">`
+    ? `<img class="detail-photo" src="${esc(row.photo)}" alt="${esc(row.name)}" width="120" height="150" decoding="async">`
     : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name) || "—")}</span>`;
   const sources = row.sources || [];
   return `<article class="detail">
@@ -495,7 +497,7 @@ export function sourcePostDetail(row) {
 
 export function dogDetail(row) {
   const photo = row.still
-    ? `<img class="detail-photo" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="120" height="150">`
+    ? `<img class="detail-photo" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="120" height="150" decoding="async">`
     : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.handle))}</span>`;
   return `<article class="detail">
     ${boxFrame(
