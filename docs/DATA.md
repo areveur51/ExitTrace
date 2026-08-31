@@ -22,6 +22,18 @@ Each line is public fields only:
 
 Accepted `category` values: `firings`, `resignations`, `government_stepdowns`, `arrests`, `death_unspecified`. Commentary dog posts are skipped. Dedup is by canonical public URL. A URL that already sits on a gold person row is stored as an annotation only — the gold person is not overwritten. The import is idempotent against Postgres or the file fallback.
 
+## Public RSS digest (name leads)
+
+Host-side seeder. No third-party digest API or key.
+
+```bash
+./exittracectl.sh digest
+# or:
+node scripts/seed-rss-digest.mjs
+```
+
+Fetches public RSS from AP, Reuters, BBC, and other official news-org / `.gov` feeds listed against `app/lib/official.mjs`. Parks matching items as Unsorted JSONL leads via `import-posts`, and queues `/add` name leads when a subject can be read from the headline. Digest items are not cites. Wikipedia is not a cite. Q drops stay leads only. Indictment headlines are not given invented JSONL categories — KEEP rematch stays `promote` / `add-process`. Current feeds plus one 2017-on historical slice. Idempotent. No batch cap on parking leads. Does not write `data/seed.json`.
+
 ## Promote one source post
 
 Once a parked Unsorted post has a named subject, a calendar event date, a catalog category, and at least two published-news or official-account cite URLs, write an identified person row:

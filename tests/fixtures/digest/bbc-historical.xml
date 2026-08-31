@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>BBC News</title>
+    <link>https://www.bbc.com/news</link>
+    <item>
+      <title>Public figure dies aged 81</title>
+      <link>https://www.bbc.com/news/world-us-canada-example-obit</link>
+      <pubDate>Wed, 03 May 2024 07:00:00 GMT</pubDate>
+      <description>A public figure died, reports said.</description>
+    </item>
+    <item>
+      <title>Q drop 1234 claims a firing</title>
+      <link>https://qalerts.app/posts/1234</link>
+      <pubDate>Thu, 04 May 2024 07:00:00 GMT</pubDate>
+      <description>A Q drop is a lead only, never a cite.</description>
+    </item>
+  </channel>
+</rss>

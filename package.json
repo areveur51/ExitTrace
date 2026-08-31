@@ -17,6 +17,7 @@
     "start": "node app/server.mjs",
     "seed": "node scripts/import-seed.mjs",
     "import-posts": "node scripts/import-source-posts.mjs",
+    "digest": "node scripts/seed-rss-digest.mjs",
     "promote": "node scripts/promote-source-post.mjs",
     "add-process": "node scripts/process-add-request.mjs",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs",
