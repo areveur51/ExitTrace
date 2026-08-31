@@ -13,6 +13,7 @@ import {
   personEvents,
   personHasKind,
   projectPerson,
+  resolveEventKind,
   validateIdentifiedPersonInput,
   validatePromoteInput,
 } from "./promote.mjs";
@@ -886,8 +887,9 @@ export async function applyIdentifiedPerson(input) {
     net_worth_note: parsed.net_worth_note,
   };
   if (existing) {
+    const kind = resolveEventKind(existing, parsed.category);
     const attached = attachPersonEvent(existing, {
-      kind: parsed.category,
+      kind,
       event_date: parsed.event_date,
       sources: incoming,
     });
@@ -896,7 +898,7 @@ export async function applyIdentifiedPerson(input) {
     person = await attachPersonNetWorth(person, extras);
     return {
       action: "annotated",
-      person: projectPerson(person, parsed.category),
+      person: projectPerson(person, kind),
       added_cites: attached.added.length,
       added_event: !attached.existed,
       people: await countPeople(),

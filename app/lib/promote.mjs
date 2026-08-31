@@ -1,6 +1,7 @@
 import {
   PROMOTE_CATEGORY_IDS,
   isDeathCategory,
+  isIndictmentKeepKind,
 } from "./categories.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -240,12 +241,24 @@ export function projectPerson(row, kinds) {
   return { ...row, ...derived };
 }
 
+/**
+ * One event, one kind. Civilian and non-civilian indictment are the same
+ * indictment classification — do not double-tag. Unclear stays un-tagged.
+ */
+export function resolveEventKind(person, kind) {
+  const key = String(kind || "").trim();
+  if (!isIndictmentKeepKind(key)) return key;
+  const existing = personEvents(person).find((ev) => isIndictmentKeepKind(ev.kind));
+  return existing ? existing.kind : key;
+}
+
 /** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. */
 export function attachPersonEvent(person, incoming) {
   const ev = normalizePersonEvent(incoming);
   if (!ev) {
     throw new PromoteError("event kind and event_date are required", "missing_event");
   }
+  ev.kind = resolveEventKind(person, ev.kind);
   const events = personEvents(person);
   const i = events.findIndex((row) => row.kind === ev.kind);
   if (i >= 0) {

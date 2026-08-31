@@ -336,6 +336,30 @@ test("migration collapses same-slug rows and keeps distinct same-name people apa
   assert.ok(!merged.some((r) => r.id === "casey-vale-2024-08-01"));
 });
 
+test("do not double-tag the same indictment as civilian and non-civilian", async () => {
+  setMemory(goldSeed());
+  await applyIdentifiedPerson({
+    subject: "Casey Vale",
+    event_date: "2024-08-01",
+    category: "indictment_civilian",
+    cite_urls: CITES,
+  });
+  const again = await applyIdentifiedPerson({
+    subject: "Casey Vale",
+    event_date: "2024-10-01",
+    category: "indictment_non_civilian",
+    cite_urls: MORE,
+  });
+  assert.equal(again.action, "annotated");
+  assert.equal(await countPeople(), 73);
+  const person = await getPerson("casey-vale");
+  const indictments = person.events.filter((ev) => ev.kind.startsWith("indictment_"));
+  assert.equal(indictments.length, 1);
+  assert.equal(indictments[0].kind, "indictment_civilian");
+  assert.equal(indictments[0].event_date, "2024-08-01");
+  assert.ok(indictments[0].sources.some((s) => s.url === MORE[0]));
+});
+
 test("findGoldMatch prefers slug, then a single normalized name", () => {
   const people = goldSeed().people;
   assert.equal(findGoldMatch(people, { subject: "James Comey" })?.id, "james-comey");

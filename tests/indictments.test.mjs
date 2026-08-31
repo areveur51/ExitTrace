@@ -269,6 +269,9 @@ test("per-kind tags: arrest + indictment stay one person; never two of the same 
   assert.equal(otherKind.action, "annotated");
   assert.equal(otherKind.person.id, "casey-vale");
   assert.equal(await countPeople(), 73);
+  const afterBoth = await getPerson("casey-vale");
+  assert.ok(afterBoth.events.some((ev) => ev.kind === "indictment_civilian"));
+  assert.ok(!afterBoth.events.some((ev) => ev.kind === "indictment_non_civilian"));
 
   const shownArrest = await checkPersonDisplayed(arrest.person);
   assert.match(shownArrest.list, /^\/arrests/);
