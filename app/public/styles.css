@@ -1,6 +1,7 @@
 :root {
-  /* Cyberdeck HUD — pin tokens only (red / oxblood / cyan). Catalog labels
-     stay real ExitTrace copy; binary and barcodes are texture, not status. */
+  /* Pin tokens (bound): cyan #3fe0e8 / #4fd8e0, red #e23a32, brick #8e2a22.
+     Near-white --label only on tiny ticks. Binary/barcode = texture, not status.
+     Catalog labels stay real ExitTrace copy. */
   --bg: #0a0203;
   --void: #050102;
   --bg-2: #140507;
@@ -23,6 +24,15 @@
   --purple: #8e2a22;
   --glow-red: 0 0 14px rgba(226, 58, 50, 0.4);
   --glow-cyan: 0 0 12px rgba(63, 224, 232, 0.45);
+  --bin-fill: repeating-linear-gradient(
+    90deg,
+    transparent 0 2px,
+    rgba(142, 42, 34, 0.2) 2px 3px,
+    transparent 3px 5px,
+    rgba(142, 42, 34, 0.32) 5px 6px,
+    transparent 6px 9px,
+    rgba(142, 42, 34, 0.12) 9px 10px
+  );
   --font: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --font-ui: "Arial Narrow", "Helvetica Neue Condensed", "Nimbus Sans Narrow", ui-sans-serif, system-ui, sans-serif;
   color: var(--ink);
@@ -150,7 +160,7 @@ a:hover { color: var(--ink); }
   height: 8px;
   background: repeating-linear-gradient(
     90deg,
-    var(--ink) 0 1px,
+    var(--label) 0 1px,
     transparent 1px 7px,
     var(--red) 7px 8px,
     transparent 8px 14px
@@ -167,10 +177,10 @@ a:hover { color: var(--ink); }
   background: repeating-linear-gradient(
     90deg,
     #000 0 3px,
-    #fff 3px 4px,
+    var(--label) 3px 4px,
     var(--red) 4px 7px,
     #000 7px 11px,
-    #fff 11px 12px,
+    var(--label) 11px 12px,
     var(--red-dim) 12px 16px
   );
   box-shadow: var(--glow-red);
@@ -188,14 +198,30 @@ a:hover { color: var(--ink); }
 .tui-n { color: var(--cyan); text-align: right; font-family: var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; text-shadow: 0 0 8px rgba(63, 224, 232, 0.35); }
 .chev { color: var(--cyan); margin-right: 0.35rem; }
 .list-head {
-  margin: 0 0 0.65rem;
+  position: relative;
+  margin: 0 0 0.85rem;
   color: var(--red);
   font-family: var(--font-ui);
   font-size: 0.92rem;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 .list-head .sep, .list-head .dot { color: var(--red); }
+.list-head::after {
+  content: "";
+  display: block;
+  height: 5px;
+  margin-top: 0.35rem;
+  background: var(--bin-fill), repeating-linear-gradient(
+    90deg,
+    #000 0 2px,
+    var(--brick) 2px 3px,
+    #000 3px 6px,
+    var(--label) 6px 7px,
+    var(--red) 7px 9px
+  );
+  opacity: 0.7;
+}
 
 .home-stage {
   flex: 1;
@@ -211,7 +237,7 @@ a:hover { color: var(--ink); }
   display: block;
   width: min(92vw, 36rem);
   height: auto;
-  filter: drop-shadow(0 0 12px rgba(225, 6, 0, 0.55));
+  filter: drop-shadow(0 0 12px rgba(226, 58, 50, 0.55));
 }
 .ver {
   margin: 0.65rem 0 1.6rem;
@@ -251,6 +277,7 @@ a:hover { color: var(--ink); }
 }
 
 .tui-main {
+  position: relative;
   flex: 1;
   width: 100%;
   margin: 0 auto;
@@ -259,6 +286,18 @@ a:hover { color: var(--ink); }
   padding-right: max(1rem, env(safe-area-inset-right));
   min-width: 0;
 }
+.tui-main::before,
+.tui-main::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--label);
+  z-index: 2;
+}
+.tui-main::before { top: 0.35rem; right: 0.45rem; border-bottom: 0; border-left: 0; }
+.tui-main::after { bottom: 0.35rem; left: 0.45rem; border-top: 0; border-right: 0; }
 .lede, .hint, .empty { color: var(--muted); }
 .death-nav {
   display: flex;
@@ -271,7 +310,7 @@ a:hover { color: var(--ink); }
 .tui-group-h {
   margin: 0.7rem 0 0.25rem;
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 7px;
   font-weight: 600;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -288,7 +327,8 @@ a:hover { color: var(--ink); }
   padding: 0.45rem 1.7rem 0.45rem 1rem;
   text-decoration: none;
   color: inherit;
-  background: linear-gradient(90deg, #1a0a0c 0%, #120406 72%, #0a0203 100%);
+  background-color: #1a0a0c;
+  background-image: var(--bin-fill), linear-gradient(90deg, #1a0a0c 0%, #120406 72%, #0a0203 100%);
   border: 1px solid var(--brick);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
 }
@@ -377,8 +417,11 @@ img.still.thumb {
 }
 .pager-status {
   margin: 0 0 0.45rem;
-  color: var(--muted);
-  font-size: 0.85rem;
+  color: var(--brick);
+  font-family: var(--font-ui);
+  font-size: 7px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 .pager-controls {
   display: flex;
@@ -453,12 +496,13 @@ img.still.thumb {
   padding-left: max(0.75rem, env(safe-area-inset-left));
   padding-right: max(0.75rem, env(safe-area-inset-right));
   padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
-  background: var(--bg-2);
+  background-color: var(--bg-2);
+  background-image: var(--bin-fill);
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 0.35rem;
   align-items: center;
-  box-shadow: 0 -6px 18px rgba(225, 6, 0, 0.12);
+  box-shadow: 0 -6px 18px rgba(226, 58, 50, 0.12);
 }
 .keymap .keychip {
   justify-content: flex-start;
@@ -531,7 +575,8 @@ img.still.thumb {
   flex: 1;
   min-width: 0;
   padding: 0.45rem 0.55rem;
-  background: transparent;
+  background-image: var(--bin-fill);
+  background-color: transparent;
 }
 .hr {
   border: 0;
@@ -728,6 +773,11 @@ pre {
   .tui-n { text-align: left; }
   .pixel-wordmark { width: min(94vw, 22rem); }
   .meta-pane { flex-direction: column; }
+  .detail-photo,
+  .initials.detail-photo {
+    width: 90px;
+    height: 160px;
+  }
   .tui-row .thumb,
   .tui-row img.still.thumb,
   .tui-row img.portrait {
