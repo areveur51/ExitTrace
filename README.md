@@ -1,6 +1,6 @@
 # ExitTrace
 
-Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, arrests, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Unidentified public source posts live on Unsorted. Not exhaustive.
+Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, arrests, indictments, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Unidentified public source posts live on Unsorted. Not exhaustive.
 
 **Repo:** [https://github.com/areveur51/ExitTrace](https://github.com/areveur51/ExitTrace)
 
@@ -72,7 +72,7 @@ node scripts/process-add-request.mjs --next \
 
 Fail-closed: people need a named subject, a calendar `event_date` (not `posted_at`), and two or more verified official news or official government / news-org social URLs. Cites are not invented. Unofficial or commentary social is extra only — it is not a cite. Portraits are attached only from an eligible Wikimedia or official-gov still already present (or supplied as that URL); they are not invented, and gold photos are not overwritten. Net worth is filled only from a published Forbes or Bloomberg estimate; it is not invented, and gold net-worth is not overwritten. If none, USD is null and the note says no published Forbes/Bloomberg estimate was located. Dog comms need an official government handle or official post URL, plus date; unofficial or commentary social is rejected. Gold rows stay annotate-only. The committed seed stays 72 people (live may already be 73). Does not write `data/seed.json`.
 
-The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. After insert or promote, the host is not done until live HTML shows the row on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
+The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. After insert or promote, the host is not done until live HTML shows the row on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. `/indictments` is an empty index; indictment rows list on `/indictments/civilians` or `/indictments/non-civilians`. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
 
 ## Data pack
 
@@ -98,6 +98,9 @@ Releases:
 | `/resignations` | Announced resignations (identified people) |
 | `/government` | Officials leaving a government post (identified people) |
 | `/arrests` | Public-role arrests (identified people) |
+| `/indictments` | Index of identified indictment lists (civilians / non-civilians) |
+| `/indictments/civilians` | Indictments of private persons |
+| `/indictments/non-civilians` | Indictments of government, appointed, military, or law-enforcement persons |
 | `/deaths` | Index of identified death lists (celebrities / officials / CEOs) |
 | `/deaths/celebrities` | Deaths of public figures in arts, sport, and entertainment |
 | `/deaths/officials` | Deaths of officials and heads of state |

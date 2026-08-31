@@ -32,6 +32,30 @@ export const CATEGORIES = [
     blurb: "Public-role arrests recorded by contemporaneous news reports.",
   },
   {
+    id: "indictment_civilian",
+    kind: "person",
+    title: "Indictments — civilians",
+    nav: "Civilians",
+    path: "/indictments/civilians",
+    blurb: "Indictments of private persons recorded by contemporaneous news reports.",
+  },
+  {
+    id: "indictment_non_civilian",
+    kind: "person",
+    title: "Indictments — non-civilians",
+    nav: "Non-civilians",
+    path: "/indictments/non-civilians",
+    blurb: "Indictments of government, appointed, military, or law-enforcement persons recorded by contemporaneous news reports.",
+  },
+  {
+    id: "indictment_unspecified",
+    kind: "person",
+    title: "Indictments",
+    nav: "Indictments",
+    path: "/indictments",
+    blurb: "Index of identified indictment lists — civilians and non-civilians.",
+  },
+  {
     id: "death_celebrity",
     kind: "person",
     title: "Deaths — celebrities",
@@ -101,6 +125,14 @@ export const PROMOTE_CATEGORY_IDS = [
   "death_official",
   "death_ceo",
   "arrests",
+  "indictment_civilian",
+  "indictment_non_civilian",
+];
+
+/** KEEP kinds classify may write for identified indictment rows. */
+export const INDICTMENT_KEEP_IDS = [
+  "indictment_civilian",
+  "indictment_non_civilian",
 ];
 
 const IMPORT_ALIASES = {
@@ -139,6 +171,19 @@ export function categoryByPath(pathname) {
 
 export function isDeathCategory(id) {
   return String(id).startsWith("death_");
+}
+
+export function isIndictmentKeepKind(id) {
+  return INDICTMENT_KEEP_IDS.includes(String(id));
+}
+
+export function isIndictmentCategory(id) {
+  return String(id).startsWith("indictment_");
+}
+
+export function isIndexCategory(id) {
+  const key = String(id);
+  return key === "death_unspecified" || key === "indictment_unspecified";
 }
 
 export function formatUsd(n) {

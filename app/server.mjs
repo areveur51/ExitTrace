@@ -34,6 +34,7 @@ import {
 import {
   addBody,
   deathsIndexNav,
+  indictmentsIndexNav,
   dogDetail,
   dogList,
   downloadsBody,
@@ -457,7 +458,12 @@ async function handle(req, res) {
       limit: meta.limit,
       offset: meta.offset,
     });
-    const extra = cat.id === "death_unspecified" ? deathsIndexNav() : "";
+    const extra =
+      cat.id === "death_unspecified"
+        ? deathsIndexNav()
+        : cat.id === "indictment_unspecified"
+          ? indictmentsIndexNav()
+          : "";
     return sendHtml(
       res,
       layout({

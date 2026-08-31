@@ -1,4 +1,8 @@
-import { PROMOTE_CATEGORY_IDS, isDeathCategory } from "./categories.mjs";
+import {
+  PROMOTE_CATEGORY_IDS,
+  isDeathCategory,
+  isIndictmentKeepKind,
+} from "./categories.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
@@ -96,13 +100,32 @@ export function mergeCites(existing, incoming) {
   return { sources: out, added };
 }
 
-export function findGoldMatch(people, { subject, event_date, slug }) {
+export function findGoldMatch(people, { subject, event_date, slug, category }) {
   const name = normalizeSubject(subject);
   const id = slug || personSlug(subject);
+  const kind = String(category || "").trim();
   for (const row of people || []) {
-    if (row.id === id) return row;
-    if (normalizeSubject(row.name) !== name) continue;
-    if (daysBetween(row.event_date, event_date) <= MATCH_WINDOW_DAYS) return row;
+    const sameName = normalizeSubject(row.name) === name;
+    const sameId = row.id === id;
+    if (!sameName && !sameId) continue;
+    if (kind) {
+      if (row.category === kind) {
+        if (sameId) return row;
+        if (isIndictmentKeepKind(kind)) return row;
+        if (event_date && daysBetween(row.event_date, event_date) <= MATCH_WINDOW_DAYS) {
+          return row;
+        }
+        continue;
+      }
+      if (isIndictmentKeepKind(kind) && isIndictmentKeepKind(row.category)) {
+        return row;
+      }
+      continue;
+    }
+    if (sameId) return row;
+    if (event_date && daysBetween(row.event_date, event_date) <= MATCH_WINDOW_DAYS) {
+      return row;
+    }
   }
   return null;
 }
