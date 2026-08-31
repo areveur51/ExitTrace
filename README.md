@@ -25,6 +25,14 @@ npm test
 
 The committed `data/seed.json` is enough to click through every page. When `DATABASE_URL` is unset the app uses that JSON file store. Promoted people that are not in the seed stay in the file store across restarts.
 
+Host-side public RSS digest (name leads only; digest items are not cites):
+
+```bash
+./exittracectl.sh digest
+```
+
+That fetches public RSS from AP, Reuters, BBC, and other official news-org / `.gov` feeds on the cite allowlist, then parks Unsorted leads. It does not promote people and does not invent cites. `promote` and `add-process` stay one-row fail-closed.
+
 ## Optional Postgres
 
 Create a database named `exittrace`, then:
@@ -153,12 +161,13 @@ media/                      portraits, dog-comm stills, derived list thumbs
 app/lib/thumb.mjs           list-thumb href + local resize
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
+scripts/seed-rss-digest.mjs host-side official RSS digest (name leads, not cites)
 scripts/promote-source-post.mjs  promote one Unsorted post to a person row
 scripts/process-add-request.mjs  apply one queued add request (cites from caller)
 scripts/build-thumbs.mjs    derive 40×52 list thumbs from stored stills
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
-exittracectl.sh             start | stop | status | seed | import-posts | promote | add-process | pack
+exittracectl.sh             start | stop | status | seed | import-posts | digest | promote | add-process | pack
 ```
 
 ## License

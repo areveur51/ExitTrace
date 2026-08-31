@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>AP News</title>
+    <link>https://apnews.com</link>
+    <item>
+      <title>Casey Vale arrested after public-role inquiry</title>
+      <link>https://apnews.com/article/casey-vale-arrested-2024</link>
+      <pubDate>Fri, 01 Mar 2024 12:00:00 GMT</pubDate>
+      <description>Officials said Casey Vale was arrested on 2024-06-15.</description>
+    </item>
+    <item>
+      <title>Markets rise as investors weigh new data</title>
+      <link>https://apnews.com/article/markets-rise</link>
+      <pubDate>Fri, 01 Mar 2024 11:00:00 GMT</pubDate>
+      <description>Stocks moved higher.</description>
+    </item>
+    <item>
+      <title>Jordan Hale indicted on fraud counts</title>
+      <link>https://apnews.com/article/jordan-hale-indicted</link>
+      <pubDate>Sat, 02 Mar 2024 09:00:00 GMT</pubDate>
+      <description>A grand jury indicted Jordan Hale.</description>
+    </item>
+    <item>
+      <title>James Comey fired by Trump</title>
+      <link>https://www.nytimes.com/2017/05/09/us/politics/james-comey-fired-fbi.html</link>
+      <pubDate>Tue, 09 May 2017 18:00:00 GMT</pubDate>
+      <description>Already on the gold Comey row.</description>
+    </item>
+  </channel>
+</rss>

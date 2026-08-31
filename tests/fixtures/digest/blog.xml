@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Random Blog</title>
+    <link>https://random-blog.example</link>
+    <item>
+      <title>Casey Vale arrested, says a blog</title>
+      <link>https://random-blog.example/casey-vale-arrested</link>
+      <pubDate>Fri, 01 Mar 2024 12:00:00 GMT</pubDate>
+      <description>Not an official publisher.</description>
+    </item>
+  </channel>
+</rss>

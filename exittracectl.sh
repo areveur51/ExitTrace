@@ -9,7 +9,7 @@ DEFAULT_PORT=5220
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") {start|stop|restart|status|logs|seed|import-posts|promote|add-process|pack|help}
+Usage: $(basename "$0") {start|stop|restart|status|logs|seed|import-posts|digest|promote|add-process|pack|help}
 EOF
 }
 
@@ -100,6 +100,11 @@ cmd_import_posts() {
   "$(find_node)" "${ROOT}/scripts/import-source-posts.mjs" "$file"
 }
 
+cmd_digest() {
+  load_env
+  "$(find_node)" "${ROOT}/scripts/seed-rss-digest.mjs" "$@"
+}
+
 cmd_promote() {
   load_env
   "$(find_node)" "${ROOT}/scripts/promote-source-post.mjs" "$@"
@@ -122,6 +127,7 @@ case "${1:-help}" in
   logs) shift || true; cmd_logs "${1:-80}" ;;
   seed) cmd_seed ;;
   import-posts) shift || true; cmd_import_posts "${1:-}" ;;
+  digest) shift || true; cmd_digest "$@" ;;
   promote) shift || true; cmd_promote "$@" ;;
   add-process) shift || true; cmd_add_process "$@" ;;
   pack) cmd_pack ;;

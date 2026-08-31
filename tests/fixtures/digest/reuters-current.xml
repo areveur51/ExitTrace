@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Reuters</title>
+    <link>https://www.reuters.com</link>
+    <item>
+      <title>Riley Chen resigns as chief operating officer</title>
+      <link>https://www.reuters.com/world/riley-chen-resigns-2024-04-02/</link>
+      <pubDate>Tue, 02 Apr 2024 08:00:00 GMT</pubDate>
+      <description>Riley Chen resigned from the role.</description>
+    </item>
+    <item>
+      <title>Random blog reprint of the same resignation</title>
+      <link>https://random-blog.example/riley-chen</link>
+      <pubDate>Tue, 02 Apr 2024 09:00:00 GMT</pubDate>
+      <description>Riley Chen resigns, a blog said.</description>
+    </item>
+    <item>
+      <title>Wikipedia page about resignations</title>
+      <link>https://en.wikipedia.org/wiki/Resignation</link>
+      <pubDate>Tue, 02 Apr 2024 10:00:00 GMT</pubDate>
+      <description>An encyclopedia page is not a cite.</description>
+    </item>
+  </channel>
+</rss>

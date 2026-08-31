@@ -170,6 +170,98 @@ export function isGovHost(host) {
   return h === "gov" || h.endsWith(".gov") || h.endsWith(".gov.uk") || h.endsWith(".gc.ca");
 }
 
+/** Publisher domains for handles in OFFICIAL_NEWS_HANDLES. Digest sources only. */
+export const OFFICIAL_NEWS_HOSTS = {
+  nytimes: ["nytimes.com", "nyti.ms"],
+  washingtonpost: ["washingtonpost.com", "wapo.st"],
+  wsj: ["wsj.com", "dowjones.io"],
+  reuters: ["reuters.com"],
+  ap: ["apnews.com", "ap.org"],
+  apnews: ["apnews.com", "ap.org"],
+  bbcnews: ["bbc.com", "bbc.co.uk", "bbci.co.uk"],
+  bbcworld: ["bbc.com", "bbc.co.uk", "bbci.co.uk"],
+  guardian: ["theguardian.com", "theguardian.co.uk"],
+  theguardian: ["theguardian.com", "theguardian.co.uk"],
+  ft: ["ft.com"],
+  bloomberg: ["bloomberg.com"],
+  npr: ["npr.org"],
+  pbs: ["pbs.org"],
+  cnn: ["cnn.com"],
+  abc: ["abcnews.go.com", "abc.com"],
+  cbsnews: ["cbsnews.com"],
+  nbcnews: ["nbcnews.com"],
+  politico: ["politico.com"],
+  axios: ["axios.com"],
+  thehill: ["thehill.com"],
+  latimes: ["latimes.com"],
+  usatoday: ["usatoday.com"],
+  afp: ["afp.com"],
+  dwnews: ["dw.com"],
+  france24: ["france24.com"],
+};
+
+const WIKI_ROOTS = ["wikipedia.org", "wikimedia.org", "wikidata.org"];
+
+const Q_DROP_HOSTS = new Set([
+  "8kun.top",
+  "8ch.net",
+  "qanon.pub",
+  "qalerts.app",
+  "qmap.pub",
+  "qresear.ch",
+  "qanon.news",
+]);
+
+export function isWikipediaHost(host) {
+  const h = String(host || "")
+    .toLowerCase()
+    .replace(/^www\./, "");
+  return WIKI_ROOTS.some((root) => h === root || h.endsWith(`.${root}`));
+}
+
+export function isWikipediaUrl(raw) {
+  const parsed = parseHttpUrl(raw);
+  return Boolean(parsed && isWikipediaHost(hostOf(parsed)));
+}
+
+export function isQDropUrl(raw) {
+  const parsed = parseHttpUrl(raw);
+  if (!parsed) return false;
+  const host = hostOf(parsed);
+  if (Q_DROP_HOSTS.has(host)) return true;
+  return [...Q_DROP_HOSTS].some((root) => host === root || host.endsWith(`.${root}`));
+}
+
+export function officialNewsHostsFor(handle) {
+  const key = handleKey(handle);
+  return OFFICIAL_NEWS_HOSTS[key] ? OFFICIAL_NEWS_HOSTS[key].slice() : [];
+}
+
+export function isOfficialNewsHost(host) {
+  const h = String(host || "")
+    .toLowerCase()
+    .replace(/^www\./, "");
+  if (!h) return false;
+  for (const hosts of Object.values(OFFICIAL_NEWS_HOSTS)) {
+    if (hosts.some((root) => h === root || h.endsWith(`.${root}`))) return true;
+  }
+  return false;
+}
+
+/** Official news-org or .gov page. Aggregators and random blogs are false. */
+export function isOfficialPublisherUrl(raw) {
+  const parsed = parseHttpUrl(raw);
+  if (!parsed) return false;
+  const host = hostOf(parsed);
+  if (isWikipediaHost(host) || isQDropUrl(raw)) return false;
+  if (isGovHost(host)) return true;
+  if (isSocialHost(host)) {
+    return isOfficialGovHandle(handleFromUrl(raw) || xStatusParts(raw)?.handle) ||
+      isOfficialNewsHandle(handleFromUrl(raw) || xStatusParts(raw)?.handle);
+  }
+  return isOfficialNewsHost(host);
+}
+
 export function xStatusParts(raw) {
   const parsed = parseHttpUrl(raw);
   if (!parsed || !X_HOSTS.has(hostOf(parsed))) return null;
@@ -230,6 +322,7 @@ export function isOfficialGovAccountOrUrl({ handle, source_url } = {}) {
 export function isOfficialCiteUrl(raw) {
   const parsed = parseHttpUrl(raw);
   if (!parsed) return false;
+  if (isWikipediaUrl(raw) || isQDropUrl(raw)) return false;
   const host = hostOf(parsed);
   if (isGovHost(host)) return true;
   if (!isSocialHost(host)) return true;
