@@ -280,29 +280,38 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.match(deaths.body, /href="\/deaths\/ceos"/);
 });
 
-test("TUI palette uses imagine-cli tokens, not MovieBox purple/cyan", async () => {
+test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop layouts", async () => {
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
   const html = fs.readFileSync(path.join(ROOT, "app", "lib", "html.mjs"), "utf8");
   const home = await get("/");
   const list = await get("/firings");
   const detail = await get("/people/james-comey");
 
-  assert.match(css, /--bg:\s*#0d0d12/);
-  assert.match(css, /--bg-2:\s*#1a1a20/);
-  assert.match(css, /--ink:\s*#c9d1d9/);
-  assert.match(css, /--gold:\s*#e6c384/);
-  assert.match(css, /--green:\s*#98bb6c/);
-  assert.match(css, /--blue:\s*#5d81f7/);
-  assert.match(css, /--amber:\s*#d19a66/);
-  assert.match(css, /--rule:\s*#21262d/);
-  assert.doesNotMatch(css, /box-shadow/);
-  assert.doesNotMatch(css, /#c4b5fd|#4c1d95|#7c3aed|#67e8f9|#1e1f2b|#fbbf24/);
-  assert.doesNotMatch(css, /--cyan\b/);
-  assert.match(html, /fill="#e6c384"/);
-  assert.doesNotMatch(html, /#c4b5fd|#4c1d95|#67e8f9/);
-  assert.match(home.body, /fill="#e6c384"/);
-  assert.doesNotMatch(home.body, /#c4b5fd|#4c1d95/);
+  assert.match(css, /--bg:\s*#0a0203/i);
+  assert.match(css, /--red:\s*#e10600/i);
+  assert.match(css, /--cyan:\s*#00e8e8/i);
+  assert.match(css, /--ink:\s*#f5f5f5/i);
+  assert.match(css, /phone ~390/);
+  assert.match(css, /iPad ~768/);
+  assert.match(css, /desktop >=1280/);
+  assert.match(css, /@media \(max-width: 720px\)/);
+  assert.match(css, /@media \(min-width: 721px\) and \(max-width: 1100px\)/);
+  assert.match(css, /@media \(min-width: 1280px\)/);
+  assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);
+  assert.match(html, /fill="#ff2a2a"/);
+  assert.doesNotMatch(html, /#e6c384|#c4b5fd|#4c1d95|#67e8f9/);
+  assert.doesNotMatch(
+    html,
+    /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@HARADAN|BIO-INTERFACE/i,
+  );
+  assert.match(home.body, /fill="#ff2a2a"/);
+  assert.match(home.body, /class="tui hud/);
+  assert.match(home.body, /class="hud-stage"/);
+  assert.match(home.body, /href="\/search"/);
+  assert.match(home.body, /data-key="s"/);
+  assert.doesNotMatch(home.body, /#c4b5fd|#4c1d95|#e6c384/);
   assert.match(list.body, /list-head/);
+  assert.match(list.body, /class="hud-stage"/);
   assert.match(detail.body, /box-pane/);
 });
 

@@ -97,6 +97,22 @@ test("list thumbs drop external hrefs instead of hotlinking", () => {
   assert.match(row, /class="initials thumb"/);
 });
 
+test("public chrome keeps catalog labels and omits pin larp copy", () => {
+  const html = fs.readFileSync(path.join(ROOT, "app", "lib", "html.mjs"), "utf8");
+  assert.match(html, /href: "\/resignations"/);
+  assert.match(html, /href: "\/firings"/);
+  assert.match(html, /href: "\/government"/);
+  assert.match(html, /href: "\/deaths"/);
+  assert.match(html, /href: "\/arrests"/);
+  assert.match(html, /href: "\/unsorted"/);
+  assert.match(html, /href: "\/add"/);
+  assert.match(html, /href: "\/search"/);
+  assert.doesNotMatch(
+    html,
+    /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@HARADAN|BIO-INTERFACE|ADMIN ACCESS GRANTED/i,
+  );
+});
+
 test("CSS keeps list still.thumb at portrait size on all viewports including 720px", () => {
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
   assert.match(css, /\.still:not\(\.thumb\)/);
