@@ -49,10 +49,10 @@ export function pixelWordmark(text = "EXITTRACE") {
         const px = ox + x * (cell + gap);
         const py = y * (cell + gap);
         shadow.push(
-          `<rect x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="#7a6240"/>`,
+          `<rect x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="#8e2a22"/>`,
         );
         ink.push(
-          `<rect x="${px}" y="${py}" width="${cell}" height="${cell}" fill="#e6c384"/>`,
+          `<rect x="${px}" y="${py}" width="${cell}" height="${cell}" fill="#e23a32"/>`,
         );
       });
     });
@@ -70,6 +70,7 @@ function keymapItems(activePath) {
     { key: "u", href: "/unsorted", label: "Unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
     { key: "n", href: "/add", label: "Add" },
+    { key: "s", href: "/search", label: "Search" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ];
   if (String(activePath).startsWith("/deaths")) {
@@ -172,14 +173,16 @@ export function layout({
   <title>${esc(title)} · ExitTrace</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body class="tui${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">
-  ${home ? "" : topBar({ query: query || heading, countLabel })}
-  <main class="${home ? "home-stage" : "tui-main"}">
-    ${home ? "" : `<h1 class="vh">${esc(heading || title)}</h1>`}
-    ${!home && lede ? `<p class="lede">${lede}</p>` : ""}
-    ${body}
-  </main>
-  ${keymapFooter(path)}
+<body class="tui hud${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">
+  ${topBar({ query: query || heading || "home", countLabel })}
+  <div class="hud-stage">
+    <main class="${home ? "home-stage" : "tui-main"}">
+      ${home ? "" : `<h1 class="vh">${esc(heading || title)}</h1>`}
+      ${!home && lede ? `<p class="lede">${lede}</p>` : ""}
+      ${body}
+    </main>
+    ${keymapFooter(path)}
+  </div>
   ${chromeWidgets()}
   <script src="/app.js" defer></script>
 </body>

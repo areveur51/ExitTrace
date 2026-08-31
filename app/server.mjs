@@ -312,6 +312,7 @@ async function handle(req, res) {
   }
 
   if (p === "/") {
+    const c = await counts();
     return sendHtml(
       res,
       layout({
@@ -319,6 +320,8 @@ async function handle(req, res) {
         path: "/",
         heading: "ExitTrace",
         mode: "home",
+        query: "home",
+        countLabel: `${c.people} people · ${c.dog_comms} dog comms`,
         body: homeBody({ version: APP_VERSION }),
       }),
     );
