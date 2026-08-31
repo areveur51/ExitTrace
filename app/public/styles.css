@@ -1,27 +1,30 @@
 :root {
-  /* Cyberdeck HUD — red / near-black / cyan. Visual language from the
-     portrait pin; labels stay ExitTrace catalog copy, not larp slogans. */
+  /* Cyberdeck HUD — pin tokens only (red / oxblood / cyan). Catalog labels
+     stay real ExitTrace copy; binary and barcodes are texture, not status. */
   --bg: #0a0203;
   --void: #050102;
   --bg-2: #140507;
-  --bg-sel: #2a0a0e;
-  --panel: #120406;
-  --ink: #f5f5f5;
-  --muted: #8b919c;
-  --red: #e10600;
-  --red-hot: #ff2a2a;
-  --red-dim: #7a1414;
-  --cyan: #00e8e8;
-  --cyan-dim: #3aa8a8;
-  --rule: #4a1218;
-  --green: #00e8e8;
-  --blue: #00e8e8;
-  --amber: #ff6b6b;
-  --rose: #ff2a2a;
-  --purple: #8b919c;
-  --glow-red: 0 0 12px rgba(225, 6, 0, 0.45);
-  --glow-cyan: 0 0 10px rgba(0, 232, 232, 0.4);
+  --bg-sel: #2a0c0e;
+  --panel: #1a0a0c;
+  --brick: #8e2a22;
+  --ink: #3fe0e8;
+  --label: #f2f0ec;
+  --muted: #a85850;
+  --red: #e23a32;
+  --red-hot: #e23a32;
+  --red-dim: #8e2a22;
+  --cyan: #3fe0e8;
+  --cyan-dim: #4fd8e0;
+  --rule: #8e2a22;
+  --green: #3fe0e8;
+  --blue: #3fe0e8;
+  --amber: #e23a32;
+  --rose: #e23a32;
+  --purple: #8e2a22;
+  --glow-red: 0 0 14px rgba(226, 58, 50, 0.4);
+  --glow-cyan: 0 0 12px rgba(63, 224, 232, 0.45);
   --font: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-ui: "Arial Narrow", "Helvetica Neue Condensed", "Nimbus Sans Narrow", ui-sans-serif, system-ui, sans-serif;
   color: var(--ink);
   background: var(--bg);
   font-family: var(--font);
@@ -45,9 +48,11 @@ body.tui {
   padding-right: env(safe-area-inset-right);
   background-color: var(--bg);
   background-image:
-    linear-gradient(rgba(225, 6, 0, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(225, 6, 0, 0.045) 1px, transparent 1px);
-  background-size: 22px 22px;
+    radial-gradient(ellipse at 50% 48%, rgba(226, 58, 50, 0.16), transparent 58%),
+    linear-gradient(180deg, #050102 0%, #1c080a 46%, #140507 58%, #050102 100%),
+    linear-gradient(rgba(142, 42, 34, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(142, 42, 34, 0.07) 1px, transparent 1px);
+  background-size: auto, auto, 22px 22px, 22px 22px;
   overflow-x: clip;
 }
 body.tui::before {
@@ -56,12 +61,19 @@ body.tui::before {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0 2px,
-    rgba(0, 0, 0, 0.18) 2px 3px
-  );
-  mix-blend-mode: multiply;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 2px,
+      rgba(0, 0, 0, 0.16) 2px 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 11px,
+      rgba(63, 224, 232, 0.035) 11px 12px,
+      transparent 12px 17px,
+      rgba(226, 58, 50, 0.05) 17px 18px
+    );
 }
 body.tui::after {
   content: "";
@@ -69,7 +81,9 @@ body.tui::after {
   position: fixed;
   inset: 0;
   z-index: 41;
-  background: radial-gradient(ellipse at 50% 0%, rgba(225, 6, 0, 0.16), transparent 55%);
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(0, 0, 0, 0.72), transparent 55%),
+    radial-gradient(ellipse at 50% -10%, rgba(0, 0, 0, 0.55), transparent 50%);
 }
 
 a { color: var(--cyan); }
@@ -87,11 +101,30 @@ a:hover { color: var(--ink); }
 }
 
 .hud-stage {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
+.hud-stage::before,
+.hud-stage::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 1px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--brick) 0 2px,
+    transparent 2px 6px
+  );
+  opacity: 0.55;
+  z-index: 1;
+}
+.hud-stage::before { left: 0.35rem; }
+.hud-stage::after { right: 0.35rem; }
 
 .tui-top {
   position: relative;
@@ -142,21 +175,24 @@ a:hover { color: var(--ink); }
   );
   box-shadow: var(--glow-red);
 }
-.tui-q { color: var(--ink); min-width: 0; }
+.tui-q { color: var(--cyan); min-width: 0; font-family: var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
 .tui-app {
-  color: var(--red-hot);
+  color: var(--red);
   text-align: center;
-  letter-spacing: 0.16em;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  text-shadow: 0 0 10px rgba(255, 42, 42, 0.55);
+  text-shadow: 0 0 10px rgba(226, 58, 50, 0.55);
 }
-.tui-n { color: var(--cyan); text-align: right; text-shadow: 0 0 8px rgba(0, 232, 232, 0.35); }
+.tui-n { color: var(--cyan); text-align: right; font-family: var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; text-shadow: 0 0 8px rgba(63, 224, 232, 0.35); }
 .chev { color: var(--cyan); margin-right: 0.35rem; }
 .list-head {
   margin: 0 0 0.65rem;
-  color: var(--red-hot);
+  color: var(--red);
+  font-family: var(--font-ui);
   font-size: 0.92rem;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 .list-head .sep, .list-head .dot { color: var(--red); }
@@ -234,11 +270,12 @@ a:hover { color: var(--ink); }
 .tui-group { margin: 0 0 0.85rem; }
 .tui-group-h {
   margin: 0.7rem 0 0.25rem;
-  font-size: 0.78rem;
+  font-family: var(--font-ui);
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--red-dim);
+  color: var(--brick);
 }
 
 .tui-row {
@@ -251,8 +288,9 @@ a:hover { color: var(--ink); }
   padding: 0.45rem 1.7rem 0.45rem 1rem;
   text-decoration: none;
   color: inherit;
-  background: rgba(18, 4, 6, 0.88);
-  border: 1px solid rgba(225, 6, 0, 0.38);
+  background: linear-gradient(90deg, #1a0a0c 0%, #120406 72%, #0a0203 100%);
+  border: 1px solid var(--brick);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
 }
 .tui-row::before {
   content: "";
@@ -282,7 +320,7 @@ a:hover { color: var(--ink); }
   color: inherit;
   outline: none;
   border-color: var(--cyan);
-  box-shadow: var(--glow-cyan);
+  filter: drop-shadow(0 0 8px rgba(63, 224, 232, 0.45));
 }
 .tui-row:focus-visible::before,
 .tui-row.is-selected::before {
@@ -301,8 +339,10 @@ a:hover { color: var(--ink); }
 }
 .tui-row-text { min-width: 0; }
 .tui-title {
-  font-weight: 600;
-  color: var(--ink);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cyan);
 }
 .tui-meta {
   color: var(--muted);
@@ -423,6 +463,11 @@ img.still.thumb {
 .keymap .keychip {
   justify-content: flex-start;
   gap: 0.35rem;
+  font-family: var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 100%, 8px 100%);
+  background: linear-gradient(90deg, #1a0a0c, #0a0203);
 }
 .keymap .fineprint {
   flex: 1 1 100%;
@@ -435,9 +480,10 @@ img.still.thumb {
 .box-pane {
   position: relative;
   margin: 0 0 0.85rem;
-  border: 1px solid var(--red);
+  border: 1px solid var(--brick);
   background: var(--panel);
   box-shadow: var(--glow-red);
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
 }
 .box-pane::before,
 .box-pane::after {
@@ -458,15 +504,16 @@ img.still.thumb {
 .box-h, .box-f { align-items: center; color: var(--red); }
 .box-c { color: var(--red); flex: 0 0 auto; }
 .box-title {
-  color: var(--muted);
+  color: var(--brick);
   padding: 0 0.4rem;
   flex: 0 1 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  font-family: var(--font-ui);
+  font-size: 7px;
 }
 .box-pane.is-active .box-title { color: var(--red-hot); }
 .toast-box .box-title { color: var(--cyan); }
@@ -493,10 +540,11 @@ img.still.thumb {
 }
 .pane-h {
   margin: 0 0 0.5rem;
+  font-family: var(--font-ui);
   font-size: 0.92rem;
-  color: var(--red-hot);
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  color: var(--red);
+  font-weight: 700;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 .tui-toast {
@@ -562,7 +610,13 @@ img.still.thumb {
 }
 .initials.detail-photo { width: 96px; height: 120px; font-size: 1.4rem; }
 .detail-copy { min-width: 0; flex: 1; }
-.detail-title { margin: 0 0 0.35rem; font-size: 1.35rem; color: var(--ink); }
+.detail-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-ui);
+  font-size: 1.35rem;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+}
 .rating { margin: 0 0 0.35rem; color: var(--amber); }
 .tui-toast[hidden] { display: none; }
 .rating .muted { color: var(--muted); font-size: 0.8rem; }

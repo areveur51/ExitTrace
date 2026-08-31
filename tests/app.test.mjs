@@ -288,9 +288,10 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   const detail = await get("/people/james-comey");
 
   assert.match(css, /--bg:\s*#0a0203/i);
-  assert.match(css, /--red:\s*#e10600/i);
-  assert.match(css, /--cyan:\s*#00e8e8/i);
-  assert.match(css, /--ink:\s*#f5f5f5/i);
+  assert.match(css, /--red:\s*#e23a32/i);
+  assert.match(css, /--cyan:\s*#3fe0e8/i);
+  assert.match(css, /--brick:\s*#8e2a22/i);
+  assert.match(css, /--ink:\s*#3fe0e8/i);
   assert.match(css, /phone ~390/);
   assert.match(css, /iPad ~768/);
   assert.match(css, /desktop >=1280/);
@@ -298,13 +299,13 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   assert.match(css, /@media \(min-width: 721px\) and \(max-width: 1100px\)/);
   assert.match(css, /@media \(min-width: 1280px\)/);
   assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);
-  assert.match(html, /fill="#ff2a2a"/);
-  assert.doesNotMatch(html, /#e6c384|#c4b5fd|#4c1d95|#67e8f9/);
+  assert.match(html, /fill="#e23a32"/);
+  assert.doesNotMatch(html, /#e6c384|#c4b5fd|#4c1d95|#67e8f9|#ff2a2a/);
   assert.doesNotMatch(
     html,
     /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@HARADAN|BIO-INTERFACE/i,
   );
-  assert.match(home.body, /fill="#ff2a2a"/);
+  assert.match(home.body, /fill="#e23a32"/);
   assert.match(home.body, /class="tui hud/);
   assert.match(home.body, /class="hud-stage"/);
   assert.match(home.body, /href="\/search"/);
