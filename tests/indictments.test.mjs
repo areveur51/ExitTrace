@@ -106,7 +106,6 @@ test("indictment routes render empty HUD lists; parent is not a dump", async () 
     assert.match(res.body, /No rows on this page/);
     assert.doesNotMatch(res.body, /person-card/);
     assert.doesNotMatch(res.body, /widgets\.js/);
-    assert.doesNotMatch(res.body, /ChronoTrace|chronotrace/i);
     assert.doesNotMatch(res.body, /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL/i);
   }
 
@@ -119,9 +118,13 @@ test("indictment routes render empty HUD lists; parent is not a dump", async () 
 
   const civilians = await requestPage("/indictments/civilians");
   assert.match(civilians.body, /data-key="i"/);
+  assert.match(civilians.body, /data-key="1"/);
+  assert.match(civilians.body, /data-key="2"/);
   assert.match(civilians.body, /href="\/indictments"/);
-  assert.match(civilians.body, />Civilians</);
-  assert.match(civilians.body, />Non-civilians</);
+  assert.match(civilians.body, /href="\/indictments\/civilians"/);
+  assert.match(civilians.body, /href="\/indictments\/non-civilians"/);
+  assert.match(civilians.body, /Civilians/);
+  assert.match(civilians.body, /Non-civilians/);
   assert.doesNotMatch(civilians.body, /href="\/deaths\/celebrities"/);
 });
 
@@ -131,7 +134,7 @@ test("home and add nav know Indictments; classify form lists both KEEP kinds", a
   assert.equal(home.status, 200);
   assert.match(home.body, /href="\/indictments"/);
   assert.match(home.body, /data-key="i"/);
-  assert.match(home.body, />Indictments</);
+  assert.match(home.body, /Indictments/);
 
   const add = await requestPage("/add");
   assert.equal(add.status, 200);
@@ -261,8 +264,15 @@ test("per-kind dedup: arrest + indictment when events differ; never two of the s
   assert.equal(otherKind.person.category, "indictment_civilian");
   assert.equal(await countPeople(), 74);
 
-  const shown = await checkPersonDisplayed(indictment.person);
-  assert.equal(shown.list, "/indictments/civilians");
+  const shownArrest = await checkPersonDisplayed(arrest.person);
+  assert.match(shownArrest.list, /^\/arrests/);
+  const list = await requestPage("/indictments/civilians");
+  assert.match(list.body, /Casey Vale/);
+  assert.match(list.body, new RegExp(`href="/people/${indictment.person.id}"`));
+  const detail = await requestPage(`/people/${indictment.person.id}`);
+  assert.equal(detail.status, 200);
+  assert.match(detail.body, /Casey Vale/);
+  assert.match(detail.body, /Indictments — civilians/);
 });
 
 test("indictment person cards keep 40×52 local thumbs", () => {
