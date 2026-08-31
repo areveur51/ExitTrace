@@ -90,7 +90,9 @@ test("official feed list is ours and stays on the cite allowlist", () => {
   assert.ok(selectDigestFeeds("current").length >= 4);
   assert.equal(selectDigestFeeds("historical").length, 3);
   assert.ok(
-    selectDigestFeeds("historical").every((f) => /after:2017-01-01/.test(f.url)),
+    selectDigestFeeds("historical").every((f) =>
+      decodeURIComponent(f.url).includes("after:2017-01-01"),
+    ),
   );
   const sources = fs.readFileSync(path.join(ROOT, "app", "lib", "digest.mjs"), "utf8");
   assert.equal(hostedDigestVendorRefsIn("https://example.com/rss"), false);
@@ -101,7 +103,7 @@ test("official feed list is ours and stays on the cite allowlist", () => {
   assert.match(ctl, /digest/);
   assert.doesNotMatch(ctl, /5434/);
   for (const feed of OFFICIAL_RSS_FEEDS) {
-    assert.ok(!worldMonitorRefsIn(feed.url));
+    assert.ok(!hostedDigestVendorRefsIn(feed.url));
     if (!feed.gov) {
       assert.equal(isOfficialNewsHandle(feed.handle), true);
     }
@@ -214,10 +216,10 @@ test("digest parks official leads, skips blogs/Q/wiki, and does not overwrite go
   assert.equal(after.net_worth_usd, comeyWorth);
 
   const parked = await listSourcePosts({ standalone: true });
-  const urls = parked.map((r) => r.source_url);
+  const urls = parked.map((r) => r.canonical_url || r.source_url);
   assert.ok(urls.includes("https://apnews.com/article/casey-vale-arrested-2024"));
-  assert.ok(urls.includes("https://www.reuters.com/world/riley-chen-resigns-2024-04-02/"));
-  assert.ok(urls.includes("https://www.bbc.com/news/world-us-canada-example-obit"));
+  assert.ok(urls.includes("https://reuters.com/world/riley-chen-resigns-2024-04-02"));
+  assert.ok(urls.includes("https://bbc.com/news/world-us-canada-example-obit"));
   assert.ok(!urls.includes("https://random-blog.example/riley-chen"));
   assert.ok(!urls.includes("https://en.wikipedia.org/wiki/Resignation"));
   assert.ok(!urls.includes("https://qalerts.app/posts/1234"));

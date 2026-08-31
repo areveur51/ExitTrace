@@ -174,7 +174,7 @@ export function isGovHost(host) {
 export const OFFICIAL_NEWS_HOSTS = {
   nytimes: ["nytimes.com", "nyti.ms"],
   washingtonpost: ["washingtonpost.com", "wapo.st"],
-  wsj: ["wsj.com"],
+  wsj: ["wsj.com", "dowjones.io"],
   reuters: ["reuters.com"],
   ap: ["apnews.com", "ap.org"],
   apnews: ["apnews.com", "ap.org"],
