@@ -1,5 +1,6 @@
-:root {
-  /* Pin tokens (bound): cyan #3fe0e8 / #4fd8e0, red #e23a32, brick #8e2a22.
+:root,
+html[data-theme="cyberdeck"] {
+  /* Cyberdeck (default): cyan #3fe0e8 / #4fd8e0, red #e23a32, brick #8e2a22.
      Near-white --label only on tiny ticks. Binary/barcode = texture, not status.
      Catalog labels stay real ExitTrace copy. */
   --bg: #0a0203;
@@ -24,6 +25,9 @@
   --purple: #8e2a22;
   --glow-red: 0 0 14px rgba(226, 58, 50, 0.4);
   --glow-cyan: 0 0 12px rgba(63, 224, 232, 0.45);
+  --status-ok: #3fe0e8;
+  --status-alert: #e23a32;
+  --status-warn: #e23a32;
   --bin-fill: repeating-linear-gradient(
     90deg,
     transparent 0 2px,
@@ -42,6 +46,122 @@
   color-scheme: dark;
 }
 
+/* Phosphor: black + phosphor green #00e08a only. CRT scanline HUD. */
+html[data-theme="phosphor"] {
+  --bg: #050805;
+  --void: #020302;
+  --bg-2: #0a120e;
+  --bg-sel: #0d1f16;
+  --panel: #08110c;
+  --brick: #007a4d;
+  --ink: #00e08a;
+  --label: #00e08a;
+  --muted: #148a55;
+  --red: #00e08a;
+  --red-hot: #00e08a;
+  --red-dim: #007a4d;
+  --cyan: #00e08a;
+  --cyan-dim: #00c478;
+  --rule: #007a4d;
+  --green: #00e08a;
+  --blue: #00e08a;
+  --amber: #00e08a;
+  --rose: #00e08a;
+  --purple: #007a4d;
+  --glow-red: 0 0 14px rgba(0, 224, 138, 0.4);
+  --glow-cyan: 0 0 12px rgba(0, 224, 138, 0.45);
+  --status-ok: #00e08a;
+  --status-alert: #00e08a;
+  --status-warn: #00e08a;
+  --bin-fill: repeating-linear-gradient(
+    90deg,
+    transparent 0 2px,
+    rgba(0, 224, 138, 0.2) 2px 3px,
+    transparent 3px 5px,
+    rgba(0, 224, 138, 0.32) 5px 6px,
+    transparent 6px 9px,
+    rgba(0, 224, 138, 0.12) 9px 10px
+  );
+}
+
+/* Greyscale: charcoal/white HUD. Saturated color only on tiny status dots. */
+html[data-theme="greyscale"] {
+  --bg: #0b0b0b;
+  --void: #050505;
+  --bg-2: #141414;
+  --bg-sel: #222222;
+  --panel: #161616;
+  --brick: #6a6a6a;
+  --ink: #e8e8e8;
+  --label: #f5f5f5;
+  --muted: #8a8a8a;
+  --red: #c4c4c4;
+  --red-hot: #f0f0f0;
+  --red-dim: #5a5a5a;
+  --cyan: #f2f2f2;
+  --cyan-dim: #d0d0d0;
+  --rule: #4a4a4a;
+  --green: #c8c8c8;
+  --blue: #d0d0d0;
+  --amber: #c8c8c8;
+  --rose: #b0b0b0;
+  --purple: #6a6a6a;
+  --glow-red: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --glow-cyan: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  --status-ok: #3dcc6a;
+  --status-alert: #d94a42;
+  --status-warn: #d4a017;
+  --bin-fill: repeating-linear-gradient(
+    90deg,
+    transparent 0 2px,
+    rgba(255, 255, 255, 0.08) 2px 3px,
+    transparent 3px 5px,
+    rgba(255, 255, 255, 0.14) 5px 6px,
+    transparent 6px 9px,
+    rgba(255, 255, 255, 0.05) 9px 10px
+  );
+  --font-ui: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Stencil: charcoal, distressed off-white, safety orange, one ice-blue accent. */
+html[data-theme="stencil"] {
+  --bg: #121212;
+  --void: #0a0a0a;
+  --bg-2: #1a1a1a;
+  --bg-sel: #2a1a10;
+  --panel: #1c1c1c;
+  --brick: #c45a10;
+  --ink: #e8e4dc;
+  --label: #f0ece4;
+  --muted: #8a8074;
+  --red: #ff6a00;
+  --red-hot: #ff7a1a;
+  --red-dim: #a84400;
+  --cyan: #a0d8e0;
+  --cyan-dim: #7ec4ce;
+  --rule: #ff6a00;
+  --green: #a0d8e0;
+  --blue: #a0d8e0;
+  --amber: #ff6a00;
+  --rose: #ff6a00;
+  --purple: #c45a10;
+  --glow-red: 0 0 14px rgba(255, 106, 0, 0.35);
+  --glow-cyan: 0 0 10px rgba(160, 216, 224, 0.3);
+  --status-ok: #3dcc6a;
+  --status-alert: #d94a42;
+  --status-warn: #ff6a00;
+  --bin-fill: repeating-linear-gradient(
+    90deg,
+    transparent 0 2px,
+    rgba(255, 106, 0, 0.18) 2px 3px,
+    transparent 3px 5px,
+    rgba(232, 228, 220, 0.16) 5px 6px,
+    transparent 6px 9px,
+    rgba(160, 216, 224, 0.1) 9px 10px
+  );
+  --font-ui: "Arial Black", "Impact", "Franklin Gothic Heavy", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 html {
@@ -58,10 +178,10 @@ body.tui {
   padding-right: env(safe-area-inset-right);
   background-color: var(--bg);
   background-image:
-    radial-gradient(ellipse at 50% 48%, rgba(226, 58, 50, 0.16), transparent 58%),
-    linear-gradient(180deg, #050102 0%, #1c080a 46%, #140507 58%, #050102 100%),
-    linear-gradient(rgba(142, 42, 34, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(142, 42, 34, 0.07) 1px, transparent 1px);
+    radial-gradient(ellipse at 50% 48%, color-mix(in srgb, var(--red) 16%, transparent), transparent 58%),
+    linear-gradient(180deg, var(--void) 0%, var(--panel) 46%, var(--bg-2) 58%, var(--void) 100%),
+    linear-gradient(color-mix(in srgb, var(--brick) 20%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--brick) 20%, transparent) 1px, transparent 1px);
   background-size: auto, auto, 22px 22px, 22px 22px;
   overflow-x: clip;
 }
@@ -80,9 +200,9 @@ body.tui::before {
     repeating-linear-gradient(
       90deg,
       transparent 0 11px,
-      rgba(63, 224, 232, 0.035) 11px 12px,
+      color-mix(in srgb, var(--cyan) 8%, transparent) 11px 12px,
       transparent 12px 17px,
-      rgba(226, 58, 50, 0.05) 17px 18px
+      color-mix(in srgb, var(--red) 10%, transparent) 17px 18px
     );
 }
 body.tui::after {
@@ -146,7 +266,7 @@ a:hover { color: var(--ink); }
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-right: max(1rem, env(safe-area-inset-right));
   border-bottom: 1px solid var(--red);
-  background: linear-gradient(180deg, #1a0608 0%, var(--bg-2) 100%);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
   box-shadow: var(--glow-red);
   font-size: 0.88rem;
   z-index: 2;
@@ -193,9 +313,9 @@ a:hover { color: var(--ink); }
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  text-shadow: 0 0 10px rgba(226, 58, 50, 0.55);
+  text-shadow: var(--glow-red);
 }
-.tui-n { color: var(--cyan); text-align: right; font-family: var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; text-shadow: 0 0 8px rgba(63, 224, 232, 0.35); }
+.tui-n { color: var(--cyan); text-align: right; font-family: var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; text-shadow: var(--glow-cyan); }
 .chev { color: var(--cyan); margin-right: 0.35rem; }
 .list-head {
   position: relative;
@@ -237,7 +357,7 @@ a:hover { color: var(--ink); }
   display: block;
   width: min(92vw, 36rem);
   height: auto;
-  filter: drop-shadow(0 0 12px rgba(226, 58, 50, 0.55));
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--red) 55%, transparent));
 }
 .ver {
   margin: 0.65rem 0 1.6rem;
@@ -327,8 +447,8 @@ a:hover { color: var(--ink); }
   padding: 0.45rem 1.7rem 0.45rem 1rem;
   text-decoration: none;
   color: inherit;
-  background-color: #1a0a0c;
-  background-image: var(--bin-fill), linear-gradient(90deg, #1a0a0c 0%, #120406 72%, #0a0203 100%);
+  background-color: var(--panel);
+  background-image: var(--bin-fill), linear-gradient(90deg, var(--panel) 0%, var(--bg-2) 72%, var(--bg) 100%);
   border: 1px solid var(--brick);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
 }
@@ -360,7 +480,7 @@ a:hover { color: var(--ink); }
   color: inherit;
   outline: none;
   border-color: var(--cyan);
-  filter: drop-shadow(0 0 8px rgba(63, 224, 232, 0.45));
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cyan) 45%, transparent));
 }
 .tui-row:focus-visible::before,
 .tui-row.is-selected::before {
@@ -502,7 +622,7 @@ img.still.thumb {
   flex-wrap: wrap;
   gap: 0.25rem 0.35rem;
   align-items: center;
-  box-shadow: 0 -6px 18px rgba(226, 58, 50, 0.12);
+  box-shadow: 0 -6px 18px color-mix(in srgb, var(--red) 12%, transparent);
 }
 .keymap .keychip {
   justify-content: flex-start;
@@ -511,7 +631,7 @@ img.still.thumb {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 100%, 8px 100%);
-  background: linear-gradient(90deg, #1a0a0c, #0a0203);
+  background: linear-gradient(90deg, var(--panel), var(--bg));
 }
 .keymap .fineprint {
   flex: 1 1 100%;
@@ -519,6 +639,163 @@ img.still.thumb {
   color: var(--muted);
   font-size: 0.75rem;
   max-width: 52rem;
+}
+.theme-switch {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.35rem;
+  margin-top: 0.35rem;
+}
+.theme-switch-label {
+  flex: 1 1 100%;
+  font-family: var(--font-ui);
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--brick);
+}
+.theme-switch-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  width: 100%;
+}
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.4rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule);
+  background: linear-gradient(90deg, var(--panel), var(--bg));
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+.theme-btn[aria-pressed="true"] {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.theme-pip {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 1px solid var(--label);
+  background: var(--muted);
+}
+.theme-btn[data-theme-set="cyberdeck"] .theme-pip { background: #e23a32; }
+.theme-btn[data-theme-set="phosphor"] .theme-pip { background: #00e08a; }
+.theme-btn[data-theme-set="greyscale"] .theme-pip { background: #c8c8c8; }
+.theme-btn[data-theme-set="stencil"] .theme-pip { background: #ff6a00; }
+
+html[data-theme="phosphor"] body.tui::before {
+  opacity: 1;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 2px,
+      rgba(0, 0, 0, 0.28) 2px 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 9px,
+      color-mix(in srgb, var(--cyan) 12%, transparent) 9px 10px,
+      transparent 10px 15px,
+      color-mix(in srgb, var(--cyan) 7%, transparent) 15px 16px
+    );
+}
+html[data-theme="phosphor"] .tui-top::before {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ink) 0 1px,
+    transparent 1px 5px,
+    var(--brick) 5px 6px,
+    transparent 6px 11px
+  );
+}
+
+html[data-theme="greyscale"] .tui-row:focus-visible::before,
+html[data-theme="greyscale"] .tui-row.is-selected::before,
+html[data-theme="greyscale"] .keychip[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0.35rem;
+  top: 50%;
+  bottom: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-ok);
+  transform: translateY(-50%);
+  box-shadow: none;
+}
+html[data-theme="greyscale"] .keychip[aria-current="page"] {
+  position: relative;
+  padding-left: 1.15rem;
+}
+html[data-theme="greyscale"] .keychip[aria-current="page"]::before {
+  background: var(--status-warn);
+}
+html[data-theme="greyscale"] .pager-pages a[aria-current="page"] {
+  position: relative;
+}
+html[data-theme="greyscale"] .pager-pages a[aria-current="page"]::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 0.35rem;
+  border-radius: 50%;
+  background: var(--status-alert);
+  vertical-align: middle;
+}
+
+html[data-theme="stencil"] body.tui {
+  background-image:
+    radial-gradient(ellipse at 50% 48%, color-mix(in srgb, var(--red) 10%, transparent), transparent 58%),
+    linear-gradient(180deg, var(--void) 0%, var(--panel) 46%, var(--bg-2) 58%, var(--void) 100%),
+    repeating-linear-gradient(0deg, transparent 0 2px, rgba(255, 255, 255, 0.015) 2px 3px),
+    repeating-radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px);
+}
+html[data-theme="stencil"] .tui-top::after {
+  height: 8px;
+  background: repeating-linear-gradient(
+    -45deg,
+    #121212 0 7px,
+    #ff6a00 7px 14px
+  );
+  box-shadow: none;
+}
+html[data-theme="stencil"] .list-head::after {
+  background: repeating-linear-gradient(
+    -45deg,
+    #121212 0 6px,
+    #ff6a00 6px 12px
+  );
+  opacity: 0.85;
+}
+html[data-theme="stencil"] .tui-main::before,
+html[data-theme="stencil"] .tui-main::after,
+html[data-theme="stencil"] .box-pane::before,
+html[data-theme="stencil"] .box-pane::after {
+  width: 9px;
+  height: 9px;
+  border-width: 2px;
+}
+html[data-theme="stencil"] .tui-app,
+html[data-theme="stencil"] .list-head,
+html[data-theme="stencil"] .pane-h {
+  font-weight: 900;
 }
 
 .box-pane {
@@ -752,6 +1029,7 @@ pre {
   .pager-btn,
   .pager-pages a,
   .add-submit,
+  .theme-btn,
   .tui-search input {
     min-height: 44px;
   }
@@ -794,6 +1072,10 @@ pre {
     flex: 1 1 calc(50% - 0.4rem);
     min-height: 44px;
   }
+  .theme-btn {
+    flex: 1 1 calc(50% - 0.4rem);
+    min-height: 44px;
+  }
   .facts { grid-template-columns: 1fr; }
 }
 
@@ -832,7 +1114,13 @@ pre {
   .keymap .fineprint {
     flex: 1 1 auto;
     max-width: none;
+    margin-top: 0.75rem;
+  }
+  .theme-switch {
     margin-top: auto;
+  }
+  .theme-btn {
+    flex: 1 1 calc(50% - 0.2rem);
   }
 }
 
@@ -863,7 +1151,13 @@ pre {
   }
   .keymap .fineprint {
     max-width: none;
+    margin-top: 0.75rem;
+  }
+  .theme-switch {
     margin-top: auto;
+  }
+  .theme-btn {
+    flex: 1 1 calc(50% - 0.2rem);
   }
 }
 

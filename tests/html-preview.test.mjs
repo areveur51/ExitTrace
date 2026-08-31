@@ -104,12 +104,14 @@ test("public chrome keeps catalog labels and omits pin larp copy", () => {
   assert.match(html, /href: "\/government"/);
   assert.match(html, /href: "\/deaths"/);
   assert.match(html, /href: "\/arrests"/);
+  assert.match(html, /href: "\/indictments"/);
   assert.match(html, /href: "\/unsorted"/);
   assert.match(html, /href: "\/add"/);
+  assert.match(html, /href: "\/dog-comms"/);
   assert.match(html, /href: "\/search"/);
   assert.doesNotMatch(
     html,
-    /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@HARADAN|BIO-INTERFACE|ADMIN ACCESS GRANTED/i,
+    /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK/i,
   );
 });
 
