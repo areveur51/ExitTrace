@@ -162,8 +162,8 @@ export function personEvents(row) {
     });
     events = lifted ? [lifted] : [];
   }
-  const leftover = Array.isArray(row.sources) ? row.sources : [];
-  if (leftover.length && events.length) {
+  const remainingSources = Array.isArray(row.sources) ? row.sources : [];
+  if (remainingSources.length && events.length) {
     const known = new Set();
     for (const ev of events) {
       for (const source of ev.sources || []) {
@@ -171,7 +171,7 @@ export function personEvents(row) {
         if (url) known.add(url);
       }
     }
-    const extras = leftover.filter((source) => {
+    const extras = remainingSources.filter((source) => {
       const url = canonicalPublicUrl(source?.url);
       return url && !known.has(url);
     });
