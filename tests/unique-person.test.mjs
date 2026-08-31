@@ -360,7 +360,7 @@ test("do not double-tag the same indictment as civilian and non-civilian", async
   assert.ok(indictments[0].sources.some((s) => s.url === MORE[0]));
 });
 
-test("findGoldMatch prefers slug, then a single normalized name", () => {
+test("findGoldMatch is identity only — slug or name, not name+date+category", () => {
   const people = goldSeed().people;
   assert.equal(findGoldMatch(people, { subject: "James Comey" })?.id, "james-comey");
   assert.equal(findGoldMatch(people, { subject: "Nobody Here" }), null);
@@ -373,4 +373,12 @@ test("findGoldMatch prefers slug, then a single normalized name", () => {
     sources: [],
   };
   assert.equal(findGoldMatch([vale], { subject: "Casey Vale", category: "firings" })?.id, "casey-vale");
+  assert.equal(
+    findGoldMatch([vale], {
+      subject: "Casey Vale",
+      event_date: "1999-01-01",
+      category: "resignations",
+    })?.id,
+    "casey-vale",
+  );
 });

@@ -49,12 +49,6 @@ export function parseEventDate(raw) {
   return text;
 }
 
-function daysBetween(a, b) {
-  const da = Date.parse(`${a}T00:00:00Z`);
-  const db = Date.parse(`${b}T00:00:00Z`);
-  return Math.abs(da - db) / 86_400_000;
-}
-
 export function parseCiteUrls(raw) {
   const list = Array.isArray(raw) ? raw : [];
   const urls = [];
@@ -307,11 +301,11 @@ function sameSlugIdentity(a, b) {
 }
 
 /**
- * Identity match for promote/add-process: id/slug OR a single normalized name.
- * Never opens a second person row just because the KEEP kind is new.
+ * Identity match: id/slug OR a single normalized name.
+ * Never name+date+category. A new KEEP kind annotates the same person.
  * Multiple same-name rows use name+role; if still unclear, do not match.
  */
-export function findGoldMatch(people, { subject, event_date, slug, category, role } = {}) {
+export function findGoldMatch(people, { subject, slug, role } = {}) {
   const name = normalizeSubject(subject);
   const id = slug || personSlug(subject);
   const rows = people || [];
@@ -323,20 +317,6 @@ export function findGoldMatch(people, { subject, event_date, slug, category, rol
   if (nameHits.length > 1) {
     const roleHits = nameHits.filter((row) => rolesCompatible(row.role, role) === true);
     if (roleHits.length === 1) return roleHits[0];
-    if (!role) {
-      const kind = String(category || "").trim();
-      if (kind) {
-        const kindHits = nameHits.filter((row) => personHasKind(row, kind));
-        if (kindHits.length === 1) return kindHits[0];
-        if (event_date && kindHits.length > 1) {
-          const close = kindHits.filter((row) => {
-            const ev = eventForKind(personEvents(row), kind);
-            return ev && daysBetween(ev.event_date, event_date) <= MATCH_WINDOW_DAYS;
-          });
-          if (close.length === 1) return close[0];
-        }
-      }
-    }
     return null;
   }
   return null;
