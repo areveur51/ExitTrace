@@ -7,6 +7,13 @@ import {
 } from "./categories.mjs";
 import { pageHref, pageWindow } from "./paginate.mjs";
 import { listThumbHref, LIST_THUMB_CSS_H, LIST_THUMB_CSS_W } from "./thumb.mjs";
+import {
+  DEFAULT_THEME,
+  THEMES,
+  THEME_IDS,
+  THEME_STORAGE_KEY,
+  normalizeTheme,
+} from "./themes.mjs";
 
 function esc(s) {
   return String(s ?? "")
@@ -49,10 +56,10 @@ export function pixelWordmark(text = "EXITTRACE") {
         const px = ox + x * (cell + gap);
         const py = y * (cell + gap);
         shadow.push(
-          `<rect x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="#8e2a22"/>`,
+          `<rect x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="var(--brick)"/>`,
         );
         ink.push(
-          `<rect x="${px}" y="${py}" width="${cell}" height="${cell}" fill="#e23a32"/>`,
+          `<rect x="${px}" y="${py}" width="${cell}" height="${cell}" fill="var(--red)"/>`,
         );
       });
     });
@@ -99,6 +106,27 @@ function keymapItems(activePath) {
   return keys;
 }
 
+export function themeSwitcher(activeId = DEFAULT_THEME) {
+  const current = normalizeTheme(activeId);
+  return `<nav class="theme-switch" aria-label="Theme">
+    <span class="theme-switch-label" id="theme-label">Theme</span>
+    <div class="theme-switch-btns" role="group" aria-labelledby="theme-label">
+      ${THEMES.map((t) => {
+        const on = t.id === current;
+        return `<button type="button" class="theme-btn" data-theme-set="${esc(t.id)}" aria-pressed="${
+          on ? "true" : "false"
+        }"><span class="theme-pip" aria-hidden="true"></span>${esc(t.label)}</button>`;
+      }).join("")}
+    </div>
+  </nav>`;
+}
+
+function themeBootScript() {
+  return `<script>
+(function(){try{var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(${JSON.stringify(THEME_IDS)}.indexOf(t)!==-1)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();
+</script>`;
+}
+
 export function keymapFooter(activePath) {
   return `<footer class="keymap" aria-label="Catalog">
     ${keymapItems(activePath)
@@ -109,6 +137,7 @@ export function keymapFooter(activePath) {
         }><span class="br">[</span>${esc(k.key)}<span class="br">]</span> ${esc(k.label)}</a>`;
       })
       .join("")}
+    ${themeSwitcher(DEFAULT_THEME)}
     <p class="fineprint">Neutral record. Two published news citations on every person row. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
@@ -178,11 +207,12 @@ export function layout({
 }) {
   const home = mode === "home";
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="${DEFAULT_THEME}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${esc(title)} · ExitTrace</title>
+  ${themeBootScript()}
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="tui hud${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">

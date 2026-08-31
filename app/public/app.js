@@ -32,6 +32,32 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   showToast(document.body.getAttribute("data-toast") || "page loaded");
 
+  const THEME_IDS = ["cyberdeck", "phosphor", "greyscale", "stencil"];
+  const THEME_KEY = "exittrace-theme";
+  const themeButtons = document.querySelectorAll("[data-theme-set]");
+
+  function applyTheme(id) {
+    const theme = THEME_IDS.includes(id) ? id : "cyberdeck";
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* private mode / quota */
+    }
+    for (const btn of themeButtons) {
+      btn.setAttribute("aria-pressed", btn.getAttribute("data-theme-set") === theme ? "true" : "false");
+    }
+  }
+
+  try {
+    applyTheme(localStorage.getItem(THEME_KEY) || "cyberdeck");
+  } catch {
+    applyTheme("cyberdeck");
+  }
+  for (const btn of themeButtons) {
+    btn.addEventListener("click", () => applyTheme(btn.getAttribute("data-theme-set")));
+  }
+
   const modal = document.getElementById("tui-modal");
   const modalTitle = document.getElementById("modal-title");
   const modalBody = document.getElementById("modal-body");

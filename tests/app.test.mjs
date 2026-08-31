@@ -293,6 +293,36 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.doesNotMatch(indictments.body, /person-card/);
 });
 
+test("list pages expose four themes and keep catalog copy, not pin LARP", async () => {
+  const list = await get("/firings");
+  assert.equal(list.status, 200);
+  assert.match(list.body, /data-theme="cyberdeck"/);
+  assert.match(list.body, /class="theme-switch"/);
+  assert.match(list.body, /data-theme-set="cyberdeck"/);
+  assert.match(list.body, /data-theme-set="phosphor"/);
+  assert.match(list.body, /data-theme-set="greyscale"/);
+  assert.match(list.body, /data-theme-set="stencil"/);
+  assert.match(list.body, />Cyberdeck</);
+  assert.match(list.body, />Phosphor</);
+  assert.match(list.body, />Greyscale</);
+  assert.match(list.body, />Stencil</);
+  assert.match(list.body, /href="\/firings"/);
+  assert.match(list.body, /href="\/resignations"/);
+  assert.match(list.body, /href="\/government"/);
+  assert.match(list.body, /href="\/deaths"/);
+  assert.match(list.body, /href="\/arrests"/);
+  assert.match(list.body, /href="\/indictments"/);
+  assert.match(list.body, /href="\/unsorted"/);
+  assert.match(list.body, /href="\/add"/);
+  assert.match(list.body, /href="\/dog-comms"/);
+  assert.match(list.body, /data-key="f"/);
+  assert.match(list.body, />Firings</);
+  assert.doesNotMatch(
+    list.body,
+    /CLOSE HACK|BREACH PROTOCOL|CLOSE HACK IMMEDIATELY|samurai|SurveilTrack|ROOT@/i,
+  );
+});
+
 test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop layouts", async () => {
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
   const html = fs.readFileSync(path.join(ROOT, "app", "lib", "html.mjs"), "utf8");
@@ -317,13 +347,15 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   assert.match(css, /@media \(min-width: 721px\) and \(max-width: 1100px\)/);
   assert.match(css, /@media \(min-width: 1280px\)/);
   assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);
-  assert.match(html, /fill="#e23a32"/);
+  assert.match(html, /fill="var\(--red\)"/);
+  assert.match(html, /fill="var\(--brick\)"/);
   assert.doesNotMatch(html, /#e6c384|#c4b5fd|#4c1d95|#67e8f9|#ff2a2a/);
   assert.doesNotMatch(
     html,
     /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@HARADAN|BIO-INTERFACE/i,
   );
-  assert.match(home.body, /fill="#e23a32"/);
+  assert.match(home.body, /data-theme="cyberdeck"/);
+  assert.match(home.body, /fill="var\(--red\)"/);
   assert.match(home.body, /class="tui hud/);
   assert.match(home.body, /class="hud-stage"/);
   assert.match(home.body, /href="\/search"/);
