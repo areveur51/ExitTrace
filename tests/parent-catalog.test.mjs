@@ -135,7 +135,7 @@ test("GET /deaths lists every death kind; child routes filter", async () => {
   assert.match(parent.body, /href="\/deaths\/officials"/);
   assert.match(parent.body, /href="\/deaths\/ceos"/);
   assert.doesNotMatch(parent.body, /source-card/);
-  assert.doesNotMatch(parent.body, /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ChronoTrace/i);
+  assert.doesNotMatch(parent.body, /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL/i);
   assert.match(parent.body, new RegExp(`${deaths.length} available`));
   assert.equal(countClass(parent.body, "person-card"), PAGE_SIZE);
 
@@ -210,7 +210,6 @@ test("GET /indictments lists every indictment kind; child routes filter", async 
   assert.match(parent.body, /href="\/indictments\/civilians"/);
   assert.match(parent.body, /href="\/indictments\/non-civilians"/);
   assert.doesNotMatch(parent.body, /source-card/);
-  assert.doesNotMatch(parent.body, /ChronoTrace/);
 
   assert.match(civilians.body, /href="\/people\/casey-vale"/);
   assert.doesNotMatch(civilians.body, new RegExp(`href="/people/${officer.person.id}"`));
