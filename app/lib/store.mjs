@@ -3,10 +3,16 @@ import path from "path";
 import { databaseUrl } from "./env.mjs";
 import {
   PromoteError,
+  attachPersonEvent,
   buildPersonRow,
   citeRecords,
+  collapseDuplicatePeople,
   findGoldMatch,
   mergeCites,
+  mergePersonAnnotate,
+  personEvents,
+  personHasKind,
+  projectPerson,
   validateIdentifiedPersonInput,
   validatePromoteInput,
 } from "./promote.mjs";
@@ -52,7 +58,8 @@ function asDate(v) {
 }
 
 function normalizePerson(row) {
-  return {
+  const events = personEvents(row);
+  return projectPerson({
     id: row.id,
     category: row.category,
     name: row.name,
@@ -69,7 +76,8 @@ function normalizePerson(row) {
     net_worth_source: row.net_worth_source || "",
     sources: Array.isArray(row.sources) ? row.sources : row.sources || [],
     summary: row.summary || "",
-  };
+    events,
+  });
 }
 
 function normalizeDog(row) {
@@ -203,29 +211,26 @@ export function writeFileStore(dataDir, seed) {
   return out;
 }
 
-/** Seed wins name/date/category; extra store people and extra cites are kept. */
+/** Seed wins name/photo/net-worth and existing event fields; extra kinds and cites stay. */
 export function mergeGoldPeople(seedPeople, priorPeople) {
-  const priorById = new Map((priorPeople || []).map((row) => [row.id, row]));
+  const priorById = new Map((priorPeople || []).map((row) => [row.id, normalizePerson(row)]));
   const out = [];
   const seen = new Set();
   for (const gold of seedPeople || []) {
-    seen.add(gold.id);
-    const prior = priorById.get(gold.id);
+    const goldRow = normalizePerson(gold);
+    seen.add(goldRow.id);
+    const prior = priorById.get(goldRow.id);
     if (!prior) {
-      out.push(normalizePerson(gold));
+      out.push(goldRow);
       continue;
     }
-    out.push(
-      normalizePerson({
-        ...gold,
-        sources: mergeCites(gold.sources, prior.sources).sources,
-      }),
-    );
+    out.push(mergePersonAnnotate(goldRow, prior));
   }
   for (const prior of priorPeople || []) {
-    if (!seen.has(prior.id)) out.push(normalizePerson(prior));
+    const row = normalizePerson(prior);
+    if (!seen.has(row.id)) out.push(row);
   }
-  return out;
+  return collapseDuplicatePeople(out);
 }
 
 /** Seed dogs win; extra store dogs are kept. Gold rows are not overwritten. */
@@ -273,13 +278,17 @@ export async function importSeed(p, seed) {
   const client = await p.connect();
   try {
     await client.query("BEGIN");
-    for (const row of seed.people) {
+    for (const raw of seed.people) {
+      const existing = await client.query("SELECT * FROM people WHERE id = $1", [raw.id]);
+      const row = existing.rows[0]
+        ? mergePersonAnnotate(normalizePerson(raw), normalizePerson(existing.rows[0]))
+        : normalizePerson(raw);
       await client.query(
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, photo, photo_credit,
-           net_worth_usd, net_worth_note, net_worth_source, sources, summary
+           net_worth_usd, net_worth_note, net_worth_source, sources, summary, events
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -293,23 +302,11 @@ export async function importSeed(p, seed) {
            net_worth_note = EXCLUDED.net_worth_note,
            net_worth_source = EXCLUDED.net_worth_source,
            sources = EXCLUDED.sources,
-           summary = EXCLUDED.summary`,
-        [
-          row.id,
-          row.category,
-          row.name,
-          row.role,
-          row.event_date,
-          row.death_date,
-          row.photo,
-          row.photo_credit,
-          row.net_worth_usd,
-          row.net_worth_note,
-          row.net_worth_source,
-          JSON.stringify(row.sources || []),
-          row.summary,
-        ],
+           summary = EXCLUDED.summary,
+           events = EXCLUDED.events`,
+        personValues(row),
       );
+      await syncPersonEvents(client, row);
     }
     for (const row of seed.dog_comms) {
       await client.query(
@@ -415,17 +412,51 @@ function applyWindow(rows, limit, offset) {
   return offset ? rows.slice(offset) : rows;
 }
 
-function peopleCategoryWhere(categories, params) {
+function peopleKindWhere(categories, params) {
   if (!categories.length) return "";
-  if (categories.length === 1) {
-    params.push(categories[0]);
-    return ` WHERE category = $${params.length}`;
+  params.push(categories);
+  const n = params.length;
+  return ` WHERE (
+    EXISTS (
+      SELECT 1 FROM person_events e
+       WHERE e.person_id = people.id AND e.kind = ANY($${n}::text[])
+    )
+    OR (
+      NOT EXISTS (SELECT 1 FROM person_events e WHERE e.person_id = people.id)
+      AND (
+        EXISTS (
+          SELECT 1 FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
+           WHERE ev->>'kind' = ANY($${n}::text[])
+        )
+        OR people.category = ANY($${n}::text[])
+      )
+    )
+  )`;
+}
+
+function peopleKindOrder(categories, params) {
+  if (!categories.length) {
+    return ` ORDER BY COALESCE((
+      SELECT MAX(e.event_date) FROM person_events e WHERE e.person_id = people.id
+    ), (
+      SELECT MAX((ev->>'event_date')::date) FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
+    ), event_date) DESC, name ASC`;
   }
-  const placeholders = categories.map((id) => {
-    params.push(id);
-    return `$${params.length}`;
-  });
-  return ` WHERE category IN (${placeholders.join(", ")})`;
+  params.push(categories);
+  const n = params.length;
+  return ` ORDER BY COALESCE((
+    SELECT MAX(e.event_date) FROM person_events e
+     WHERE e.person_id = people.id AND e.kind = ANY($${n}::text[])
+  ), (
+    SELECT MAX((ev->>'event_date')::date) FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
+     WHERE ev->>'kind' = ANY($${n}::text[])
+  ), event_date) DESC, name ASC`;
+}
+
+function projectListed(rows, categories) {
+  return rows.map((row) =>
+    categories.length ? projectPerson(row, categories) : projectPerson(row),
+  );
 }
 
 export async function listPeople(categoryOrOpts, maybeOpts) {
@@ -435,15 +466,17 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const categories = asCategories(args.category);
   const p = await getPool();
   if (!p) {
-    let rows = getMemory().people;
+    let rows = getMemory().people.map((r) =>
+      categories.length ? projectPerson(r, categories) : projectPerson(r),
+    );
     if (categories.length) {
-      rows = rows.filter((r) => categories.includes(r.category));
+      rows = rows.filter((r) => personHasKind(r, categories));
     }
     return applyWindow(rows.slice().sort(comparePeople), limit, offset);
   }
   const params = [];
-  let sql = `SELECT * FROM people${peopleCategoryWhere(categories, params)}`;
-  sql += " ORDER BY event_date DESC, name ASC";
+  let sql = `SELECT * FROM people${peopleKindWhere(categories, params)}`;
+  sql += peopleKindOrder(categories, params);
   if (limit != null) {
     params.push(limit);
     sql += ` LIMIT $${params.length}`;
@@ -454,7 +487,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
     sql += ` OFFSET $${params.length}`;
   }
   const q = await p.query(sql, params);
-  return q.rows.map(normalizePerson);
+  return projectListed(q.rows.map(normalizePerson), categories);
 }
 
 export async function listDogComms(opts = {}) {
@@ -489,7 +522,7 @@ export async function countPeople(category) {
   if (!p) {
     const rows = getMemory().people;
     return categories.length
-      ? rows.filter((r) => categories.includes(r.category)).length
+      ? rows.filter((r) => personHasKind(r, categories)).length
       : rows.length;
   }
   if (!categories.length) {
@@ -498,7 +531,7 @@ export async function countPeople(category) {
   }
   const params = [];
   const q = await p.query(
-    `SELECT COUNT(*)::int AS n FROM people${peopleCategoryWhere(categories, params)}`,
+    `SELECT COUNT(*)::int AS n FROM people${peopleKindWhere(categories, params)}`,
     params,
   );
   return q.rows[0].n;
@@ -643,7 +676,23 @@ function personValues(row) {
     person.net_worth_source,
     JSON.stringify(person.sources || []),
     person.summary,
+    JSON.stringify(person.events || []),
   ];
+}
+
+async function syncPersonEvents(client, row) {
+  const person = normalizePerson(row);
+  await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
+  for (const ev of person.events) {
+    await client.query(
+      `INSERT INTO person_events (person_id, kind, event_date, sources)
+       VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (person_id, kind) DO UPDATE SET
+         event_date = person_events.event_date,
+         sources = EXCLUDED.sources`,
+      [person.id, ev.kind, ev.event_date, JSON.stringify(ev.sources || [])],
+    );
+  }
 }
 
 export async function insertPerson(row) {
@@ -660,36 +709,93 @@ export async function insertPerson(row) {
   await p.query(
     `INSERT INTO people (
        id, category, name, role, event_date, death_date, photo, photo_credit,
-       net_worth_usd, net_worth_note, net_worth_source, sources, summary
+       net_worth_usd, net_worth_note, net_worth_source, sources, summary, events
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb
      )`,
     personValues(person),
   );
+  const client = await p.connect();
+  try {
+    await syncPersonEvents(client, person);
+  } finally {
+    client.release();
+  }
   return person;
 }
 
-export async function appendPersonSources(id, incoming) {
+export async function savePerson(row) {
+  const person = normalizePerson(row);
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    const i = mem.people.findIndex((r) => r.id === person.id);
+    if (i < 0) {
+      throw new PromoteError(`person not found: ${person.id}`, "person_not_found");
+    }
+    mem.people[i] = person;
+    return person;
+  }
+  await p.query(
+    `UPDATE people SET
+       category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
+       photo = $7, photo_credit = $8, net_worth_usd = $9, net_worth_note = $10,
+       net_worth_source = $11, sources = $12::jsonb, summary = $13, events = $14::jsonb
+     WHERE id = $1`,
+    personValues(person),
+  );
+  const client = await p.connect();
+  try {
+    await syncPersonEvents(client, person);
+  } finally {
+    client.release();
+  }
+  return getPerson(person.id);
+}
+
+export async function deletePerson(id) {
+  if (!id) return false;
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    const n = mem.people.length;
+    mem.people = mem.people.filter((r) => r.id !== id);
+    return mem.people.length !== n;
+  }
+  const client = await p.connect();
+  try {
+    await client.query("DELETE FROM person_events WHERE person_id = $1", [id]);
+    const q = await client.query("DELETE FROM people WHERE id = $1", [id]);
+    return q.rowCount > 0;
+  } finally {
+    client.release();
+  }
+}
+
+export async function appendPersonSources(id, incoming, kind) {
   const person = await getPerson(id);
   if (!person) {
     throw new PromoteError(`person not found: ${id}`, "person_not_found");
   }
-  const merged = mergeCites(person.sources, incoming);
-  if (!merged.added.length) {
+  const targetKind = kind || person.category;
+  const event = person.events.find((ev) => ev.kind === targetKind) || person.events[0];
+  if (!event) {
+    const merged = mergeCites(person.sources, incoming);
+    if (!merged.added.length) return { person, added: [] };
+    const next = projectPerson({ ...person, sources: merged.sources });
+    await savePerson(next);
+    return { person: next, added: merged.added };
+  }
+  const attached = attachPersonEvent(person, {
+    kind: event.kind,
+    event_date: event.event_date,
+    sources: incoming,
+  });
+  if (!attached.added.length) {
     return { person, added: [] };
   }
-  const p = await getPool();
-  if (!p) {
-    const mem = getMemory();
-    const i = mem.people.findIndex((r) => r.id === id);
-    mem.people[i] = { ...person, sources: merged.sources };
-    return { person: mem.people[i], added: merged.added };
-  }
-  await p.query("UPDATE people SET sources = $1::jsonb WHERE id = $2", [
-    JSON.stringify(merged.sources),
-    id,
-  ]);
-  return { person: { ...person, sources: merged.sources }, added: merged.added };
+  const saved = await savePerson(attached.person);
+  return { person: saved, added: attached.added };
 }
 
 export async function setPersonPhoto(id, photo, photo_credit = "") {
@@ -780,13 +886,19 @@ export async function applyIdentifiedPerson(input) {
     net_worth_note: parsed.net_worth_note,
   };
   if (existing) {
-    const annotated = await appendPersonSources(existing.id, incoming);
-    let person = await attachPersonPortrait(annotated.person, extras);
+    const attached = attachPersonEvent(existing, {
+      kind: parsed.category,
+      event_date: parsed.event_date,
+      sources: incoming,
+    });
+    let person = await savePerson(attached.person);
+    person = await attachPersonPortrait(person, extras);
     person = await attachPersonNetWorth(person, extras);
     return {
       action: "annotated",
-      person,
-      added_cites: annotated.added.length,
+      person: projectPerson(person, parsed.category),
+      added_cites: attached.added.length,
+      added_event: !attached.existed,
       people: await countPeople(),
     };
   }
@@ -796,8 +908,9 @@ export async function applyIdentifiedPerson(input) {
   person = await attachPersonNetWorth(person, extras);
   return {
     action: "created",
-    person,
-    added_cites: person.sources.length,
+    person: projectPerson(person, parsed.category),
+    added_cites: incoming.length,
+    added_event: true,
     people: await countPeople(),
   };
 }
@@ -921,7 +1034,13 @@ export async function counts() {
     const dogs = getMemory().dog_comms;
     const byCategory = {};
     for (const row of people) {
-      byCategory[row.category] = (byCategory[row.category] || 0) + 1;
+      const kinds = new Set(
+        (row.events || []).map((ev) => ev.kind).filter(Boolean),
+      );
+      if (!kinds.size && row.category) kinds.add(row.category);
+      for (const kind of kinds) {
+        byCategory[kind] = (byCategory[kind] || 0) + 1;
+      }
     }
     byCategory.dog_comms = dogs.length;
     return {
@@ -935,10 +1054,20 @@ export async function counts() {
     p.query("SELECT COUNT(*)::int AS n FROM people"),
     p.query("SELECT COUNT(*)::int AS n FROM dog_comms"),
     p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
-    p.query("SELECT category, COUNT(*)::int AS n FROM people GROUP BY category"),
+    p.query(
+      `SELECT kind AS category, COUNT(DISTINCT person_id)::int AS n
+         FROM person_events
+        GROUP BY kind`,
+    ),
   ]);
   const byCategory = {};
   for (const row of grouped.rows) byCategory[row.category] = row.n;
+  if (!grouped.rows.length) {
+    const fallback = await p.query(
+      "SELECT category, COUNT(*)::int AS n FROM people GROUP BY category",
+    );
+    for (const row of fallback.rows) byCategory[row.category] = row.n;
+  }
   byCategory.dog_comms = dogCount.rows[0].n;
   return {
     people: peopleCount.rows[0].n,
@@ -1297,6 +1426,28 @@ export async function searchCatalog(q) {
     ...dogs.map((row) => ({ type: "dog", date: row.posted_at || "", row })),
     ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),
   ];
+}
+
+export async function migrateUniquePeople() {
+  const people = await listPeople();
+  const collapsed = collapseDuplicatePeople(people);
+  const keepIds = new Set(collapsed.map((row) => row.id));
+  let merged = 0;
+  for (const row of people) {
+    if (!keepIds.has(row.id)) {
+      await deletePerson(row.id);
+      merged += 1;
+    }
+  }
+  for (const row of collapsed) {
+    const existing = people.find((p) => p.id === row.id);
+    if (!existing) {
+      await insertPerson(row);
+      continue;
+    }
+    await savePerson(row);
+  }
+  return { people: collapsed.length, merged };
 }
 
 export async function closeStore() {

@@ -54,6 +54,11 @@ Fail-closed:
   located. Do not overwrite existing gold net-worth.
   dog comms need an official government handle or official post URL, plus date.
 
+If the person already exists (id/slug or normalized name), the new KEEP kind
+is attached as an event. A second person row is not created. Each event is
+fail-closed on its own calendar date plus two official cites. Wikipedia is
+not a cite. Gold name, event fields, cites, photo, and net-worth stay put.
+
 The Unsorted classify walk stays a separate path (import-posts / promote).
 If a queued hint URL happens to match one parked post, the same fail-closed
 insert helper is reused. Gold rows are annotate-only.

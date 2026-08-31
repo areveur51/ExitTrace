@@ -213,7 +213,7 @@ test("parked source posts rematch onto indictment KEEP kinds; parent lists the u
   assert.doesNotMatch(other.body, /href="\/people\/casey-vale"/);
 });
 
-test("per-kind dedup: arrest + indictment when events differ; never two of the same indictment kind", async () => {
+test("per-kind tags: arrest + indictment stay one person; never two of the same indictment kind", async () => {
   setMemory(goldSeed());
   await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
   const arrest = await applyIdentifiedPerson({
@@ -225,14 +225,12 @@ test("per-kind dedup: arrest + indictment when events differ; never two of the s
   assert.equal(arrest.action, "created");
   assert.equal(arrest.person.id, "casey-vale");
 
-  assert.equal(
-    findGoldMatch(await listPeople(), {
-      subject: "Casey Vale",
-      event_date: "2024-08-01",
-      category: "indictment_civilian",
-    }),
-    null,
-  );
+  const match = findGoldMatch(await listPeople(), {
+    subject: "Casey Vale",
+    event_date: "2024-08-01",
+    category: "indictment_civilian",
+  });
+  assert.equal(match?.id, "casey-vale");
 
   const indictment = await applyIdentifiedPerson({
     subject: "Casey Vale",
@@ -240,11 +238,16 @@ test("per-kind dedup: arrest + indictment when events differ; never two of the s
     category: "indictment_civilian",
     cite_urls: CITES,
   });
-  assert.equal(indictment.action, "created");
+  assert.equal(indictment.action, "annotated");
+  assert.equal(indictment.person.id, arrest.person.id);
   assert.equal(indictment.person.category, "indictment_civilian");
-  assert.notEqual(indictment.person.id, arrest.person.id);
-  assert.equal(await countPeople(), 74);
-  assert.equal((await getPerson("casey-vale")).category, "arrests");
+  assert.equal(await countPeople(), 73);
+  const vale = await getPerson("casey-vale");
+  assert.equal(vale.events.length, 2);
+  assert.ok(vale.events.some((ev) => ev.kind === "arrests" && ev.event_date === "2024-06-15"));
+  assert.ok(
+    vale.events.some((ev) => ev.kind === "indictment_civilian" && ev.event_date === "2024-08-01"),
+  );
 
   const again = await applyIdentifiedPerson({
     subject: "Casey Vale",
@@ -255,7 +258,7 @@ test("per-kind dedup: arrest + indictment when events differ; never two of the s
   assert.equal(again.action, "annotated");
   assert.equal(again.person.category, "indictment_civilian");
   assert.equal(again.person.event_date, "2024-08-01");
-  assert.equal(await countPeople(), 74);
+  assert.equal(await countPeople(), 73);
 
   const otherKind = await applyIdentifiedPerson({
     subject: "Casey Vale",
@@ -264,18 +267,19 @@ test("per-kind dedup: arrest + indictment when events differ; never two of the s
     cite_urls: CITES,
   });
   assert.equal(otherKind.action, "annotated");
-  assert.equal(otherKind.person.category, "indictment_civilian");
-  assert.equal(await countPeople(), 74);
+  assert.equal(otherKind.person.id, "casey-vale");
+  assert.equal(await countPeople(), 73);
 
   const shownArrest = await checkPersonDisplayed(arrest.person);
   assert.match(shownArrest.list, /^\/arrests/);
   const list = await requestPage("/indictments/civilians");
   assert.match(list.body, /Casey Vale/);
-  assert.match(list.body, new RegExp(`href="/people/${indictment.person.id}"`));
-  const detail = await requestPage(`/people/${indictment.person.id}`);
+  assert.match(list.body, /href="\/people\/casey-vale"/);
+  const detail = await requestPage("/people/casey-vale");
   assert.equal(detail.status, 200);
   assert.match(detail.body, /Casey Vale/);
   assert.match(detail.body, /Indictments — civilians/);
+  assert.match(detail.body, /Arrests/);
 });
 
 test("indictment person cards keep 40×52 local thumbs", () => {

@@ -24,6 +24,39 @@ CREATE TABLE IF NOT EXISTS people (
 CREATE INDEX IF NOT EXISTS people_category_idx ON people (category);
 CREATE INDEX IF NOT EXISTS people_event_date_idx ON people (event_date DESC);
 
+-- Unique person entry: identity on people, KEEP tags on person_events.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS person_events (
+  person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  event_date DATE NOT NULL,
+  sources JSONB NOT NULL DEFAULT '[]'::jsonb,
+  PRIMARY KEY (person_id, kind)
+);
+
+CREATE INDEX IF NOT EXISTS person_events_kind_idx ON person_events (kind);
+CREATE INDEX IF NOT EXISTS person_events_event_date_idx ON person_events (event_date DESC);
+
+UPDATE people
+   SET events = jsonb_build_array(
+     jsonb_build_object(
+       'kind', category,
+       'event_date', to_char(event_date, 'YYYY-MM-DD'),
+       'sources', COALESCE(sources, '[]'::jsonb)
+     )
+   )
+ WHERE COALESCE(jsonb_array_length(events), 0) = 0
+   AND category IS NOT NULL
+   AND event_date IS NOT NULL;
+
+INSERT INTO person_events (person_id, kind, event_date, sources)
+SELECT id, category, event_date, COALESCE(sources, '[]'::jsonb)
+  FROM people
+ WHERE category IS NOT NULL
+   AND event_date IS NOT NULL
+ON CONFLICT (person_id, kind) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS dog_comms (
   id TEXT PRIMARY KEY,
   posted_at DATE NOT NULL,

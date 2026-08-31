@@ -11,7 +11,12 @@ function sourcePostId(canonicalUrl) {
 export function goldUrlIndex(people, dogs) {
   const peopleMap = new Map();
   for (const row of people || []) {
-    for (const source of row.sources || []) {
+    const cites = [];
+    for (const source of row.sources || []) cites.push(source);
+    for (const ev of row.events || []) {
+      for (const source of ev.sources || []) cites.push(source);
+    }
+    for (const source of cites) {
       const url = canonicalPublicUrl(source.url);
       if (url) peopleMap.set(url, row.id);
     }

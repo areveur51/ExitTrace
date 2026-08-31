@@ -948,6 +948,16 @@ html[data-theme="stencil"] .pane-h {
 .nw-note, .nw-src { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 400; }
 .sources { margin: 0; padding-left: 1.15rem; }
 .sources time { color: var(--muted); font-size: 0.85rem; }
+.event-line { letter-spacing: 0.02em; }
+.event-cites { margin: 0 0 0.85rem; }
+.event-cites:last-child { margin-bottom: 0; }
+.event-h {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
 
 .dog-snapshot {
   border: 1px solid var(--rule);

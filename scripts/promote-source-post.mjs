@@ -48,8 +48,10 @@ Does not invent a figure or overwrite existing gold net-worth. If none,
 usd stays null with a short missing-estimate note. Leaves the
 source post on Unsorted.
 
-If the same person already exists (id/slug or same subject + event_date ±3 days),
-new cites are attached only — name, date, category, and existing cites stay put.
+If the same person already exists (id/slug or normalized name), the new KEEP
+kind is attached as an event. A second person row is not created. Existing
+name, event fields, cites, photo, and net-worth stay put (gold annotate-only).
+Each event is fail-closed on its own calendar event_date plus two official cites.
 
 After the row is written, the host process is not done until live HTML
 shows it on the list page and the detail page. Health counts are not

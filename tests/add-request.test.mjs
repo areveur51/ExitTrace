@@ -676,3 +676,42 @@ test("annotate does not overwrite gold net-worth", async () => {
   assert.equal(seedComey.net_worth_usd, null);
   assert.equal(seedComey.net_worth_note, MISSING_NET_WORTH_NOTE);
 });
+
+test("add-process attaches a new kind on the existing person", async () => {
+  setMemory(goldSeed());
+  const first = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const created = await processAddRequest({
+    id: first.request.id,
+    overlay: { cite_urls: CITES },
+  });
+  assert.equal(created.action, "created");
+  assert.equal(await countPeople(), 73);
+
+  const second = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "resignations",
+    event_date: "2024-07-01",
+  });
+  const tagged = await processAddRequest({
+    id: second.request.id,
+    overlay: {
+      cite_urls: [
+        "https://www.example.com/news/casey-vale-quit",
+        "https://www.example.net/world/casey-vale-resigned",
+      ],
+    },
+  });
+  assert.equal(tagged.action, "annotated");
+  assert.equal(tagged.person.id, "casey-vale");
+  assert.equal(await countPeople(), 73);
+  const person = await getPerson("casey-vale");
+  assert.equal(person.events.length, 2);
+  assert.ok(person.events.some((ev) => ev.kind === "arrests"));
+  assert.ok(person.events.some((ev) => ev.kind === "resignations"));
+});
