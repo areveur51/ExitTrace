@@ -9,7 +9,6 @@ import {
   getMemory,
   getPool,
   hydrateFileMemory,
-  importSeed,
   loadSeedFile,
   migrateUniquePeople,
   writeFileStore,
@@ -24,21 +23,16 @@ const bootstrapSql = fs.readFileSync(
   "utf8",
 );
 
-const seed = loadSeedFile(seedPath);
 if (databaseUrl()) {
   const pool = await getPool();
   await ensureSchema(pool, bootstrapSql);
-  const n = await importSeed(pool, seed);
-  const migrated = await migrateUniquePeople();
-  console.log(
-    `imported postgres people=${n.people} dog_comms=${n.dog_comms} unique=${migrated.people}`,
-  );
-  await closeStore();
 } else {
-  hydrateFileMemory(dataDir, seed);
-  writeFileStore(dataDir, getMemory());
-  const mem = getMemory();
-  console.log(
-    `wrote file store people=${mem.people.length} dog_comms=${mem.dog_comms.length} source_posts=${mem.source_posts.length}`,
-  );
+  hydrateFileMemory(dataDir, loadSeedFile(seedPath));
 }
+
+const result = await migrateUniquePeople();
+if (!databaseUrl()) {
+  writeFileStore(dataDir, getMemory());
+}
+console.log(`unique people=${result.people} collapsed=${result.merged}`);
+await closeStore();

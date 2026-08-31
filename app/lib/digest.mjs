@@ -16,7 +16,7 @@ import {
   officialNewsHostsFor,
   parseHttpUrl,
 } from "./official.mjs";
-import { normalizeSubject, parseEventDate, personSlug } from "./promote.mjs";
+import { findGoldMatch, parseEventDate, personSlug } from "./promote.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import { queueAddRequest } from "./add-request.mjs";
 
@@ -447,24 +447,8 @@ function cleanLeadName(raw) {
   return name;
 }
 
-export function livePersonHit(people, { name, event_date, category, slug } = {}) {
-  const subject = normalizeSubject(name);
-  const id = slug || personSlug(name);
-  if (!id && !subject) return null;
-  for (const row of people || []) {
-    if (id && row.id === id) return row;
-    if (
-      subject &&
-      normalizeSubject(row.name) === subject &&
-      event_date &&
-      row.event_date === event_date &&
-      category &&
-      row.category === category
-    ) {
-      return row;
-    }
-  }
-  return null;
+export function livePersonHit(people, { name, slug } = {}) {
+  return findGoldMatch(people, { subject: name, slug });
 }
 
 /** Digest items are name leads. They never count as cites. */
@@ -547,13 +531,7 @@ export function digestItemsToLeads(items, { people = [], feed = null } = {}) {
       // calendar date may match pub day; still never copy posted_at as event_date later
     }
     const goldHit = goldUrls.has(source_url);
-    const live = lead_name
-      ? livePersonHit(people, {
-          name: lead_name,
-          event_date,
-          category: classified.import_category,
-        })
-      : null;
+    const live = lead_name ? livePersonHit(people, { name: lead_name }) : null;
     if (live && !goldHit) {
       skipped.push({ skip: "live_person", source_url, name: lead_name, id: live.id });
       continue;
@@ -680,11 +658,7 @@ export async function seedRssDigest({
     for (const lead of allLeads) {
       if (!lead.lead_name) continue;
       if (
-        livePersonHit(people, {
-          name: lead.lead_name,
-          event_date: lead.event_date,
-          category: lead.category,
-        })
+        livePersonHit(people, { name: lead.lead_name })
       ) {
         continue;
       }

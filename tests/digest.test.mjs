@@ -265,7 +265,7 @@ test("digest parks official leads, skips blogs/Q/wiki, and does not overwrite go
   assert.equal(await countPeople(), 72);
 });
 
-test("URL dedup and live name/date/category skip", async () => {
+test("URL dedup and live identity skip (slug or normalized name)", async () => {
   const items = parseRssItems(fixtureXml("ap-current.xml"));
   const people = [
     {
@@ -282,11 +282,12 @@ test("URL dedup and live name/date/category skip", async () => {
   });
   assert.ok(mapped.skipped.some((s) => s.skip === "live_person" && s.name === "Casey Vale"));
   assert.ok(!mapped.leads.some((l) => l.lead_name === "Casey Vale"));
+  assert.equal(livePersonHit(people, { name: "Casey Vale" })?.id, "casey-vale");
   assert.equal(
     livePersonHit(people, {
       name: "Casey Vale",
-      event_date: "2024-06-15",
-      category: "arrests",
+      event_date: "1999-01-01",
+      category: "firings",
     })?.id,
     "casey-vale",
   );

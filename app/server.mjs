@@ -17,6 +17,7 @@ import {
   ensureSchema,
   getPool,
   importSeed,
+  migrateUniquePeople,
   countDogComms,
   countPeople,
   countSourcePosts,
@@ -568,8 +569,9 @@ async function boot() {
     const pool = await getPool();
     await ensureSchema(pool, bootstrapSql);
     const imported = await importSeed(pool, seed);
+    const migrated = await migrateUniquePeople();
     console.log(
-      `[exittrace] postgres people=${imported.people} dog_comms=${imported.dog_comms}`,
+      `[exittrace] postgres people=${imported.people} dog_comms=${imported.dog_comms} unique=${migrated.people}`,
     );
   } else {
     const mem = hydrateFileMemory(dataDir, seed);

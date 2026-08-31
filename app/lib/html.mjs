@@ -5,6 +5,7 @@ import {
   initials,
   isDeathCategory,
 } from "./categories.mjs";
+import { personEvents } from "./promote.mjs";
 import { pageHref, pageWindow } from "./paginate.mjs";
 import { listThumbHref, LIST_THUMB_CSS_H, LIST_THUMB_CSS_W } from "./thumb.mjs";
 import {
@@ -138,7 +139,7 @@ export function keymapFooter(activePath) {
       })
       .join("")}
     ${themeSwitcher(DEFAULT_THEME)}
-    <p class="fineprint">Neutral record. Two published news citations on every person row. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -463,16 +464,55 @@ export function homeBody({ version }) {
     <p class="home-tag">Sourced public-role exits and official government dog-comms since 2017. A seed set, not a census.</p>`;
 }
 
-export function personDetail(row) {
-  const cat = categoryById(row.category);
-  const kind = cat ? cat.title : row.category;
-  const death = isDeathCategory(row.category)
-    ? `<p class="meta-line">Death date · <time datetime="${esc(row.death_date || "")}">${esc(formatDate(row.death_date))}</time></p>`
+function eventKindTitle(kind) {
+  const cat = categoryById(kind);
+  return cat ? cat.title : kind || "Event";
+}
+
+function personEventBlocks(row) {
+  const events = personEvents(row);
+  if (!events.length) {
+    const cat = categoryById(row.category);
+    const kind = cat ? cat.title : row.category;
+    const death = isDeathCategory(row.category)
+      ? `<p class="meta-line">Death date · <time datetime="${esc(row.death_date || "")}">${esc(formatDate(row.death_date))}</time></p>`
+      : "";
+    return {
+      meta: `<p class="meta-line"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role || "—")} · ${esc(kind)}</p>${death}`,
+      sourcesHtml: sourceList(row.sources || []),
+      sourceCount: (row.sources || []).length,
+    };
+  }
+  const meta = events
+    .map((ev) => {
+      const label = eventKindTitle(ev.kind);
+      const death = isDeathCategory(ev.kind)
+        ? ` · death date`
+        : "";
+      return `<p class="meta-line event-line"><time datetime="${esc(ev.event_date || "")}">${esc(formatDate(ev.event_date))}</time> · ${esc(label)}${death}</p>`;
+    })
+    .join("");
+  const role = row.role
+    ? `<p class="meta-line">Role · ${esc(row.role)}</p>`
     : "";
+  const sourcesHtml = events
+    .map((ev) => {
+      const label = eventKindTitle(ev.kind);
+      return `<section class="event-cites">
+        <h4 class="event-h">${esc(label)} · <time datetime="${esc(ev.event_date || "")}">${esc(formatDate(ev.event_date))}</time></h4>
+        ${sourceList(ev.sources || [])}
+      </section>`;
+    })
+    .join("");
+  const sourceCount = events.reduce((n, ev) => n + (ev.sources || []).length, 0);
+  return { meta: `${role}${meta}`, sourcesHtml, sourceCount };
+}
+
+export function personDetail(row) {
   const photo = row.photo
     ? `<img class="detail-photo" src="${esc(row.photo)}" alt="${esc(row.name)}" width="120" height="150" decoding="async">`
     : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name) || "—")}</span>`;
-  const sources = row.sources || [];
+  const { meta, sourcesHtml, sourceCount } = personEventBlocks(row);
   return `<article class="detail">
     ${boxFrame(
       "Metadata",
@@ -481,8 +521,7 @@ export function personDetail(row) {
       <div class="detail-copy">
         <h2 class="detail-title">${esc(row.name || "—")}</h2>
         <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
-        <p class="meta-line"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role || "—")} · ${esc(kind)}</p>
-        ${death}
+        ${meta}
         <hr class="hr">
         <h3 class="pane-h">Synopsis</h3>
         <p class="synopsis">${esc(row.summary || "—")}</p>
@@ -491,8 +530,8 @@ export function personDetail(row) {
       { extraClass: "meta-box" },
     )}
     ${boxFrame(
-      `● Sources · ${sources.length} available · 1/${sources.length || 0}`,
-      sourceList(sources),
+      `● Sources · ${sourceCount} available · 1/${sourceCount || 0}`,
+      sourcesHtml,
       { active: true, extraClass: "sources-pane" },
     )}
   </article>`;
@@ -658,7 +697,7 @@ const ADD_CATEGORIES = [
 ];
 
 export function addCiteRule() {
-  return `<p class="cite-rule">Person rows need two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. This form does not invent cites or copy a post date into the event date. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. A host process looks up published sources and applies the row.</p>`;
+  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. If the person already exists, the new kind is attached — a second row is not created. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. A host process looks up published sources and applies the row.</p>`;
 }
 
 export function addBody({
