@@ -84,7 +84,7 @@ test("after insert, list + detail HTML show the row; /deaths and health do not c
   assert.doesNotMatch(health.body, /Casey Vale/);
 });
 
-test("death promote displays on officials, not the /deaths index", async () => {
+test("death promote displays on officials and the /deaths union", async () => {
   const seed = goldSeed();
   setMemory(seed);
   await importSourcePostsText(
@@ -104,7 +104,9 @@ test("death promote displays on officials, not the /deaths index", async () => {
   const list = await fetchCatalogHtml("/deaths/officials");
   assert.match(list.body, /Casey Vale/);
   const index = await fetchCatalogHtml("/deaths");
-  assert.doesNotMatch(index.body, /href="\/people\/casey-vale"/);
+  assert.match(index.body, /href="\/people\/casey-vale"/);
+  const celebs = await fetchCatalogHtml("/deaths/celebrities");
+  assert.doesNotMatch(celebs.body, /href="\/people\/casey-vale"/);
   assert.equal(getMemory().people.some((r) => r.id === "casey-vale"), true);
 });
 

@@ -180,7 +180,7 @@ test("list paths skip the /indictments index", () => {
   assert.equal(categoryById("indictment_civilian").path, "/indictments/civilians");
 });
 
-test("parked source posts rematch onto indictment KEEP kinds; catalog stays closed", async () => {
+test("parked source posts rematch onto indictment KEEP kinds; parent lists the union", async () => {
   setMemory(goldSeed());
   await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
   const created = await promoteSourcePost({
@@ -206,8 +206,11 @@ test("parked source posts rematch onto indictment KEEP kinds; catalog stays clos
   assert.match(list.body, /class="tui-row person-card/);
   assert.match(list.body, / · Civilians · /);
   const index = await requestPage("/indictments");
-  assert.doesNotMatch(index.body, /href="\/people\/casey-vale"/);
+  assert.match(index.body, /href="\/people\/casey-vale"/);
+  assert.match(index.body, /Casey Vale/);
   assert.match(index.body, /href="\/indictments\/civilians"/);
+  const other = await requestPage("/indictments/non-civilians");
+  assert.doesNotMatch(other.body, /href="\/people\/casey-vale"/);
 });
 
 test("per-kind dedup: arrest + indictment when events differ; never two of the same indictment kind", async () => {

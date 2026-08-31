@@ -355,7 +355,21 @@ export async function importSeed(p, seed) {
   return { people: seed.people.length, dog_comms: seed.dog_comms.length };
 }
 
+function asCategories(category) {
+  if (!category) return [];
+  return (Array.isArray(category) ? category : [category])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+}
+
 function parseListArgs(categoryOrOpts, maybeOpts) {
+  if (Array.isArray(categoryOrOpts)) {
+    return {
+      category: categoryOrOpts,
+      limit: maybeOpts?.limit,
+      offset: maybeOpts?.offset ?? 0,
+    };
+  }
   if (categoryOrOpts && typeof categoryOrOpts === "object") {
     return {
       category: categoryOrOpts.category || undefined,
@@ -401,23 +415,34 @@ function applyWindow(rows, limit, offset) {
   return offset ? rows.slice(offset) : rows;
 }
 
+function peopleCategoryWhere(categories, params) {
+  if (!categories.length) return "";
+  if (categories.length === 1) {
+    params.push(categories[0]);
+    return ` WHERE category = $${params.length}`;
+  }
+  const placeholders = categories.map((id) => {
+    params.push(id);
+    return `$${params.length}`;
+  });
+  return ` WHERE category IN (${placeholders.join(", ")})`;
+}
+
 export async function listPeople(categoryOrOpts, maybeOpts) {
   const args = parseListArgs(categoryOrOpts, maybeOpts);
   const limit = finiteInt(args.limit, null);
   const offset = finiteInt(args.offset, 0);
-  const category = args.category;
+  const categories = asCategories(args.category);
   const p = await getPool();
   if (!p) {
     let rows = getMemory().people;
-    if (category) rows = rows.filter((r) => r.category === category);
+    if (categories.length) {
+      rows = rows.filter((r) => categories.includes(r.category));
+    }
     return applyWindow(rows.slice().sort(comparePeople), limit, offset);
   }
   const params = [];
-  let sql = "SELECT * FROM people";
-  if (category) {
-    params.push(category);
-    sql += ` WHERE category = $${params.length}`;
-  }
+  let sql = `SELECT * FROM people${peopleCategoryWhere(categories, params)}`;
   sql += " ORDER BY event_date DESC, name ASC";
   if (limit != null) {
     params.push(limit);
@@ -459,16 +484,23 @@ export async function listDogComms(opts = {}) {
 }
 
 export async function countPeople(category) {
+  const categories = asCategories(category);
   const p = await getPool();
   if (!p) {
     const rows = getMemory().people;
-    return category ? rows.filter((r) => r.category === category).length : rows.length;
+    return categories.length
+      ? rows.filter((r) => categories.includes(r.category)).length
+      : rows.length;
   }
-  const q = category
-    ? await p.query("SELECT COUNT(*)::int AS n FROM people WHERE category = $1", [
-        category,
-      ])
-    : await p.query("SELECT COUNT(*)::int AS n FROM people");
+  if (!categories.length) {
+    const q = await p.query("SELECT COUNT(*)::int AS n FROM people");
+    return q.rows[0].n;
+  }
+  const params = [];
+  const q = await p.query(
+    `SELECT COUNT(*)::int AS n FROM people${peopleCategoryWhere(categories, params)}`,
+    params,
+  );
   return q.rows[0].n;
 }
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import {
   CATEGORIES,
   PERSON_CATEGORIES,
+  catalogListKinds,
   categoryByPath,
   isDeathCategory,
 } from "./lib/categories.mjs";
@@ -447,14 +448,15 @@ async function handle(req, res) {
 
   const cat = categoryByPath(p);
   if (cat && cat.kind === "person") {
-    const total = await countPeople(cat.id);
+    const kinds = catalogListKinds(cat.id);
+    const total = await countPeople(kinds);
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
       pageSize: PAGE_SIZE,
     });
     const rows = await listPeople({
-      category: cat.id,
+      category: kinds,
       limit: meta.limit,
       offset: meta.offset,
     });

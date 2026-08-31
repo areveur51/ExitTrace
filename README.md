@@ -98,10 +98,10 @@ Releases:
 | `/resignations` | Announced resignations (identified people) |
 | `/government` | Officials leaving a government post (identified people) |
 | `/arrests` | Public-role arrests (identified people) |
-| `/indictments` | Index of identified indictment lists (civilians / non-civilians) |
+| `/indictments` | All identified indictments (civilians and non-civilians) |
 | `/indictments/civilians` | Indictments of private persons |
 | `/indictments/non-civilians` | Indictments of government, appointed, military, or law-enforcement persons |
-| `/deaths` | Index of identified death lists (celebrities / officials / CEOs) |
+| `/deaths` | All identified deaths (celebrities, officials, and CEOs) |
 | `/deaths/celebrities` | Deaths of public figures in arts, sport, and entertainment |
 | `/deaths/officials` | Deaths of officials and heads of state |
 | `/deaths/ceos` | Deaths of chief executives and controlling founders |

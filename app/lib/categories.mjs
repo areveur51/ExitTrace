@@ -53,7 +53,7 @@ export const CATEGORIES = [
     title: "Indictments",
     nav: "Indictments",
     path: "/indictments",
-    blurb: "Index of identified indictment lists — civilians and non-civilians.",
+    blurb: "Indictments of civilians and non-civilians recorded by contemporaneous news reports.",
   },
   {
     id: "death_celebrity",
@@ -85,7 +85,7 @@ export const CATEGORIES = [
     title: "Deaths",
     nav: "Deaths",
     path: "/deaths",
-    blurb: "Index of identified death lists — celebrities, officials, and CEOs.",
+    blurb: "Deaths of celebrities, officials, and CEOs recorded by contemporaneous news reports.",
   },
   {
     id: "unsorted",
@@ -127,6 +127,13 @@ export const PROMOTE_CATEGORY_IDS = [
   "arrests",
   "indictment_civilian",
   "indictment_non_civilian",
+];
+
+/** KEEP kinds classify may write for identified death rows. */
+export const DEATH_KEEP_IDS = [
+  "death_celebrity",
+  "death_official",
+  "death_ceo",
 ];
 
 /** KEEP kinds classify may write for identified indictment rows. */
@@ -184,6 +191,14 @@ export function isIndictmentCategory(id) {
 export function isIndexCategory(id) {
   const key = String(id);
   return key === "death_unspecified" || key === "indictment_unspecified";
+}
+
+/** Person kinds a catalog path lists. Parents are the KEEP union; children are one kind. */
+export function catalogListKinds(id) {
+  const key = String(id);
+  if (key === "death_unspecified") return DEATH_KEEP_IDS.slice();
+  if (key === "indictment_unspecified") return INDICTMENT_KEEP_IDS.slice();
+  return [key];
 }
 
 export function formatUsd(n) {

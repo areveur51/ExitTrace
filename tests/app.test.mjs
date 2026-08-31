@@ -285,6 +285,7 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.match(deaths.body, /href="\/deaths\/celebrities"/);
   assert.match(deaths.body, /href="\/deaths\/officials"/);
   assert.match(deaths.body, /href="\/deaths\/ceos"/);
+  assert.match(deaths.body, /person-card/);
   const indictments = await get("/indictments");
   assert.equal(indictments.status, 200);
   assert.match(indictments.body, /href="\/indictments\/civilians"/);
@@ -402,6 +403,17 @@ test("death lists and people search show one death date without a died suffix", 
     assert.equal(res.status, 200, p);
     assert.doesNotMatch(res.body, /died /, p);
   }
+
+  const allDeaths = newestFirst(
+    seed.people.filter((r) =>
+      ["death_celebrity", "death_official", "death_ceo"].includes(r.category),
+    ),
+    "event_date",
+  );
+  const parentDeaths = await get("/deaths");
+  assert.match(parentDeaths.body, /person-card/);
+  assert.match(parentDeaths.body, new RegExp(allDeaths[0].name));
+  assert.match(parentDeaths.body, new RegExp(`${allDeaths.length} available`));
 
   const celebs = await get("/deaths/celebrities");
   assert.match(celebs.body, new RegExp(`datetime="${celeb.death_date}"`));

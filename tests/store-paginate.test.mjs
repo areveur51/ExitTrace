@@ -132,6 +132,31 @@ test("countPeople can filter by category without loading every row's page", asyn
   });
   assert.equal(await countPeople("firings"), 17);
   assert.equal(await countPeople("resignations"), 4);
+  assert.equal(await countPeople(["firings", "resignations"]), 21);
   assert.equal(await countPeople(), 21);
   assert.equal(await countDogComms(), 1);
+});
+
+test("listPeople accepts a union of kinds without inventing rows", async () => {
+  setMemory({
+    people: [
+      person(3, "death_celebrity"),
+      person(1, "death_official"),
+      person(2, "death_ceo"),
+      person(4, "firings"),
+    ],
+    dog_comms: [],
+  });
+  const union = await listPeople({
+    category: ["death_celebrity", "death_official", "death_ceo"],
+  });
+  assert.equal(union.length, 3);
+  assert.deepEqual(
+    union.map((r) => r.category),
+    ["death_celebrity", "death_ceo", "death_official"],
+  );
+  assert.ok(union.every((r) => r.category !== "firings"));
+  const one = await listPeople("death_official");
+  assert.equal(one.length, 1);
+  assert.equal(one[0].category, "death_official");
 });
