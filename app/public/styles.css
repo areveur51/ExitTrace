@@ -185,12 +185,13 @@ body.tui {
   background-size: auto, auto, 22px 22px, 22px 22px;
   overflow-x: clip;
 }
+/* Scanlines, ticks, and vignette stay behind .tui-top / .hud-stage. */
 body.tui::before {
   content: "";
   pointer-events: none;
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 0;
   background:
     repeating-linear-gradient(
       to bottom,
@@ -210,7 +211,7 @@ body.tui::after {
   pointer-events: none;
   position: fixed;
   inset: 0;
-  z-index: 41;
+  z-index: 0;
   background:
     radial-gradient(ellipse at 50% 110%, rgba(0, 0, 0, 0.72), transparent 55%),
     radial-gradient(ellipse at 50% -10%, rgba(0, 0, 0, 0.55), transparent 50%);
@@ -232,6 +233,7 @@ a:hover { color: var(--ink); }
 
 .hud-stage {
   position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -251,7 +253,7 @@ a:hover { color: var(--ink); }
     transparent 2px 6px
   );
   opacity: 0.55;
-  z-index: 1;
+  z-index: 0;
 }
 .hud-stage::before { left: 0.35rem; }
 .hud-stage::after { right: 0.35rem; }
@@ -262,7 +264,8 @@ a:hover { color: var(--ink); }
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 0.5rem 1rem;
-  padding: 0.85rem 1rem 0.65rem;
+  /* Reserved bands: 8px tick strip above copy, 7–8px barcode below. */
+  padding: 1.3rem 1rem 0.95rem;
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-right: max(1rem, env(safe-area-inset-right));
   border-bottom: 1px solid var(--red);
@@ -273,11 +276,13 @@ a:hover { color: var(--ink); }
 }
 .tui-top::before {
   content: "";
+  pointer-events: none;
   position: absolute;
   left: 0.6rem;
   right: 0.6rem;
   top: 0.28rem;
   height: 8px;
+  z-index: 0;
   background: repeating-linear-gradient(
     90deg,
     var(--label) 0 1px,
@@ -289,11 +294,13 @@ a:hover { color: var(--ink); }
 }
 .tui-top::after {
   content: "";
+  pointer-events: none;
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   height: 7px;
+  z-index: 0;
   background: repeating-linear-gradient(
     90deg,
     #000 0 3px,
@@ -304,6 +311,12 @@ a:hover { color: var(--ink); }
     var(--red-dim) 12px 16px
   );
   box-shadow: var(--glow-red);
+}
+.tui-q,
+.tui-app,
+.tui-n {
+  position: relative;
+  z-index: 1;
 }
 .tui-q { color: var(--cyan); min-width: 0; font-family: var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
 .tui-app {
@@ -344,6 +357,8 @@ a:hover { color: var(--ink); }
 }
 
 .home-stage {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -398,6 +413,7 @@ a:hover { color: var(--ink); }
 
 .tui-main {
   position: relative;
+  z-index: 1;
   flex: 1;
   width: 100%;
   margin: 0 auto;
@@ -405,6 +421,10 @@ a:hover { color: var(--ink); }
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-right: max(1rem, env(safe-area-inset-right));
   min-width: 0;
+}
+.tui-main > * {
+  position: relative;
+  z-index: 1;
 }
 .tui-main::before,
 .tui-main::after {
@@ -414,7 +434,7 @@ a:hover { color: var(--ink); }
   width: 12px;
   height: 12px;
   border: 1px solid var(--label);
-  z-index: 2;
+  z-index: 0;
 }
 .tui-main::before { top: 0.35rem; right: 0.45rem; border-bottom: 0; border-left: 0; }
 .tui-main::after { bottom: 0.35rem; left: 0.45rem; border-top: 0; border-right: 0; }
@@ -439,6 +459,7 @@ a:hover { color: var(--ink); }
 
 .tui-row {
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -447,27 +468,37 @@ a:hover { color: var(--ink); }
   padding: 0.45rem 1.7rem 0.45rem 1rem;
   text-decoration: none;
   color: inherit;
+  /* Solid plate under name/date/thumb; --bin-fill only in the chevron gutter. */
   background-color: var(--panel);
-  background-image: var(--bin-fill), linear-gradient(90deg, var(--panel) 0%, var(--bg-2) 72%, var(--bg) 100%);
+  background-image:
+    linear-gradient(90deg, var(--panel) 0%, var(--bg-2) 72%, var(--bg) 100%),
+    var(--bin-fill);
+  background-size: calc(100% - 1.7rem) 100%, 100% 100%;
+  background-position: left top, 0 0;
+  background-repeat: no-repeat;
   border: 1px solid var(--brick);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
 }
 .tui-row::before {
   content: "";
+  pointer-events: none;
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
   width: 3px;
+  z-index: 0;
   background: transparent;
 }
 .tui-row::after {
   content: "";
+  pointer-events: none;
   position: absolute;
   right: 0.65rem;
   top: 50%;
   width: 0;
   height: 0;
+  z-index: 0;
   border-style: solid;
   border-width: 5px 0 5px 7px;
   border-color: transparent transparent transparent var(--cyan);
@@ -476,7 +507,10 @@ a:hover { color: var(--ink); }
 }
 .tui-row:focus-visible,
 .tui-row.is-selected {
-  background: var(--bg-sel);
+  background-color: var(--bg-sel);
+  background-image:
+    linear-gradient(var(--bg-sel), var(--bg-sel)),
+    var(--bin-fill);
   color: inherit;
   outline: none;
   border-color: var(--cyan);
@@ -491,13 +525,20 @@ a:hover { color: var(--ink); }
 .tui-row:focus-visible .tui-title { color: var(--ink); }
 @media (hover: hover) and (pointer: fine) {
   .tui-row:hover {
-    background: var(--bg-sel);
+    background-color: var(--bg-sel);
+    background-image:
+      linear-gradient(var(--bg-sel), var(--bg-sel)),
+      var(--bin-fill);
     color: inherit;
     border-color: var(--red-hot);
   }
   .tui-row:hover::before { background: var(--cyan); }
 }
-.tui-row-text { min-width: 0; }
+.tui-row-text {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
 .tui-title {
   font-family: var(--font-ui);
   font-weight: 700;
@@ -512,6 +553,8 @@ a:hover { color: var(--ink); }
 .thumb,
 .portrait,
 img.still.thumb {
+  position: relative;
+  z-index: 1;
   width: 40px;
   height: 52px;
   max-width: 40px;
@@ -611,13 +654,20 @@ img.still.thumb {
 }
 
 .keymap {
+  position: relative;
+  z-index: 1;
   border-top: 1px solid var(--red);
   padding: 0.45rem 0.75rem 0.85rem;
   padding-left: max(0.75rem, env(safe-area-inset-left));
   padding-right: max(0.75rem, env(safe-area-inset-right));
   padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
   background-color: var(--bg-2);
-  background-image: var(--bin-fill);
+  background-image:
+    linear-gradient(var(--bg-2), var(--bg-2)),
+    var(--bin-fill);
+  background-size: 100% calc(100% - 8px), 100% 100%;
+  background-position: left bottom, 0 0;
+  background-repeat: no-repeat;
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 0.35rem;
@@ -800,6 +850,7 @@ html[data-theme="stencil"] .pane-h {
 
 .box-pane {
   position: relative;
+  isolation: isolate;
   margin: 0 0 0.85rem;
   border: 1px solid var(--brick);
   background: var(--panel);
@@ -814,7 +865,7 @@ html[data-theme="stencil"] .pane-h {
   height: 11px;
   border: 1px solid var(--red-hot);
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
 }
 .box-pane::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
 .box-pane::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
@@ -849,11 +900,18 @@ html[data-theme="stencil"] .pane-h {
 .box-dash::before { content: none; }
 .box-side { line-height: 1.2; }
 .box-inner {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   padding: 0.45rem 0.55rem;
-  background-image: var(--bin-fill);
-  background-color: transparent;
+  background-color: var(--panel);
+  background-image:
+    linear-gradient(var(--panel), var(--panel)),
+    var(--bin-fill);
+  background-size: calc(100% - 1.1rem) 100%, 100% 100%;
+  background-position: center, 0 0;
+  background-repeat: no-repeat;
 }
 .hr {
   border: 0;
@@ -922,6 +980,8 @@ html[data-theme="stencil"] .pane-h {
   align-items: flex-start;
 }
 .detail-photo {
+  position: relative;
+  z-index: 1;
   width: 96px;
   height: 120px;
   object-fit: cover;
@@ -931,7 +991,12 @@ html[data-theme="stencil"] .pane-h {
   box-shadow: var(--glow-red);
 }
 .initials.detail-photo { width: 96px; height: 120px; font-size: 1.4rem; }
-.detail-copy { min-width: 0; flex: 1; }
+.detail-copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  flex: 1;
+}
 .detail-title {
   margin: 0 0 0.35rem;
   font-family: var(--font-ui);

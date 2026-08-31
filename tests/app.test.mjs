@@ -366,6 +366,43 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   assert.match(detail.body, /box-pane/);
 });
 
+test("HUD overlays stay behind text and images and keep pointer-events none", () => {
+  const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
+  function rule(selector) {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = css.match(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`));
+    assert.ok(match, `missing CSS rule ${selector}`);
+    return match[1];
+  }
+
+  const scan = rule("body.tui::before");
+  const vignette = rule("body.tui::after");
+  assert.match(scan, /pointer-events:\s*none/);
+  assert.match(vignette, /pointer-events:\s*none/);
+  assert.match(scan, /z-index:\s*0/);
+  assert.match(vignette, /z-index:\s*0/);
+  assert.doesNotMatch(scan, /z-index:\s*4\d/);
+  assert.doesNotMatch(vignette, /z-index:\s*4\d/);
+
+  const top = rule(".tui-top");
+  const stage = rule(".hud-stage");
+  const main = rule(".tui-main");
+  assert.match(top, /z-index:\s*2/);
+  assert.match(top, /padding:\s*1\.3rem/);
+  assert.match(stage, /z-index:\s*1/);
+  assert.match(main, /z-index:\s*1/);
+  assert.match(rule(".tui-top::before"), /pointer-events:\s*none/);
+  assert.match(rule(".tui-top::after"), /pointer-events:\s*none/);
+  assert.match(rule(".tui-q,\n.tui-app,\n.tui-n"), /z-index:\s*1/);
+
+  const row = rule(".tui-row");
+  assert.match(row, /isolation:\s*isolate/);
+  assert.match(row, /background-size:\s*calc\(100% - 1\.7rem\)/);
+  const inner = rule(".box-inner");
+  assert.match(inner, /background-color:\s*var\(--panel\)/);
+  assert.match(inner, /background-size:\s*calc\(100% - 1\.1rem\)/);
+});
+
 test("person detail keeps net worth and two sources without inventing figures", async () => {
   const row = seed.people.find((r) => r.id === "james-comey");
   const res = await get("/people/james-comey");
