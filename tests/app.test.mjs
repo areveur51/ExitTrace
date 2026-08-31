@@ -114,6 +114,9 @@ test("html pages render", async () => {
     "/resignations",
     "/government",
     "/arrests",
+    "/indictments",
+    "/indictments/civilians",
+    "/indictments/non-civilians",
     "/deaths",
     "/deaths/celebrities",
     "/deaths/officials",
@@ -214,6 +217,9 @@ test("every category list page ships a pager", async () => {
     "/resignations",
     "/government",
     "/arrests",
+    "/indictments",
+    "/indictments/civilians",
+    "/indictments/non-civilians",
     "/deaths",
     "/deaths/celebrities",
     "/deaths/officials",
@@ -259,6 +265,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /class="keychip"/);
   assert.match(res.body, /href="\/firings"/);
   assert.match(res.body, /href="\/arrests"/);
+  assert.match(res.body, /href="\/indictments"/);
   assert.match(res.body, /href="\/unsorted"/);
   assert.match(res.body, /data-key="u"/);
   assert.doesNotMatch(res.body, /widgets\.js/);
@@ -278,6 +285,11 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.match(deaths.body, /href="\/deaths\/celebrities"/);
   assert.match(deaths.body, /href="\/deaths\/officials"/);
   assert.match(deaths.body, /href="\/deaths\/ceos"/);
+  const indictments = await get("/indictments");
+  assert.equal(indictments.status, 200);
+  assert.match(indictments.body, /href="\/indictments\/civilians"/);
+  assert.match(indictments.body, /href="\/indictments\/non-civilians"/);
+  assert.doesNotMatch(indictments.body, /person-card/);
 });
 
 test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop layouts", async () => {

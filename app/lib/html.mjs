@@ -66,6 +66,7 @@ function keymapItems(activePath) {
     { key: "r", href: "/resignations", label: "Resignations" },
     { key: "g", href: "/government", label: "Gov" },
     { key: "a", href: "/arrests", label: "Arrests" },
+    { key: "i", href: "/indictments", label: "Indictments" },
     { key: "d", href: "/deaths", label: "Deaths" },
     { key: "u", href: "/unsorted", label: "Unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
@@ -73,9 +74,20 @@ function keymapItems(activePath) {
     { key: "s", href: "/search", label: "Search" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ];
-  if (String(activePath).startsWith("/deaths")) {
+  if (String(activePath).startsWith("/indictments")) {
+    const at = keys.findIndex((k) => k.href === "/indictments");
     keys.splice(
-      4,
+      at,
+      1,
+      { key: "i", href: "/indictments", label: "Indictments" },
+      { key: "1", href: "/indictments/civilians", label: "Civilians" },
+      { key: "2", href: "/indictments/non-civilians", label: "Non-civilians" },
+    );
+  }
+  if (String(activePath).startsWith("/deaths")) {
+    const at = keys.findIndex((k) => k.href === "/deaths");
+    keys.splice(
+      at,
       1,
       { key: "d", href: "/deaths", label: "Deaths" },
       { key: "1", href: "/deaths/celebrities", label: "Celebs" },
@@ -330,6 +342,13 @@ export function deathsIndexNav() {
     <a class="keychip" href="/deaths/celebrities">Celebrities</a>
     <a class="keychip" href="/deaths/officials">Officials</a>
     <a class="keychip" href="/deaths/ceos">CEOs</a>
+  </nav>`;
+}
+
+export function indictmentsIndexNav() {
+  return `<nav class="death-nav" aria-label="Sorted indictment lists">
+    <a class="keychip" href="/indictments/civilians">Civilians</a>
+    <a class="keychip" href="/indictments/non-civilians">Non-civilians</a>
   </nav>`;
 }
 
@@ -604,6 +623,8 @@ const ADD_CATEGORIES = [
   { id: "death_official", label: "Deaths — officials" },
   { id: "death_ceo", label: "Deaths — CEOs" },
   { id: "arrests", label: "Arrests" },
+  { id: "indictment_civilian", label: "Indictments — civilians" },
+  { id: "indictment_non_civilian", label: "Indictments — non-civilians" },
 ];
 
 export function addCiteRule() {

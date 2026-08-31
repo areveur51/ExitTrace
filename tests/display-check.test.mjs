@@ -34,12 +34,18 @@ test("list paths skip the /deaths index", () => {
   assert.equal(listPathForPerson("resignations"), "/resignations");
   assert.equal(listPathForPerson("government_stepdowns"), "/government");
   assert.equal(listPathForPerson("arrests"), "/arrests");
+  assert.equal(listPathForPerson("indictment_civilian"), "/indictments/civilians");
+  assert.equal(listPathForPerson("indictment_non_civilian"), "/indictments/non-civilians");
   assert.equal(listPathForPerson("death_celebrity"), "/deaths/celebrities");
   assert.equal(listPathForPerson("death_official"), "/deaths/officials");
   assert.equal(listPathForPerson("death_ceo"), "/deaths/ceos");
   assert.throws(
     () => listPathForPerson("death_unspecified"),
     (err) => err instanceof DisplayError && err.code === "deaths_index",
+  );
+  assert.throws(
+    () => listPathForPerson("indictment_unspecified"),
+    (err) => err instanceof DisplayError && err.code === "indictments_index",
   );
   assert.throws(() => listPathForPerson("dog_comms"), (err) => err instanceof DisplayError);
 });

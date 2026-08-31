@@ -62,6 +62,8 @@ After a person or dog is written, the host process is not done until live
 HTML shows the row on the list page and the detail page. Health counts
 are not enough. /deaths is an empty index — death rows list on
 /deaths/celebrities, /deaths/officials, or /deaths/ceos.
+/indictments is an empty index — indictment rows list on
+/indictments/civilians or /indictments/non-civilians.
 
 Idempotent. Writes Postgres when DATABASE_URL is set; otherwise the file store.
 Does not write data/seed.json.`);

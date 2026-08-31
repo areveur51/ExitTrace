@@ -296,6 +296,10 @@ test("reject missing subject, missing date, and fewer than two cites", async () 
     () => promoteSourcePost({ ...base, category: "death_unspecified" }),
     (err) => err instanceof PromoteError && err.code === "invalid_category",
   );
+  await assert.rejects(
+    () => promoteSourcePost({ ...base, category: "indictment_unspecified" }),
+    (err) => err instanceof PromoteError && err.code === "invalid_category",
+  );
 
   assert.equal(await countPeople(), 72);
   assert.doesNotMatch(JSON.stringify(getMemory().people), /Casey Vale/);
