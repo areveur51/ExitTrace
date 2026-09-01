@@ -323,9 +323,11 @@ async function handle(req, res) {
     });
   }
 
-  if (p === "/styles.css" || p === "/app.js") {
-    const filePath = path.join(PUBLIC, p.slice(1));
-    if (!fs.existsSync(filePath)) {
+  if (p === "/styles.css" || p === "/app.js" || p.startsWith("/media/themes/")) {
+    const filePath = p.startsWith("/media/themes/")
+      ? safeJoin(PUBLIC, p.slice(1))
+      : path.join(PUBLIC, p.slice(1));
+    if (!filePath || !fs.existsSync(filePath)) {
       send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
     }

@@ -148,6 +148,12 @@ test("CSS tokens cover five themes and keep cyberdeck as the default palette", (
   assert.match(css, /\.theme-btn\[data-theme-set="glass"\]/);
   assert.match(css, /\.theme-switch/);
   assert.match(css, /\.theme-btn/);
+  assert.match(css, /url\("\/media\/themes\/glass-bg\.webp"\)/);
+  assert.doesNotMatch(css, /pinterest|pinimg|i\.pinimg/i);
+  assert.ok(
+    fs.existsSync(path.join(ROOT, "app", "public", "media", "themes", "glass-bg.webp")),
+    "glass theme still is vendored locally",
+  );
   assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);
   assert.doesNotMatch(css, LARP);
 });
