@@ -348,7 +348,9 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   assert.match(css, /--ink:\s*#3fe0e8/i);
   assert.match(css, /--label:\s*#f2f0ec/i);
   assert.match(css, /--bin-fill:/);
-  assert.match(css, /font-size:\s*7px/);
+  assert.match(css, /--hud-year:\s*0\.95rem/);
+  assert.match(css, /--hud-label:\s*0\.8rem/);
+  assert.match(css, /\.tui-group-h[\s\S]*font-size:\s*var\(--hud-year\)/);
   assert.match(css, /clip-path:\s*polygon/);
   assert.match(css, /phone ~390/);
   assert.match(css, /iPad ~768/);

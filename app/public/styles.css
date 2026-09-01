@@ -39,6 +39,8 @@ html[data-theme="cyberdeck"] {
   );
   --font: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --font-ui: "Arial Narrow", "Helvetica Neue Condensed", "Nimbus Sans Narrow", ui-sans-serif, system-ui, sans-serif;
+  --hud-label: 0.8rem;
+  --hud-year: 0.95rem;
   color: var(--ink);
   background: var(--bg);
   font-family: var(--font);
@@ -505,7 +507,7 @@ a:hover { color: var(--ink); }
 .identity-filters-label,
 .person-tags-label {
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: var(--hud-label);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--muted);
@@ -523,9 +525,9 @@ a:hover { color: var(--ink); }
 .tui-group-h {
   margin: 0.7rem 0 0.25rem;
   font-family: var(--font-ui);
-  font-size: 7px;
+  font-size: var(--hud-year);
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--brick);
 }
@@ -655,8 +657,8 @@ img.still.thumb {
   margin: 0 0 0.45rem;
   color: var(--brick);
   font-family: var(--font-ui);
-  font-size: 7px;
-  letter-spacing: 0.16em;
+  font-size: var(--hud-label);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 .pager-controls {
@@ -715,9 +717,9 @@ img.still.thumb {
 .age-filter-label {
   flex: 1 1 100%;
   font-family: var(--font-ui);
-  font-size: 7px;
+  font-size: var(--hud-label);
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--brick);
 }
@@ -831,9 +833,9 @@ img.still.thumb {
 .theme-switch-label {
   flex: 1 1 100%;
   font-family: var(--font-ui);
-  font-size: 7px;
+  font-size: var(--hud-label);
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--brick);
 }
@@ -1013,9 +1015,9 @@ html[data-theme="stencil"] .pane-h {
   overflow: hidden;
   text-overflow: ellipsis;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   font-family: var(--font-ui);
-  font-size: 7px;
+  font-size: var(--hud-label);
 }
 .box-pane.is-active .box-title { color: var(--red-hot); }
 .toast-box .box-title { color: var(--cyan); }
