@@ -11,6 +11,7 @@ import {
   topN,
   weekKey,
 } from "../app/lib/dashboard.mjs";
+import { eventFromLead } from "../app/lib/event-attrs.mjs";
 import { breadcrumbItems } from "../app/lib/html.mjs";
 import { handle } from "../app/server.mjs";
 import {
@@ -58,7 +59,7 @@ function requestPage(pathname) {
   });
 }
 
-test("dashboard dimensions stay ExitTrace kinds and existing role, not invented labels", () => {
+test("dashboard dimensions stay ExitTrace kinds and event columns, not invented labels", () => {
   assert.deepEqual(
     DASH_DIMENSIONS.map((d) => d.id),
     ["organization", "country", "reason", "branch", "position"],
@@ -82,12 +83,12 @@ test("dashboard dimensions stay ExitTrace kinds and existing role, not invented 
   const org = model.dimensions.find((d) => d.id === "organization");
   const country = model.dimensions.find((d) => d.id === "country");
   const branch = model.dimensions.find((d) => d.id === "branch");
+  const position = model.dimensions.find((d) => d.id === "position");
   assert.equal(org.ranked.length, 0);
   assert.equal(country.ranked.length, 0);
   assert.equal(branch.ranked.length, 0);
-  const position = model.dimensions.find((d) => d.id === "position");
-  assert.ok(position.ranked.some((r) => r.label === "Prime Minister of the United Kingdom"));
-  assert.ok(position.ranked.every((r) => r.count >= 1));
+  assert.equal(position.ranked.length, 0);
+  assert.equal(DASH_DIMENSIONS.find((d) => d.id === "position").field, "position");
 });
 
 test("empty org and country stay empty — role text is not guessed", () => {
@@ -104,10 +105,7 @@ test("empty org and country stay empty — role text is not guessed", () => {
   assert.equal(rankDimension([row], "organization").length, 0);
   assert.equal(rankDimension([row], "country").length, 0);
   assert.equal(rankDimension([row], "branch").length, 0);
-  const positions = rankDimension([row], "position");
-  assert.equal(positions.length, 1);
-  assert.equal(positions[0].label, "Prime Minister of the United Kingdom");
-  assert.equal(positions[0].count, 1);
+  assert.equal(rankDimension([row], "position").length, 0);
 });
 
 test("unique-person corona tag raises reason count without a second card", async () => {
@@ -118,9 +116,11 @@ test("unique-person corona tag raises reason count without a second card", async
     event_date: "2024-06-15",
     category: "arrests",
     cite_urls: CITES,
+    position: "Anchor, CNN",
     organization: "Example Desk",
     country: "USA",
     branch: "News",
+    comments: "lead note",
   });
   assert.equal(created.action, "created");
   const tagged = await applyIdentifiedPerson({
@@ -140,6 +140,12 @@ test("unique-person corona tag raises reason count without a second card", async
   const reason = model.dimensions.find((d) => d.id === "reason");
   assert.ok(reason.ranked.some((r) => r.key === "arrests" && r.count === 1));
   assert.ok(reason.ranked.some((r) => r.key === "corona_comms" && r.count === 1));
+  const vale = people.find((r) => r.id === "casey-vale");
+  assert.equal(vale.organization, undefined);
+  const arrest = vale.events.find((ev) => ev.kind === "arrests");
+  assert.equal(arrest.organization, "Example Desk");
+  assert.equal(arrest.position, "Anchor, CNN");
+  assert.equal(arrest.comments, "lead note");
   const org = rankDimension(people, "organization");
   assert.deepEqual(org, [
     { key: "Example Desk", label: "Example Desk", href: "/dashboard/organization", count: 1 },
@@ -148,7 +154,11 @@ test("unique-person corona tag raises reason count without a second card", async
   assert.equal(country[0].label, "USA");
   const branch = rankDimension(people, "branch");
   assert.equal(branch[0].label, "News");
+  const position = rankDimension(people, "position");
+  assert.equal(position[0].label, "Anchor, CNN");
+  assert.equal(position[0].count, 1);
   assert.ok(model.trends.events > before.trends.events);
+  assert.equal(eventFromLead({ last_day: "2024-06-15", reason: "Fired", Organization: "Example Desk" }).organization, "Example Desk");
 });
 
 test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", async () => {

@@ -6,6 +6,7 @@ import {
   attachPersonEvent,
   buildPersonRow,
   citeRecords,
+  incomingPersonEvent,
   collapseDuplicatePeople,
   findGoldMatch,
   mergeCites,
@@ -72,9 +73,6 @@ function normalizePerson(row) {
     category: row.category,
     name: row.name,
     role: row.role || "",
-    organization: String(row.organization || "").trim(),
-    country: String(row.country || "").trim(),
-    branch: String(row.branch || "").trim(),
     event_date: asDate(row.event_date),
     death_date: asDate(row.death_date),
     birth_date: asDate(row.birth_date),
@@ -299,10 +297,9 @@ export async function importSeed(p, seed) {
       await client.query(
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
-           net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags,
-           organization, country, branch
+           net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb,$17,$18,$19
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -319,10 +316,7 @@ export async function importSeed(p, seed) {
            sources = EXCLUDED.sources,
            summary = EXCLUDED.summary,
            events = EXCLUDED.events,
-           tags = EXCLUDED.tags,
-           organization = COALESCE(NULLIF(EXCLUDED.organization, ''), people.organization),
-           country = COALESCE(NULLIF(EXCLUDED.country, ''), people.country),
-           branch = COALESCE(NULLIF(EXCLUDED.branch, ''), people.branch)`,
+           tags = EXCLUDED.tags`,
         personValues(row),
       );
       await syncPersonEvents(client, row);
@@ -814,9 +808,6 @@ function personValues(row) {
     person.summary,
     JSON.stringify(person.events || []),
     JSON.stringify(person.tags || []),
-    person.organization || "",
-    person.country || "",
-    person.branch || "",
   ];
 }
 
@@ -825,12 +816,32 @@ async function syncPersonEvents(client, row) {
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
   for (const ev of person.events) {
     await client.query(
-      `INSERT INTO person_events (person_id, kind, event_date, sources)
-       VALUES ($1, $2, $3, $4::jsonb)
+      `INSERT INTO person_events (
+         person_id, kind, event_date, sources, announced_date,
+         position, organization, country, branch, comments
+       )
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (person_id, kind) DO UPDATE SET
          event_date = person_events.event_date,
-         sources = EXCLUDED.sources`,
-      [person.id, ev.kind, ev.event_date, JSON.stringify(ev.sources || [])],
+         sources = EXCLUDED.sources,
+         announced_date = COALESCE(person_events.announced_date, EXCLUDED.announced_date),
+         position = COALESCE(NULLIF(person_events.position, ''), EXCLUDED.position),
+         organization = COALESCE(NULLIF(person_events.organization, ''), EXCLUDED.organization),
+         country = COALESCE(NULLIF(person_events.country, ''), EXCLUDED.country),
+         branch = COALESCE(NULLIF(person_events.branch, ''), EXCLUDED.branch),
+         comments = COALESCE(NULLIF(person_events.comments, ''), EXCLUDED.comments)`,
+      [
+        person.id,
+        ev.kind,
+        ev.event_date,
+        JSON.stringify(ev.sources || []),
+        ev.announced_date || null,
+        ev.position || null,
+        ev.organization || null,
+        ev.country || null,
+        ev.branch || null,
+        ev.comments || null,
+      ],
     );
   }
 }
@@ -849,10 +860,9 @@ export async function insertPerson(row) {
   await p.query(
     `INSERT INTO people (
        id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
-       net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags,
-       organization, country, branch
+       net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb,$17,$18,$19
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb
      )`,
     personValues(person),
   );
@@ -882,7 +892,7 @@ export async function savePerson(row) {
        category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
        birth_date = $7, photo = $8, photo_credit = $9, net_worth_usd = $10, net_worth_note = $11,
        net_worth_source = $12, sources = $13::jsonb, summary = $14, events = $15::jsonb,
-       tags = $16::jsonb, organization = $17, country = $18, branch = $19
+       tags = $16::jsonb
      WHERE id = $1`,
     personValues(person),
   );
@@ -1029,11 +1039,10 @@ export async function applyIdentifiedPerson(input) {
   };
   if (existing) {
     const kind = resolveEventKind(existing, parsed.category);
-    const attached = attachPersonEvent(existing, {
-      kind,
-      event_date: parsed.event_date,
-      sources: incoming,
-    });
+    const attached = attachPersonEvent(
+      existing,
+      incomingPersonEvent({ ...parsed, category: kind }, incoming),
+    );
     let person = await savePerson(attached.person);
     person = await attachPersonPortrait(person, extras);
     person = await attachPersonNetWorth(person, extras);

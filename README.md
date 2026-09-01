@@ -2,6 +2,8 @@
 
 Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, arrests, corona comms, indictments, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Unidentified public source posts live on Unsorted. Not exhaustive.
 
+[resignation.info](https://www.resignation.info/) is a lead source for historical resignations, firings, deaths, and dashboard attributes. It is not a cite. ExitTrace still requires two or more official news or government citations before a person event is inserted.
+
 **Repo:** [https://github.com/areveur51/ExitTrace](https://github.com/areveur51/ExitTrace)
 
 ## Quick start
@@ -121,11 +123,11 @@ Releases:
 | `/dashboard/country` | Ranked countries (empty unless country is stored) |
 | `/dashboard/reason` | Ranked KEEP tags (firings, resignations, deaths, corona comms, …) |
 | `/dashboard/branch` | Ranked branches (empty unless branch is stored) |
-| `/dashboard/position` | Ranked roles from the existing role field |
+| `/dashboard/position` | Ranked event positions (empty unless position is stored on the event) |
 | `/add` | Queue a person name or official government dog-comm |
 | `/downloads` | How the GitHub Release zip is named |
 
-Each person is one card. The same person can carry more than one KEEP tag (firings, resignations, government step-downs, arrests, corona comms, indictments, deaths). Each tagged event has its own calendar date and two official news sources. A stored Wikimedia or official `.gov` photo or initials and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank sit on the person. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
+Each person is one card. The same person can carry more than one KEEP tag (firings, resignations, government step-downs, arrests, corona comms, indictments, deaths). Each tagged event has its own calendar date (`event_date` is Last Day when present, otherwise Announced) and two official news sources. Optional event fields — position, organization, country, branch, comments — stay empty unless supplied. The dashboard reads those same event columns. A stored Wikimedia or official `.gov` photo or initials and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank sit on the person. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
 
 Identified people use the same list card on every people page: a small local portrait thumb, name, and one date · category · net worth (or em dash). Source posts that still render as posted (em dash title, poster handle) live only on Unsorted. Person and unsorted lists paginate (`?page=`, 17 rows per page by default, selector 17 / 34 / 51 persisted in localStorage, newest event first). Dog-comm lists stay at 10 rows. Death list pages can filter by age at death when `birth_date` is present; a missing birth date is not guessed. The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person, source post, or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
 

@@ -237,9 +237,17 @@ export function officialCiteUrls(raw) {
 }
 
 export function validateProcessPersonInput(input = {}) {
-  if (!String(input.event_date || "").trim() && String(input.posted_at || "").trim()) {
+  const hasCalendar = [
+    input.event_date,
+    input.last_day,
+    input.announced,
+    input.announced_date,
+    input["Last Day"],
+    input.Announced,
+  ].some((v) => String(v || "").trim());
+  if (!hasCalendar && String(input.posted_at || "").trim()) {
     throw new AddError(
-      "event_date is required as YYYY-MM-DD (calendar date, not posted_at)",
+      "event_date is required as YYYY-MM-DD (Last Day or Announced; not posted_at)",
       "missing_event_date",
     );
   }
@@ -363,9 +371,16 @@ export function mergeProcessOverlay(request, overlay = {}) {
     still_credit: String(overlay.still_credit || request.still_credit || "").trim(),
     summary: String(overlay.summary || request.summary || "").trim(),
     role: String(overlay.role || request.role || "").trim(),
+    last_day: String(overlay.last_day || request.last_day || "").trim(),
+    announced: String(overlay.announced || request.announced || "").trim(),
+    announced_date: String(overlay.announced_date || request.announced_date || "").trim(),
+    reason: String(overlay.reason || request.reason || "").trim(),
+    position: String(overlay.position || request.position || "").trim(),
     organization: String(overlay.organization || request.organization || "").trim(),
     country: String(overlay.country || request.country || "").trim(),
     branch: String(overlay.branch || request.branch || "").trim(),
+    comments: String(overlay.comments || request.comments || "").trim(),
+    tags: overlay.tags || request.tags,
     photo: String(overlay.photo || request.photo || "").trim(),
     photo_credit: String(overlay.photo_credit || request.photo_credit || "").trim(),
     net_worth_usd:
@@ -447,17 +462,13 @@ async function applyQueuedPerson(merged) {
     result = await promoteSourcePost({
       id: sourcePost.id,
       source_url: sourcePost.source_url,
-      subject: parsed.subject,
-      event_date: parsed.event_date,
-      category: parsed.category,
+      ...parsed,
+      last_day: merged.last_day,
+      announced: merged.announced,
+      reason: merged.reason,
+      tags: merged.tags,
       cite_urls,
-      summary: parsed.summary,
-      role: parsed.role,
-      organization: parsed.organization,
-      country: parsed.country,
-      branch: parsed.branch,
-      photo: parsed.photo,
-      photo_credit: parsed.photo_credit,
+      extra_urls,
       net_worth_usd: merged.net_worth_usd,
       net_worth_source: merged.net_worth_source,
       net_worth_note: merged.net_worth_note,
@@ -465,17 +476,13 @@ async function applyQueuedPerson(merged) {
     });
   } else {
     result = await applyIdentifiedPerson({
-      subject: parsed.subject,
-      event_date: parsed.event_date,
-      category: parsed.category,
+      ...parsed,
+      last_day: merged.last_day,
+      announced: merged.announced,
+      reason: merged.reason,
+      tags: merged.tags,
       cite_urls,
-      summary: parsed.summary,
-      role: parsed.role,
-      organization: parsed.organization,
-      country: parsed.country,
-      branch: parsed.branch,
-      photo: parsed.photo,
-      photo_credit: parsed.photo_credit,
+      extra_urls,
       net_worth_usd: merged.net_worth_usd,
       net_worth_source: merged.net_worth_source,
       net_worth_note: merged.net_worth_note,

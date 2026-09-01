@@ -31,10 +31,6 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'::
 ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
 -- Identity tags (civilian, non_civilian, celebrity, official, ceo). Multi-tag.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
--- Optional dashboard attrs. Empty stays empty; never guessed from role.
-ALTER TABLE people ADD COLUMN IF NOT EXISTS organization TEXT;
-ALTER TABLE people ADD COLUMN IF NOT EXISTS country TEXT;
-ALTER TABLE people ADD COLUMN IF NOT EXISTS branch TEXT;
 
 CREATE TABLE IF NOT EXISTS person_events (
   person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
@@ -43,6 +39,14 @@ CREATE TABLE IF NOT EXISTS person_events (
   sources JSONB NOT NULL DEFAULT '[]'::jsonb,
   PRIMARY KEY (person_id, kind)
 );
+
+-- Harvest / dashboard attrs live on the event. Empty stays empty.
+ALTER TABLE person_events ADD COLUMN IF NOT EXISTS announced_date DATE;
+ALTER TABLE person_events ADD COLUMN IF NOT EXISTS position TEXT;
+ALTER TABLE person_events ADD COLUMN IF NOT EXISTS organization TEXT;
+ALTER TABLE person_events ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE person_events ADD COLUMN IF NOT EXISTS branch TEXT;
+ALTER TABLE person_events ADD COLUMN IF NOT EXISTS comments TEXT;
 
 CREATE INDEX IF NOT EXISTS person_events_kind_idx ON person_events (kind);
 CREATE INDEX IF NOT EXISTS person_events_event_date_idx ON person_events (event_date DESC);

@@ -439,7 +439,7 @@ async function handle(req, res) {
           query: dim.nav,
           pageSize,
           countLabel: countText(dim.nav, meta, windowed.length),
-          lede: "Live unique-person counts. Empty buckets stay empty. Country and organization are not guessed.",
+          lede: "Live unique-person counts from event columns. Empty buckets stay empty. Country, organization, and branch are not guessed.",
           body: listSection(
             dashboardRankBody(dim, windowed),
             pager(meta, { basePath: dim.path, noun: "rows", pageSizes: PAGE_SIZES }),
@@ -462,7 +462,7 @@ async function handle(req, res) {
         heading: "Dashboard",
         query: "dashboard",
         countLabel: `${model.people} people · ${model.trends.events} events`,
-        lede: "Live unique-person ranks and calendar event-date trends. One card per person. Reason maps to KEEP tags. Empty org, country, and branch buckets stay empty.",
+        lede: "Live unique-person ranks from the same event columns harvest writes. One card per person. Reason is the KEEP kind. Empty org, country, branch, and position stay empty.",
         body: dashboardBody(model),
       }),
     );

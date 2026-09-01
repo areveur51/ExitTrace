@@ -1,6 +1,7 @@
-/** Live unique-person dashboard ranks and event-date trends. Fail-closed. */
+/** Live unique-person dashboard ranks from the shared event columns. */
 
 import { categoryById, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
+import { EVENT_ATTR_FIELDS } from "./event-attrs.mjs";
 import { personEvents } from "./promote.mjs";
 
 export const DASH_TOP_N = 5;
@@ -43,9 +44,11 @@ export const DASH_DIMENSIONS = [
     nav: "Position",
     path: "/dashboard/position",
     source: "field",
-    field: "role",
+    field: "position",
   },
 ];
+
+const EVENT_FIELD_SET = new Set(EVENT_ATTR_FIELDS);
 
 const DIM_BY_ID = new Map(DASH_DIMENSIONS.map((d) => [d.id, d]));
 const DIM_BY_PATH = new Map(DASH_DIMENSIONS.map((d) => [d.path, d]));
@@ -82,32 +85,33 @@ function compareRank(a, b) {
   return String(a.label).localeCompare(String(b.label));
 }
 
-/** Unique people per bucket. Empty/missing attrs are skipped — never guessed. */
+/** Unique people per bucket. Empty/missing event attrs are skipped — never guessed. */
 export function rankDimension(people, dimId) {
   const dim = dashDimensionById(dimId);
   if (!dim) return [];
   const counts = new Map();
   const meta = new Map();
   for (const row of people || []) {
-    if (dim.source === "kind") {
-      const seen = new Set();
-      for (const ev of personEvents(row)) {
+    const seen = new Set();
+    for (const ev of personEvents(row)) {
+      if (dim.source === "kind") {
         const kind = String(ev.kind || "").trim();
         if (!kind || seen.has(kind)) continue;
         if (!PROMOTE_CATEGORY_IDS.includes(kind)) continue;
         seen.add(kind);
-        const cur = counts.get(kind) || 0;
-        counts.set(kind, cur + 1);
+        counts.set(kind, (counts.get(kind) || 0) + 1);
         if (!meta.has(kind)) {
           meta.set(kind, { label: reasonLabel(kind), href: reasonHref(kind) });
         }
+        continue;
       }
-      continue;
+      if (!EVENT_FIELD_SET.has(dim.field)) continue;
+      const label = explicitAttr(ev, dim.field);
+      if (!label || seen.has(label)) continue;
+      seen.add(label);
+      counts.set(label, (counts.get(label) || 0) + 1);
+      if (!meta.has(label)) meta.set(label, { label, href: dim.path });
     }
-    const label = explicitAttr(row, dim.field);
-    if (!label) continue;
-    counts.set(label, (counts.get(label) || 0) + 1);
-    if (!meta.has(label)) meta.set(label, { label, href: dim.path });
   }
   return [...counts.entries()]
     .map(([key, count]) => ({

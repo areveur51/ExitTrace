@@ -680,7 +680,20 @@ function personEventBlocks(row) {
       const death = isDeathCategory(ev.kind)
         ? ` · death date`
         : "";
-      return `<p class="meta-line event-line"><time datetime="${esc(ev.event_date || "")}">${esc(formatDate(ev.event_date))}</time> · ${esc(label)}${death}</p>`;
+      const announced = ev.announced_date
+        ? ` · announced <time datetime="${esc(ev.announced_date)}">${esc(formatDate(ev.announced_date))}</time>`
+        : "";
+      const bits = [
+        ev.position && `Position · ${ev.position}`,
+        ev.organization && `Organization · ${ev.organization}`,
+        ev.country && `Country · ${ev.country}`,
+        ev.branch && `Branch · ${ev.branch}`,
+      ].filter(Boolean);
+      const attrs = bits.length ? ` · ${esc(bits.join(" · "))}` : "";
+      const comments = ev.comments
+        ? `<p class="meta-line">Comments · ${esc(ev.comments)}</p>`
+        : "";
+      return `<p class="meta-line event-line"><time datetime="${esc(ev.event_date || "")}">${esc(formatDate(ev.event_date))}</time> · ${esc(label)}${death}${announced}${attrs}</p>${comments}`;
     })
     .join("");
   const role = row.role

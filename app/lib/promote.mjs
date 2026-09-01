@@ -3,6 +3,13 @@ import {
   isDeathCategory,
   isIndictmentKeepKind,
 } from "./categories.mjs";
+import {
+  eventFromLead,
+  mapLeadReason,
+  mergeEventAttrs,
+  normalizeEventAttrs,
+  resolveEventCalendar,
+} from "./event-attrs.mjs";
 import { personTags } from "./tags.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -119,10 +126,12 @@ export function normalizePersonEvent(raw, fallback = {}) {
     : Array.isArray(fallback.sources)
       ? fallback.sources
       : [];
+  const attrs = mergeEventAttrs(fallback, raw);
   return {
     kind,
     event_date,
     sources,
+    ...attrs,
   };
 }
 
@@ -140,6 +149,7 @@ function uniqueEvents(events) {
       kind: prior.kind,
       event_date: prior.event_date,
       sources: mergeCites(prior.sources, ev.sources).sources,
+      ...mergeEventAttrs(prior, ev),
     });
   }
   return [...byKind.values()].sort((a, b) => {
@@ -265,6 +275,7 @@ export function attachPersonEvent(person, incoming) {
       kind: events[i].kind,
       event_date: events[i].event_date,
       sources: merged.sources,
+      ...mergeEventAttrs(events[i], ev),
     };
     return {
       person: projectPerson({ ...person, events: next }),
@@ -356,6 +367,7 @@ export function mergePersonAnnotate(gold, prior) {
       kind: ev.kind,
       event_date: ev.event_date,
       sources: (ev.sources || []).slice(),
+      ...mergeEventAttrs(ev, {}),
     });
   }
   for (const ev of extra.events) {
@@ -365,10 +377,12 @@ export function mergePersonAnnotate(gold, prior) {
         kind: ev.kind,
         event_date: ev.event_date,
         sources: (ev.sources || []).slice(),
+        ...mergeEventAttrs(ev, {}),
       });
       continue;
     }
     existing.sources = mergeCites(existing.sources, ev.sources).sources;
+    Object.assign(existing, mergeEventAttrs(existing, ev));
   }
   return projectPerson({
     ...keep,
@@ -378,9 +392,6 @@ export function mergePersonAnnotate(gold, prior) {
     net_worth_note: keep.net_worth_note || extra.net_worth_note || "",
     net_worth_source: keep.net_worth_source || extra.net_worth_source || "",
     role: keep.role || extra.role || "",
-    organization: keep.organization || extra.organization || "",
-    country: keep.country || extra.country || "",
-    branch: keep.branch || extra.branch || "",
     summary: keep.summary || extra.summary || "",
     birth_date: keep.birth_date || extra.birth_date || null,
     events: [...eventsByKind.values()],
@@ -429,14 +440,23 @@ export function validateIdentifiedPersonInput(input = {}) {
       "missing_subject",
     );
   }
-  const event_date = parseEventDate(input.event_date);
+  const calendar = resolveEventCalendar(input);
+  const event_date = calendar.event_date;
   if (!event_date) {
     throw new PromoteError(
-      "event_date is required as YYYY-MM-DD (calendar date, not posted_at)",
+      "event_date is required as YYYY-MM-DD (Last Day or Announced; not posted_at)",
       "missing_event_date",
     );
   }
-  const category = String(input.category || "").trim();
+  const attrs = normalizeEventAttrs(input);
+  let category = String(input.category || "").trim();
+  if (!category) {
+    category =
+      mapLeadReason(input.reason, {
+        role: input.role || attrs.position,
+        tags: input.tags,
+      }) || "";
+  }
   if (!category) {
     throw new PromoteError("category is required", "missing_category");
   }
@@ -466,10 +486,9 @@ export function validateIdentifiedPersonInput(input = {}) {
     extra_urls: extra,
     slug,
     summary: String(input.summary || "").trim(),
-    role: String(input.role || "").trim(),
-    organization: String(input.organization || "").trim(),
-    country: String(input.country || "").trim(),
-    branch: String(input.branch || "").trim(),
+    role: String(input.role || attrs.position || "").trim(),
+    announced_date: calendar.announced_date,
+    ...attrs,
     photo: String(input.photo || "").trim(),
     photo_credit: String(input.photo_credit || "").trim(),
     net_worth_usd: input.net_worth_usd,
@@ -497,22 +516,25 @@ export function validatePromoteInput(input = {}) {
   return { ...person, id, source_url };
 }
 
+export function incomingPersonEvent(input, sources) {
+  const lead = eventFromLead(input, { kind: input.category, tags: input.tags });
+  const attrs = normalizeEventAttrs(input);
+  return {
+    kind: input.category,
+    event_date: input.event_date,
+    announced_date: input.announced_date || lead?.announced_date || "",
+    sources: sources || [],
+    ...attrs,
+  };
+}
+
 export function buildPersonRow(input, people) {
-  const events = [
-    {
-      kind: input.category,
-      event_date: input.event_date,
-      sources: citeRecords(input.cite_urls, input.event_date),
-    },
-  ];
+  const events = [incomingPersonEvent(input, citeRecords(input.cite_urls, input.event_date))];
   return projectPerson({
     id: nextPersonId(people, input.slug, input.event_date),
     category: input.category,
     name: input.subject,
     role: input.role,
-    organization: input.organization || "",
-    country: input.country || "",
-    branch: input.branch || "",
     event_date: input.event_date,
     death_date: isDeathCategory(input.category) ? input.event_date : null,
     photo: input.photo,
