@@ -32,6 +32,14 @@ export const CATEGORIES = [
     blurb: "Public-role arrests recorded by contemporaneous news reports.",
   },
   {
+    id: "corona_comms",
+    kind: "person",
+    title: "Corona Comms",
+    nav: "Corona Comms",
+    path: "/corona-comms",
+    blurb: "Identified people who carry the corona comms tag. Parent lists every tagged person; there is no child split.",
+  },
+  {
     id: "indictment_civilian",
     kind: "person",
     title: "Indictments — civilians",
@@ -125,6 +133,7 @@ export const PROMOTE_CATEGORY_IDS = [
   "death_official",
   "death_ceo",
   "arrests",
+  "corona_comms",
   "indictment_civilian",
   "indictment_non_civilian",
 ];

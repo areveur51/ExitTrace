@@ -1,6 +1,8 @@
 # ExitTrace
 
-Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, arrests, indictments, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Unidentified public source posts live on Unsorted. Not exhaustive.
+Sourced tracker of public-role exits since 2017 — firings, resignations, government step-downs, arrests, corona comms, indictments, and deaths of celebrities, officials, and CEOs — plus official government posts about dogs (or that include a dog in the image). Neutral record. Two published news citations on every person row. Unidentified public source posts live on Unsorted. Not exhaustive.
+
+[resignation.info](https://www.resignation.info/) is a lead source for historical resignations, firings, deaths, and dashboard attributes. It is not a cite. ExitTrace still requires two or more official news or government citations before a person event is inserted.
 
 **Repo:** [https://github.com/areveur51/ExitTrace](https://github.com/areveur51/ExitTrace)
 
@@ -80,7 +82,7 @@ node scripts/process-add-request.mjs --next \
 
 Fail-closed: people need a named subject, a calendar `event_date` (not `posted_at`), and two or more verified official news or official government / news-org social URLs. Cites are not invented. Unofficial or commentary social is extra only — it is not a cite. Portraits are attached only from an eligible Wikimedia or official-gov still already present (or supplied as that URL); they are not invented, and gold photos are not overwritten. Net worth is filled only from a published Forbes or Bloomberg estimate; it is not invented, and gold net-worth is not overwritten. If none, USD is null and the note says no published Forbes/Bloomberg estimate was located. Dog comms need an official government handle or official post URL, plus date; unofficial or commentary social is rejected. Gold rows stay annotate-only. The committed seed stays 72 people (live may already be 73). Does not write `data/seed.json`.
 
-The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. After insert or promote, the host is not done until live HTML shows the row on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. `/indictments` is an empty index; indictment rows list on `/indictments/civilians` or `/indictments/non-civilians`. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
+The process hook is host-side: two turns in a scratch directory, one envelope of flags into `add-process`. After insert or promote, the host is not done until live HTML shows the row on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. `/indictments` is an empty index; indictment rows list on `/indictments/civilians` or `/indictments/non-civilians`. `/corona-comms` lists every person with that tag and has no child split. The Unsorted classify walk (`import-posts` / `promote`) stays a separate path.
 
 ## Data pack
 
@@ -106,6 +108,7 @@ Releases:
 | `/resignations` | Announced resignations (identified people) |
 | `/government` | Officials filter — people tagged official (any event) |
 | `/arrests` | Public-role arrests (identified people) |
+| `/corona-comms` | People tagged corona comms (identified people) |
 | `/indictments` | All identified indictments; identity filters apply |
 | `/indictments/civilians` | Indictments filtered to people tagged civilian |
 | `/indictments/non-civilians` | Indictments filtered to people tagged non-civilian |
@@ -115,10 +118,16 @@ Releases:
 | `/deaths/ceos` | Deaths filtered to people tagged CEO |
 | `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
+| `/dashboard` | Live unique-person ranks and event-date trends |
+| `/dashboard/organization` | Ranked organizations (empty unless organization is stored) |
+| `/dashboard/country` | Ranked countries (empty unless country is stored) |
+| `/dashboard/reason` | Ranked KEEP tags (firings, resignations, deaths, corona comms, …) |
+| `/dashboard/branch` | Ranked branches (empty unless branch is stored) |
+| `/dashboard/position` | Ranked event positions (empty unless position is stored on the event) |
 | `/add` | Queue a person name or official government dog-comm |
 | `/downloads` | How the GitHub Release zip is named |
 
-Each person is one card. The same person can carry more than one KEEP tag (firings, resignations, government step-downs, arrests, indictments, deaths). Each tagged event has its own calendar date and two official news sources. A stored Wikimedia or official `.gov` photo or initials and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank sit on the person. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
+Each person is one card. The same person can carry more than one KEEP tag (firings, resignations, government step-downs, arrests, corona comms, indictments, deaths). Each tagged event has its own calendar date (`event_date` is Last Day when present, otherwise Announced) and two official news sources. Optional event fields — position, organization, country, branch, comments — stay empty unless supplied. The dashboard reads those same event columns. A stored Wikimedia or official `.gov` photo or initials and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank sit on the person. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
 
 Identified people use the same list card on every people page: a small local portrait thumb, name, and one date · category · net worth (or em dash). Source posts that still render as posted (em dash title, poster handle) live only on Unsorted. Person and unsorted lists paginate (`?page=`, 17 rows per page by default, selector 17 / 34 / 51 persisted in localStorage, newest event first). Dog-comm lists stay at 10 rows. Death list pages can filter by age at death when `birth_date` is present; a missing birth date is not guessed. The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person, source post, or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
 
@@ -134,6 +143,8 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /people/:id` | One person row |
 | `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm snapshot |
+| `GET /dashboard` | Unique-person ranks and event-date trends |
+| `GET /dashboard/:dimension` | Full ranked list (organization, country, reason, branch, position) |
 | `GET /add` | Queue a person or official dog-comm |
 | `POST /add` | Store a pending add request |
 | `GET /api/people?category=` | Seeded person rows |

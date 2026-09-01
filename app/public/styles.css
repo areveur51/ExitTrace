@@ -1245,6 +1245,97 @@ pre {
   }
 }
 
+.dash-hud { position: relative; z-index: 1; }
+.dash-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.4rem;
+  margin: 0 0 1rem;
+}
+.dash-stat {
+  margin: 0;
+  min-width: 7rem;
+}
+.dash-stat-label {
+  display: block;
+  color: var(--muted);
+  font-size: var(--hud-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.dash-count {
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+  text-shadow: var(--glow-cyan);
+}
+.dash-grid,
+.dash-trends {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  margin: 0 0 1rem;
+}
+.dash-block { min-width: 0; }
+.dash-box .box-inner { overflow-x: auto; }
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.dash-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 0.25rem 0.4rem;
+}
+.dash-table td { padding: 0.3rem 0.4rem; border-top: 1px solid color-mix(in srgb, var(--rule) 45%, transparent); }
+.dash-rank { color: var(--red); width: 2.2rem; }
+.dash-n { text-align: right; width: 4.5rem; }
+.dash-link,
+.dash-label { color: var(--ink); }
+.dash-more { margin: 0.65rem 0 0; }
+.dash-chart {
+  position: relative;
+  z-index: 1;
+}
+.dash-svg { display: block; width: 100%; height: auto; max-width: 28rem; }
+.dash-line {
+  stroke: var(--cyan);
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  fill: none;
+  stroke-dasharray: 900;
+  stroke-dashoffset: 900;
+  animation: dash-draw 1.15s ease forwards;
+}
+.dash-bar {
+  fill: color-mix(in srgb, var(--red) 72%, transparent);
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: dash-bar-in 0.7s ease both;
+}
+.dash-chart-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+@keyframes dash-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes dash-bar-in {
+  from { transform: scaleY(0.08); opacity: 0.2; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-line,
+  .dash-bar,
+  .dash-count { animation: none; }
+  .dash-line { stroke-dashoffset: 0; }
+}
+
 /*
   Breakpoints (HUD layouts) — tested in CSS, not a native app:
   - phone ~390px (max-width: 720px): stacked cards like the pin; footer nav; no hover-only actions.
@@ -1401,6 +1492,8 @@ pre {
   }
   .pixel-wordmark { width: min(48rem, 70vw); }
   .tui-search { width: min(36rem, 70vw); }
+  .dash-grid { grid-template-columns: 1fr 1fr; }
+  .dash-trends { grid-template-columns: 1fr 1fr 1fr; }
   .detail {
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);

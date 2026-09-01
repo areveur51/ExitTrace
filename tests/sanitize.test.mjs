@@ -27,6 +27,7 @@ const PATTERNS = [
   "syno" + "logy",
   "true" + "NAS",
   "true" + "nas",
+  "left" + "over",
   "wire" + "guard",
   "Wire" + "Guard",
 ];

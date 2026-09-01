@@ -130,6 +130,7 @@ test("main event pages expose identity and age filters", async () => {
     "/firings",
     "/resignations",
     "/arrests",
+    "/corona-comms",
     "/indictments",
     "/deaths",
     "/government",

@@ -94,6 +94,9 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
   const resignations = await requestPage("/resignations");
   const government = await requestPage("/government");
   const arrests = await requestPage("/arrests");
+  const corona = await requestPage("/corona-comms");
+  const dashReason = await requestPage("/dashboard/reason");
+  const dash = await requestPage("/dashboard");
   const indictments = await requestPage("/indictments");
   const deaths = await requestPage("/deaths");
   const celebs = await requestPage("/deaths/celebrities");
@@ -108,6 +111,8 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
     resignations,
     government,
     arrests,
+    corona,
+    dashReason,
     indictments,
     deaths,
     celebs,
@@ -119,7 +124,7 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
     assert.match(res.body, /data-page-size-set="34"/);
     assert.match(res.body, /data-page-size-set="51"/);
   }
-  for (const res of [dogs, home, add, detail]) {
+  for (const res of [dogs, home, add, detail, dash]) {
     assert.doesNotMatch(res.body, /data-page-size=/);
     assert.doesNotMatch(res.body, /data-page-size-set=/);
     assert.doesNotMatch(res.body, /class="page-size"/);

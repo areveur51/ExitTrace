@@ -84,6 +84,7 @@ test("indictment IA matches deaths: parent index, two KEEP child lists", () => {
   ]);
   assert.ok(PROMOTE_CATEGORY_IDS.includes("indictment_civilian"));
   assert.ok(PROMOTE_CATEGORY_IDS.includes("indictment_non_civilian"));
+  assert.ok(PROMOTE_CATEGORY_IDS.includes("corona_comms"));
   assert.ok(!PROMOTE_CATEGORY_IDS.includes("indictment_unspecified"));
   assert.ok(!IMPORT_CATEGORY_IDS.includes("indictment_civilian"));
   assert.ok(!IMPORT_CATEGORY_IDS.includes("indictment_non_civilian"));

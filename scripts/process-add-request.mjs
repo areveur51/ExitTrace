@@ -104,6 +104,14 @@ function parseArgs(argv) {
     else if (arg === "--still-credit") out.still_credit = take();
     else if (arg === "--summary") out.summary = take();
     else if (arg === "--role") out.role = take();
+    else if (arg === "--last-day") out.last_day = take();
+    else if (arg === "--announced") out.announced = take();
+    else if (arg === "--reason") out.reason = take();
+    else if (arg === "--position") out.position = take();
+    else if (arg === "--organization") out.organization = take();
+    else if (arg === "--country") out.country = take();
+    else if (arg === "--branch") out.branch = take();
+    else if (arg === "--comments") out.comments = take();
     else if (arg === "--photo") out.photo = take();
     else if (arg === "--photo-credit") out.photo_credit = take();
     else if (arg === "--net-worth" || arg === "--net-worth-usd") out.net_worth_usd = take();

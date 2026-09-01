@@ -116,6 +116,10 @@ test("html pages render", async () => {
     "/resignations",
     "/government",
     "/arrests",
+    "/corona-comms",
+    "/dashboard",
+    "/dashboard/reason",
+    "/dashboard/organization",
     "/indictments",
     "/indictments/civilians",
     "/indictments/non-civilians",
@@ -225,6 +229,8 @@ test("every category list page ships a pager", async () => {
     "/resignations",
     "/government",
     "/arrests",
+    "/corona-comms",
+    "/dashboard/reason",
     "/indictments",
     "/indictments/civilians",
     "/indictments/non-civilians",
@@ -275,6 +281,8 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /class="keychip"/);
   assert.match(res.body, /href="\/firings"/);
   assert.match(res.body, /href="\/arrests"/);
+  assert.match(res.body, /href="\/corona-comms"/);
+  assert.match(res.body, /href="\/dashboard"/);
   assert.match(res.body, /href="\/indictments"/);
   assert.match(res.body, /href="\/unsorted"/);
   assert.match(res.body, /data-key="u"/);
@@ -301,6 +309,15 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.match(indictments.body, /href="\/indictments\/civilians"/);
   assert.match(indictments.body, /href="\/indictments\/non-civilians"/);
   assert.doesNotMatch(indictments.body, /person-card/);
+  const corona = await get("/corona-comms");
+  assert.equal(corona.status, 200);
+  assert.match(corona.body, /Corona Comms/);
+  assert.match(corona.body, /href="\/corona-comms"/);
+  assert.match(corona.body, /data-key="o"/);
+  assert.match(corona.body, /aria-current="page">Corona Comms/);
+  assert.doesNotMatch(corona.body, /person-card/);
+  assert.doesNotMatch(corona.body, /href="\/corona-comms\/civilians"/);
+  assert.doesNotMatch(corona.body, /source-card/);
 });
 
 test("list pages expose four themes and keep catalog copy, not pin LARP", async () => {
@@ -321,6 +338,8 @@ test("list pages expose four themes and keep catalog copy, not pin LARP", async 
   assert.match(list.body, /href="\/government"/);
   assert.match(list.body, /href="\/deaths"/);
   assert.match(list.body, /href="\/arrests"/);
+  assert.match(list.body, /href="\/corona-comms"/);
+  assert.match(list.body, /href="\/dashboard"/);
   assert.match(list.body, /href="\/indictments"/);
   assert.match(list.body, /href="\/unsorted"/);
   assert.match(list.body, /href="\/add"/);

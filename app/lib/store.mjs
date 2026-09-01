@@ -6,6 +6,7 @@ import {
   attachPersonEvent,
   buildPersonRow,
   citeRecords,
+  incomingPersonEvent,
   collapseDuplicatePeople,
   findGoldMatch,
   mergeCites,
@@ -815,12 +816,32 @@ async function syncPersonEvents(client, row) {
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
   for (const ev of person.events) {
     await client.query(
-      `INSERT INTO person_events (person_id, kind, event_date, sources)
-       VALUES ($1, $2, $3, $4::jsonb)
+      `INSERT INTO person_events (
+         person_id, kind, event_date, sources, announced_date,
+         position, organization, country, branch, comments
+       )
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (person_id, kind) DO UPDATE SET
          event_date = person_events.event_date,
-         sources = EXCLUDED.sources`,
-      [person.id, ev.kind, ev.event_date, JSON.stringify(ev.sources || [])],
+         sources = EXCLUDED.sources,
+         announced_date = COALESCE(person_events.announced_date, EXCLUDED.announced_date),
+         position = COALESCE(NULLIF(person_events.position, ''), EXCLUDED.position),
+         organization = COALESCE(NULLIF(person_events.organization, ''), EXCLUDED.organization),
+         country = COALESCE(NULLIF(person_events.country, ''), EXCLUDED.country),
+         branch = COALESCE(NULLIF(person_events.branch, ''), EXCLUDED.branch),
+         comments = COALESCE(NULLIF(person_events.comments, ''), EXCLUDED.comments)`,
+      [
+        person.id,
+        ev.kind,
+        ev.event_date,
+        JSON.stringify(ev.sources || []),
+        ev.announced_date || null,
+        ev.position || null,
+        ev.organization || null,
+        ev.country || null,
+        ev.branch || null,
+        ev.comments || null,
+      ],
     );
   }
 }
@@ -1018,11 +1039,10 @@ export async function applyIdentifiedPerson(input) {
   };
   if (existing) {
     const kind = resolveEventKind(existing, parsed.category);
-    const attached = attachPersonEvent(existing, {
-      kind,
-      event_date: parsed.event_date,
-      sources: incoming,
-    });
+    const attached = attachPersonEvent(
+      existing,
+      incomingPersonEvent({ ...parsed, category: kind }, incoming),
+    );
     let person = await savePerson(attached.person);
     person = await attachPersonPortrait(person, extras);
     person = await attachPersonNetWorth(person, extras);
