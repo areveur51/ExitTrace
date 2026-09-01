@@ -94,6 +94,7 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
   const resignations = await requestPage("/resignations");
   const government = await requestPage("/government");
   const arrests = await requestPage("/arrests");
+  const corona = await requestPage("/corona-comms");
   const indictments = await requestPage("/indictments");
   const deaths = await requestPage("/deaths");
   const celebs = await requestPage("/deaths/celebrities");
@@ -108,6 +109,7 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
     resignations,
     government,
     arrests,
+    corona,
     indictments,
     deaths,
     celebs,

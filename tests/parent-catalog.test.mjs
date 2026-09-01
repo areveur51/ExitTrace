@@ -72,8 +72,11 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
   assert.deepEqual(catalogListKinds("death_ceo"), ["death_ceo"]);
   assert.deepEqual(catalogListKinds("indictment_civilian"), ["indictment_civilian"]);
   assert.deepEqual(catalogListKinds("indictment_non_civilian"), ["indictment_non_civilian"]);
+  assert.deepEqual(catalogListKinds("corona_comms"), ["corona_comms"]);
   assert.equal(categoryByPath("/deaths").id, "death_unspecified");
   assert.equal(categoryByPath("/indictments").id, "indictment_unspecified");
+  assert.equal(categoryByPath("/corona-comms").id, "corona_comms");
+  assert.equal(categoryByPath("/corona-comms/civilians"), undefined);
   assert.deepEqual(DEATH_KEEP_IDS, ["death_celebrity", "death_official", "death_ceo"]);
   assert.deepEqual(INDICTMENT_KEEP_IDS, [
     "indictment_civilian",
@@ -112,6 +115,7 @@ test("unspecified classify and display-check paths stay fail-closed", () => {
   );
   assert.equal(listPathForPerson("death_celebrity"), "/deaths/celebrities");
   assert.equal(listPathForPerson("indictment_civilian"), "/indictments/civilians");
+  assert.equal(listPathForPerson("corona_comms"), "/corona-comms");
 });
 
 test("GET /deaths lists every death kind; child routes filter", async () => {

@@ -89,6 +89,7 @@ function keymapItems(activePath) {
     { key: "r", href: "/resignations", label: "Resignations" },
     { key: "g", href: "/government", label: "Officials" },
     { key: "a", href: "/arrests", label: "Arrests" },
+    { key: "o", href: "/corona-comms", label: "Corona Comms" },
     { key: "i", href: "/indictments", label: "Indictments" },
     { key: "d", href: "/deaths", label: "Deaths" },
     { key: "u", href: "/unsorted", label: "Unsorted" },
@@ -891,6 +892,7 @@ const ADD_CATEGORIES = [
   { id: "death_official", label: "Deaths — officials" },
   { id: "death_ceo", label: "Deaths — CEOs" },
   { id: "arrests", label: "Arrests" },
+  { id: "corona_comms", label: "Corona Comms" },
   { id: "indictment_civilian", label: "Indictments — civilians" },
   { id: "indictment_non_civilian", label: "Indictments — non-civilians" },
 ];

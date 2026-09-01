@@ -110,6 +110,8 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   assert.match(person.body, /name="category"/);
   assert.match(person.body, /value="arrests"/);
   assert.match(person.body, />Arrests</);
+  assert.match(person.body, /value="corona_comms"/);
+  assert.match(person.body, />Corona Comms</);
   assert.match(person.body, /value="indictment_civilian"/);
   assert.match(person.body, /value="indictment_non_civilian"/);
   assert.match(person.body, /name="event_date"/);

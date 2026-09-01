@@ -360,6 +360,87 @@ test("do not double-tag the same indictment as civilian and non-civilian", async
   assert.ok(indictments[0].sources.some((s) => s.url === MORE[0]));
 });
 
+test("corona_comms skip-as-dup: tag lands on the existing card, never a second card", async () => {
+  setMemory(goldSeed());
+  const created = await applyIdentifiedPerson({
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    category: "arrests",
+    cite_urls: CITES,
+  });
+  assert.equal(created.action, "created");
+  assert.equal(await countPeople(), 73);
+
+  const tagged = await applyIdentifiedPerson({
+    subject: "Casey Vale",
+    event_date: "2024-07-20",
+    category: "corona_comms",
+    cite_urls: MORE,
+  });
+  assert.equal(tagged.action, "annotated");
+  assert.equal(tagged.added_event, true);
+  assert.equal(tagged.person.id, "casey-vale");
+  assert.equal(await countPeople(), 73);
+
+  const again = await applyIdentifiedPerson({
+    subject: "Casey Vale",
+    event_date: "2024-08-01",
+    category: "corona_comms",
+    cite_urls: [
+      "https://www.example.com/news/casey-vale-corona-extra",
+      "https://www.example.net/world/casey-vale-corona-note",
+    ],
+  });
+  assert.equal(again.action, "annotated");
+  assert.equal(again.added_event, false);
+  assert.equal(await countPeople(), 73);
+
+  const person = await getPerson("casey-vale");
+  assert.equal(person.events.filter((ev) => ev.kind === "corona_comms").length, 1);
+  const corona = person.events.find((ev) => ev.kind === "corona_comms");
+  assert.equal(corona.event_date, "2024-07-20");
+  assert.ok(corona.sources.length >= 2);
+  assert.ok(person.events.some((ev) => ev.kind === "arrests" && ev.event_date === "2024-06-15"));
+  assert.equal((await listPeople()).filter((r) => /casey vale/i.test(r.name)).length, 1);
+  assert.equal((await listPeople("corona_comms")).filter((r) => r.id === "casey-vale").length, 1);
+  assert.equal((await listPeople("arrests")).filter((r) => r.id === "casey-vale").length, 1);
+
+  const list = await requestPage("/corona-comms");
+  assert.equal(list.status, 200);
+  assert.match(list.body, /href="\/people\/casey-vale"/);
+  assert.match(list.body, /Casey Vale/);
+  assert.match(list.body, / · Corona Comms · /);
+  assert.equal((list.body.match(/href="\/people\/casey-vale"/g) || []).length, 1);
+  assert.doesNotMatch(list.body, /source-card/);
+  assert.match(list.body, /aria-label="Breadcrumb"/);
+  assert.match(list.body, /aria-current="page">Corona Comms/);
+  assert.match(list.body, /data-page-size="17"/);
+  assert.match(list.body, /data-page-size-set="17"/);
+  assert.match(list.body, /data-page-size-set="34"/);
+  assert.match(list.body, /data-page-size-set="51"/);
+  assert.doesNotMatch(list.body, /href="\/corona-comms\//);
+  assert.doesNotMatch(list.body, /href="\/corona-comms\/civilians"/);
+
+  const detail = await requestPage("/people/casey-vale");
+  assert.equal(detail.status, 200);
+  assert.match(detail.body, /Arrests/);
+  assert.match(detail.body, /Corona Comms/);
+  assert.match(detail.body, /datetime="2024-06-15"/);
+  assert.match(detail.body, /datetime="2024-07-20"/);
+  assert.equal((detail.body.match(/class="tui-row person-card/g) || []).length, 0);
+
+  await assert.rejects(
+    () =>
+      applyIdentifiedPerson({
+        subject: "Casey Vale",
+        event_date: "2024-09-01",
+        category: "corona_comms",
+        cite_urls: ["https://www.example.com/news/only-one"],
+      }),
+    (err) => err instanceof PromoteError && err.code === "cites_floor",
+  );
+});
+
 test("findGoldMatch is identity only — slug or name, not name+date+category", () => {
   const people = goldSeed().people;
   assert.equal(findGoldMatch(people, { subject: "James Comey" })?.id, "james-comey");

@@ -12,6 +12,10 @@ test("list pages nest death and indictment indexes", () => {
     { href: "/", label: "Home" },
     { href: "/firings", label: "Firings" },
   ]);
+  assert.deepEqual(breadcrumbItems({ path: "/corona-comms" }), [
+    { href: "/", label: "Home" },
+    { href: "/corona-comms", label: "Corona Comms" },
+  ]);
   assert.deepEqual(breadcrumbItems({ path: "/deaths" }), [
     { href: "/", label: "Home" },
     { href: "/deaths", label: "Deaths" },
@@ -39,6 +43,18 @@ test("detail pages link back through the parent catalog", () => {
       { href: "/", label: "Home" },
       { href: "/firings", label: "Firings" },
       { href: "/people/james-comey", label: "James Comey" },
+    ],
+  );
+  assert.deepEqual(
+    breadcrumbItems({
+      path: "/people/casey-vale",
+      categoryId: "corona_comms",
+      label: "Casey Vale",
+    }),
+    [
+      { href: "/", label: "Home" },
+      { href: "/corona-comms", label: "Corona Comms" },
+      { href: "/people/casey-vale", label: "Casey Vale" },
     ],
   );
   assert.deepEqual(

@@ -175,6 +175,7 @@ test("closed catalog: indictment stays promote/add-process; no invented kinds", 
   });
   assert.equal(mapImportCategory("indictment_civilian"), null);
   assert.equal(mapImportCategory("death_celebrity"), null);
+  assert.equal(mapImportCategory("corona_comms"), null);
   assert.deepEqual(IMPORT_CATEGORY_IDS, [
     "firings",
     "resignations",
