@@ -17,16 +17,17 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LARP =
   /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|KILO MICROCYBER/i;
 
-test("normalizeTheme keeps the four HUD ids and defaults to cyberdeck", () => {
+test("normalizeTheme keeps the five HUD ids and defaults to cyberdeck", () => {
   assert.equal(DEFAULT_THEME, "cyberdeck");
-  assert.deepEqual(THEME_IDS, ["cyberdeck", "phosphor", "greyscale", "stencil"]);
+  assert.deepEqual(THEME_IDS, ["cyberdeck", "phosphor", "greyscale", "stencil", "glass"]);
   assert.deepEqual(
     THEMES.map((t) => t.label),
-    ["Cyberdeck", "Phosphor", "Greyscale", "Stencil"],
+    ["Cyberdeck", "Phosphor", "Greyscale", "Stencil", "Glass"],
   );
   assert.equal(normalizeTheme("phosphor"), "phosphor");
   assert.equal(normalizeTheme("greyscale"), "greyscale");
   assert.equal(normalizeTheme("stencil"), "stencil");
+  assert.equal(normalizeTheme("glass"), "glass");
   assert.equal(normalizeTheme("cyberdeck"), "cyberdeck");
   assert.equal(normalizeTheme("nope"), "cyberdeck");
   assert.equal(normalizeTheme(""), "cyberdeck");
@@ -60,11 +61,17 @@ test("applyTheme writes data-theme and persists the choice", () => {
   assert.equal(pressed.stencil, "true");
   assert.equal(pressed.cyberdeck, "false");
 
+  assert.equal(applyTheme("glass", { root, storage, buttons }), "glass");
+  assert.equal(attrs["data-theme"], "glass");
+  assert.equal(store[THEME_STORAGE_KEY], "glass");
+  assert.equal(pressed.glass, "true");
+  assert.equal(pressed.stencil, "false");
+
   assert.equal(applyTheme("unknown", { root, storage, buttons }), "cyberdeck");
   assert.equal(attrs["data-theme"], "cyberdeck");
   assert.equal(store[THEME_STORAGE_KEY], "cyberdeck");
   assert.equal(pressed.cyberdeck, "true");
-  assert.equal(pressed.stencil, "false");
+  assert.equal(pressed.glass, "false");
 });
 
 test("theme switcher and layout default to Cyberdeck with real catalog routes", () => {
@@ -82,10 +89,12 @@ test("theme switcher and layout default to Cyberdeck with real catalog routes", 
     assert.match(html, /data-theme-set="phosphor"/);
     assert.match(html, /data-theme-set="greyscale"/);
     assert.match(html, /data-theme-set="stencil"/);
+    assert.match(html, /data-theme-set="glass"/);
     assert.match(html, />Cyberdeck</);
     assert.match(html, />Phosphor</);
     assert.match(html, />Greyscale</);
     assert.match(html, />Stencil</);
+    assert.match(html, />Glass</);
     assert.doesNotMatch(html, LARP);
   }
 
@@ -112,12 +121,15 @@ test("theme switcher and layout default to Cyberdeck with real catalog routes", 
   assert.doesNotMatch(footer, /CLOSE HACK|BREACH PROTOCOL|SurveilTrack|ROOT@/i);
 });
 
-test("CSS tokens cover four themes and keep cyberdeck as the default palette", () => {
+test("CSS tokens cover five themes and keep cyberdeck as the default palette", () => {
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
+  const themeIds = [...css.matchAll(/html\[data-theme="([^"]+)"\]/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(themeIds)], ["cyberdeck", "phosphor", "greyscale", "stencil", "glass"]);
   assert.match(css, /html\[data-theme="cyberdeck"\]/);
   assert.match(css, /html\[data-theme="phosphor"\]/);
   assert.match(css, /html\[data-theme="greyscale"\]/);
   assert.match(css, /html\[data-theme="stencil"\]/);
+  assert.match(css, /html\[data-theme="glass"\]/);
   assert.match(css, /--bg:\s*#0a0203/i);
   assert.match(css, /--red:\s*#e23a32/i);
   assert.match(css, /--cyan:\s*#3fe0e8/i);
@@ -129,6 +141,11 @@ test("CSS tokens cover four themes and keep cyberdeck as the default palette", (
   assert.match(css, /--red:\s*#ff6a00/i);
   assert.match(css, /--cyan:\s*#a0d8e0/i);
   assert.match(css, /--bg:\s*#121212/i);
+  assert.match(css, /backdrop-filter:\s*blur\(/);
+  assert.match(css, /--status-ok:\s*#c6e020/i);
+  assert.match(css, /--status-alert:\s*#e08a28/i);
+  assert.match(css, /--ink:\s*#f5f6f8/i);
+  assert.match(css, /\.theme-btn\[data-theme-set="glass"\]/);
   assert.match(css, /\.theme-switch/);
   assert.match(css, /\.theme-btn/);
   assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);

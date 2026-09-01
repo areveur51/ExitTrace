@@ -320,7 +320,7 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.doesNotMatch(corona.body, /source-card/);
 });
 
-test("list pages expose four themes and keep catalog copy, not pin LARP", async () => {
+test("list pages expose five themes and keep catalog copy, not pin LARP", async () => {
   const list = await get("/firings");
   assert.equal(list.status, 200);
   assert.match(list.body, /data-theme="cyberdeck"/);
@@ -329,10 +329,12 @@ test("list pages expose four themes and keep catalog copy, not pin LARP", async 
   assert.match(list.body, /data-theme-set="phosphor"/);
   assert.match(list.body, /data-theme-set="greyscale"/);
   assert.match(list.body, /data-theme-set="stencil"/);
+  assert.match(list.body, /data-theme-set="glass"/);
   assert.match(list.body, />Cyberdeck</);
   assert.match(list.body, />Phosphor</);
   assert.match(list.body, />Greyscale</);
   assert.match(list.body, />Stencil</);
+  assert.match(list.body, />Glass</);
   assert.match(list.body, /href="\/firings"/);
   assert.match(list.body, /href="\/resignations"/);
   assert.match(list.body, /href="\/government"/);

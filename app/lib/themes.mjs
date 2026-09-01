@@ -4,6 +4,7 @@ export const THEMES = [
   { id: "phosphor", label: "Phosphor" },
   { id: "greyscale", label: "Greyscale" },
   { id: "stencil", label: "Stencil" },
+  { id: "glass", label: "Glass" },
 ];
 
 export const THEME_IDS = THEMES.map((t) => t.id);
