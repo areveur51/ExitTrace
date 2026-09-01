@@ -206,7 +206,7 @@ test("people list pages paginate newest-first with shareable ?page=", async () =
   assert.match(second.body, /href="\/deaths"/);
   assert.match(first.body, /data-page-size-set="17"/);
   assert.match(firings.body, /data-page-size-set="17"/);
-  assert.doesNotMatch(firings.body, /class="age-filter"/);
+  assert.match(firings.body, /class="age-filter"/);
   assert.match(first.body, /class="age-filter"/);
 
   assert.match(first.body, new RegExp(deaths[0].name));

@@ -18,10 +18,10 @@ export const CATEGORIES = [
   {
     id: "government_stepdowns",
     kind: "person",
-    title: "Government step-downs",
-    nav: "Gov. step-downs",
+    title: "Officials",
+    nav: "Officials",
     path: "/government",
-    blurb: "Officials leaving a government post by ouster, resignation from office, or election loss that ended the role.",
+    blurb: "People tagged official — government, appointed, military, or law-enforcement roles. One card per person; celebrity, CEO, and other tags may also apply.",
   },
   {
     id: "arrests",

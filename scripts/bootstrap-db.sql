@@ -29,6 +29,8 @@ CREATE INDEX IF NOT EXISTS people_event_date_idx ON people (event_date DESC);
 ALTER TABLE people ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Optional calendar birth date. No gold backfill; UI reads it when present.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
+-- Identity tags (civilian, non_civilian, celebrity, official, ceo). Multi-tag.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS person_events (
   person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,

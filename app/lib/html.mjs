@@ -23,6 +23,13 @@ import {
   THEME_STORAGE_KEY,
   normalizeTheme,
 } from "./themes.mjs";
+import {
+  IDENTITY_TAGS,
+  catalogMainPath,
+  filterPath,
+  normalizeTags,
+  personTags,
+} from "./tags.mjs";
 
 function esc(s) {
   return String(s ?? "")
@@ -80,7 +87,7 @@ function keymapItems(activePath) {
   const keys = [
     { key: "f", href: "/firings", label: "Firings" },
     { key: "r", href: "/resignations", label: "Resignations" },
-    { key: "g", href: "/government", label: "Gov" },
+    { key: "g", href: "/government", label: "Officials" },
     { key: "a", href: "/arrests", label: "Arrests" },
     { key: "i", href: "/indictments", label: "Indictments" },
     { key: "d", href: "/deaths", label: "Deaths" },
@@ -90,27 +97,6 @@ function keymapItems(activePath) {
     { key: "s", href: "/search", label: "Search" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ];
-  if (String(activePath).startsWith("/indictments")) {
-    const at = keys.findIndex((k) => k.href === "/indictments");
-    keys.splice(
-      at,
-      1,
-      { key: "i", href: "/indictments", label: "Indictments" },
-      { key: "1", href: "/indictments/civilians", label: "Civilians" },
-      { key: "2", href: "/indictments/non-civilians", label: "Non-civilians" },
-    );
-  }
-  if (String(activePath).startsWith("/deaths")) {
-    const at = keys.findIndex((k) => k.href === "/deaths");
-    keys.splice(
-      at,
-      1,
-      { key: "d", href: "/deaths", label: "Deaths" },
-      { key: "1", href: "/deaths/celebrities", label: "Celebs" },
-      { key: "2", href: "/deaths/officials", label: "Officials" },
-      { key: "3", href: "/deaths/ceos", label: "CEOs" },
-    );
-  }
   if (activePath !== "/") keys.push({ key: "h", href: "/", label: "Home" });
   return keys;
 }
@@ -157,17 +143,53 @@ export function pageSizeSelector(activeSize = PAGE_SIZE) {
   </nav>`;
 }
 
-export function ageFilterForm(actionPath, { minAge, maxAge } = {}) {
+export function ageFilterForm(actionPath, { minAge, maxAge, tags, deaths } = {}) {
   const minVal = minAge != null ? String(minAge) : "";
   const maxVal = maxAge != null ? String(maxAge) : "";
-  return `<form class="age-filter" method="get" action="${esc(actionPath)}" role="search">
-    <span class="age-filter-label" id="age-filter-label">Age at death</span>
+  const selected = normalizeTags(tags);
+  const hidden = selected.length
+    ? `<input type="hidden" name="tags" value="${esc(selected.join(","))}">`
+    : "";
+  const label = deaths ? "Age at death" : "Age";
+  return `<form class="age-filter" method="get" action="${esc(catalogMainPath(actionPath))}" role="search">
+    ${hidden}
+    <span class="age-filter-label" id="age-filter-label">${label}</span>
     <div class="age-filter-fields" role="group" aria-labelledby="age-filter-label">
       <label class="age-filter-field">Min <input type="number" name="min_age" min="0" max="150" inputmode="numeric" value="${esc(minVal)}"></label>
       <label class="age-filter-field">Max <input type="number" name="max_age" min="0" max="150" inputmode="numeric" value="${esc(maxVal)}"></label>
       <button type="submit" class="keychip age-filter-apply">Apply</button>
     </div>
   </form>`;
+}
+
+export function identityFilterNav(basePath, { tags = [], minAge, maxAge } = {}) {
+  const main = catalogMainPath(basePath);
+  const selected = new Set(normalizeTags(tags));
+  const locked = main === "/government" ? new Set(["official"]) : new Set();
+  const chips = IDENTITY_TAGS.map((tag) => {
+    const on = selected.has(tag.id);
+    const next = new Set(selected);
+    if (!on && !locked.has(tag.id)) next.add(tag.id);
+    const href = filterPath(main, {
+      tags: [...next],
+      minAge,
+      maxAge,
+    });
+    return `<a class="keychip" href="${esc(href)}"${
+      on ? ' aria-current="true"' : ""
+    }>${esc(tag.nav)}</a>`;
+  });
+  const clearHref = filterPath(main, locked.size ? { tags: [...locked] } : {});
+  const showClear = [...selected].some((id) => !locked.has(id)) || minAge != null || maxAge != null;
+  if (showClear) {
+    chips.push(
+      `<a class="keychip" href="${esc(clearHref)}" data-clear="1">Clear</a>`,
+    );
+  }
+  return `<nav class="identity-filters" aria-label="Identity filters">
+    <span class="identity-filters-label">Filters</span>
+    ${chips.join("")}
+  </nav>`;
 }
 
 export function keymapFooter(activePath) {
@@ -534,18 +556,11 @@ export function sourcePostList(rows) {
 }
 
 export function deathsIndexNav() {
-  return `<nav class="death-nav" aria-label="Sorted death lists">
-    <a class="keychip" href="/deaths/celebrities">Celebrities</a>
-    <a class="keychip" href="/deaths/officials">Officials</a>
-    <a class="keychip" href="/deaths/ceos">CEOs</a>
-  </nav>`;
+  return identityFilterNav("/deaths", { tags: [] });
 }
 
 export function indictmentsIndexNav() {
-  return `<nav class="death-nav" aria-label="Sorted indictment lists">
-    <a class="keychip" href="/indictments/civilians">Civilians</a>
-    <a class="keychip" href="/indictments/non-civilians">Non-civilians</a>
-  </nav>`;
+  return identityFilterNav("/indictments", { tags: [] });
 }
 
 export function dogList(rows) {
@@ -675,6 +690,22 @@ function personEventBlocks(row) {
   return { meta: `${role}${meta}`, sourcesHtml, sourceCount };
 }
 
+function personTagChips(row) {
+  const tags = personTags(row);
+  if (!tags.length) return "";
+  const cat = categoryById(row.category);
+  const main = catalogMainPath(cat?.path || "/firings");
+  const chips = tags
+    .map((id) => {
+      const tag = IDENTITY_TAGS.find((t) => t.id === id);
+      if (!tag) return "";
+      return `<a class="keychip" href="${esc(filterPath(main, { tags: [id] }))}">${esc(tag.nav)}</a>`;
+    })
+    .filter(Boolean)
+    .join("");
+  return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips}</p>`;
+}
+
 export function personDetail(row) {
   const photo = row.photo
     ? `<img class="detail-photo" src="${esc(row.photo)}" alt="${esc(row.name)}" width="120" height="150" decoding="async">`
@@ -689,6 +720,7 @@ export function personDetail(row) {
         <h2 class="detail-title">${esc(row.name || "—")}</h2>
         <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
         ${meta}
+        ${personTagChips(row)}
         <hr class="hr">
         <h3 class="pane-h">Synopsis</h3>
         <p class="synopsis">${esc(row.summary || "—")}</p>

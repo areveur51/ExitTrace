@@ -104,15 +104,15 @@ Releases:
 |--|--|
 | `/firings` | Public-role dismissals (identified people) |
 | `/resignations` | Announced resignations (identified people) |
-| `/government` | Officials leaving a government post (identified people) |
+| `/government` | Officials filter — people tagged official (any event) |
 | `/arrests` | Public-role arrests (identified people) |
-| `/indictments` | All identified indictments (civilians and non-civilians) |
-| `/indictments/civilians` | Indictments of private persons |
-| `/indictments/non-civilians` | Indictments of government, appointed, military, or law-enforcement persons |
-| `/deaths` | All identified deaths (celebrities, officials, and CEOs) |
-| `/deaths/celebrities` | Deaths of public figures in arts, sport, and entertainment |
-| `/deaths/officials` | Deaths of officials and heads of state |
-| `/deaths/ceos` | Deaths of chief executives and controlling founders |
+| `/indictments` | All identified indictments; identity filters apply |
+| `/indictments/civilians` | Indictments filtered to people tagged civilian |
+| `/indictments/non-civilians` | Indictments filtered to people tagged non-civilian |
+| `/deaths` | All identified deaths; identity filters apply |
+| `/deaths/celebrities` | Deaths filtered to people tagged celebrity |
+| `/deaths/officials` | Deaths filtered to people tagged official |
+| `/deaths/ceos` | Deaths filtered to people tagged CEO |
 | `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
 | `/add` | Queue a person name or official government dog-comm |

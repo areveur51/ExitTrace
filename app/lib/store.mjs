@@ -21,6 +21,12 @@ import { isPeopleMediaHref, resolvePortrait } from "./portrait.mjs";
 import { hasRecordedNetWorth, resolveNetWorth } from "./net-worth.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import { ageFilterActive, matchesAgeFilter } from "./age.mjs";
+import {
+  kindsImplyingTags,
+  matchesTags,
+  normalizeTags,
+  personTags,
+} from "./tags.mjs";
 
 let pool = null;
 let memory = null;
@@ -80,6 +86,7 @@ function normalizePerson(row) {
     sources: Array.isArray(row.sources) ? row.sources : row.sources || [],
     summary: row.summary || "",
     events,
+    tags: personTags({ ...row, events }),
   });
 }
 
@@ -289,9 +296,9 @@ export async function importSeed(p, seed) {
       await client.query(
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
-           net_worth_usd, net_worth_note, net_worth_source, sources, summary, events
+           net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -307,7 +314,8 @@ export async function importSeed(p, seed) {
            net_worth_source = EXCLUDED.net_worth_source,
            sources = EXCLUDED.sources,
            summary = EXCLUDED.summary,
-           events = EXCLUDED.events`,
+           events = EXCLUDED.events,
+           tags = EXCLUDED.tags`,
         personValues(row),
       );
       await syncPersonEvents(client, row);
@@ -371,6 +379,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       offset: maybeOpts?.offset ?? 0,
       minAge: maybeOpts?.minAge,
       maxAge: maybeOpts?.maxAge,
+      tags: maybeOpts?.tags,
     };
   }
   if (categoryOrOpts && typeof categoryOrOpts === "object") {
@@ -380,6 +389,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       offset: categoryOrOpts.offset ?? 0,
       minAge: categoryOrOpts.minAge,
       maxAge: categoryOrOpts.maxAge,
+      tags: categoryOrOpts.tags,
     };
   }
   return {
@@ -388,6 +398,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
     offset: maybeOpts?.offset ?? 0,
     minAge: maybeOpts?.minAge,
     maxAge: maybeOpts?.maxAge,
+    tags: maybeOpts?.tags,
   };
 }
 
@@ -455,11 +466,30 @@ function deathDateSql() {
   )`;
 }
 
-function peopleAgeWhere(params, { minAge, maxAge } = {}) {
+function listedEventDateSql(categories) {
+  if (categories.length) {
+    return `COALESCE((
+      SELECT MAX(e.event_date) FROM person_events e
+       WHERE e.person_id = people.id AND e.kind = ANY($KIND::text[])
+    ), (
+      SELECT MAX((ev->>'event_date')::date)
+        FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
+       WHERE ev->>'kind' = ANY($KIND::text[])
+    ), people.event_date)`;
+  }
+  return `COALESCE(${deathDateSql()}, people.event_date)`;
+}
+
+function peopleAgeWhere(params, { minAge, maxAge } = {}, categories = []) {
   if (!ageFilterActive({ minAge, maxAge })) return "";
-  const deathDate = deathDateSql();
-  const ageExpr = `EXTRACT(YEAR FROM age(${deathDate}, people.birth_date))::int`;
-  const clauses = ["people.birth_date IS NOT NULL", `${deathDate} IS NOT NULL`];
+  let atDate = listedEventDateSql(categories);
+  if (categories.length) {
+    params.push(categories);
+    const n = params.length;
+    atDate = atDate.replaceAll("$KIND", `$${n}`);
+  }
+  const ageExpr = `EXTRACT(YEAR FROM age(${atDate}, people.birth_date))::int`;
+  const clauses = ["people.birth_date IS NOT NULL", `${atDate} IS NOT NULL`];
   if (minAge != null) {
     params.push(minAge);
     clauses.push(`${ageExpr} >= $${params.length}`);
@@ -471,12 +501,40 @@ function peopleAgeWhere(params, { minAge, maxAge } = {}) {
   return ` AND ${clauses.join(" AND ")}`;
 }
 
-function peopleWhere(categories, params, ageFilter) {
+function peopleTagWhere(params, tags) {
+  const selected = normalizeTags(tags);
+  if (!selected.length) return "";
+  params.push(selected);
+  const tagN = params.length;
+  const implied = kindsImplyingTags(selected);
+  let sql = ` AND (
+    EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(COALESCE(people.tags, '[]'::jsonb)) t
+       WHERE t = ANY($${tagN}::text[])
+    )`;
+  if (implied.length) {
+    params.push(implied);
+    const kN = params.length;
+    sql += `
+    OR people.category = ANY($${kN}::text[])
+    OR EXISTS (
+      SELECT 1 FROM person_events e
+       WHERE e.person_id = people.id AND e.kind = ANY($${kN}::text[])
+    )`;
+  }
+  sql += `
+  )`;
+  return sql;
+}
+
+function peopleWhere(categories, params, ageFilter, tags) {
   const kindSql = peopleKindWhere(categories, params);
-  const ageSql = peopleAgeWhere(params, ageFilter);
-  if (!ageSql) return kindSql;
-  if (kindSql) return `${kindSql}${ageSql}`;
-  return ` WHERE ${ageSql.replace(/^ AND /, "")}`;
+  const tagSql = peopleTagWhere(params, tags);
+  const ageSql = peopleAgeWhere(params, ageFilter, categories);
+  const extra = `${tagSql}${ageSql}`;
+  if (!kindSql && !extra) return "";
+  if (kindSql) return `${kindSql}${extra}`;
+  return ` WHERE ${extra.replace(/^ AND /, "")}`;
 }
 
 function peopleKindOrder(categories, params) {
@@ -510,6 +568,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const offset = finiteInt(args.offset, 0);
   const categories = asCategories(args.category);
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
+  const tags = normalizeTags(args.tags);
   const p = await getPool();
   if (!p) {
     let rows = getMemory().people.map((r) =>
@@ -518,13 +577,16 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
     if (categories.length) {
       rows = rows.filter((r) => personHasKind(r, categories));
     }
+    if (tags.length) {
+      rows = rows.filter((r) => matchesTags(r, tags));
+    }
     if (ageFilterActive(ageFilter)) {
       rows = rows.filter((r) => matchesAgeFilter(r, ageFilter));
     }
     return applyWindow(rows.slice().sort(comparePeople), limit, offset);
   }
   const params = [];
-  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter)}`;
+  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags)}`;
   sql += peopleKindOrder(categories, params);
   if (limit != null) {
     params.push(limit);
@@ -574,11 +636,15 @@ export async function countPeople(categoryOrOpts) {
       : { category: categoryOrOpts };
   const categories = asCategories(args.category);
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
+  const tags = normalizeTags(args.tags);
   const p = await getPool();
   if (!p) {
     let rows = getMemory().people;
     if (categories.length) {
       rows = rows.filter((r) => personHasKind(r, categories));
+    }
+    if (tags.length) {
+      rows = rows.filter((r) => matchesTags(r, tags));
     }
     if (ageFilterActive(ageFilter)) {
       rows = rows
@@ -587,13 +653,13 @@ export async function countPeople(categoryOrOpts) {
     }
     return rows.length;
   }
-  if (!categories.length && !ageFilterActive(ageFilter)) {
+  if (!categories.length && !ageFilterActive(ageFilter) && !tags.length) {
     const q = await p.query("SELECT COUNT(*)::int AS n FROM people");
     return q.rows[0].n;
   }
   const params = [];
   const q = await p.query(
-    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter)}`,
+    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter, tags)}`,
     params,
   );
   return q.rows[0].n;
@@ -740,6 +806,7 @@ function personValues(row) {
     JSON.stringify(person.sources || []),
     person.summary,
     JSON.stringify(person.events || []),
+    JSON.stringify(person.tags || []),
   ];
 }
 
@@ -772,9 +839,9 @@ export async function insertPerson(row) {
   await p.query(
     `INSERT INTO people (
        id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
-       net_worth_usd, net_worth_note, net_worth_source, sources, summary, events
+       net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb
      )`,
     personValues(person),
   );
@@ -803,7 +870,8 @@ export async function savePerson(row) {
     `UPDATE people SET
        category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
        birth_date = $7, photo = $8, photo_credit = $9, net_worth_usd = $10, net_worth_note = $11,
-       net_worth_source = $12, sources = $13::jsonb, summary = $14, events = $15::jsonb
+       net_worth_source = $12, sources = $13::jsonb, summary = $14, events = $15::jsonb,
+       tags = $16::jsonb
      WHERE id = $1`,
     personValues(person),
   );
