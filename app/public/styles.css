@@ -631,6 +631,63 @@ img.still.thumb {
   min-height: 44px;
   color: var(--muted);
 }
+.page-size {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.45rem;
+  margin-top: 0.45rem;
+}
+.page-size-label,
+.age-filter-label {
+  flex: 1 1 100%;
+  font-family: var(--font-ui);
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--brick);
+}
+.page-size-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.page-size-btn[aria-pressed="true"] {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.age-filter {
+  margin: 0 0 0.85rem;
+}
+.age-filter-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+}
+.age-filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.age-filter-field input {
+  width: 4.5rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
 .br { color: var(--red); }
 .keychip[data-key="f"] { color: var(--cyan); }
 .keychip[data-key="r"] { color: var(--red-hot); }
@@ -1105,6 +1162,9 @@ pre {
   .pager-pages a,
   .add-submit,
   .theme-btn,
+  .page-size-btn,
+  .age-filter-apply,
+  .age-filter-field input,
   .tui-search input {
     min-height: 44px;
   }

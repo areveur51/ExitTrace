@@ -35,6 +35,7 @@ import {
 } from "./lib/store.mjs";
 import {
   addBody,
+  ageFilterForm,
   deathsIndexNav,
   indictmentsIndexNav,
   dogDetail,
@@ -54,7 +55,14 @@ import {
   tuiCount,
 } from "./lib/html.mjs";
 import { AddError, queueAddRequest } from "./lib/add-request.mjs";
-import { PAGE_SIZE, paginate, parsePage } from "./lib/paginate.mjs";
+import {
+  DOG_PAGE_SIZE,
+  PAGE_SIZES,
+  paginate,
+  parseCookiePageSize,
+  parsePage,
+} from "./lib/paginate.mjs";
+import { ageFilterPath, parseAgeFilter } from "./lib/age.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -251,7 +259,11 @@ async function handle(req, res) {
     const category = url.searchParams.get("category") || undefined;
     if (url.searchParams.has("page")) {
       const total = await countPeople(category);
-      const meta = paginate({ total, page: parsePage(url.searchParams) });
+      const meta = paginate({
+        total,
+        page: parsePage(url.searchParams),
+        pageSize: parseCookiePageSize(req.headers.cookie),
+      });
       return sendJson(res, 200, {
         people: await listPeople({
           category,
@@ -266,7 +278,11 @@ async function handle(req, res) {
   if (p === "/api/dog-comms") {
     if (url.searchParams.has("page")) {
       const total = await countDogComms();
-      const meta = paginate({ total, page: parsePage(url.searchParams) });
+      const meta = paginate({
+        total,
+        page: parsePage(url.searchParams),
+        pageSize: DOG_PAGE_SIZE,
+      });
       return sendJson(res, 200, {
         dog_comms: await listDogComms({
           limit: meta.limit,
@@ -281,7 +297,11 @@ async function handle(req, res) {
     const category = url.searchParams.get("category") || undefined;
     if (url.searchParams.has("page")) {
       const total = await countSourcePosts({ category, standalone: true });
-      const meta = paginate({ total, page: parsePage(url.searchParams) });
+      const meta = paginate({
+        total,
+        page: parsePage(url.searchParams),
+        pageSize: parseCookiePageSize(req.headers.cookie),
+      });
       return sendJson(res, 200, {
         source_posts: await listSourcePosts({
           category,
@@ -336,7 +356,7 @@ async function handle(req, res) {
     const meta = paginate({
       total: all.length,
       page: parsePage(url.searchParams),
-      pageSize: PAGE_SIZE,
+      pageSize: DOG_PAGE_SIZE,
     });
     const windowed = all.slice(meta.offset, meta.offset + meta.limit);
     const searchPath = q ? `/search?q=${encodeURIComponent(q)}` : "/search";
@@ -450,16 +470,20 @@ async function handle(req, res) {
   const cat = categoryByPath(p);
   if (cat && cat.kind === "person") {
     const kinds = catalogListKinds(cat.id);
-    const total = await countPeople(kinds);
+    const deaths = isDeathCategory(cat.id);
+    const ageFilter = deaths ? parseAgeFilter(url.searchParams) : {};
+    const pageSize = parseCookiePageSize(req.headers.cookie);
+    const total = await countPeople({ category: kinds, ...ageFilter });
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
-      pageSize: PAGE_SIZE,
+      pageSize,
     });
     const rows = await listPeople({
       category: kinds,
       limit: meta.limit,
       offset: meta.offset,
+      ...ageFilter,
     });
     const extra =
       cat.id === "death_unspecified"
@@ -467,6 +491,8 @@ async function handle(req, res) {
         : cat.id === "indictment_unspecified"
           ? indictmentsIndexNav()
           : "";
+    const ageForm = deaths ? ageFilterForm(cat.path, ageFilter) : "";
+    const listPath = deaths ? ageFilterPath(cat.path, ageFilter) : cat.path;
     return sendHtml(
       res,
       layout({
@@ -474,11 +500,12 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         query: cat.title,
+        pageSize,
         countLabel: countText(cat.title, meta, rows.length),
         lede: `${cat.blurb} Seeded rows only — not exhaustive.`,
-        body: `${extra}${listSection(
-          peopleList(rows, { showDeath: isDeathCategory(cat.id) }),
-          pager(meta, { basePath: cat.path, noun: "rows" }),
+        body: `${extra}${ageForm}${listSection(
+          peopleList(rows, { showDeath: deaths }),
+          pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({
             title: cat.title,
             total: meta.total,
@@ -490,11 +517,12 @@ async function handle(req, res) {
     );
   }
   if (cat && cat.kind === "source") {
+    const pageSize = parseCookiePageSize(req.headers.cookie);
     const total = await countSourcePosts({ standalone: true });
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
-      pageSize: PAGE_SIZE,
+      pageSize,
     });
     const rows = await listSourcePosts({
       standalone: true,
@@ -508,11 +536,12 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         query: cat.title,
+        pageSize,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: listSection(
           sourcePostList(rows),
-          pager(meta, { basePath: cat.path, noun: "posts" }),
+          pager(meta, { basePath: cat.path, noun: "posts", pageSizes: PAGE_SIZES }),
           listHead({
             title: cat.title,
             total: meta.total,
@@ -528,7 +557,7 @@ async function handle(req, res) {
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
-      pageSize: PAGE_SIZE,
+      pageSize: DOG_PAGE_SIZE,
     });
     const rows = await listDogComms({
       limit: meta.limit,

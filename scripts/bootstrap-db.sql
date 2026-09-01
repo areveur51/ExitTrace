@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS people (
   role TEXT,
   event_date DATE NOT NULL,
   death_date DATE,
+  birth_date DATE,
   photo TEXT,
   photo_credit TEXT,
   net_worth_usd BIGINT,
@@ -26,6 +27,8 @@ CREATE INDEX IF NOT EXISTS people_event_date_idx ON people (event_date DESC);
 
 -- Unique person entry: identity on people, KEEP tags on person_events.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Optional calendar birth date. No gold backfill; UI reads it when present.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
 
 CREATE TABLE IF NOT EXISTS person_events (
   person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,

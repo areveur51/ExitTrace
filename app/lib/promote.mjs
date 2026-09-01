@@ -376,6 +376,7 @@ export function mergePersonAnnotate(gold, prior) {
     net_worth_source: keep.net_worth_source || extra.net_worth_source || "",
     role: keep.role || extra.role || "",
     summary: keep.summary || extra.summary || "",
+    birth_date: keep.birth_date || extra.birth_date || null,
     events: [...eventsByKind.values()],
   });
 }

@@ -20,6 +20,7 @@ import {
 import { isPeopleMediaHref, resolvePortrait } from "./portrait.mjs";
 import { hasRecordedNetWorth, resolveNetWorth } from "./net-worth.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
+import { ageFilterActive, matchesAgeFilter } from "./age.mjs";
 
 let pool = null;
 let memory = null;
@@ -67,6 +68,7 @@ function normalizePerson(row) {
     role: row.role || "",
     event_date: asDate(row.event_date),
     death_date: asDate(row.death_date),
+    birth_date: asDate(row.birth_date),
     photo: row.photo || "",
     photo_credit: row.photo_credit || "",
     net_worth_usd:
@@ -286,10 +288,10 @@ export async function importSeed(p, seed) {
         : normalizePerson(raw);
       await client.query(
         `INSERT INTO people (
-           id, category, name, role, event_date, death_date, photo, photo_credit,
+           id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
            net_worth_usd, net_worth_note, net_worth_source, sources, summary, events
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -297,6 +299,7 @@ export async function importSeed(p, seed) {
            role = EXCLUDED.role,
            event_date = EXCLUDED.event_date,
            death_date = EXCLUDED.death_date,
+           birth_date = EXCLUDED.birth_date,
            photo = EXCLUDED.photo,
            photo_credit = EXCLUDED.photo_credit,
            net_worth_usd = EXCLUDED.net_worth_usd,
@@ -366,6 +369,8 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       category: categoryOrOpts,
       limit: maybeOpts?.limit,
       offset: maybeOpts?.offset ?? 0,
+      minAge: maybeOpts?.minAge,
+      maxAge: maybeOpts?.maxAge,
     };
   }
   if (categoryOrOpts && typeof categoryOrOpts === "object") {
@@ -373,12 +378,16 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       category: categoryOrOpts.category || undefined,
       limit: categoryOrOpts.limit,
       offset: categoryOrOpts.offset ?? 0,
+      minAge: categoryOrOpts.minAge,
+      maxAge: categoryOrOpts.maxAge,
     };
   }
   return {
     category: categoryOrOpts || undefined,
     limit: maybeOpts?.limit,
     offset: maybeOpts?.offset ?? 0,
+    minAge: maybeOpts?.minAge,
+    maxAge: maybeOpts?.maxAge,
   };
 }
 
@@ -435,6 +444,41 @@ function peopleKindWhere(categories, params) {
   )`;
 }
 
+function deathDateSql() {
+  return `COALESCE(
+    (SELECT MAX(e.event_date) FROM person_events e
+      WHERE e.person_id = people.id AND e.kind LIKE 'death_%'),
+    CASE WHEN people.category LIKE 'death_%' THEN COALESCE(people.death_date, people.event_date) END,
+    (SELECT MAX((ev->>'event_date')::date)
+       FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
+      WHERE ev->>'kind' LIKE 'death_%')
+  )`;
+}
+
+function peopleAgeWhere(params, { minAge, maxAge } = {}) {
+  if (!ageFilterActive({ minAge, maxAge })) return "";
+  const deathDate = deathDateSql();
+  const ageExpr = `EXTRACT(YEAR FROM age(${deathDate}, people.birth_date))::int`;
+  const clauses = ["people.birth_date IS NOT NULL", `${deathDate} IS NOT NULL`];
+  if (minAge != null) {
+    params.push(minAge);
+    clauses.push(`${ageExpr} >= $${params.length}`);
+  }
+  if (maxAge != null) {
+    params.push(maxAge);
+    clauses.push(`${ageExpr} <= $${params.length}`);
+  }
+  return ` AND ${clauses.join(" AND ")}`;
+}
+
+function peopleWhere(categories, params, ageFilter) {
+  const kindSql = peopleKindWhere(categories, params);
+  const ageSql = peopleAgeWhere(params, ageFilter);
+  if (!ageSql) return kindSql;
+  if (kindSql) return `${kindSql}${ageSql}`;
+  return ` WHERE ${ageSql.replace(/^ AND /, "")}`;
+}
+
 function peopleKindOrder(categories, params) {
   if (!categories.length) {
     return ` ORDER BY COALESCE((
@@ -465,6 +509,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const limit = finiteInt(args.limit, null);
   const offset = finiteInt(args.offset, 0);
   const categories = asCategories(args.category);
+  const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const p = await getPool();
   if (!p) {
     let rows = getMemory().people.map((r) =>
@@ -473,10 +518,13 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
     if (categories.length) {
       rows = rows.filter((r) => personHasKind(r, categories));
     }
+    if (ageFilterActive(ageFilter)) {
+      rows = rows.filter((r) => matchesAgeFilter(r, ageFilter));
+    }
     return applyWindow(rows.slice().sort(comparePeople), limit, offset);
   }
   const params = [];
-  let sql = `SELECT * FROM people${peopleKindWhere(categories, params)}`;
+  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter)}`;
   sql += peopleKindOrder(categories, params);
   if (limit != null) {
     params.push(limit);
@@ -517,22 +565,35 @@ export async function listDogComms(opts = {}) {
   return q.rows.map(normalizeDog);
 }
 
-export async function countPeople(category) {
-  const categories = asCategories(category);
+export async function countPeople(categoryOrOpts) {
+  const args =
+    categoryOrOpts &&
+    typeof categoryOrOpts === "object" &&
+    !Array.isArray(categoryOrOpts)
+      ? categoryOrOpts
+      : { category: categoryOrOpts };
+  const categories = asCategories(args.category);
+  const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const p = await getPool();
   if (!p) {
-    const rows = getMemory().people;
-    return categories.length
-      ? rows.filter((r) => personHasKind(r, categories)).length
-      : rows.length;
+    let rows = getMemory().people;
+    if (categories.length) {
+      rows = rows.filter((r) => personHasKind(r, categories));
+    }
+    if (ageFilterActive(ageFilter)) {
+      rows = rows
+        .map((r) => (categories.length ? projectPerson(r, categories) : projectPerson(r)))
+        .filter((r) => matchesAgeFilter(r, ageFilter));
+    }
+    return rows.length;
   }
-  if (!categories.length) {
+  if (!categories.length && !ageFilterActive(ageFilter)) {
     const q = await p.query("SELECT COUNT(*)::int AS n FROM people");
     return q.rows[0].n;
   }
   const params = [];
   const q = await p.query(
-    `SELECT COUNT(*)::int AS n FROM people${peopleKindWhere(categories, params)}`,
+    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter)}`,
     params,
   );
   return q.rows[0].n;
@@ -670,6 +731,7 @@ function personValues(row) {
     person.role,
     person.event_date,
     person.death_date,
+    person.birth_date,
     person.photo,
     person.photo_credit,
     person.net_worth_usd,
@@ -709,10 +771,10 @@ export async function insertPerson(row) {
   }
   await p.query(
     `INSERT INTO people (
-       id, category, name, role, event_date, death_date, photo, photo_credit,
+       id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
        net_worth_usd, net_worth_note, net_worth_source, sources, summary, events
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb
      )`,
     personValues(person),
   );
@@ -740,8 +802,8 @@ export async function savePerson(row) {
   await p.query(
     `UPDATE people SET
        category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
-       photo = $7, photo_credit = $8, net_worth_usd = $9, net_worth_note = $10,
-       net_worth_source = $11, sources = $12::jsonb, summary = $13, events = $14::jsonb
+       birth_date = $7, photo = $8, photo_credit = $9, net_worth_usd = $10, net_worth_note = $11,
+       net_worth_source = $12, sources = $13::jsonb, summary = $14, events = $15::jsonb
      WHERE id = $1`,
     personValues(person),
   );

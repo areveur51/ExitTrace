@@ -58,6 +58,31 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => applyTheme(btn.getAttribute("data-theme-set")));
   }
 
+  const PAGE_SIZES = [17, 34, 51];
+  const PAGE_SIZE_KEY = "exittrace-page-size";
+  const pageSizeButtons = document.querySelectorAll("[data-page-size-set]");
+
+  function applyPageSize(raw) {
+    const n = Number.parseInt(String(raw ?? ""), 10);
+    const size = PAGE_SIZES.includes(n) ? n : 17;
+    try {
+      localStorage.setItem(PAGE_SIZE_KEY, String(size));
+    } catch {
+      /* private mode / quota */
+    }
+    document.cookie = `${PAGE_SIZE_KEY}=${size}; Path=/; SameSite=Lax`;
+    for (const btn of pageSizeButtons) {
+      btn.setAttribute("aria-pressed", Number(btn.getAttribute("data-page-size-set")) === size ? "true" : "false");
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("page");
+    window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+  }
+
+  for (const btn of pageSizeButtons) {
+    btn.addEventListener("click", () => applyPageSize(btn.getAttribute("data-page-size-set")));
+  }
+
   const modal = document.getElementById("tui-modal");
   const modalTitle = document.getElementById("modal-title");
   const modalBody = document.getElementById("modal-body");
