@@ -26,6 +26,19 @@ find_node() {
   return 1
 }
 
+abs_under_root() {
+  local p="${1:-}"
+  if [[ -z "$p" ]]; then
+    echo "$2"
+    return
+  fi
+  if [[ "$p" == /* ]]; then
+    echo "$p"
+  else
+    echo "${ROOT}/${p#./}"
+  fi
+}
+
 load_env() {
   if [[ -f "$ENV_FILE" ]]; then
     set -a
@@ -35,8 +48,9 @@ load_env() {
   fi
   export PORT="${PORT:-$DEFAULT_PORT}"
   export HOST="${HOST:-0.0.0.0}"
-  export MEDIA_DIR="${MEDIA_DIR:-${ROOT}/media}"
-  export DATA_DIR="${DATA_DIR:-${ROOT}/data}"
+  export MEDIA_DIR="$(abs_under_root "${MEDIA_DIR:-}" "${ROOT}/media")"
+  export DATA_DIR="$(abs_under_root "${DATA_DIR:-}" "${ROOT}/data")"
+  cd "$ROOT"
 }
 
 is_running() {
@@ -75,9 +89,16 @@ cmd_start() {
   fi
   local node
   node="$(find_node)"
-  mkdir -p "$(dirname "$LOG_FILE")"
+  mkdir -p "$(dirname "$LOG_FILE")" "$DATA_DIR" "$MEDIA_DIR"
   nohup "$node" "${ROOT}/app/server.mjs" >>"$LOG_FILE" 2>&1 &
   echo $! >"$PID_FILE"
+  sleep 0.5
+  if ! is_running; then
+    echo "Failed to start — last log lines:" >&2
+    tail -n 40 "$LOG_FILE" >&2 || true
+    rm -f "$PID_FILE"
+    return 1
+  fi
   echo "Started pid=$(cat "$PID_FILE") port=${PORT}"
 }
 

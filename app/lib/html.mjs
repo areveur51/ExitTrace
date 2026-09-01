@@ -1,9 +1,11 @@
 import {
   categoryById,
+  categoryByPath,
   formatDate,
   formatUsd,
   initials,
   isDeathCategory,
+  isIndictmentCategory,
 } from "./categories.mjs";
 import { personEvents } from "./promote.mjs";
 import {
@@ -228,10 +230,117 @@ function chromeWidgets() {
   </div>`;
 }
 
-function topBar({ query, countLabel }) {
+function categoryTrail(cat) {
+  if (!cat) return [];
+  if (isDeathCategory(cat.id)) {
+    if (cat.id === "death_unspecified") {
+      return [{ href: "/deaths", label: "Deaths" }];
+    }
+    return [
+      { href: "/deaths", label: "Deaths" },
+      { href: cat.path, label: cat.nav },
+    ];
+  }
+  if (isIndictmentCategory(cat.id)) {
+    if (cat.id === "indictment_unspecified") {
+      return [{ href: "/indictments", label: "Indictments" }];
+    }
+    return [
+      { href: "/indictments", label: "Indictments" },
+      { href: cat.path, label: cat.nav },
+    ];
+  }
+  return [{ href: cat.path, label: cat.nav }];
+}
+
+/** Clickable trail: Home / Deaths / Celebrities / Name */
+export function breadcrumbItems({
+  path,
+  label,
+  categoryId,
+  mode,
+} = {}) {
+  const items = [{ href: "/", label: "Home" }];
+  const p = String(path || "/").split("?")[0] || "/";
+  if (p === "/") return items;
+
+  if (p.startsWith("/people/")) {
+    const cat = categoryById(categoryId);
+    const trail = categoryTrail(cat);
+    items.push(...(trail.length ? trail : [{ href: "/firings", label: "Catalog" }]));
+    items.push({ href: p, label: label || "Person" });
+    return items;
+  }
+  if (p.startsWith("/posts/")) {
+    items.push({ href: "/unsorted", label: "Unsorted" });
+    items.push({ href: p, label: label || "Source post" });
+    return items;
+  }
+  if (p.startsWith("/dog-comms/") && p !== "/dog-comms") {
+    items.push({ href: "/dog-comms", label: "Dog comms" });
+    items.push({ href: p, label: label || "Snapshot" });
+    return items;
+  }
+
+  const cat = categoryByPath(p);
+  if (cat) {
+    items.push(...categoryTrail(cat));
+    return items;
+  }
+
+  if (p === "/search") {
+    items.push({ href: "/search", label: "Search" });
+    if (label && label !== "Search") items.push({ href: p, label });
+    return items;
+  }
+  if (p === "/add") {
+    items.push({ href: "/add", label: "Add" });
+    if (mode === "dog") items.push({ href: "/add?mode=dog", label: "Dog comms" });
+    else if (String(label || "").toLowerCase() === "queued") {
+      items.push({ href: p, label: "Queued" });
+    }
+    return items;
+  }
+  if (p === "/downloads") {
+    items.push({ href: "/downloads", label: "Downloads" });
+    return items;
+  }
+  if (p === "/health") {
+    items.push({ href: "/health", label: "Health" });
+    return items;
+  }
+  items.push({ href: p, label: label || p.replace(/^\//, "") });
+  return items;
+}
+
+export function breadcrumbNav(items) {
+  const last = items.length - 1;
+  return `<nav class="tui-q crumbs" aria-label="Breadcrumb">
+    <span class="chev" aria-hidden="true">❯</span>
+    <ol>
+      ${items
+        .map((item, i) => {
+          const current = i === last;
+          if (current) {
+            return `<li><span class="crumb-current" aria-current="page">${esc(item.label)}</span></li>`;
+          }
+          return `<li><a href="${esc(item.href)}">${esc(item.label)}</a></li>`;
+        })
+        .join("")}
+    </ol>
+  </nav>`;
+}
+
+function topBar({ query, countLabel, path, crumbLabel, categoryId, mode, heading }) {
+  const items = breadcrumbItems({
+    path,
+    label: crumbLabel || heading || query,
+    categoryId,
+    mode,
+  });
   return `<header class="tui-top">
-    <div class="tui-q"><span class="chev" aria-hidden="true">❯</span> ${esc(query || "")}</div>
-    <div class="tui-app">exittrace</div>
+    ${breadcrumbNav(items)}
+    <div class="tui-app"><a class="tui-app-link" href="/">exittrace</a></div>
     <div class="tui-n">${countLabel || ""}</div>
   </header>`;
 }
@@ -246,6 +355,8 @@ export function layout({
   query,
   countLabel,
   pageSize,
+  categoryId,
+  crumbLabel,
 }) {
   const home = mode === "home";
   const sizeAttr =
@@ -263,7 +374,15 @@ export function layout({
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="tui hud${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">
-  ${topBar({ query: query || heading || "home", countLabel })}
+  ${topBar({
+    query: query || heading || "home",
+    countLabel,
+    path,
+    crumbLabel,
+    categoryId,
+    mode,
+    heading,
+  })}
   <div class="hud-stage">
     <main class="${home ? "home-stage" : "tui-main"}">
       ${home ? "" : `<h1 class="vh">${esc(heading || title)}</h1>`}
