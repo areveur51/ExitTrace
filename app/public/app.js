@@ -32,7 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   showToast(document.body.getAttribute("data-toast") || "page loaded");
 
-  const THEME_IDS = ["cyberdeck", "phosphor", "greyscale", "stencil"];
+  const THEME_IDS = ["cyberdeck", "phosphor", "greyscale", "stencil", "glass"];
   const THEME_KEY = "exittrace-theme";
   const themeButtons = document.querySelectorAll("[data-theme-set]");
 

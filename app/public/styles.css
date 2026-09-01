@@ -164,6 +164,46 @@ html[data-theme="stencil"] {
   --font-ui: "Arial Black", "Impact", "Franklin Gothic Heavy", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Glass: frosted dark glassmorphism HUD. White type, amber alert, lime active. */
+html[data-theme="glass"] {
+  --bg: #101318;
+  --void: #08090c;
+  --bg-2: #16191f;
+  --bg-sel: #22262e;
+  --panel: #1a1d24;
+  --brick: #7a7e86;
+  --ink: #f5f6f8;
+  --label: #ffffff;
+  --muted: #8e929a;
+  --red: #d6d8de;
+  --red-hot: #f0f2f5;
+  --red-dim: #5c6068;
+  --cyan: #f2f4f6;
+  --cyan-dim: #c6c8ce;
+  --rule: #3e424a;
+  --green: #c6e020;
+  --blue: #d8dae0;
+  --amber: #e08a28;
+  --rose: #e08a28;
+  --purple: #6a6e76;
+  --glow-red: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --glow-cyan: 0 0 0 1px rgba(198, 224, 32, 0.35);
+  --status-ok: #c6e020;
+  --status-alert: #e08a28;
+  --status-warn: #e08a28;
+  --bin-fill: repeating-linear-gradient(
+    90deg,
+    transparent 0 2px,
+    rgba(255, 255, 255, 0.05) 2px 3px,
+    transparent 3px 5px,
+    rgba(255, 255, 255, 0.08) 5px 6px,
+    transparent 6px 9px,
+    rgba(255, 255, 255, 0.03) 9px 10px
+  );
+  --font: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-ui: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 html {
@@ -879,6 +919,7 @@ img.still.thumb {
 .theme-btn[data-theme-set="phosphor"] .theme-pip { background: #00e08a; }
 .theme-btn[data-theme-set="greyscale"] .theme-pip { background: #c8c8c8; }
 .theme-btn[data-theme-set="stencil"] .theme-pip { background: #ff6a00; }
+.theme-btn[data-theme-set="glass"] .theme-pip { background: #c6e020; }
 
 html[data-theme="phosphor"] body.tui::before {
   opacity: 1;
@@ -1335,6 +1376,222 @@ pre {
   .dash-count { animation: none; }
   .dash-line { stroke-dashoffset: 0; }
 }
+
+html[data-theme="glass"] body.tui {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 18% 12%, rgba(224, 138, 40, 0.14), transparent 42%),
+    radial-gradient(ellipse at 82% 78%, rgba(64, 86, 128, 0.26), transparent 50%),
+    radial-gradient(ellipse at 50% 46%, rgba(28, 34, 46, 0.5), transparent 58%),
+    linear-gradient(180deg, #0a0c10 0%, #141820 48%, #0c0e14 100%);
+}
+html[data-theme="glass"] body.tui::before {
+  z-index: 0;
+  opacity: 0.22;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 3px,
+      rgba(0, 0, 0, 0.08) 3px 4px
+    );
+}
+html[data-theme="glass"] body.tui::after {
+  z-index: 0;
+}
+html[data-theme="glass"] .hud-stage::before,
+html[data-theme="glass"] .hud-stage::after {
+  z-index: 0;
+  width: 1px;
+  background-image: none;
+  background: rgba(255, 255, 255, 0.14);
+  opacity: 1;
+}
+html[data-theme="glass"] .tui-top {
+  background: rgba(12, 14, 18, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+html[data-theme="glass"] .tui-top::before {
+  z-index: 0;
+  opacity: 0.35;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.55) 0 1px,
+    transparent 1px 8px
+  );
+}
+html[data-theme="glass"] .tui-top::after {
+  z-index: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+html[data-theme="glass"] .tui-app,
+html[data-theme="glass"] .list-head,
+html[data-theme="glass"] .pane-h,
+html[data-theme="glass"] .detail-title,
+html[data-theme="glass"] .tui-title {
+  color: var(--label);
+  text-shadow: none;
+}
+html[data-theme="glass"] .tui-n {
+  color: var(--muted);
+  text-shadow: none;
+}
+html[data-theme="glass"] .list-head .sep,
+html[data-theme="glass"] .list-head .dot,
+html[data-theme="glass"] .br,
+html[data-theme="glass"] .crumbs li:not(:last-child)::after {
+  color: var(--muted);
+}
+html[data-theme="glass"] .list-head::after {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.16);
+  opacity: 1;
+}
+html[data-theme="glass"] .tui-main {
+  padding-top: 1.1rem;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.42)),
+    linear-gradient(rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.42)),
+    linear-gradient(rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.42)),
+    linear-gradient(rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.42));
+  background-size: 10px 1px, 1px 10px, 10px 1px, 1px 10px;
+  background-position:
+    top 0.35rem left 0.45rem,
+    top 0.35rem left 0.45rem,
+    bottom 0.35rem right 0.45rem,
+    bottom 0.35rem right 0.45rem;
+  background-repeat: no-repeat;
+}
+html[data-theme="glass"] .tui-main::before,
+html[data-theme="glass"] .tui-main::after,
+html[data-theme="glass"] .box-pane::before,
+html[data-theme="glass"] .box-pane::after {
+  z-index: 0;
+  width: 10px;
+  height: 10px;
+  border-color: rgba(255, 255, 255, 0.42);
+}
+html[data-theme="glass"] .tui-row,
+html[data-theme="glass"] .box-pane,
+html[data-theme="glass"] .keymap,
+html[data-theme="glass"] .tui-search-label,
+html[data-theme="glass"] .dog-snapshot,
+html[data-theme="glass"] .dash-stat,
+html[data-theme="glass"] .keychip,
+html[data-theme="glass"] .theme-btn,
+html[data-theme="glass"] .pager-btn,
+html[data-theme="glass"] .pager-pages a,
+html[data-theme="glass"] .tui-form input,
+html[data-theme="glass"] .tui-form select,
+html[data-theme="glass"] .age-filter-field input,
+html[data-theme="glass"] .add-submit,
+html[data-theme="glass"] pre {
+  clip-path: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(14, 16, 22, 0.52);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(16px) saturate(1.12);
+  backdrop-filter: blur(16px) saturate(1.12);
+}
+html[data-theme="glass"] .tui-row {
+  margin-bottom: 0.55rem;
+  padding: 0.6rem 1.5rem 0.6rem 1.1rem;
+  background-image: none;
+}
+html[data-theme="glass"] .box-pane {
+  clip-path: none;
+  margin-bottom: 1rem;
+}
+html[data-theme="glass"] .box-inner {
+  background-color: transparent;
+  background-image: none;
+}
+html[data-theme="glass"] .keymap {
+  background-image: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+html[data-theme="glass"] .keymap .keychip,
+html[data-theme="glass"] .theme-btn {
+  clip-path: none;
+  background: rgba(14, 16, 22, 0.52);
+}
+html[data-theme="glass"] .keychip[data-key] {
+  color: var(--ink);
+}
+html[data-theme="glass"] .tui-row:focus-visible,
+html[data-theme="glass"] .tui-row.is-selected,
+html[data-theme="glass"] .keychip[aria-current="page"],
+html[data-theme="glass"] .pager-pages a[aria-current="page"],
+html[data-theme="glass"] .theme-btn[aria-pressed="true"],
+html[data-theme="glass"] .page-size-btn[aria-pressed="true"],
+html[data-theme="glass"] .box-pane.is-active {
+  border-color: var(--status-ok);
+  color: var(--label);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-ok) 40%, transparent);
+  filter: none;
+}
+html[data-theme="glass"] .tui-row:focus-visible::before,
+html[data-theme="glass"] .tui-row.is-selected::before {
+  z-index: 0;
+  background: var(--status-ok);
+  box-shadow: none;
+}
+html[data-theme="glass"] .tui-row.is-selected .tui-title,
+html[data-theme="glass"] .tui-row:focus-visible .tui-title,
+html[data-theme="glass"] .keychip[aria-current="page"],
+html[data-theme="glass"] .theme-btn[aria-pressed="true"] {
+  color: var(--status-ok);
+}
+html[data-theme="glass"] .form-error,
+html[data-theme="glass"] .rating {
+  color: var(--status-alert);
+}
+html[data-theme="glass"] .tui-form input:focus,
+html[data-theme="glass"] .tui-form select:focus {
+  outline: 1px solid var(--status-ok);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-ok) 40%, transparent);
+}
+html[data-theme="glass"] .detail-photo {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+html[data-theme="glass"] .dash-count {
+  color: var(--label);
+  text-shadow: none;
+}
+html[data-theme="glass"] .dash-rank {
+  color: var(--muted);
+}
+html[data-theme="glass"] .dash-line {
+  stroke: var(--label);
+}
+html[data-theme="glass"] .dash-bar {
+  fill: rgba(255, 255, 255, 0.52);
+}
+html[data-theme="glass"] .dash-stat {
+  padding: 0.65rem 0.9rem;
+}
+html[data-theme="glass"] .dash-grid,
+html[data-theme="glass"] .dash-trends,
+html[data-theme="glass"] .dash-stats {
+  gap: 1rem 1.5rem;
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-theme="glass"] .tui-row:hover {
+    background-color: rgba(22, 26, 34, 0.62);
+    background-image: none;
+    border-color: rgba(255, 255, 255, 0.32);
+    filter: none;
+  }
+  html[data-theme="glass"] .tui-row:hover::before {
+    background: var(--status-ok);
+  }
+}
+
 
 /*
   Breakpoints (HUD layouts) — tested in CSS, not a native app:
