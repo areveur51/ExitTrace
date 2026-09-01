@@ -58,6 +58,7 @@ before(async () => {
       HOST: "127.0.0.1",
       DATA_DIR: path.join(ROOT, "data"),
       MEDIA_DIR: path.join(ROOT, "media"),
+      DATABASE_URL: "",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -373,6 +374,25 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   assert.match(list.body, /list-head/);
   assert.match(list.body, /class="hud-stage"/);
   assert.match(detail.body, /box-pane/);
+});
+
+test("pages expose a clickable breadcrumb trail", async () => {
+  const home = await get("/");
+  const list = await get("/firings");
+  const deaths = await get("/deaths/celebrities");
+  const detail = await get("/people/james-comey");
+  const addDog = await get("/add?mode=dog");
+
+  assert.match(home.body, /aria-label="Breadcrumb"/);
+  assert.match(home.body, /aria-current="page">Home/);
+  assert.match(list.body, /<a href="\/">Home<\/a>/);
+  assert.match(list.body, /aria-current="page">Firings/);
+  assert.match(deaths.body, /href="\/deaths"/);
+  assert.match(deaths.body, /aria-current="page">Celebrities/);
+  assert.match(detail.body, /href="\/firings"/);
+  assert.match(detail.body, /aria-current="page">James Comey/);
+  assert.match(addDog.body, /href="\/add"/);
+  assert.match(addDog.body, /aria-current="page">Dog comms/);
 });
 
 test("HUD overlays stay behind text and images and keep pointer-events none", () => {
