@@ -5,7 +5,7 @@ import path from "path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "url";
 import { spawn } from "node:child_process";
-import { PAGE_SIZE } from "../app/lib/paginate.mjs";
+import { DOG_PAGE_SIZE, PAGE_SIZE } from "../app/lib/paginate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 15220;
@@ -73,6 +73,7 @@ test("seed has 8-13 people per exit category and 7+ dog comms", () => {
   for (const row of seed.people) {
     counts[row.category] = (counts[row.category] || 0) + 1;
     assert.ok(row.sources.length >= 2, `${row.id} needs two sources`);
+    assert.equal(row.birth_date, undefined, `${row.id} gold birth_date stays unset`);
     if (String(row.category).startsWith("death_")) {
       assert.ok(row.death_date, `${row.id} needs death_date`);
     } else {
@@ -167,16 +168,18 @@ function countClass(html, className) {
 }
 
 test("people list pages paginate newest-first with shareable ?page=", async () => {
-  const firings = newestFirst(
-    seed.people.filter((r) => r.category === "firings"),
+  const deaths = newestFirst(
+    seed.people.filter((r) => String(r.category).startsWith("death_")),
     "event_date",
   );
-  assert.ok(firings.length > PAGE_SIZE, "seed must have more than one page of firings");
+  const totalPages = Math.ceil(deaths.length / PAGE_SIZE);
+  assert.ok(deaths.length > PAGE_SIZE, "seed must have more than one page of deaths");
 
-  const first = await get("/firings");
-  const second = await get("/firings?page=2");
-  const clamped = await get("/firings?page=99");
-  const junk = await get("/firings?page=nope");
+  const first = await get("/deaths");
+  const second = await get("/deaths?page=2");
+  const clamped = await get("/deaths?page=99");
+  const junk = await get("/deaths?page=nope");
+  const firings = await get("/firings");
 
   for (const res of [first, second, clamped, junk]) {
     assert.equal(res.status, 200);
@@ -189,26 +192,30 @@ test("people list pages paginate newest-first with shareable ?page=", async () =
   const page1Cards = countClass(first.body, "person-card");
   const page2Cards = countClass(second.body, "person-card");
   assert.equal(page1Cards, PAGE_SIZE);
-  assert.equal(page2Cards, firings.length - PAGE_SIZE);
-  assert.match(first.body, /Page 1 of 2/);
-  assert.match(second.body, /Page 2 of 2/);
-  assert.match(first.body, /12 available/);
-  assert.match(first.body, /1\/10/);
+  assert.equal(page2Cards, Math.min(PAGE_SIZE, deaths.length - PAGE_SIZE));
+  assert.match(first.body, new RegExp(`Page 1 of ${totalPages}`));
+  assert.match(second.body, new RegExp(`Page 2 of ${totalPages}`));
+  assert.match(first.body, new RegExp(`${deaths.length} available`));
+  assert.match(first.body, new RegExp(`1/${PAGE_SIZE}`));
   assert.match(first.body, /tui-toast/);
   assert.match(first.body, /tui-modal/);
   assert.match(first.body, /rel="next"/);
   assert.match(second.body, /rel="prev"/);
-  assert.match(first.body, /href="\/firings\?page=2"/);
-  assert.match(second.body, /href="\/firings"/);
+  assert.match(first.body, /href="\/deaths\?page=2"/);
+  assert.match(second.body, /href="\/deaths"/);
+  assert.match(first.body, /data-page-size-set="17"/);
+  assert.match(firings.body, /data-page-size-set="17"/);
+  assert.doesNotMatch(firings.body, /class="age-filter"/);
+  assert.match(first.body, /class="age-filter"/);
 
-  assert.match(first.body, new RegExp(firings[0].name));
-  assert.doesNotMatch(first.body, new RegExp(firings[PAGE_SIZE].name));
-  assert.match(second.body, new RegExp(firings[PAGE_SIZE].name));
-  assert.doesNotMatch(second.body, new RegExp(firings[0].name));
+  assert.match(first.body, new RegExp(deaths[0].name));
+  assert.doesNotMatch(first.body, new RegExp(deaths[PAGE_SIZE].name));
+  assert.match(second.body, new RegExp(deaths[PAGE_SIZE].name));
+  assert.doesNotMatch(second.body, new RegExp(deaths[0].name));
 
-  assert.match(clamped.body, /Page 2 of 2/);
-  assert.match(junk.body, /Page 1 of 2/);
-  assert.match(junk.body, new RegExp(firings[0].name));
+  assert.match(clamped.body, new RegExp(`Page ${totalPages} of ${totalPages}`));
+  assert.match(junk.body, new RegExp(`Page 1 of ${totalPages}`));
+  assert.match(junk.body, new RegExp(deaths[0].name));
 });
 
 test("every category list page ships a pager", async () => {
@@ -244,10 +251,12 @@ test("dog-comms page paginates stored rows and opens local snapshots on detail",
   assert.match(res.body, new RegExp(dogs[0].handle.replace("@", "@")));
   assert.match(res.body, new RegExp(`/dog-comms/${dogs[0].id}`));
   assert.doesNotMatch(res.body, /widgets\.js/);
-  if (dogs.length <= PAGE_SIZE) {
+  if (dogs.length <= DOG_PAGE_SIZE) {
     assert.match(res.body, /Page 1 of 1/);
     assert.equal(countClass(res.body, "dog-card"), dogs.length);
   }
+  assert.doesNotMatch(res.body, /data-page-size-set=/);
+  assert.doesNotMatch(res.body, /class="age-filter"/);
   const detail = await get(`/dog-comms/${dogs[0].id}`);
   assert.equal(detail.status, 200);
   assert.match(detail.body, /Citation:/);

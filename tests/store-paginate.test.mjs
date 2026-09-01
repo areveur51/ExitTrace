@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PAGE_SIZE } from "../app/lib/paginate.mjs";
+import { DOG_PAGE_SIZE, PAGE_SIZE } from "../app/lib/paginate.mjs";
 import {
   countDogComms,
   countPeople,
@@ -54,20 +54,20 @@ test("listPeople windows stay newest-first as the catalog grows", async () => {
   const page3 = await listPeople({
     category: "firings",
     limit: PAGE_SIZE,
-    offset: 20,
+    offset: PAGE_SIZE * 2,
   });
   const all = await listPeople("firings");
 
-  assert.equal(page1.length, 10);
-  assert.equal(page3.length, 10);
+  assert.equal(page1.length, PAGE_SIZE);
+  assert.equal(page3.length, 45 - PAGE_SIZE * 2);
   assert.equal(all.length, 45);
   assert.deepEqual(
     page1.map((r) => r.id),
-    all.slice(0, 10).map((r) => r.id),
+    all.slice(0, PAGE_SIZE).map((r) => r.id),
   );
   assert.deepEqual(
     page3.map((r) => r.id),
-    all.slice(20, 30).map((r) => r.id),
+    all.slice(PAGE_SIZE * 2, PAGE_SIZE * 3).map((r) => r.id),
   );
   for (let i = 1; i < all.length; i++) {
     assert.ok(
@@ -82,20 +82,20 @@ test("listDogComms windows stay newest-first as posts grow", async () => {
   setMemory({ people: [], dog_comms });
   assert.equal(await countDogComms(), 23);
 
-  const page1 = await listDogComms({ limit: PAGE_SIZE, offset: 0 });
-  const page2 = await listDogComms({ limit: PAGE_SIZE, offset: 10 });
+  const page1 = await listDogComms({ limit: DOG_PAGE_SIZE, offset: 0 });
+  const page2 = await listDogComms({ limit: DOG_PAGE_SIZE, offset: DOG_PAGE_SIZE });
   const all = await listDogComms();
 
-  assert.equal(page1.length, 10);
-  assert.equal(page2.length, 10);
+  assert.equal(page1.length, DOG_PAGE_SIZE);
+  assert.equal(page2.length, DOG_PAGE_SIZE);
   assert.equal(all.length, 23);
   assert.deepEqual(
     page1.map((r) => r.id),
-    all.slice(0, 10).map((r) => r.id),
+    all.slice(0, DOG_PAGE_SIZE).map((r) => r.id),
   );
   assert.deepEqual(
     page2.map((r) => r.id),
-    all.slice(10, 20).map((r) => r.id),
+    all.slice(DOG_PAGE_SIZE, DOG_PAGE_SIZE * 2).map((r) => r.id),
   );
   for (let i = 1; i < all.length; i++) {
     assert.ok(

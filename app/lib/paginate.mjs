@@ -1,6 +1,47 @@
 /** List-page pagination. Newest-first lists stay shareable via ?page=. */
 
-export const PAGE_SIZE = 10;
+export const PAGE_SIZE = 17;
+export const PAGE_SIZES = [17, 34, 51];
+export const DOG_PAGE_SIZE = 10;
+export const PAGE_SIZE_STORAGE_KEY = "exittrace-page-size";
+
+export function normalizePageSize(raw) {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  return PAGE_SIZES.includes(n) ? n : PAGE_SIZE;
+}
+
+export function applyPageSize(raw, { storage, cookieJar, buttons } = {}) {
+  const size = normalizePageSize(raw);
+  try {
+    storage?.setItem?.(PAGE_SIZE_STORAGE_KEY, String(size));
+  } catch {
+    /* private mode / quota */
+  }
+  if (cookieJar && typeof cookieJar === "object") {
+    cookieJar[PAGE_SIZE_STORAGE_KEY] = String(size);
+  }
+  if (buttons) {
+    for (const btn of buttons) {
+      const on = Number(btn.getAttribute?.("data-page-size-set")) === size;
+      btn.setAttribute?.("aria-pressed", on ? "true" : "false");
+    }
+  }
+  return size;
+}
+
+export function parseCookiePageSize(cookieHeader) {
+  const raw = String(cookieHeader || "");
+  if (!raw) return PAGE_SIZE;
+  for (const part of raw.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq < 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (key !== PAGE_SIZE_STORAGE_KEY) continue;
+    return normalizePageSize(decodeURIComponent(trimmed.slice(eq + 1).trim()));
+  }
+  return PAGE_SIZE;
+}
 
 export function parsePage(searchParams) {
   const raw =

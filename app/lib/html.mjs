@@ -6,7 +6,13 @@ import {
   isDeathCategory,
 } from "./categories.mjs";
 import { personEvents } from "./promote.mjs";
-import { pageHref, pageWindow } from "./paginate.mjs";
+import {
+  PAGE_SIZE,
+  PAGE_SIZES,
+  PAGE_SIZE_STORAGE_KEY,
+  pageHref,
+  pageWindow,
+} from "./paginate.mjs";
 import { listThumbHref, LIST_THUMB_CSS_H, LIST_THUMB_CSS_W } from "./thumb.mjs";
 import {
   DEFAULT_THEME,
@@ -128,6 +134,40 @@ function themeBootScript() {
 </script>`;
 }
 
+function pageSizeBootScript() {
+  return `<script>
+(function(){try{var key=${JSON.stringify(PAGE_SIZE_STORAGE_KEY)};var allowed=${JSON.stringify(PAGE_SIZES)};var raw=localStorage.getItem(key);var n=Number(raw);var size=allowed.indexOf(n)!==-1?String(n):null;if(size)document.cookie=key+"="+size+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-page-size");var guard=key+"-sync";if(rendered&&size&&rendered!==size&&sessionStorage.getItem(guard)!==size){sessionStorage.setItem(guard,size);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+</script>`;
+}
+
+export function pageSizeSelector(activeSize = PAGE_SIZE) {
+  const current = PAGE_SIZES.includes(Number(activeSize)) ? Number(activeSize) : PAGE_SIZE;
+  return `<nav class="page-size" aria-label="Rows per page">
+    <span class="page-size-label" id="page-size-label">Rows</span>
+    <div class="page-size-btns" role="group" aria-labelledby="page-size-label">
+      ${PAGE_SIZES.map((n) => {
+        const on = n === current;
+        return `<button type="button" class="page-size-btn keychip" data-page-size-set="${n}" aria-pressed="${
+          on ? "true" : "false"
+        }">${n}</button>`;
+      }).join("")}
+    </div>
+  </nav>`;
+}
+
+export function ageFilterForm(actionPath, { minAge, maxAge } = {}) {
+  const minVal = minAge != null ? String(minAge) : "";
+  const maxVal = maxAge != null ? String(maxAge) : "";
+  return `<form class="age-filter" method="get" action="${esc(actionPath)}" role="search">
+    <span class="age-filter-label" id="age-filter-label">Age at death</span>
+    <div class="age-filter-fields" role="group" aria-labelledby="age-filter-label">
+      <label class="age-filter-field">Min <input type="number" name="min_age" min="0" max="150" inputmode="numeric" value="${esc(minVal)}"></label>
+      <label class="age-filter-field">Max <input type="number" name="max_age" min="0" max="150" inputmode="numeric" value="${esc(maxVal)}"></label>
+      <button type="submit" class="keychip age-filter-apply">Apply</button>
+    </div>
+  </form>`;
+}
+
 export function keymapFooter(activePath) {
   return `<footer class="keymap" aria-label="Catalog">
     ${keymapItems(activePath)
@@ -205,15 +245,21 @@ export function layout({
   mode,
   query,
   countLabel,
+  pageSize,
 }) {
   const home = mode === "home";
+  const sizeAttr =
+    pageSize != null && PAGE_SIZES.includes(Number(pageSize))
+      ? ` data-page-size="${Number(pageSize)}"`
+      : "";
   return `<!doctype html>
-<html lang="en" data-theme="${DEFAULT_THEME}">
+<html lang="en" data-theme="${DEFAULT_THEME}"${sizeAttr}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${esc(title)} · ExitTrace</title>
   ${themeBootScript()}
+  ${pageSizeBootScript()}
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="tui hud${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">
@@ -388,7 +434,7 @@ export function dogList(rows) {
   return `<div class="dog-page tui-list">${groupByYear(rows, "posted_at", dogListRow)}</div>`;
 }
 
-export function pager(meta, { basePath, noun = "rows" } = {}) {
+export function pager(meta, { basePath, noun = "rows", pageSizes } = {}) {
   const { page, totalPages, total, hasPrev, hasNext } = meta;
   const status = `Page ${page} of ${totalPages} · ${total} ${noun}`;
   const prev = hasPrev
@@ -413,6 +459,7 @@ export function pager(meta, { basePath, noun = "rows" } = {}) {
     }
     prevN = n;
   }
+  const sizeNav = pageSizes ? pageSizeSelector(meta.pageSize) : "";
   return `<nav class="pager" aria-label="Pagination">
     <p class="pager-status">${esc(status)}</p>
     <div class="pager-controls">
@@ -420,6 +467,7 @@ export function pager(meta, { basePath, noun = "rows" } = {}) {
       <ol class="pager-pages">${items.join("")}</ol>
       ${next}
     </div>
+    ${sizeNav}
   </nav>`;
 }
 
