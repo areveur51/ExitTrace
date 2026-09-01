@@ -76,7 +76,7 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
   assert.equal(categoryByPath("/deaths").id, "death_unspecified");
   assert.equal(categoryByPath("/indictments").id, "indictment_unspecified");
   assert.equal(categoryByPath("/corona-comms").id, "corona_comms");
-  assert.equal(categoryByPath("/corona-comms/civilians"), undefined);
+  assert.equal(categoryByPath("/corona-comms/civilians"), null);
   assert.deepEqual(DEATH_KEEP_IDS, ["death_celebrity", "death_official", "death_ceo"]);
   assert.deepEqual(INDICTMENT_KEEP_IDS, [
     "indictment_civilian",
