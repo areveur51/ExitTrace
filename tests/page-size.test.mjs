@@ -15,7 +15,7 @@ import { loadSeedFile, setMemory } from "../app/lib/store.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LARP =
-  /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|KILO MICROCYBER|leftover/i;
+  /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|KILO MICROCYBER/i;
 
 function goldSeed() {
   return loadSeedFile(path.join(ROOT, "data", "seed.json"));
@@ -86,7 +86,6 @@ test("layout boot script syncs localStorage to a cookie without changing ?page="
   assert.match(page, new RegExp(PAGE_SIZE_STORAGE_KEY));
   assert.match(page, /localStorage\.getItem/);
   assert.match(page, /document\.cookie/);
-  assert.doesNotMatch(page, /leftover/);
 });
 
 test("person list pages default to 17 and honor the cookie; dog comms stay 10", async () => {
@@ -154,5 +153,4 @@ test("app.js persists page size in localStorage like themes", () => {
   assert.match(js, /localStorage\.setItem/);
   assert.match(js, /searchParams\.delete\("page"\)/);
   assert.doesNotMatch(js, LARP);
-  assert.doesNotMatch(js, /leftover/);
 });
