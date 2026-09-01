@@ -116,7 +116,7 @@ test("gold seed does not backfill birth_date", () => {
   }
 });
 
-test("age filter is deaths-only and excludes rows without birth_date", async () => {
+test("age filter is on catalog lists and excludes rows without birth_date", async () => {
   const seed = goldSeed();
   setMemory({
     people: [
@@ -187,7 +187,14 @@ test("age filter is deaths-only and excludes rows without birth_date", async () 
     assert.match(res.body, /name="max_age"/);
     assert.match(res.body, /Age at death/);
   }
-  for (const res of [firings, arrests, unsorted, dogs, home, add, detail]) {
+  for (const res of [firings, arrests]) {
+    assert.equal(res.status, 200);
+    assert.match(res.body, /class="age-filter"/);
+    assert.match(res.body, /name="min_age"/);
+    assert.match(res.body, />Age</);
+    assert.doesNotMatch(res.body, /Age at death/);
+  }
+  for (const res of [unsorted, dogs, home, add, detail]) {
     assert.doesNotMatch(res.body, /class="age-filter"/);
     assert.doesNotMatch(res.body, /name="min_age"/);
   }

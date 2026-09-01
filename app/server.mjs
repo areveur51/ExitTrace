@@ -9,6 +9,7 @@ import {
   catalogListKinds,
   categoryByPath,
   isDeathCategory,
+  isIndictmentCategory,
 } from "./lib/categories.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "./lib/env.mjs";
 import {
@@ -36,8 +37,7 @@ import {
 import {
   addBody,
   ageFilterForm,
-  deathsIndexNav,
-  indictmentsIndexNav,
+  identityFilterNav,
   dogDetail,
   dogList,
   downloadsBody,
@@ -62,7 +62,8 @@ import {
   parseCookiePageSize,
   parsePage,
 } from "./lib/paginate.mjs";
-import { ageFilterPath, parseAgeFilter } from "./lib/age.mjs";
+import { parseAgeFilter } from "./lib/age.mjs";
+import { catalogMainPath, filterPath, parseTagFilter } from "./lib/tags.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -476,45 +477,53 @@ async function handle(req, res) {
 
   const cat = categoryByPath(p);
   if (cat && cat.kind === "person") {
-    const kinds = catalogListKinds(cat.id);
     const deaths = isDeathCategory(cat.id);
-    const ageFilter = deaths ? parseAgeFilter(url.searchParams) : {};
+    const gov = cat.id === "government_stepdowns";
+    const kinds = gov
+      ? []
+      : isDeathCategory(cat.id)
+        ? catalogListKinds("death_unspecified")
+        : isIndictmentCategory(cat.id)
+          ? catalogListKinds("indictment_unspecified")
+          : catalogListKinds(cat.id);
+    const ageFilter = parseAgeFilter(url.searchParams);
+    const tags = parseTagFilter(url.searchParams, p);
     const pageSize = parseCookiePageSize(req.headers.cookie);
-    const total = await countPeople({ category: kinds, ...ageFilter });
+    const listOpts = { category: kinds, tags, ...ageFilter };
+    const total = await countPeople(listOpts);
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
       pageSize,
     });
     const rows = await listPeople({
-      category: kinds,
+      ...listOpts,
       limit: meta.limit,
       offset: meta.offset,
-      ...ageFilter,
     });
-    const extra =
-      cat.id === "death_unspecified"
-        ? deathsIndexNav()
-        : cat.id === "indictment_unspecified"
-          ? indictmentsIndexNav()
-          : "";
-    const ageForm = deaths ? ageFilterForm(cat.path, ageFilter) : "";
-    const listPath = deaths ? ageFilterPath(cat.path, ageFilter) : cat.path;
+    const mainPath = catalogMainPath(cat.path);
+    const heading = gov ? "Officials" : cat.title;
+    const listPath = filterPath(mainPath, { tags, ...ageFilter });
     return sendHtml(
       res,
       layout({
-        title: cat.title,
+        title: heading,
         path: cat.path,
-        heading: cat.title,
-        query: cat.title,
+        heading,
+        query: heading,
         pageSize,
-        countLabel: countText(cat.title, meta, rows.length),
-        lede: `${cat.blurb} Seeded rows only — not exhaustive.`,
-        body: `${extra}${ageForm}${listSection(
+        countLabel: countText(heading, meta, rows.length),
+        lede: gov
+          ? "People tagged official — government, appointed, military, or law-enforcement roles. One card per person; tags are not exclusive."
+          : `${cat.blurb} One card per person. Identity tags are independent of the event. Seeded rows only — not exhaustive.`,
+        body: `${identityFilterNav(cat.path, { tags, ...ageFilter })}${ageFilterForm(
+          mainPath,
+          { ...ageFilter, tags, deaths },
+        )}${listSection(
           peopleList(rows, { showDeath: deaths }),
           pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({
-            title: cat.title,
+            title: heading,
             total: meta.total,
             index: 1,
             of: rows.length,

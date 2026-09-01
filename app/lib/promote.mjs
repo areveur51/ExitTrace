@@ -3,6 +3,7 @@ import {
   isDeathCategory,
   isIndictmentKeepKind,
 } from "./categories.mjs";
+import { personTags } from "./tags.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
@@ -232,7 +233,9 @@ export function derivePersonFields(row, preferKinds) {
 export function projectPerson(row, kinds) {
   const prefer = Array.isArray(kinds) ? kinds : kinds ? [kinds] : [];
   const derived = derivePersonFields(row, prefer.length ? prefer : undefined);
-  return { ...row, ...derived };
+  const projected = { ...row, ...derived };
+  projected.tags = personTags(projected);
+  return projected;
 }
 
 /**
@@ -378,6 +381,7 @@ export function mergePersonAnnotate(gold, prior) {
     summary: keep.summary || extra.summary || "",
     birth_date: keep.birth_date || extra.birth_date || null,
     events: [...eventsByKind.values()],
+    tags: [...(keep.tags || []), ...(extra.tags || [])],
   });
 }
 

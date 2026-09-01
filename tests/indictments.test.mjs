@@ -118,13 +118,11 @@ test("indictment routes render empty HUD lists; parent is not a dump", async () 
 
   const civilians = await requestPage("/indictments/civilians");
   assert.match(civilians.body, /data-key="i"/);
-  assert.match(civilians.body, /data-key="1"/);
-  assert.match(civilians.body, /data-key="2"/);
   assert.match(civilians.body, /href="\/indictments"/);
   assert.match(civilians.body, /href="\/indictments\/civilians"/);
-  assert.match(civilians.body, /href="\/indictments\/non-civilians"/);
   assert.match(civilians.body, /Civilians/);
   assert.match(civilians.body, /Non-civilians/);
+  assert.match(civilians.body, /aria-label="Identity filters"/);
   assert.doesNotMatch(civilians.body, /href="\/deaths\/celebrities"/);
 });
 

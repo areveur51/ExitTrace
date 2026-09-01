@@ -11,17 +11,22 @@ function asCalendarDate(v) {
   return text;
 }
 
-/** Whole completed years from birth_date to the death event_date. */
-export function ageAtDeath(birthDate, deathDate) {
+/** Whole completed years from birth_date to an event date. */
+export function ageAtEvent(birthDate, eventDate) {
   const birth = asCalendarDate(birthDate);
-  const death = asCalendarDate(deathDate);
-  if (!birth || !death) return null;
+  const at = asCalendarDate(eventDate);
+  if (!birth || !at) return null;
   const [by, bm, bd] = birth.split("-").map(Number);
-  const [dy, dm, dd] = death.split("-").map(Number);
-  let years = dy - by;
-  if (dm < bm || (dm === bm && dd < bd)) years -= 1;
+  const [ey, em, ed] = at.split("-").map(Number);
+  let years = ey - by;
+  if (em < bm || (em === bm && ed < bd)) years -= 1;
   if (!Number.isFinite(years) || years < 0) return null;
   return years;
+}
+
+/** Whole completed years from birth_date to the death event_date. */
+export function ageAtDeath(birthDate, deathDate) {
+  return ageAtEvent(birthDate, deathDate);
 }
 
 export function parseAgeBound(raw) {
@@ -49,7 +54,8 @@ export function ageFilterActive({ minAge, maxAge } = {}) {
 /** When a min or max is on, missing birth_date does not match. */
 export function matchesAgeFilter(row, { minAge, maxAge } = {}) {
   if (!ageFilterActive({ minAge, maxAge })) return true;
-  const age = ageAtDeath(row?.birth_date, row?.death_date);
+  const at = row?.death_date || row?.event_date;
+  const age = ageAtEvent(row?.birth_date, at);
   if (age == null) return false;
   if (minAge != null && age < minAge) return false;
   if (maxAge != null && age > maxAge) return false;

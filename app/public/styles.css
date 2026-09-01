@@ -494,11 +494,29 @@ a:hover { color: var(--ink); }
 .tui-main::before { top: 0.35rem; right: 0.45rem; border-bottom: 0; border-left: 0; }
 .tui-main::after { bottom: 0.35rem; left: 0.45rem; border-top: 0; border-right: 0; }
 .lede, .hint, .empty { color: var(--muted); }
-.death-nav {
+.death-nav,
+.identity-filters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.35rem;
   margin: 0 0 0.85rem;
+}
+.identity-filters-label,
+.person-tags-label {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.25rem;
+}
+.person-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.45rem 0 0;
 }
 
 .tui-group { margin: 0 0 0.85rem; }
