@@ -97,6 +97,7 @@ test("theme switcher and layout default to Cyberdeck with real catalog routes", 
   assert.match(footer, /href="\/deaths"/);
   assert.match(footer, /href="\/arrests"/);
   assert.match(footer, /href="\/corona-comms"/);
+  assert.match(footer, /href="\/dashboard"/);
   assert.match(footer, /href="\/indictments"/);
   assert.match(footer, /href="\/unsorted"/);
   assert.match(footer, /href="\/add"/);
@@ -105,6 +106,7 @@ test("theme switcher and layout default to Cyberdeck with real catalog routes", 
   assert.match(footer, /\]<\/span> Resignations</);
   assert.match(footer, /\]<\/span> Arrests</);
   assert.match(footer, /\]<\/span> Corona Comms</);
+  assert.match(footer, /\]<\/span> Dashboard</);
   assert.match(footer, /\]<\/span> Indictments</);
   assert.match(footer, /\]<\/span> Unsorted</);
   assert.doesNotMatch(footer, /CLOSE HACK|BREACH PROTOCOL|SurveilTrack|ROOT@/i);

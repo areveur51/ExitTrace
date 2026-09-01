@@ -30,6 +30,7 @@ import {
   normalizeTags,
   personTags,
 } from "./tags.mjs";
+import { DASH_DIMENSIONS } from "./dashboard.mjs";
 
 function esc(s) {
   return String(s ?? "")
@@ -92,6 +93,7 @@ function keymapItems(activePath) {
     { key: "o", href: "/corona-comms", label: "Corona Comms" },
     { key: "i", href: "/indictments", label: "Indictments" },
     { key: "d", href: "/deaths", label: "Deaths" },
+    { key: "b", href: "/dashboard", label: "Dashboard" },
     { key: "u", href: "/unsorted", label: "Unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
     { key: "n", href: "/add", label: "Add" },
@@ -330,6 +332,12 @@ export function breadcrumbItems({
   }
   if (p === "/health") {
     items.push({ href: "/health", label: "Health" });
+    return items;
+  }
+  if (p === "/dashboard" || p.startsWith("/dashboard/")) {
+    items.push({ href: "/dashboard", label: "Dashboard" });
+    const dim = DASH_DIMENSIONS.find((d) => d.path === p);
+    if (dim) items.push({ href: dim.path, label: dim.nav });
     return items;
   }
   items.push({ href: p, label: label || p.replace(/^\//, "") });
@@ -881,6 +889,118 @@ export function healthBody(payload) {
   return boxFrame("Health", `<pre class="health">${esc(JSON.stringify(payload, null, 2))}</pre>`, {
     active: true,
   });
+}
+
+function dashCount(n) {
+  const num = Math.max(0, Number(n) || 0);
+  return `<span class="dash-count" data-count="${num}">${num}</span>`;
+}
+
+function dashChart(series, { title, kind = "line" } = {}) {
+  const rows = Array.isArray(series) ? series : [];
+  const values = rows.map((r) => Number(r.count) || 0);
+  const w = 360;
+  const h = 96;
+  const padX = 10;
+  const padY = 8;
+  const innerW = w - padX * 2;
+  const innerH = h - padY * 2;
+  const max = Math.max(1, ...values);
+  if (!rows.length) {
+    return `<div class="dash-chart empty" role="img" aria-label="${esc(title)}: no dates">
+      <p class="empty">No rows on this page</p>
+    </div>`;
+  }
+  const pts = values.map((v, i) => {
+    const x = padX + (values.length === 1 ? innerW / 2 : (i / (values.length - 1)) * innerW);
+    const y = padY + innerH - (v / max) * innerH;
+    return { x, y, v };
+  });
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const bars =
+    kind === "bar"
+      ? pts
+          .map((p, i) => {
+            const bw = Math.max(2, innerW / Math.max(values.length, 1) - 1);
+            const x = padX + (i + 0.5) * (innerW / values.length) - bw / 2;
+            const bh = innerH - (p.y - padY);
+            return `<rect class="dash-bar" x="${x.toFixed(1)}" y="${p.y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, bh).toFixed(1)}"></rect>`;
+          })
+          .join("")
+      : "";
+  const first = rows[0]?.key || "";
+  const last = rows[rows.length - 1]?.key || "";
+  return `<div class="dash-chart" role="img" aria-label="${esc(title)}: ${values.length} points from ${esc(first)} to ${esc(last)}">
+    <svg class="dash-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">
+      <path class="dash-line" d="${esc(d)}" fill="none"></path>
+      ${bars}
+    </svg>
+    <p class="dash-chart-ends"><span>${esc(first)}</span><span>${esc(last)}</span></p>
+  </div>`;
+}
+
+function dashRankTable(rows, { empty = "No rows on this page", selfPath = "" } = {}) {
+  if (!rows.length) {
+    return `<p class="empty">${esc(empty)}</p>`;
+  }
+  return `<table class="dash-table">
+    <thead><tr><th scope="col">#</th><th scope="col">Name</th><th scope="col">Count</th></tr></thead>
+    <tbody>
+      ${rows
+        .map((row, i) => {
+          const hop = row.href && row.href !== selfPath;
+          const name = hop
+            ? `<a class="dash-link" href="${esc(row.href)}">${esc(row.label)}</a>`
+            : `<span class="dash-label">${esc(row.label)}</span>`;
+          return `<tr>
+            <td class="dash-rank">${i + 1}</td>
+            <td>${name}</td>
+            <td class="dash-n">${dashCount(row.count)}</td>
+          </tr>`;
+        })
+        .join("")}
+    </tbody>
+  </table>`;
+}
+
+export function dashboardBody(model) {
+  const dims = (model.dimensions || [])
+    .map((dim) => {
+      const more = `<p class="dash-more"><a class="keychip" href="${esc(dim.path)}">All by ${esc(dim.nav)}</a></p>`;
+      return `<section class="dash-block" data-dash-dim="${esc(dim.id)}">
+        ${boxFrame(
+          `Top ${Math.max(dim.top.length, 1)} by ${dim.nav}`,
+          `${dashRankTable(dim.top, { selfPath: dim.path })}${more}`,
+          { extraClass: "dash-box" },
+        )}
+      </section>`;
+    })
+    .join("");
+  const trends = model.trends || { total: [], perMonth: [], perWeek: [], events: 0, last: 0 };
+  return `<div class="dash-hud">
+    <section class="dash-stats" aria-label="Live counts">
+      <p class="dash-stat"><span class="dash-stat-label">People</span> ${dashCount(model.people)}</p>
+      <p class="dash-stat"><span class="dash-stat-label">Events</span> ${dashCount(trends.events)}</p>
+    </section>
+    <div class="dash-grid">${dims}</div>
+    <section class="dash-trends" aria-label="Event-date trends">
+      <section class="dash-block">
+        ${boxFrame("Trends · total", dashChart(trends.total, { title: "Total events" }), { extraClass: "dash-box" })}
+      </section>
+      <section class="dash-block">
+        ${boxFrame("Trends · per month", dashChart(trends.perMonth, { title: "Events per month", kind: "bar" }), { extraClass: "dash-box" })}
+      </section>
+      <section class="dash-block">
+        ${boxFrame("Trends · per week", dashChart(trends.perWeek, { title: "Events per week", kind: "bar" }), { extraClass: "dash-box" })}
+      </section>
+    </section>
+  </div>`;
+}
+
+export function dashboardRankBody(dim, rows) {
+  return `<div class="dash-hud dash-rank-page" data-dash-dim="${esc(dim.id)}">
+    ${boxFrame(`All by ${dim.nav}`, dashRankTable(rows, { selfPath: dim.path }), { extraClass: "dash-box", active: true })}
+  </div>`;
 }
 
 const ADD_CATEGORIES = [

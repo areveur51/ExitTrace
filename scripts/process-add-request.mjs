@@ -104,6 +104,9 @@ function parseArgs(argv) {
     else if (arg === "--still-credit") out.still_credit = take();
     else if (arg === "--summary") out.summary = take();
     else if (arg === "--role") out.role = take();
+    else if (arg === "--organization") out.organization = take();
+    else if (arg === "--country") out.country = take();
+    else if (arg === "--branch") out.branch = take();
     else if (arg === "--photo") out.photo = take();
     else if (arg === "--photo-credit") out.photo_credit = take();
     else if (arg === "--net-worth" || arg === "--net-worth-usd") out.net_worth_usd = take();

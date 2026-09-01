@@ -72,6 +72,9 @@ function normalizePerson(row) {
     category: row.category,
     name: row.name,
     role: row.role || "",
+    organization: String(row.organization || "").trim(),
+    country: String(row.country || "").trim(),
+    branch: String(row.branch || "").trim(),
     event_date: asDate(row.event_date),
     death_date: asDate(row.death_date),
     birth_date: asDate(row.birth_date),
@@ -296,9 +299,10 @@ export async function importSeed(p, seed) {
       await client.query(
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
-           net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags
+           net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags,
+           organization, country, branch
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb,$17,$18,$19
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -315,7 +319,10 @@ export async function importSeed(p, seed) {
            sources = EXCLUDED.sources,
            summary = EXCLUDED.summary,
            events = EXCLUDED.events,
-           tags = EXCLUDED.tags`,
+           tags = EXCLUDED.tags,
+           organization = COALESCE(NULLIF(EXCLUDED.organization, ''), people.organization),
+           country = COALESCE(NULLIF(EXCLUDED.country, ''), people.country),
+           branch = COALESCE(NULLIF(EXCLUDED.branch, ''), people.branch)`,
         personValues(row),
       );
       await syncPersonEvents(client, row);
@@ -807,6 +814,9 @@ function personValues(row) {
     person.summary,
     JSON.stringify(person.events || []),
     JSON.stringify(person.tags || []),
+    person.organization || "",
+    person.country || "",
+    person.branch || "",
   ];
 }
 
@@ -839,9 +849,10 @@ export async function insertPerson(row) {
   await p.query(
     `INSERT INTO people (
        id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
-       net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags
+       net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags,
+       organization, country, branch
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb,$17,$18,$19
      )`,
     personValues(person),
   );
@@ -871,7 +882,7 @@ export async function savePerson(row) {
        category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
        birth_date = $7, photo = $8, photo_credit = $9, net_worth_usd = $10, net_worth_note = $11,
        net_worth_source = $12, sources = $13::jsonb, summary = $14, events = $15::jsonb,
-       tags = $16::jsonb
+       tags = $16::jsonb, organization = $17, country = $18, branch = $19
      WHERE id = $1`,
     personValues(person),
   );

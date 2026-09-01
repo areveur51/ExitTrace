@@ -16,6 +16,11 @@ test("list pages nest death and indictment indexes", () => {
     { href: "/", label: "Home" },
     { href: "/corona-comms", label: "Corona Comms" },
   ]);
+  assert.deepEqual(breadcrumbItems({ path: "/dashboard/reason" }), [
+    { href: "/", label: "Home" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/reason", label: "Reason" },
+  ]);
   assert.deepEqual(breadcrumbItems({ path: "/deaths" }), [
     { href: "/", label: "Home" },
     { href: "/deaths", label: "Deaths" },

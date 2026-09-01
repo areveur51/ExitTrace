@@ -38,6 +38,8 @@ import {
   addBody,
   ageFilterForm,
   identityFilterNav,
+  dashboardBody,
+  dashboardRankBody,
   dogDetail,
   dogList,
   downloadsBody,
@@ -64,6 +66,7 @@ import {
 } from "./lib/paginate.mjs";
 import { parseAgeFilter } from "./lib/age.mjs";
 import { catalogMainPath, filterPath, parseTagFilter } from "./lib/tags.mjs";
+import { buildDashboard, dashDimensionByPath, rankDimension } from "./lib/dashboard.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -409,6 +412,60 @@ async function handle(req, res) {
   if (p === "/add") {
     const mode = url.searchParams.get("mode") === "dog" ? "dog" : "person";
     return sendHtml(res, addPage({ mode }));
+  }
+
+  if (p === "/dashboard" || p.startsWith("/dashboard/")) {
+    const people = await listPeople();
+    const dim = dashDimensionByPath(p);
+    if (p !== "/dashboard" && !dim) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    if (dim) {
+      const ranked = rankDimension(people, dim.id);
+      const pageSize = parseCookiePageSize(req.headers.cookie);
+      const meta = paginate({
+        total: ranked.length,
+        page: parsePage(url.searchParams),
+        pageSize,
+      });
+      const windowed = ranked.slice(meta.offset, meta.offset + meta.limit);
+      return sendHtml(
+        res,
+        layout({
+          title: `Dashboard · ${dim.nav}`,
+          path: dim.path,
+          heading: `All by ${dim.nav}`,
+          query: dim.nav,
+          pageSize,
+          countLabel: countText(dim.nav, meta, windowed.length),
+          lede: "Live unique-person counts. Empty buckets stay empty. Country and organization are not guessed.",
+          body: listSection(
+            dashboardRankBody(dim, windowed),
+            pager(meta, { basePath: dim.path, noun: "rows", pageSizes: PAGE_SIZES }),
+            listHead({
+              title: dim.nav,
+              total: meta.total,
+              index: 1,
+              of: windowed.length,
+            }),
+          ),
+        }),
+      );
+    }
+    const model = buildDashboard(people);
+    return sendHtml(
+      res,
+      layout({
+        title: "Dashboard",
+        path: "/dashboard",
+        heading: "Dashboard",
+        query: "dashboard",
+        countLabel: `${model.people} people · ${model.trends.events} events`,
+        lede: "Live unique-person ranks and calendar event-date trends. One card per person. Reason maps to KEEP tags. Empty org, country, and branch buckets stay empty.",
+        body: dashboardBody(model),
+      }),
+    );
   }
 
   if (p.startsWith("/people/")) {

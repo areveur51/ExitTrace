@@ -117,6 +117,9 @@ test("html pages render", async () => {
     "/government",
     "/arrests",
     "/corona-comms",
+    "/dashboard",
+    "/dashboard/reason",
+    "/dashboard/organization",
     "/indictments",
     "/indictments/civilians",
     "/indictments/non-civilians",
@@ -227,6 +230,7 @@ test("every category list page ships a pager", async () => {
     "/government",
     "/arrests",
     "/corona-comms",
+    "/dashboard/reason",
     "/indictments",
     "/indictments/civilians",
     "/indictments/non-civilians",
@@ -278,6 +282,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /href="\/firings"/);
   assert.match(res.body, /href="\/arrests"/);
   assert.match(res.body, /href="\/corona-comms"/);
+  assert.match(res.body, /href="\/dashboard"/);
   assert.match(res.body, /href="\/indictments"/);
   assert.match(res.body, /href="\/unsorted"/);
   assert.match(res.body, /data-key="u"/);
@@ -334,6 +339,7 @@ test("list pages expose four themes and keep catalog copy, not pin LARP", async 
   assert.match(list.body, /href="\/deaths"/);
   assert.match(list.body, /href="\/arrests"/);
   assert.match(list.body, /href="\/corona-comms"/);
+  assert.match(list.body, /href="\/dashboard"/);
   assert.match(list.body, /href="\/indictments"/);
   assert.match(list.body, /href="\/unsorted"/);
   assert.match(list.body, /href="\/add"/);

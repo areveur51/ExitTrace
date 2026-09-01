@@ -31,6 +31,10 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'::
 ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
 -- Identity tags (civilian, non_civilian, celebrity, official, ceo). Multi-tag.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Optional dashboard attrs. Empty stays empty; never guessed from role.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS organization TEXT;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS branch TEXT;
 
 CREATE TABLE IF NOT EXISTS person_events (
   person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,

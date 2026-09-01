@@ -116,6 +116,12 @@ Releases:
 | `/deaths/ceos` | Deaths filtered to people tagged CEO |
 | `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
+| `/dashboard` | Live unique-person ranks and event-date trends |
+| `/dashboard/organization` | Ranked organizations (empty unless organization is stored) |
+| `/dashboard/country` | Ranked countries (empty unless country is stored) |
+| `/dashboard/reason` | Ranked KEEP tags (firings, resignations, deaths, corona comms, …) |
+| `/dashboard/branch` | Ranked branches (empty unless branch is stored) |
+| `/dashboard/position` | Ranked roles from the existing role field |
 | `/add` | Queue a person name or official government dog-comm |
 | `/downloads` | How the GitHub Release zip is named |
 
@@ -135,6 +141,8 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /people/:id` | One person row |
 | `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm snapshot |
+| `GET /dashboard` | Unique-person ranks and event-date trends |
+| `GET /dashboard/:dimension` | Full ranked list (organization, country, reason, branch, position) |
 | `GET /add` | Queue a person or official dog-comm |
 | `POST /add` | Store a pending add request |
 | `GET /api/people?category=` | Seeded person rows |

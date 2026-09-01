@@ -83,6 +83,28 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => applyPageSize(btn.getAttribute("data-page-size-set")));
   }
 
+  const reduceMotion =
+    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function countUp(el) {
+    const end = Number(el.getAttribute("data-count") || 0);
+    if (!Number.isFinite(end)) return;
+    if (reduceMotion || end <= 0) {
+      el.textContent = String(end);
+      return;
+    }
+    const start = performance.now();
+    const ms = 700;
+    function frame(now) {
+      const t = Math.min(1, (now - start) / ms);
+      const eased = 1 - (1 - t) * (1 - t);
+      el.textContent = String(Math.round(end * eased));
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    el.textContent = "0";
+    requestAnimationFrame(frame);
+  }
+  for (const el of document.querySelectorAll(".dash-count[data-count]")) countUp(el);
+
   const modal = document.getElementById("tui-modal");
   const modalTitle = document.getElementById("modal-title");
   const modalBody = document.getElementById("modal-body");
