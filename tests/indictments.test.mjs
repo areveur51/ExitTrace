@@ -111,8 +111,8 @@ test("indictment routes render empty HUD lists; parent is not a dump", async () 
   }
 
   const index = await requestPage("/indictments");
-  assert.match(index.body, /href="\/indictments\/civilians"/);
-  assert.match(index.body, /href="\/indictments\/non-civilians"/);
+  assert.match(index.body, /value="\/indictments\/civilians"/);
+  assert.match(index.body, /value="\/indictments\/non-civilians"/);
   assert.match(index.body, />Civilians</);
   assert.match(index.body, />Non-civilians</);
   assert.doesNotMatch(index.body, /source-card/);
@@ -120,7 +120,7 @@ test("indictment routes render empty HUD lists; parent is not a dump", async () 
   const civilians = await requestPage("/indictments/civilians");
   assert.match(civilians.body, /data-key="i"/);
   assert.match(civilians.body, /href="\/indictments"/);
-  assert.match(civilians.body, /href="\/indictments\/civilians"/);
+  assert.match(civilians.body, /value="\/indictments\/civilians"/);
   assert.match(civilians.body, /Civilians/);
   assert.match(civilians.body, /Non-civilians/);
   assert.match(civilians.body, /aria-label="Identity filters"/);
@@ -207,7 +207,7 @@ test("parked source posts rematch onto indictment KEEP kinds; parent lists the u
   const index = await requestPage("/indictments");
   assert.match(index.body, /href="\/people\/casey-vale"/);
   assert.match(index.body, /Casey Vale/);
-  assert.match(index.body, /href="\/indictments\/civilians"/);
+  assert.match(index.body, /value="\/indictments\/civilians"/);
   const other = await requestPage("/indictments/non-civilians");
   assert.doesNotMatch(other.body, /href="\/people\/casey-vale"/);
 });

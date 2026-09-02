@@ -17,64 +17,52 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LARP =
   /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|KILO MICROCYBER/i;
 
-test("normalizeTheme keeps the five HUD ids and defaults to cyberdeck", () => {
-  assert.equal(DEFAULT_THEME, "cyberdeck");
-  assert.deepEqual(THEME_IDS, ["cyberdeck", "phosphor", "greyscale", "stencil", "glass"]);
+test("normalizeTheme is glass-only and defaults to glass", () => {
+  assert.equal(DEFAULT_THEME, "glass");
+  assert.deepEqual(THEME_IDS, ["glass"]);
   assert.deepEqual(
     THEMES.map((t) => t.label),
-    ["Cyberdeck", "Phosphor", "Greyscale", "Stencil", "Glass"],
+    ["Glass"],
   );
-  assert.equal(normalizeTheme("phosphor"), "phosphor");
-  assert.equal(normalizeTheme("greyscale"), "greyscale");
-  assert.equal(normalizeTheme("stencil"), "stencil");
   assert.equal(normalizeTheme("glass"), "glass");
-  assert.equal(normalizeTheme("cyberdeck"), "cyberdeck");
-  assert.equal(normalizeTheme("nope"), "cyberdeck");
-  assert.equal(normalizeTheme(""), "cyberdeck");
-  assert.equal(normalizeTheme(null), "cyberdeck");
+  assert.equal(normalizeTheme("cyberdeck"), "glass");
+  assert.equal(normalizeTheme("phosphor"), "glass");
+  assert.equal(normalizeTheme("greyscale"), "glass");
+  assert.equal(normalizeTheme("stencil"), "glass");
+  assert.equal(normalizeTheme("visual-novel"), "glass");
+  assert.equal(normalizeTheme("nope"), "glass");
+  assert.equal(normalizeTheme(""), "glass");
+  assert.equal(normalizeTheme(null), "glass");
 });
 
-test("applyTheme writes data-theme and persists the choice", () => {
+test("applyTheme always locks Glass and clears stale theme storage", () => {
   const attrs = {};
-  const store = {};
-  const pressed = [];
+  const store = { [THEME_STORAGE_KEY]: "cyberdeck" };
+  const removed = [];
   const root = { setAttribute(k, v) { attrs[k] = v; } };
   const storage = {
     setItem(k, v) { store[k] = v; },
     getItem(k) { return store[k]; },
+    removeItem(k) {
+      removed.push(store[k]);
+      delete store[k];
+    },
   };
-  const buttons = THEME_IDS.map((id) => ({
-    id,
-    getAttribute(name) {
-      if (name === "data-theme-set") return id;
-      if (name === "aria-pressed") return pressed[id];
-      return null;
-    },
-    setAttribute(name, value) {
-      if (name === "aria-pressed") pressed[id] = value;
-    },
-  }));
 
-  assert.equal(applyTheme("stencil", { root, storage, buttons }), "stencil");
-  assert.equal(attrs["data-theme"], "stencil");
-  assert.equal(store[THEME_STORAGE_KEY], "stencil");
-  assert.equal(pressed.stencil, "true");
-  assert.equal(pressed.cyberdeck, "false");
-
-  assert.equal(applyTheme("glass", { root, storage, buttons }), "glass");
+  assert.equal(applyTheme("phosphor", { root, storage }), "glass");
   assert.equal(attrs["data-theme"], "glass");
   assert.equal(store[THEME_STORAGE_KEY], "glass");
-  assert.equal(pressed.glass, "true");
-  assert.equal(pressed.stencil, "false");
+  assert.ok(removed.includes("cyberdeck"));
 
-  assert.equal(applyTheme("unknown", { root, storage, buttons }), "cyberdeck");
-  assert.equal(attrs["data-theme"], "cyberdeck");
-  assert.equal(store[THEME_STORAGE_KEY], "cyberdeck");
-  assert.equal(pressed.cyberdeck, "true");
-  assert.equal(pressed.glass, "false");
+  assert.equal(applyTheme("unknown", { root, storage }), "glass");
+  assert.equal(attrs["data-theme"], "glass");
+  assert.equal(store[THEME_STORAGE_KEY], "glass");
+
+  assert.equal(applyTheme("glass", { root, storage }), "glass");
+  assert.equal(attrs["data-theme"], "glass");
 });
 
-test("theme switcher and layout default to Cyberdeck with real catalog routes", () => {
+test("layout defaults to Glass with real catalog routes and no theme picker", () => {
   const switcher = themeSwitcher();
   const footer = keymapFooter("/firings");
   const page = layout({
@@ -84,22 +72,22 @@ test("theme switcher and layout default to Cyberdeck with real catalog routes", 
     body: `<p class="list-head">Firings</p>`,
   });
 
+  assert.equal(switcher, "");
   for (const html of [switcher, footer, page]) {
-    assert.match(html, /data-theme-set="cyberdeck"/);
-    assert.match(html, /data-theme-set="phosphor"/);
-    assert.match(html, /data-theme-set="greyscale"/);
-    assert.match(html, /data-theme-set="stencil"/);
-    assert.match(html, /data-theme-set="glass"/);
-    assert.match(html, />Cyberdeck</);
-    assert.match(html, />Phosphor</);
-    assert.match(html, />Greyscale</);
-    assert.match(html, />Stencil</);
-    assert.match(html, />Glass</);
+    assert.doesNotMatch(html, /data-theme-set=/);
+    assert.doesNotMatch(html, /class="theme-switch"/);
+    assert.doesNotMatch(html, /theme-btn/);
+    assert.doesNotMatch(html, />Cyberdeck</);
+    assert.doesNotMatch(html, />Phosphor</);
+    assert.doesNotMatch(html, />Greyscale</);
+    assert.doesNotMatch(html, />Stencil</);
     assert.doesNotMatch(html, LARP);
   }
 
-  assert.match(page, /data-theme="cyberdeck"/);
+  assert.match(page, /data-theme="glass"/);
   assert.match(page, /exittrace-theme/);
+  assert.match(page, /localStorage\.removeItem/);
+  assert.doesNotMatch(page, /data-theme="cyberdeck"/);
   assert.match(footer, /href="\/firings"/);
   assert.match(footer, /href="\/resignations"/);
   assert.match(footer, /href="\/government"/);
@@ -114,41 +102,37 @@ test("theme switcher and layout default to Cyberdeck with real catalog routes", 
   assert.match(footer, /\]<\/span> Firings</);
   assert.match(footer, /\]<\/span> Resignations</);
   assert.match(footer, /\]<\/span> Arrests</);
-  assert.match(footer, /\]<\/span> Corona Comms</);
+  assert.match(footer, /\]<\/span> Corona</);
   assert.match(footer, /\]<\/span> Dashboard</);
   assert.match(footer, /\]<\/span> Indictments</);
   assert.match(footer, /\]<\/span> Unsorted</);
   assert.doesNotMatch(footer, /CLOSE HACK|BREACH PROTOCOL|SurveilTrack|ROOT@/i);
 });
 
-test("CSS tokens cover five themes and keep cyberdeck as the default palette", () => {
+test("CSS tokens cover Glass only and keep tracking-database HUD chrome", () => {
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
   const themeIds = [...css.matchAll(/html\[data-theme="([^"]+)"\]/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(themeIds)], ["cyberdeck", "phosphor", "greyscale", "stencil", "glass"]);
-  assert.match(css, /html\[data-theme="cyberdeck"\]/);
-  assert.match(css, /html\[data-theme="phosphor"\]/);
-  assert.match(css, /html\[data-theme="greyscale"\]/);
-  assert.match(css, /html\[data-theme="stencil"\]/);
+  assert.deepEqual([...new Set(themeIds)], ["glass"]);
   assert.match(css, /html\[data-theme="glass"\]/);
-  assert.match(css, /--bg:\s*#0a0203/i);
+  assert.doesNotMatch(css, /html\[data-theme="cyberdeck"\]/);
+  assert.doesNotMatch(css, /html\[data-theme="phosphor"\]/);
+  assert.doesNotMatch(css, /html\[data-theme="greyscale"\]/);
+  assert.doesNotMatch(css, /html\[data-theme="stencil"\]/);
+  assert.doesNotMatch(css, /visual-novel/);
+  assert.match(css, /--bg:\s*#000000/i);
   assert.match(css, /--red:\s*#e23a32/i);
-  assert.match(css, /--cyan:\s*#3fe0e8/i);
-  assert.match(css, /--ink:\s*#00e08a/i);
-  assert.match(css, /--red:\s*#00e08a/i);
-  assert.match(css, /--status-ok:\s*#3dcc6a/i);
-  assert.match(css, /--status-alert:\s*#d94a42/i);
-  assert.match(css, /--status-warn:\s*#d4a017/i);
-  assert.match(css, /--red:\s*#ff6a00/i);
-  assert.match(css, /--cyan:\s*#a0d8e0/i);
-  assert.match(css, /--bg:\s*#121212/i);
+  assert.match(css, /--cyan:\s*#7ee9ff/i);
+  assert.match(css, /--amber:\s*#f07a18/i);
+  assert.match(css, /--ink:\s*#f4f6f8/i);
+  assert.match(css, /--label:\s*#ffffff/i);
+  assert.match(css, /--status-alert:\s*#e23a32/i);
   assert.match(css, /backdrop-filter:\s*blur\(/);
-  assert.match(css, /--status-ok:\s*#c6e020/i);
-  assert.match(css, /--status-alert:\s*#e08a28/i);
-  assert.match(css, /--ink:\s*#f5f6f8/i);
-  assert.match(css, /\.theme-btn\[data-theme-set="glass"\]/);
-  assert.match(css, /\.theme-switch/);
-  assert.match(css, /\.theme-btn/);
+  assert.doesNotMatch(css, /\.theme-switch/);
+  assert.doesNotMatch(css, /\.theme-btn/);
+  assert.doesNotMatch(css, /data-theme-set/);
   assert.match(css, /url\("\/media\/themes\/glass-bg\.webp"\)/);
+  assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*border:\s*0;/);
+  assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*backdrop-filter:\s*none;/);
   assert.doesNotMatch(css, /pinterest|pinimg|i\.pinimg/i);
   assert.ok(
     fs.existsSync(path.join(ROOT, "app", "public", "media", "themes", "glass-bg.webp")),
@@ -158,16 +142,17 @@ test("CSS tokens cover five themes and keep cyberdeck as the default palette", (
   assert.doesNotMatch(css, LARP);
 });
 
-test("app.js switches data-theme immediately and writes localStorage", () => {
+test("app.js locks Glass and clears stale localStorage theme keys", () => {
   const js = fs.readFileSync(path.join(ROOT, "app", "public", "app.js"), "utf8");
-  for (const id of THEME_IDS) {
-    assert.match(js, new RegExp(`"${id}"`));
-  }
+  assert.match(js, /"glass"/);
+  assert.match(js, /lockGlassTheme/);
   assert.match(js, /exittrace-theme/);
   assert.match(js, /localStorage\.setItem/);
   assert.match(js, /localStorage\.getItem/);
+  assert.match(js, /localStorage\.removeItem/);
   assert.match(js, /setAttribute\("data-theme"/);
-  assert.match(js, /data-theme-set/);
-  assert.match(js, /aria-pressed/);
+  assert.doesNotMatch(js, /data-theme-set/);
+  assert.doesNotMatch(js, /theme-switch/);
+  assert.doesNotMatch(js, /cyberdeck|phosphor|greyscale|stencil|visual-novel/);
   assert.doesNotMatch(js, LARP);
 });

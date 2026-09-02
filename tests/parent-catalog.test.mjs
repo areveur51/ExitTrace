@@ -135,9 +135,10 @@ test("GET /deaths lists every death kind; child routes filter", async () => {
   assert.match(parent.body, /class="tui-row person-card/);
   assert.match(parent.body, /class="portrait thumb"/);
   assert.match(parent.body, /\/media\/thumbs\/people\//);
-  assert.match(parent.body, /href="\/deaths\/celebrities"/);
-  assert.match(parent.body, /href="\/deaths\/officials"/);
-  assert.match(parent.body, /href="\/deaths\/ceos"/);
+  assert.match(parent.body, /value="\/deaths\/celebrities"/);
+  assert.match(parent.body, /value="\/deaths\/officials"/);
+  assert.match(parent.body, /value="\/deaths\/ceos"/);
+  assert.match(parent.body, />Executives</);
   assert.doesNotMatch(parent.body, /source-card/);
   assert.doesNotMatch(parent.body, /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL/i);
   assert.match(parent.body, new RegExp(`${deaths.length} available`));
@@ -183,8 +184,8 @@ test("GET /indictments lists every indictment kind; child routes filter", async 
   assert.match(empty.body, /class="hud-stage"/);
   assert.match(empty.body, /No rows on this page/);
   assert.doesNotMatch(empty.body, /person-card/);
-  assert.match(empty.body, /href="\/indictments\/civilians"/);
-  assert.match(empty.body, /href="\/indictments\/non-civilians"/);
+  assert.match(empty.body, /value="\/indictments\/civilians"/);
+  assert.match(empty.body, /value="\/indictments\/non-civilians"/);
 
   const civilian = await applyIdentifiedPerson({
     subject: "Casey Vale",
@@ -211,8 +212,8 @@ test("GET /indictments lists every indictment kind; child routes filter", async 
   assert.match(parent.body, /Casey Vale/);
   assert.match(parent.body, new RegExp(`href="/people/${officer.person.id}"`));
   assert.match(parent.body, /Riley Shaw/);
-  assert.match(parent.body, /href="\/indictments\/civilians"/);
-  assert.match(parent.body, /href="\/indictments\/non-civilians"/);
+  assert.match(parent.body, /value="\/indictments\/civilians"/);
+  assert.match(parent.body, /value="\/indictments\/non-civilians"/);
   assert.doesNotMatch(parent.body, /source-card/);
 
   assert.match(civilians.body, /href="\/people\/casey-vale"/);

@@ -155,6 +155,8 @@ test("app.js persists page size in localStorage like themes", () => {
   const js = fs.readFileSync(path.join(ROOT, "app", "public", "app.js"), "utf8");
   assert.match(js, /exittrace-page-size/);
   assert.match(js, /data-page-size-set/);
+  assert.match(js, /data-filter-select/);
+  assert.match(js, /tag === "SELECT"/);
   assert.match(js, /localStorage\.setItem/);
   assert.match(js, /searchParams\.delete\("page"\)/);
   assert.doesNotMatch(js, LARP);

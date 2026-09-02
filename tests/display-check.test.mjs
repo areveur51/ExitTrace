@@ -75,9 +75,9 @@ test("after insert, list + detail HTML show the row; /deaths and health do not c
   const deaths = await fetchCatalogHtml("/deaths");
   assert.equal(deaths.status, 200);
   assert.doesNotMatch(deaths.body, /href="\/people\/casey-vale"/);
-  assert.match(deaths.body, /href="\/deaths\/celebrities"/);
-  assert.match(deaths.body, /href="\/deaths\/officials"/);
-  assert.match(deaths.body, /href="\/deaths\/ceos"/);
+  assert.match(deaths.body, /value="\/deaths\/celebrities"/);
+  assert.match(deaths.body, /value="\/deaths\/officials"/);
+  assert.match(deaths.body, /value="\/deaths\/ceos"/);
 
   const health = await fetchCatalogHtml("/api/health");
   assert.equal(health.status, 200);

@@ -5,7 +5,7 @@ export const IDENTITY_TAGS = [
   { id: "non_civilian", nav: "Non-civilians" },
   { id: "celebrity", nav: "Celebrities" },
   { id: "official", nav: "Officials" },
-  { id: "ceo", nav: "CEOs" },
+  { id: "ceo", nav: "Executives" },
 ];
 
 export const IDENTITY_TAG_IDS = IDENTITY_TAGS.map((t) => t.id);

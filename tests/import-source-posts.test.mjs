@@ -203,16 +203,16 @@ test("Arrests has no source-card; parked posts render on Unsorted", async () => 
   assert.equal(deaths.status, 200);
   assert.doesNotMatch(deaths.body, /source-card/);
   assert.doesNotMatch(deaths.body, /poster @example_obit/);
-  assert.match(deaths.body, /href="\/deaths\/celebrities"/);
-  assert.match(deaths.body, /href="\/deaths\/officials"/);
-  assert.match(deaths.body, /href="\/deaths\/ceos"/);
+  assert.match(deaths.body, /value="\/deaths\/celebrities"/);
+  assert.match(deaths.body, /value="\/deaths\/officials"/);
+  assert.match(deaths.body, /value="\/deaths\/ceos"/);
 
   const indictments = await requestPage("/indictments");
   assert.equal(indictments.status, 200);
   assert.doesNotMatch(indictments.body, /source-card/);
   assert.doesNotMatch(indictments.body, /person-card/);
-  assert.match(indictments.body, /href="\/indictments\/civilians"/);
-  assert.match(indictments.body, /href="\/indictments\/non-civilians"/);
+  assert.match(indictments.body, /value="\/indictments\/civilians"/);
+  assert.match(indictments.body, /value="\/indictments\/non-civilians"/);
 
   const search = await requestPage("/search?q=example_desk");
   assert.equal(search.status, 200);

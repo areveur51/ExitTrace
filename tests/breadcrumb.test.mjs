@@ -14,7 +14,7 @@ test("list pages nest death and indictment indexes", () => {
   ]);
   assert.deepEqual(breadcrumbItems({ path: "/corona-comms" }), [
     { href: "/", label: "Home" },
-    { href: "/corona-comms", label: "Corona Comms" },
+    { href: "/corona-comms", label: "Corona" },
   ]);
   assert.deepEqual(breadcrumbItems({ path: "/dashboard/reason" }), [
     { href: "/", label: "Home" },
@@ -29,6 +29,11 @@ test("list pages nest death and indictment indexes", () => {
     { href: "/", label: "Home" },
     { href: "/deaths", label: "Deaths" },
     { href: "/deaths/celebrities", label: "Celebrities" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/deaths/ceos" }), [
+    { href: "/", label: "Home" },
+    { href: "/deaths", label: "Deaths" },
+    { href: "/deaths/ceos", label: "Executives" },
   ]);
   assert.deepEqual(breadcrumbItems({ path: "/indictments/non-civilians" }), [
     { href: "/", label: "Home" },
@@ -58,7 +63,7 @@ test("detail pages link back through the parent catalog", () => {
     }),
     [
       { href: "/", label: "Home" },
-      { href: "/corona-comms", label: "Corona Comms" },
+      { href: "/corona-comms", label: "Corona" },
       { href: "/people/casey-vale", label: "Casey Vale" },
     ],
   );

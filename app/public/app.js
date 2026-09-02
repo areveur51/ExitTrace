@@ -32,31 +32,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   showToast(document.body.getAttribute("data-toast") || "page loaded");
 
-  const THEME_IDS = ["cyberdeck", "phosphor", "greyscale", "stencil", "glass"];
   const THEME_KEY = "exittrace-theme";
-  const themeButtons = document.querySelectorAll("[data-theme-set]");
-
-  function applyTheme(id) {
-    const theme = THEME_IDS.includes(id) ? id : "cyberdeck";
-    document.documentElement.setAttribute("data-theme", theme);
+  function lockGlassTheme() {
+    document.documentElement.setAttribute("data-theme", "glass");
     try {
-      localStorage.setItem(THEME_KEY, theme);
+      const prev = localStorage.getItem(THEME_KEY);
+      if (prev && prev !== "glass") localStorage.removeItem(THEME_KEY);
+      localStorage.setItem(THEME_KEY, "glass");
     } catch {
       /* private mode / quota */
     }
-    for (const btn of themeButtons) {
-      btn.setAttribute("aria-pressed", btn.getAttribute("data-theme-set") === theme ? "true" : "false");
-    }
   }
-
-  try {
-    applyTheme(localStorage.getItem(THEME_KEY) || "cyberdeck");
-  } catch {
-    applyTheme("cyberdeck");
-  }
-  for (const btn of themeButtons) {
-    btn.addEventListener("click", () => applyTheme(btn.getAttribute("data-theme-set")));
-  }
+  lockGlassTheme();
 
   const PAGE_SIZES = [17, 34, 51];
   const PAGE_SIZE_KEY = "exittrace-page-size";
@@ -237,7 +224,19 @@ document.addEventListener("DOMContentLoaded", () => {
   function typingInField(el) {
     if (!el) return false;
     const tag = el.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+    return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || el.isContentEditable;
+  }
+
+  function catalogFilterPath(raw) {
+    const value = String(raw || "");
+    return value.startsWith("/") && !value.startsWith("//") ? value : "";
+  }
+
+  for (const sel of document.querySelectorAll("[data-filter-select]")) {
+    sel.addEventListener("change", () => {
+      const href = catalogFilterPath(sel.value);
+      if (href) window.location.assign(href);
+    });
   }
 
   document.addEventListener("keydown", (e) => {
