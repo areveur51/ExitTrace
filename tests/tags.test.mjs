@@ -116,6 +116,7 @@ test("one person can carry firing + celebrity + official + ceo tags", async () =
   const firings = await requestPage(`/firings?tags=celebrity`);
   assert.match(firings.body, new RegExp(`href="/people/${row.id}"`));
   assert.match(firings.body, /aria-label="Identity filters"/);
+  assert.match(firings.body, /value="\/firings\?tags=celebrity"[^>]*selected/);
   assert.match(firings.body, />Age</);
 
   const officials = await requestPage("/government");
