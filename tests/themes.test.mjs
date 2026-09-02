@@ -15,7 +15,7 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LARP =
-  /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|KILO MICROCYBER/i;
+  /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|KILO MICROCYBER|Batman|Batmobile|Warner|DC Comics|BATMOBILE GUNNER/i;
 
 test("normalizeTheme is glass-only and defaults to glass", () => {
   assert.equal(DEFAULT_THEME, "glass");
@@ -109,7 +109,7 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.doesNotMatch(footer, /CLOSE HACK|BREACH PROTOCOL|SurveilTrack|ROOT@/i);
 });
 
-test("CSS tokens cover Glass only and keep tracking-database HUD chrome", () => {
+test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
   const themeIds = [...css.matchAll(/html\[data-theme="([^"]+)"\]/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(themeIds)], ["glass"]);
@@ -121,12 +121,14 @@ test("CSS tokens cover Glass only and keep tracking-database HUD chrome", () => 
   assert.doesNotMatch(css, /visual-novel/);
   assert.match(css, /--bg:\s*#000000/i);
   assert.match(css, /--red:\s*#e23a32/i);
-  assert.match(css, /--cyan:\s*#7ee9ff/i);
-  assert.match(css, /--amber:\s*#f07a18/i);
+  assert.match(css, /--cyan:\s*#f4f6f8/i);
+  assert.match(css, /--amber:\s*#ffb000/i);
   assert.match(css, /--ink:\s*#f4f6f8/i);
   assert.match(css, /--label:\s*#ffffff/i);
+  assert.match(css, /--status-ok:\s*#ffb000/i);
   assert.match(css, /--status-alert:\s*#e23a32/i);
   assert.match(css, /backdrop-filter:\s*blur\(/);
+  assert.match(css, /repeating-radial-gradient/);
   assert.doesNotMatch(css, /\.theme-switch/);
   assert.doesNotMatch(css, /\.theme-btn/);
   assert.doesNotMatch(css, /data-theme-set/);
@@ -138,6 +140,7 @@ test("CSS tokens cover Glass only and keep tracking-database HUD chrome", () => 
     fs.existsSync(path.join(ROOT, "app", "public", "media", "themes", "glass-bg.webp")),
     "glass theme still is vendored locally",
   );
+  assert.doesNotMatch(css, /#7ee9ff|#5ec8e0|#f07a18|#c45a12/);
   assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);
   assert.doesNotMatch(css, LARP);
 });
