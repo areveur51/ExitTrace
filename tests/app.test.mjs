@@ -357,7 +357,7 @@ test("glass theme still is served from the local public path", async () => {
   assert.match(String(res.headers["content-type"] || ""), /image\/webp/);
 });
 
-test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop layouts", async () => {
+test("HUD palette uses red/black/gold tokens and documents phone/iPad/desktop layouts", async () => {
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
   const html = fs.readFileSync(path.join(ROOT, "app", "lib", "html.mjs"), "utf8");
   const home = await get("/");
@@ -366,12 +366,12 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
 
   assert.match(css, /--bg:\s*#000000/i);
   assert.match(css, /--red:\s*#e23a32/i);
-  assert.match(css, /--cyan:\s*#7ee9ff/i);
-  assert.match(css, /--cyan-dim:\s*#5ec8e0/i);
-  assert.match(css, /--brick:\s*#c45a12/i);
+  assert.match(css, /--cyan:\s*#f4f6f8/i);
+  assert.match(css, /--cyan-dim:\s*#c8ccd2/i);
+  assert.match(css, /--brick:\s*#c9a227/i);
   assert.match(css, /--ink:\s*#f4f6f8/i);
   assert.match(css, /--label:\s*#ffffff/i);
-  assert.match(css, /--amber:\s*#f07a18/i);
+  assert.match(css, /--amber:\s*#ffb000/i);
   assert.match(css, /--bin-fill:/);
   assert.match(css, /--hud-year:\s*0\.95rem/);
   assert.match(css, /--hud-label:\s*0\.8rem/);
@@ -383,13 +383,14 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   assert.match(css, /@media \(max-width: 720px\)/);
   assert.match(css, /@media \(min-width: 721px\) and \(max-width: 1100px\)/);
   assert.match(css, /@media \(min-width: 1280px\)/);
+  assert.doesNotMatch(css, /#7ee9ff|#5ec8e0|#f07a18|#c45a12/);
   assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);
   assert.match(html, /fill="var\(--label\)"/);
   assert.match(html, /fill="var\(--brick\)"/);
-  assert.doesNotMatch(html, /#e6c384|#c4b5fd|#4c1d95|#67e8f9|#ff2a2a/);
+  assert.doesNotMatch(html, /#e6c384|#c4b5fd|#4c1d95|#67e8f9|#ff2a2a|#7ee9ff/);
   assert.doesNotMatch(
     html,
-    /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@HARADAN|BIO-INTERFACE/i,
+    /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@HARADAN|BIO-INTERFACE|Batman|Batmobile|Warner/i,
   );
   assert.match(home.body, /data-theme="glass"/);
   assert.match(home.body, /fill="var\(--label\)"/);
