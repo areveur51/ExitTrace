@@ -329,7 +329,7 @@ a:hover { color: var(--ink); }
   width: clamp(9.25rem, 40%, 13.5rem);
   aspect-ratio: 1928 / 965;
   margin-left: var(--race-center);
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.45rem;
   transform: translateX(calc(-1 * var(--disc-in-crop)));
   background-color: transparent;
   background-image: url("/media/themes/glass-callsign.png");
