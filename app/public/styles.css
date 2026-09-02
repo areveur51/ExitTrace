@@ -1088,11 +1088,14 @@ html[data-theme="glass"] body.tui::before {
   z-index: 0;
   opacity: 1;
   background-color: #000000;
+  /* Clean HD call signal over the NYC still: photographed-ray amber
+     cone + brighter solid disc, photographed silhouette. Transparent outside. */
   background-image:
+    url("/media/themes/glass-callsign.png"),
     linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.7)),
     url("/media/themes/glass-bg.webp");
-  background-size: cover, cover;
-  background-position: center, center;
+  background-size: cover, cover, cover;
+  background-position: center, center, center;
   background-repeat: no-repeat;
 }
 html[data-theme="glass"] body.tui::after {

@@ -133,6 +133,11 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
   assert.doesNotMatch(css, /\.theme-btn/);
   assert.doesNotMatch(css, /data-theme-set/);
   assert.match(css, /url\("\/media\/themes\/glass-bg\.webp"\)/);
+  assert.match(css, /url\("\/media\/themes\/glass-callsign\.png"\)/);
+  assert.match(
+    css,
+    /url\("\/media\/themes\/glass-callsign\.png"\),[\s\S]*?url\("\/media\/themes\/glass-bg\.webp"\)/,
+  );
   assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*border:\s*0;/);
   assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*backdrop-filter:\s*none;/);
   assert.doesNotMatch(css, /pinterest|pinimg|i\.pinimg/i);
@@ -140,6 +145,13 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
     fs.existsSync(path.join(ROOT, "app", "public", "media", "themes", "glass-bg.webp")),
     "glass theme still is vendored locally",
   );
+  const callsign = path.join(ROOT, "app", "public", "media", "themes", "glass-callsign.png");
+  assert.ok(fs.existsSync(callsign), "glass call-sign overlay is vendored locally");
+  assert.ok(
+    fs.statSync(callsign).size > 80_000,
+    "call-sign overlay stays a photographic asset, not a tiny icon",
+  );
+  assert.equal(fs.existsSync(path.join(ROOT, "app", "public", "media", "themes", "glass-callsign.webp")), false);
   assert.doesNotMatch(css, /#7ee9ff|#5ec8e0|#f07a18|#c45a12/);
   assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);
   assert.doesNotMatch(css, LARP);
