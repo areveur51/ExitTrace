@@ -1088,8 +1088,8 @@ html[data-theme="glass"] body.tui::before {
   z-index: 0;
   opacity: 1;
   background-color: #000000;
-  /* HD yellow call signal only (photographic beam + disc + profile)
-     over the NYC wireframe still. Transparent outside the signal. */
+  /* Clean HD yellow call signal (geometric beam + disc, photographed
+     silhouette) over the NYC wireframe still. Transparent outside. */
   background-image:
     url("/media/themes/glass-callsign.png"),
     linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.7)),
