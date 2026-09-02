@@ -32,31 +32,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   showToast(document.body.getAttribute("data-toast") || "page loaded");
 
-  const THEME_IDS = ["cyberdeck", "phosphor", "greyscale", "stencil", "glass"];
   const THEME_KEY = "exittrace-theme";
-  const themeButtons = document.querySelectorAll("[data-theme-set]");
-
-  function applyTheme(id) {
-    const theme = THEME_IDS.includes(id) ? id : "cyberdeck";
-    document.documentElement.setAttribute("data-theme", theme);
+  function lockGlassTheme() {
+    document.documentElement.setAttribute("data-theme", "glass");
     try {
-      localStorage.setItem(THEME_KEY, theme);
+      const prev = localStorage.getItem(THEME_KEY);
+      if (prev && prev !== "glass") localStorage.removeItem(THEME_KEY);
+      localStorage.setItem(THEME_KEY, "glass");
     } catch {
       /* private mode / quota */
     }
-    for (const btn of themeButtons) {
-      btn.setAttribute("aria-pressed", btn.getAttribute("data-theme-set") === theme ? "true" : "false");
-    }
   }
-
-  try {
-    applyTheme(localStorage.getItem(THEME_KEY) || "cyberdeck");
-  } catch {
-    applyTheme("cyberdeck");
-  }
-  for (const btn of themeButtons) {
-    btn.addEventListener("click", () => applyTheme(btn.getAttribute("data-theme-set")));
-  }
+  lockGlassTheme();
 
   const PAGE_SIZES = [17, 34, 51];
   const PAGE_SIZE_KEY = "exittrace-page-size";

@@ -64,7 +64,7 @@ test("dashboard dimensions stay ExitTrace kinds and event columns, not invented 
     DASH_DIMENSIONS.map((d) => d.id),
     ["organization", "country", "reason", "branch", "position"],
   );
-  assert.equal(THEME_IDS.length, 5);
+  assert.equal(THEME_IDS.length, 1);
   assert.ok(!THEME_IDS.includes("dashboard"));
   assert.ok(THEME_IDS.includes("glass"));
   const seed = goldSeed();
@@ -181,8 +181,10 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /class="dash-svg"/);
   assert.match(dash.body, /data-count=/);
   assert.match(dash.body, /Firings/);
-  assert.match(dash.body, /data-theme-set="glass"/);
-  assert.match(dash.body, />Glass</);
+  assert.match(dash.body, /data-theme="glass"/);
+  assert.doesNotMatch(dash.body, /class="theme-switch"/);
+  assert.doesNotMatch(dash.body, /data-theme-set=/);
+  assert.doesNotMatch(dash.body, />Cyberdeck</);
   assert.doesNotMatch(dash.body, />Resigned</);
   assert.doesNotMatch(dash.body, /data-theme-set="[^"]+"[^>]*>\s*Dashboard/);
   const orgBlock = dash.body.split("Organization")[1] || "";

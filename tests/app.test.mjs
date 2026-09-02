@@ -321,21 +321,17 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.doesNotMatch(corona.body, /source-card/);
 });
 
-test("list pages expose five themes and keep catalog copy, not pin LARP", async () => {
+test("list pages lock Glass only and keep catalog copy, not pin LARP", async () => {
   const list = await get("/firings");
   assert.equal(list.status, 200);
-  assert.match(list.body, /data-theme="cyberdeck"/);
-  assert.match(list.body, /class="theme-switch"/);
-  assert.match(list.body, /data-theme-set="cyberdeck"/);
-  assert.match(list.body, /data-theme-set="phosphor"/);
-  assert.match(list.body, /data-theme-set="greyscale"/);
-  assert.match(list.body, /data-theme-set="stencil"/);
-  assert.match(list.body, /data-theme-set="glass"/);
-  assert.match(list.body, />Cyberdeck</);
-  assert.match(list.body, />Phosphor</);
-  assert.match(list.body, />Greyscale</);
-  assert.match(list.body, />Stencil</);
-  assert.match(list.body, />Glass</);
+  assert.match(list.body, /data-theme="glass"/);
+  assert.doesNotMatch(list.body, /class="theme-switch"/);
+  assert.doesNotMatch(list.body, /data-theme-set=/);
+  assert.doesNotMatch(list.body, /theme-btn/);
+  assert.doesNotMatch(list.body, />Cyberdeck</);
+  assert.doesNotMatch(list.body, />Phosphor</);
+  assert.doesNotMatch(list.body, />Greyscale</);
+  assert.doesNotMatch(list.body, />Stencil</);
   assert.match(list.body, /href="\/firings"/);
   assert.match(list.body, /href="\/resignations"/);
   assert.match(list.body, /href="\/government"/);
@@ -368,13 +364,14 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   const list = await get("/firings");
   const detail = await get("/people/james-comey");
 
-  assert.match(css, /--bg:\s*#0a0203/i);
+  assert.match(css, /--bg:\s*#000000/i);
   assert.match(css, /--red:\s*#e23a32/i);
-  assert.match(css, /--cyan:\s*#3fe0e8/i);
-  assert.match(css, /--cyan-dim:\s*#4fd8e0/i);
-  assert.match(css, /--brick:\s*#8e2a22/i);
-  assert.match(css, /--ink:\s*#3fe0e8/i);
-  assert.match(css, /--label:\s*#f2f0ec/i);
+  assert.match(css, /--cyan:\s*#7ee9ff/i);
+  assert.match(css, /--cyan-dim:\s*#5ec8e0/i);
+  assert.match(css, /--brick:\s*#c45a12/i);
+  assert.match(css, /--ink:\s*#f4f6f8/i);
+  assert.match(css, /--label:\s*#ffffff/i);
+  assert.match(css, /--amber:\s*#f07a18/i);
   assert.match(css, /--bin-fill:/);
   assert.match(css, /--hud-year:\s*0\.95rem/);
   assert.match(css, /--hud-label:\s*0\.8rem/);
@@ -387,15 +384,15 @@ test("HUD palette uses red/black/cyan tokens and documents phone/iPad/desktop la
   assert.match(css, /@media \(min-width: 721px\) and \(max-width: 1100px\)/);
   assert.match(css, /@media \(min-width: 1280px\)/);
   assert.doesNotMatch(css, /#e6c384|#0d0d12|#c4b5fd|#4c1d95|#7c3aed|#fbbf24/);
-  assert.match(html, /fill="var\(--red\)"/);
+  assert.match(html, /fill="var\(--label\)"/);
   assert.match(html, /fill="var\(--brick\)"/);
   assert.doesNotMatch(html, /#e6c384|#c4b5fd|#4c1d95|#67e8f9|#ff2a2a/);
   assert.doesNotMatch(
     html,
     /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@HARADAN|BIO-INTERFACE/i,
   );
-  assert.match(home.body, /data-theme="cyberdeck"/);
-  assert.match(home.body, /fill="var\(--red\)"/);
+  assert.match(home.body, /data-theme="glass"/);
+  assert.match(home.body, /fill="var\(--label\)"/);
   assert.match(home.body, /class="tui hud/);
   assert.match(home.body, /class="hud-stage"/);
   assert.match(home.body, /href="\/search"/);
