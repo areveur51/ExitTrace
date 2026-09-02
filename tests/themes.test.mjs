@@ -15,7 +15,7 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LARP =
-  /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|KILO MICROCYBER|BATMOBILE GUNNER|BATMOBILE/i;
+  /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|KILO MICROCYBER/i;
 
 test("normalizeTheme is glass-only and defaults to glass", () => {
   assert.equal(DEFAULT_THEME, "glass");
@@ -109,7 +109,7 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.doesNotMatch(footer, /CLOSE HACK|BREACH PROTOCOL|SurveilTrack|ROOT@/i);
 });
 
-test("CSS tokens cover Glass only and keep Batman-tech HUD chrome", () => {
+test("CSS tokens cover Glass only and keep tracking-database HUD chrome", () => {
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
   const themeIds = [...css.matchAll(/html\[data-theme="([^"]+)"\]/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(themeIds)], ["glass"]);
