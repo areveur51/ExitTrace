@@ -358,9 +358,9 @@ test("glass theme still is served from the local public path", async () => {
 });
 
 test("glass call-sign overlay is served from the local public path", async () => {
-  const res = await get("/media/themes/glass-callsign.webp");
+  const res = await get("/media/themes/glass-callsign.png");
   assert.equal(res.status, 200);
-  assert.match(String(res.headers["content-type"] || ""), /image\/webp/);
+  assert.match(String(res.headers["content-type"] || ""), /image\/png/);
 });
 
 test("HUD palette uses red/black/gold tokens and documents phone/iPad/desktop layouts", async () => {
