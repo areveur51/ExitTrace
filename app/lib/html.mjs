@@ -628,7 +628,10 @@ export function dogRow(row) {
 
 export function homeBody({ version }) {
   return `
-    <a class="pixel-link" href="/" aria-label="ExitTrace home">${pixelWordmark("EXITTRACE")}</a>
+    <div class="home-wordmark">
+      <span class="home-callsign" aria-hidden="true"></span>
+      <a class="pixel-link" href="/" aria-label="ExitTrace home">${pixelWordmark("EXITTRACE")}</a>
+    </div>
     <p class="ver">v${esc(version || "1.0.0")}</p>
     <form class="tui-search" action="/search" method="get" role="search">
       <label class="tui-search-label">
