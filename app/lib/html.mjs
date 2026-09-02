@@ -170,31 +170,27 @@ export function ageFilterForm(actionPath, { minAge, maxAge, tags, deaths } = {})
 
 export function identityFilterNav(basePath, { tags = [], minAge, maxAge } = {}) {
   const main = catalogMainPath(basePath);
-  const selected = new Set(normalizeTags(tags));
-  const locked = main === "/government" ? new Set(["official"]) : new Set();
-  const chips = IDENTITY_TAGS.map((tag) => {
-    const on = selected.has(tag.id);
-    const next = new Set(selected);
-    if (!on && !locked.has(tag.id)) next.add(tag.id);
-    const href = filterPath(main, {
-      tags: [...next],
-      minAge,
-      maxAge,
-    });
-    return `<a class="keychip" href="${esc(href)}"${
-      on ? ' aria-current="true"' : ""
-    }>${esc(tag.nav)}</a>`;
-  });
-  const clearHref = filterPath(main, locked.size ? { tags: [...locked] } : {});
-  const showClear = [...selected].some((id) => !locked.has(id)) || minAge != null || maxAge != null;
-  if (showClear) {
-    chips.push(
-      `<a class="keychip" href="${esc(clearHref)}" data-clear="1">Clear</a>`,
-    );
+  const selected = normalizeTags(tags);
+  const locked = main === "/government" ? ["official"] : [];
+  const age = { minAge, maxAge };
+  const allHref = filterPath(main, { tags: locked, ...age });
+  const options = [{ href: allHref, label: "All" }];
+  for (const tag of IDENTITY_TAGS) {
+    if (locked.includes(tag.id)) continue;
+    const href = filterPath(main, { tags: [...new Set([...locked, tag.id])], ...age });
+    options.push({ href, label: tag.nav });
   }
+  const currentHref = filterPath(main, { tags: selected, ...age });
+  const current = options.find((o) => o.href === currentHref) || options[0];
+  const opts = options
+    .map((o) => {
+      const on = o.href === current.href;
+      return `<option value="${esc(o.href)}"${on ? " selected" : ""}>${esc(o.label)}</option>`;
+    })
+    .join("");
   return `<nav class="identity-filters" aria-label="Identity filters">
-    <span class="identity-filters-label">Filters</span>
-    ${chips.join("")}
+    <label class="identity-filters-label" for="identity-filter">Filters</label>
+    <select class="identity-filter-select" id="identity-filter" data-filter-select>${opts}</select>
   </nav>`;
 }
 

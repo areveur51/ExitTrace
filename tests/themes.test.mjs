@@ -149,6 +149,8 @@ test("CSS tokens cover five themes and keep cyberdeck as the default palette", (
   assert.match(css, /\.theme-switch/);
   assert.match(css, /\.theme-btn/);
   assert.match(css, /url\("\/media\/themes\/glass-bg\.webp"\)/);
+  assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*border:\s*0;/);
+  assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*backdrop-filter:\s*none;/);
   assert.doesNotMatch(css, /pinterest|pinimg|i\.pinimg/i);
   assert.ok(
     fs.existsSync(path.join(ROOT, "app", "public", "media", "themes", "glass-bg.webp")),

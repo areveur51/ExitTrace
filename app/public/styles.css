@@ -553,6 +553,22 @@ a:hover { color: var(--ink); }
   color: var(--muted);
   margin-right: 0.25rem;
 }
+.identity-filter-select {
+  min-height: 44px;
+  min-width: min(100%, 14rem);
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--rule);
+  background: var(--bg-2);
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.identity-filter-select:focus {
+  outline: 1px solid var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
 .person-tags {
   display: flex;
   flex-wrap: wrap;
@@ -1281,6 +1297,7 @@ pre {
   .page-size-btn,
   .age-filter-apply,
   .age-filter-field input,
+  .identity-filter-select,
   .tui-search input {
     min-height: 44px;
   }
@@ -1478,12 +1495,12 @@ html[data-theme="glass"] .box-pane::after {
 }
 html[data-theme="glass"] .crumbs a,
 html[data-theme="glass"] .crumb-current {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  padding: 0 0.45rem;
+  border: 0;
+  background: none;
+  padding: 0;
   box-shadow: none;
-  -webkit-backdrop-filter: blur(12px) saturate(1.1);
-  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 html[data-theme="glass"] .tui-row,
 html[data-theme="glass"] .box-pane,
@@ -1499,6 +1516,7 @@ html[data-theme="glass"] .pager-btn,
 html[data-theme="glass"] .pager-pages a,
 html[data-theme="glass"] .tui-form input,
 html[data-theme="glass"] .tui-form select,
+html[data-theme="glass"] .identity-filter-select,
 html[data-theme="glass"] .age-filter-field input,
 html[data-theme="glass"] .add-submit,
 html[data-theme="glass"] pre {
@@ -1564,7 +1582,8 @@ html[data-theme="glass"] .rating {
   color: var(--status-alert);
 }
 html[data-theme="glass"] .tui-form input:focus,
-html[data-theme="glass"] .tui-form select:focus {
+html[data-theme="glass"] .tui-form select:focus,
+html[data-theme="glass"] .identity-filter-select:focus {
   outline: 1px solid var(--status-ok);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-ok) 40%, transparent);
 }

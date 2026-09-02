@@ -237,7 +237,19 @@ document.addEventListener("DOMContentLoaded", () => {
   function typingInField(el) {
     if (!el) return false;
     const tag = el.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+    return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || el.isContentEditable;
+  }
+
+  function catalogFilterPath(raw) {
+    const value = String(raw || "");
+    return value.startsWith("/") && !value.startsWith("//") ? value : "";
+  }
+
+  for (const sel of document.querySelectorAll("[data-filter-select]")) {
+    sel.addEventListener("change", () => {
+      const href = catalogFilterPath(sel.value);
+      if (href) window.location.assign(href);
+    });
   }
 
   document.addEventListener("keydown", (e) => {

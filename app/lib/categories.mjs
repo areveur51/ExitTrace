@@ -83,7 +83,7 @@ export const CATEGORIES = [
     id: "death_ceo",
     kind: "person",
     title: "Deaths — CEOs",
-    nav: "CEOs",
+    nav: "Executives",
     path: "/deaths/ceos",
     blurb: "Deaths of chief executives, chairs, and controlling founders of major firms.",
   },
