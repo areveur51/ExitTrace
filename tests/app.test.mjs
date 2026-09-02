@@ -314,7 +314,7 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.match(corona.body, /Corona Comms/);
   assert.match(corona.body, /href="\/corona-comms"/);
   assert.match(corona.body, /data-key="o"/);
-  assert.match(corona.body, /aria-current="page">Corona Comms/);
+  assert.match(corona.body, /aria-current="page">Corona</);
   assert.doesNotMatch(corona.body, /person-card/);
   assert.doesNotMatch(corona.body, /href="\/corona-comms\/civilians"/);
   assert.doesNotMatch(corona.body, /source-card/);

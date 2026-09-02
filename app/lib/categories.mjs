@@ -35,7 +35,7 @@ export const CATEGORIES = [
     id: "corona_comms",
     kind: "person",
     title: "Corona Comms",
-    nav: "Corona Comms",
+    nav: "Corona",
     path: "/corona-comms",
     blurb: "Identified people who carry the corona comms tag. Parent lists every tagged person; there is no child split.",
   },

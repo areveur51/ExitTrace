@@ -86,20 +86,23 @@ export function pixelWordmark(text = "EXITTRACE") {
 
 function keymapItems(activePath) {
   const keys = [
-    { key: "f", href: "/firings", label: "Firings" },
-    { key: "r", href: "/resignations", label: "Resignations" },
-    { key: "g", href: "/government", label: "Officials" },
-    { key: "a", href: "/arrests", label: "Arrests" },
-    { key: "o", href: "/corona-comms", label: "Corona Comms" },
-    { key: "i", href: "/indictments", label: "Indictments" },
-    { key: "d", href: "/deaths", label: "Deaths" },
+    { key: "f", href: "/firings" },
+    { key: "r", href: "/resignations" },
+    { key: "g", href: "/government" },
+    { key: "a", href: "/arrests" },
+    { key: "o", href: "/corona-comms" },
+    { key: "i", href: "/indictments" },
+    { key: "d", href: "/deaths" },
     { key: "b", href: "/dashboard", label: "Dashboard" },
-    { key: "u", href: "/unsorted", label: "Unsorted" },
+    { key: "u", href: "/unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
     { key: "n", href: "/add", label: "Add" },
     { key: "s", href: "/search", label: "Search" },
     { key: "w", href: "/downloads", label: "Downloads" },
-  ];
+  ].map((item) => ({
+    ...item,
+    label: item.label || categoryByPath(item.href)?.nav || item.href,
+  }));
   if (activePath !== "/") keys.push({ key: "h", href: "/", label: "Home" });
   return keys;
 }

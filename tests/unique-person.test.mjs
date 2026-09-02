@@ -409,11 +409,11 @@ test("corona_comms skip-as-dup: tag lands on the existing card, never a second c
   assert.equal(list.status, 200);
   assert.match(list.body, /href="\/people\/casey-vale"/);
   assert.match(list.body, /Casey Vale/);
-  assert.match(list.body, / · Corona Comms · /);
+  assert.match(list.body, / · Corona · /);
   assert.equal((list.body.match(/href="\/people\/casey-vale"/g) || []).length, 1);
   assert.doesNotMatch(list.body, /source-card/);
   assert.match(list.body, /aria-label="Breadcrumb"/);
-  assert.match(list.body, /aria-current="page">Corona Comms/);
+  assert.match(list.body, /aria-current="page">Corona</);
   assert.match(list.body, /data-page-size="17"/);
   assert.match(list.body, /data-page-size-set="17"/);
   assert.match(list.body, /data-page-size-set="34"/);
