@@ -164,7 +164,7 @@ html[data-theme="stencil"] {
   --font-ui: "Arial Black", "Impact", "Franklin Gothic Heavy", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Glass: frosted dark glassmorphism HUD. White type, amber alert, lime active. */
+/* Glass: frosted HUD over a local dark city-wireframe still. White type, amber alert, lime active. */
 html[data-theme="glass"] {
   --bg: #101318;
   --void: #08090c;
@@ -1378,25 +1378,26 @@ pre {
 }
 
 html[data-theme="glass"] body.tui {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(ellipse at 18% 12%, rgba(224, 138, 40, 0.14), transparent 42%),
-    radial-gradient(ellipse at 82% 78%, rgba(64, 86, 128, 0.26), transparent 50%),
-    radial-gradient(ellipse at 50% 46%, rgba(28, 34, 46, 0.5), transparent 58%),
-    linear-gradient(180deg, #0a0c10 0%, #141820 48%, #0c0e14 100%);
+  background-color: #08090c;
+  background-image: none;
 }
 html[data-theme="glass"] body.tui::before {
   z-index: 0;
-  opacity: 0.22;
-  background:
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0 3px,
-      rgba(0, 0, 0, 0.08) 3px 4px
-    );
+  opacity: 1;
+  background-color: #08090c;
+  background-image:
+    linear-gradient(rgba(4, 6, 10, 0.36), rgba(4, 6, 10, 0.44)),
+    url("/media/themes/glass-bg.webp");
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat;
 }
 html[data-theme="glass"] body.tui::after {
   z-index: 0;
+  opacity: 0.42;
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(0, 0, 0, 0.5), transparent 58%),
+    radial-gradient(ellipse at 50% -8%, rgba(0, 0, 0, 0.28), transparent 46%);
 }
 html[data-theme="glass"] .hud-stage::before,
 html[data-theme="glass"] .hud-stage::after {
@@ -1407,11 +1408,11 @@ html[data-theme="glass"] .hud-stage::after {
   opacity: 1;
 }
 html[data-theme="glass"] .tui-top {
-  background: rgba(12, 14, 18, 0.55);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: none;
-  -webkit-backdrop-filter: blur(18px) saturate(1.15);
-  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.12);
+  backdrop-filter: blur(16px) saturate(1.12);
 }
 html[data-theme="glass"] .tui-top::before {
   z-index: 0;
@@ -1475,14 +1476,25 @@ html[data-theme="glass"] .box-pane::after {
   height: 10px;
   border-color: rgba(255, 255, 255, 0.42);
 }
+html[data-theme="glass"] .crumbs a,
+html[data-theme="glass"] .crumb-current {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0 0.45rem;
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.1);
+}
 html[data-theme="glass"] .tui-row,
 html[data-theme="glass"] .box-pane,
 html[data-theme="glass"] .keymap,
 html[data-theme="glass"] .tui-search-label,
+html[data-theme="glass"] .tui-search input,
 html[data-theme="glass"] .dog-snapshot,
 html[data-theme="glass"] .dash-stat,
 html[data-theme="glass"] .keychip,
 html[data-theme="glass"] .theme-btn,
+html[data-theme="glass"] .page-size-btn,
 html[data-theme="glass"] .pager-btn,
 html[data-theme="glass"] .pager-pages a,
 html[data-theme="glass"] .tui-form input,
@@ -1491,11 +1503,11 @@ html[data-theme="glass"] .age-filter-field input,
 html[data-theme="glass"] .add-submit,
 html[data-theme="glass"] pre {
   clip-path: none;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(14, 16, 22, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
   box-shadow: none;
-  -webkit-backdrop-filter: blur(16px) saturate(1.12);
-  backdrop-filter: blur(16px) saturate(1.12);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
 }
 html[data-theme="glass"] .tui-row {
   margin-bottom: 0.55rem;
@@ -1515,9 +1527,10 @@ html[data-theme="glass"] .keymap {
   border-top: 1px solid rgba(255, 255, 255, 0.16);
 }
 html[data-theme="glass"] .keymap .keychip,
-html[data-theme="glass"] .theme-btn {
+html[data-theme="glass"] .theme-btn,
+html[data-theme="glass"] .page-size-btn {
   clip-path: none;
-  background: rgba(14, 16, 22, 0.52);
+  background: rgba(255, 255, 255, 0.08);
 }
 html[data-theme="glass"] .keychip[data-key] {
   color: var(--ink);
@@ -1582,9 +1595,9 @@ html[data-theme="glass"] .dash-stats {
 }
 @media (hover: hover) and (pointer: fine) {
   html[data-theme="glass"] .tui-row:hover {
-    background-color: rgba(22, 26, 34, 0.62);
+    background-color: rgba(255, 255, 255, 0.14);
     background-image: none;
-    border-color: rgba(255, 255, 255, 0.32);
+    border-color: rgba(255, 255, 255, 0.36);
     filter: none;
   }
   html[data-theme="glass"] .tui-row:hover::before {
