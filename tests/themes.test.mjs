@@ -35,7 +35,7 @@ test("normalizeTheme is glass-only and defaults to glass", () => {
   assert.equal(normalizeTheme(null), "glass");
 });
 
-test("applyTheme always locks Glass and clears leftover theme storage", () => {
+test("applyTheme always locks Glass and clears stale theme storage", () => {
   const attrs = {};
   const store = { [THEME_STORAGE_KEY]: "cyberdeck" };
   const removed = [];
@@ -142,7 +142,7 @@ test("CSS tokens cover Glass only and keep Batman-tech HUD chrome", () => {
   assert.doesNotMatch(css, LARP);
 });
 
-test("app.js locks Glass and clears leftover localStorage theme keys", () => {
+test("app.js locks Glass and clears stale localStorage theme keys", () => {
   const js = fs.readFileSync(path.join(ROOT, "app", "public", "app.js"), "utf8");
   assert.match(js, /"glass"/);
   assert.match(js, /lockGlassTheme/);
