@@ -289,28 +289,21 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.doesNotMatch(res.body, /widgets\.js/);
 });
 
-test("home call-sign sits on the ExitTrace wordmark, not under the right menu", async () => {
+test("home keeps the ExitTrace wordmark and one page-fill call-sign, not a wordmark disc", async () => {
   const home = await get("/");
   const list = await get("/firings");
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
 
   assert.match(home.body, /class="home-wordmark"/);
-  assert.match(home.body, /class="home-callsign"/);
   assert.match(home.body, /class="pixel-wordmark"/);
+  assert.doesNotMatch(home.body, /home-callsign/);
   assert.doesNotMatch(list.body, /home-wordmark|home-callsign/);
 
-  assert.match(css, /--race-center:\s*77\.46%/);
-  assert.match(css, /--disc-in-crop:\s*75\.26%/);
-  assert.match(css, /\.home-callsign[^{]*\{[^}]*url\("\/media\/themes\/glass-callsign\.png"\)/);
-  assert.match(css, /\.home-callsign[^{]*\{[^}]*z-index:\s*3/);
-  assert.match(css, /\.home-callsign[^{]*\{[^}]*pointer-events:\s*none/);
-  assert.doesNotMatch(
-    css,
-    /html\[data-theme="glass"\] body\.tui::before \{[^}]*glass-callsign/,
-  );
+  assert.doesNotMatch(css, /\.home-callsign/);
+  assert.doesNotMatch(css, /--race-center|--disc-in-crop/);
   assert.match(
     css,
-    /html\[data-theme="glass"\] body\.tui::before \{[^}]*url\("\/media\/themes\/glass-bg\.webp"\)/,
+    /html\[data-theme="glass"\] body\.tui::before \{[^}]*url\("\/media\/themes\/glass-callsign\.png"\)[^}]*url\("\/media\/themes\/glass-bg\.webp"\)/,
   );
   assert.doesNotMatch(home.body, /Batman|Batmobile|Warner|DC Comics/i);
 });
@@ -387,6 +380,9 @@ test("glass call-sign overlay is served from the local public path", async () =>
   const res = await get("/media/themes/glass-callsign.png");
   assert.equal(res.status, 200);
   assert.match(String(res.headers["content-type"] || ""), /image\/png/);
+  const city = await get("/media/themes/glass-bg.webp");
+  assert.equal(city.status, 200);
+  assert.equal(Number(city.headers["content-length"] || 0), 370900);
 });
 
 test("HUD palette uses red/black/gold tokens and documents phone/iPad/desktop layouts", async () => {
