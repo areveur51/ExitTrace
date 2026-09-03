@@ -29,6 +29,8 @@ CREATE INDEX IF NOT EXISTS people_event_date_idx ON people (event_date DESC);
 ALTER TABLE people ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Optional calendar birth date. No gold backfill; UI reads it when present.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
+-- Person-level origin. Not event.country. Empty stays empty until backfill.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS country_of_origin TEXT;
 -- Identity tags (civilian, non_civilian, celebrity, official, ceo). Multi-tag.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
 
@@ -47,6 +49,8 @@ ALTER TABLE person_events ADD COLUMN IF NOT EXISTS organization TEXT;
 ALTER TABLE person_events ADD COLUMN IF NOT EXISTS country TEXT;
 ALTER TABLE person_events ADD COLUMN IF NOT EXISTS branch TEXT;
 ALTER TABLE person_events ADD COLUMN IF NOT EXISTS comments TEXT;
+-- Whole years from people.birth_date + this tag's event_date. Null if either date is missing.
+ALTER TABLE person_events ADD COLUMN IF NOT EXISTS age_at_event INTEGER;
 
 CREATE INDEX IF NOT EXISTS person_events_kind_idx ON person_events (kind);
 CREATE INDEX IF NOT EXISTS person_events_event_date_idx ON person_events (event_date DESC);

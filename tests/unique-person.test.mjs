@@ -20,6 +20,7 @@ import {
   mergeGoldPeople,
   setMemory,
 } from "../app/lib/store.mjs";
+import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CITES = [
@@ -76,6 +77,7 @@ test("seed people lift into one event each and stay unique", () => {
 test("new KEEP kind annotates the existing person — no second row", async () => {
   setMemory(goldSeed());
   const created = await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "arrests",
@@ -107,6 +109,7 @@ test("new KEEP kind annotates the existing person — no second row", async () =
 test("list pages filter by tag; parent unions stay unions", async () => {
   setMemory(goldSeed());
   await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "arrests",
@@ -251,6 +254,7 @@ test("second firing on the same person annotates; does not add a second firing e
 test("detail page lists every tagged event with its cites", async () => {
   setMemory(goldSeed());
   await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "arrests",
@@ -339,6 +343,7 @@ test("migration collapses same-slug rows and keeps distinct same-name people apa
 test("do not double-tag the same indictment as civilian and non-civilian", async () => {
   setMemory(goldSeed());
   await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-08-01",
     category: "indictment_civilian",
@@ -363,6 +368,7 @@ test("do not double-tag the same indictment as civilian and non-civilian", async
 test("corona_comms skip-as-dup: tag lands on the existing card, never a second card", async () => {
   setMemory(goldSeed());
   const created = await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "arrests",

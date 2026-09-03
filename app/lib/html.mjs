@@ -654,8 +654,14 @@ function personEventBlocks(row) {
     const death = isDeathCategory(row.category)
       ? `<p class="meta-line">Death date · <time datetime="${esc(row.death_date || "")}">${esc(formatDate(row.death_date))}</time></p>`
       : "";
+    const origin = row.country_of_origin
+      ? `<p class="meta-line">Origin · ${esc(row.country_of_origin)}</p>`
+      : "";
+    const birth = row.birth_date
+      ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
+      : "";
     return {
-      meta: `<p class="meta-line"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role || "—")} · ${esc(kind)}</p>${death}`,
+      meta: `<p class="meta-line"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role || "—")} · ${esc(kind)}</p>${origin}${birth}${death}`,
       sourcesHtml: sourceList(row.sources || []),
       sourceCount: (row.sources || []).length,
     };
@@ -685,6 +691,12 @@ function personEventBlocks(row) {
   const role = row.role
     ? `<p class="meta-line">Role · ${esc(row.role)}</p>`
     : "";
+  const origin = row.country_of_origin
+    ? `<p class="meta-line">Origin · ${esc(row.country_of_origin)}</p>`
+    : "";
+  const birth = row.birth_date
+    ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
+    : "";
   const sourcesHtml = events
     .map((ev) => {
       const label = eventKindTitle(ev.kind);
@@ -695,7 +707,7 @@ function personEventBlocks(row) {
     })
     .join("");
   const sourceCount = events.reduce((n, ev) => n + (ev.sources || []).length, 0);
-  return { meta: `${role}${meta}`, sourcesHtml, sourceCount };
+  return { meta: `${role}${origin}${birth}${meta}`, sourcesHtml, sourceCount };
 }
 
 function personTagChips(row) {
@@ -1017,7 +1029,7 @@ const ADD_CATEGORIES = [
 ];
 
 export function addCiteRule() {
-  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. If the person already exists, the new kind is attached — a second row is not created. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. A host process looks up published sources and applies the row.</p>`;
+  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. A new person insert is fail-closed: birth date, country of origin, position, organization, reason of event, event date, and two official cites. Country of origin is not guessed and is not the event country. If the person already exists, the new kind is attached — a second row is not created. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. A host process looks up published sources and applies the row.</p>`;
 }
 
 export function addBody({
@@ -1067,6 +1079,40 @@ export function addBody({
           <span>Event date</span>
           <input type="date" name="event_date" value="${esc(values.event_date || "")}">
         </label>
+        <label class="field">
+          <span>Birth date</span>
+          <input type="date" name="birth_date" value="${esc(values.birth_date || "")}">
+        </label>
+        <label class="field">
+          <span>Country of origin</span>
+          <input type="text" name="country_of_origin" value="${esc(values.country_of_origin || "")}" autocomplete="off">
+        </label>
+        <p class="hint">Required on new insert. Do not guess. Event country is where the event happened if it differs.</p>
+        <label class="field">
+          <span>Position</span>
+          <input type="text" name="position" value="${esc(values.position || "")}" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Organization</span>
+          <input type="text" name="organization" value="${esc(values.organization || "")}" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Reason of event</span>
+          <input type="text" name="comments" value="${esc(values.comments || "")}" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Event country</span>
+          <input type="text" name="country" value="${esc(values.country || "")}" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Military</span>
+          <input type="checkbox" name="military" value="true"${values.military ? " checked" : ""}>
+        </label>
+        <label class="field">
+          <span>Branch</span>
+          <input type="text" name="branch" value="${esc(values.branch || "")}" autocomplete="off">
+        </label>
+        <p class="hint">Event country only when it differs from origin. Branch is required when military; otherwise optional. Do not guess branch.</p>
         <label class="field">
           <span>Hint URL</span>
           <input type="url" name="hint_url" value="${esc(values.hint_url || "")}" placeholder="https://…" inputmode="url">

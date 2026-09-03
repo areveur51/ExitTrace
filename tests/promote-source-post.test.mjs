@@ -29,6 +29,7 @@ import {
   setMemory,
   writeFileStore,
 } from "../app/lib/store.mjs";
+import { LOCK_CLI_FLAGS, NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE = path.join(ROOT, "tests", "fixtures", "source-posts.jsonl");
@@ -113,6 +114,7 @@ test("promote fixture source post adds one officials-style person", async () => 
   assert.equal(arrest.posted_at, "2024-03-01");
 
   const result = await promoteSourcePost({
+    ...NEW_PERSON_LOCK,
     source_url: arrest.source_url,
     subject: "Casey Vale",
     event_date: "2024-06-15",
@@ -161,6 +163,7 @@ test("promote fixture source post adds one officials-style person", async () => 
 test("second promote is idempotent and does not duplicate", async () => {
   await parkedFixture();
   const args = {
+    ...NEW_PERSON_LOCK,
     source_url: "https://example.com/n/arrest-1",
     subject: "Casey Vale",
     event_date: "2024-06-15",
@@ -230,6 +233,7 @@ test("promote attaches a same-id local still and leaves a missing still blank", 
   fs.writeFileSync(path.join(media, "people", "casey-vale.jpg"), "portrait-bytes");
 
   const created = await promoteSourcePost({
+    ...NEW_PERSON_LOCK,
     source_url: "https://example.com/n/arrest-1",
     subject: "Casey Vale",
     event_date: "2024-06-15",
@@ -246,6 +250,7 @@ test("promote attaches a same-id local still and leaves a missing still blank", 
 
   const blankMedia = fs.mkdtempSync(path.join(os.tmpdir(), "et-promote-blank-"));
   const death = await promoteSourcePost({
+    ...NEW_PERSON_LOCK,
     source_url: "https://example.com/n/death-1",
     subject: "Riley Chen",
     event_date: "2024-05-10",
@@ -323,6 +328,7 @@ test("validatePromoteInput never fills subject or date from a source post", () =
 test("death promote sets death_date; file hydrate keeps extras", async () => {
   await parkedFixture();
   const result = await promoteSourcePost({
+    ...NEW_PERSON_LOCK,
     source_url: "https://example.com/n/death-1",
     subject: "Casey Vale",
     event_date: "2024-05-10",
@@ -375,6 +381,7 @@ test("one-shot CLI writes the file store and stays idempotent", async () => {
     CITES[1],
     "--summary",
     "Arrested, contemporaneous news reports said.",
+    ...LOCK_CLI_FLAGS,
   ];
   const first = await runPromote(flags, { DATA_DIR: tmp });
   assert.equal(first.code, 0, first.stderr);

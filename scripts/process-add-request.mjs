@@ -34,6 +34,9 @@ function usage(exitCode = 0) {
   [--source-url <https://…>] [--handle @Official] [--posted-at YYYY-MM-DD]
   [--text "…"] [--account-name "…"] [--still <path>] [--still-credit "…"]
   [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"]
+  [--birth-date YYYY-MM-DD] [--country-of-origin "…"]
+  [--position "…"] [--organization "…"] [--reason "…"] [--comments "…"]
+  [--country "…"] [--branch "…"] [--military]
   [--net-worth <USD>] [--net-worth-source <Forbes|Bloomberg URL>] [--net-worth-note "…"]
 
 Host-side process hook (scratch directory, two turns, one envelope):
@@ -43,6 +46,9 @@ Host-side process hook (scratch directory, two turns, one envelope):
 Fail-closed:
   people need subject + event_date + at least ${CITE_FLOOR} verified
   official news or official gov/news-org social cite URLs.
+  A new person insert also needs birth_date, country of origin, position,
+  organization, and reason of event (comments/reason).
+  Military inserts also require branch (existing event field).
   Do not invent cites. Do not copy posted_at into event_date.
   Unofficial or commentary social is extra only, not a cite.
   Attach a local Wikimedia or official-gov portrait under /media/people/
@@ -112,6 +118,17 @@ function parseArgs(argv) {
     else if (arg === "--country") out.country = take();
     else if (arg === "--branch") out.branch = take();
     else if (arg === "--comments") out.comments = take();
+    else if (arg === "--birth-date" || arg === "--birth_date") out.birth_date = take();
+    else if (arg === "--country-of-origin" || arg === "--origin-country") {
+      out.country_of_origin = take();
+    } else if (arg === "--military") {
+      const peek = argv[i + 1];
+      if (peek && !String(peek).startsWith("--") && /^(true|false|yes|no|1|0)$/i.test(peek)) {
+        out.military = take();
+      } else {
+        out.military = true;
+      }
+    }
     else if (arg === "--photo") out.photo = take();
     else if (arg === "--photo-credit") out.photo_credit = take();
     else if (arg === "--net-worth" || arg === "--net-worth-usd") out.net_worth_usd = take();

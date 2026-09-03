@@ -16,6 +16,7 @@ import {
   loadSeedFile,
   setMemory,
 } from "../app/lib/store.mjs";
+import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CITES = [
@@ -87,6 +88,7 @@ test("path and query parse identity filters", () => {
 test("one person can carry firing + celebrity + official + ceo tags", async () => {
   setMemory(goldSeed());
   const created = await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "firings",

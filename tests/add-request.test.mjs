@@ -25,6 +25,7 @@ import {
   setMemory,
   writeFileStore,
 } from "../app/lib/store.mjs";
+import { LOCK_CLI_FLAGS, NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = path.join(ROOT, "scripts", "process-add-request.mjs");
@@ -115,6 +116,13 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   assert.match(person.body, /value="indictment_civilian"/);
   assert.match(person.body, /value="indictment_non_civilian"/);
   assert.match(person.body, /name="event_date"/);
+  assert.match(person.body, /name="birth_date"/);
+  assert.match(person.body, /name="country_of_origin"/);
+  assert.match(person.body, /name="position"/);
+  assert.match(person.body, /name="organization"/);
+  assert.match(person.body, /name="comments"/);
+  assert.match(person.body, /name="military"/);
+  assert.match(person.body, /name="branch"/);
   assert.match(person.body, /name="hint_url"/);
   assert.match(person.body, /name="photo"/);
   assert.match(person.body, /Wikimedia Commons or official \.gov/);
@@ -200,7 +208,7 @@ test("process with two official cites creates a person; one cite is rejected", a
   });
   const created = await processAddRequest({
     id: again.request.id,
-    overlay: { cite_urls: CITES },
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: CITES },
   });
   assert.equal(created.action, "created");
   assert.equal(created.person.id, "casey-vale");
@@ -232,7 +240,7 @@ test("unofficial commentary social is extra only and posted_at is never event_da
   });
   const created = await processAddRequest({
     id: queued.request.id,
-    overlay: { cite_urls: [...CITES, unofficial] },
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: [...CITES, unofficial] },
   });
   assert.equal(created.action, "created");
   const urls = created.person.sources.map((s) => s.url);
@@ -387,6 +395,7 @@ test("add-process CLI applies next pending with cite flags", async () => {
       "2024-06-15",
       "--category",
       "arrests",
+      ...LOCK_CLI_FLAGS,
     ],
     { DATA_DIR: tmp },
   );
@@ -423,7 +432,7 @@ test("local eligible still attaches; missing or ineligible still stays blank", a
   });
   const created = await processAddRequest({
     id: queued.request.id,
-    overlay: { cite_urls: CITES, mediaDir: media },
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: CITES, mediaDir: media },
   });
   assert.equal(created.action, "created");
   assert.equal(created.person.photo, "/media/people/casey-vale.jpg");
@@ -439,6 +448,7 @@ test("local eligible still attaches; missing or ineligible still stays blank", a
   const empty = await processAddRequest({
     id: blank.request.id,
     overlay: {
+      ...NEW_PERSON_LOCK,
       cite_urls: CITES,
       photo: "https://example.com/selfie.jpg",
       mediaDir: blankMedia,
@@ -542,7 +552,7 @@ test("published Forbes estimate fills net worth; ineligible or missing stays bla
 
   const created = await processAddRequest({
     id: queued.request.id,
-    overlay: { cite_urls: CITES },
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: CITES },
   });
   assert.equal(created.action, "created");
   assert.equal(created.person.net_worth_usd, 2500000000);
@@ -558,6 +568,7 @@ test("published Forbes estimate fills net worth; ineligible or missing stays bla
   const empty = await processAddRequest({
     id: blank.request.id,
     overlay: {
+      ...NEW_PERSON_LOCK,
       cite_urls: CITES,
       net_worth_usd: "999",
       net_worth_source: "https://example.com/wealth/riley",
@@ -689,7 +700,7 @@ test("add-process attaches a new kind on the existing person", async () => {
   });
   const created = await processAddRequest({
     id: first.request.id,
-    overlay: { cite_urls: CITES },
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: CITES },
   });
   assert.equal(created.action, "created");
   assert.equal(await countPeople(), 73);
