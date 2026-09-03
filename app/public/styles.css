@@ -1094,14 +1094,12 @@ html[data-theme="glass"] body.tui::before {
   z-index: 0;
   opacity: 1;
   background-color: #000000;
-  /* Original NYC mesh is the page fill. The call-sign PNG is a transparent
-     extract (beam + disc + silhouette) locked to the same cover frame. */
+  /* Admiral-signed still is the page fill. Baked-in signal is the only call-sign. */
   background-image:
-    url("/media/themes/glass-callsign.png"),
     linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.7)),
     url("/media/themes/glass-bg.webp");
-  background-size: cover, cover, cover;
-  background-position: center, center, center;
+  background-size: cover, cover;
+  background-position: center, center;
   background-repeat: no-repeat;
 }
 html[data-theme="glass"] body.tui::after {
