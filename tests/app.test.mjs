@@ -289,7 +289,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.doesNotMatch(res.body, /widgets\.js/);
 });
 
-test("home keeps the ExitTrace wordmark and one page-fill call-sign, not a wordmark disc", async () => {
+test("home keeps the ExitTrace wordmark; baked-in still is the only call-sign", async () => {
   const home = await get("/");
   const list = await get("/firings");
   const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
@@ -303,8 +303,9 @@ test("home keeps the ExitTrace wordmark and one page-fill call-sign, not a wordm
   assert.doesNotMatch(css, /--race-center|--disc-in-crop/);
   assert.match(
     css,
-    /html\[data-theme="glass"\] body\.tui::before \{[^}]*url\("\/media\/themes\/glass-callsign\.png"\)[^}]*url\("\/media\/themes\/glass-bg\.webp"\)/,
+    /html\[data-theme="glass"\] body\.tui::before \{[^}]*url\("\/media\/themes\/glass-bg\.webp"\)/,
   );
+  assert.doesNotMatch(css, /glass-callsign\.png/);
   assert.doesNotMatch(home.body, /Batman|Batmobile|Warner|DC Comics/i);
 });
 
@@ -376,13 +377,13 @@ test("glass theme still is served from the local public path", async () => {
   assert.match(String(res.headers["content-type"] || ""), /image\/webp/);
 });
 
-test("glass call-sign overlay is served from the local public path", async () => {
-  const res = await get("/media/themes/glass-callsign.png");
-  assert.equal(res.status, 200);
-  assert.match(String(res.headers["content-type"] || ""), /image\/png/);
+test("glass still is the Admiral-signed webp and extra call-sign overlay is gone", async () => {
   const city = await get("/media/themes/glass-bg.webp");
   assert.equal(city.status, 200);
-  assert.equal(Number(city.headers["content-length"] || 0), 370900);
+  assert.match(String(city.headers["content-type"] || ""), /image\/webp/);
+  assert.equal(Number(city.headers["content-length"] || 0), 650650);
+  const overlay = await get("/media/themes/glass-callsign.png");
+  assert.equal(overlay.status, 404);
 });
 
 test("HUD palette uses red/black/gold tokens and documents phone/iPad/desktop layouts", async () => {
