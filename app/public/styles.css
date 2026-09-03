@@ -311,32 +311,10 @@ a:hover { color: var(--ink); }
 }
 .pixel-link { text-decoration: none; display: inline-block; }
 .home-wordmark {
-  /* EXITTRACE SVG is 448 units wide; RACE (last four letters) centers at 347. */
-  --race-center: 77.46%;
-  /* Crop of glass-callsign.png: disc 912px at (2463, 1129) plus the incoming
-     amber ray in the same band. Disc center is 75.26% across that crop. */
-  --disc-in-crop: 75.26%;
   position: relative;
   display: inline-flex;
   flex-direction: column;
   align-items: stretch;
-}
-.home-callsign {
-  pointer-events: none;
-  position: relative;
-  z-index: 3;
-  display: block;
-  width: clamp(9.25rem, 40%, 13.5rem);
-  aspect-ratio: 1928 / 965;
-  margin-left: var(--race-center);
-  margin-bottom: 0.45rem;
-  transform: translateX(calc(-1 * var(--disc-in-crop)));
-  background-color: transparent;
-  background-image: url("/media/themes/glass-callsign.png");
-  background-repeat: no-repeat;
-  /* Show disc + ray stub; leave the long lower cone off the letters. */
-  background-size: 173.65% 346.32%;
-  background-position: 71.27% 26.92%;
 }
 .pixel-wordmark {
   display: block;
@@ -1116,22 +1094,15 @@ html[data-theme="glass"] body.tui::before {
   z-index: 0;
   opacity: 1;
   background-color: #000000;
-  /* NYC still stays the page fill. The call-sign PNG is anchored to the
-     home wordmark (.home-callsign), not this full-viewport layer. */
+  /* Original NYC mesh is the page fill. The call-sign PNG is a transparent
+     extract (beam + disc + silhouette) locked to the same cover frame. */
   background-image:
+    url("/media/themes/glass-callsign.png"),
     linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.7)),
     url("/media/themes/glass-bg.webp");
-  background-size: cover, cover;
-  background-position: center, center;
+  background-size: cover, cover, cover;
+  background-position: center, center, center;
   background-repeat: no-repeat;
-}
-html[data-theme="glass"] body.tui-home .home-stage {
-  /* Keep the logo-anchored disc above the right keymap frost panel. */
-  z-index: 2;
-}
-html[data-theme="glass"] .home-callsign {
-  /* Brighter disc #F2D01C; darker photographed-ray amber in the same PNG. */
-  z-index: 3;
 }
 html[data-theme="glass"] body.tui::after {
   z-index: 0;

@@ -134,27 +134,27 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
   assert.doesNotMatch(css, /data-theme-set/);
   assert.match(css, /url\("\/media\/themes\/glass-bg\.webp"\)/);
   assert.match(css, /url\("\/media\/themes\/glass-callsign\.png"\)/);
-  assert.match(css, /\.home-callsign[^{]*\{[^}]*url\("\/media\/themes\/glass-callsign\.png"\)/);
+  assert.doesNotMatch(css, /\.home-callsign/);
+  assert.doesNotMatch(css, /--race-center|--disc-in-crop/);
   assert.match(
     css,
-    /html\[data-theme="glass"\] body\.tui::before \{[^}]*url\("\/media\/themes\/glass-bg\.webp"\)/,
-  );
-  assert.doesNotMatch(
-    css,
-    /html\[data-theme="glass"\] body\.tui::before \{[^}]*glass-callsign/,
+    /html\[data-theme="glass"\] body\.tui::before \{[^}]*url\("\/media\/themes\/glass-callsign\.png"\)[^}]*url\("\/media\/themes\/glass-bg\.webp"\)/,
   );
   assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*border:\s*0;/);
   assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*backdrop-filter:\s*none;/);
   assert.doesNotMatch(css, /pinterest|pinimg|i\.pinimg/i);
-  assert.ok(
-    fs.existsSync(path.join(ROOT, "app", "public", "media", "themes", "glass-bg.webp")),
-    "glass theme still is vendored locally",
+  const city = path.join(ROOT, "app", "public", "media", "themes", "glass-bg.webp");
+  assert.ok(fs.existsSync(city), "glass theme still is vendored locally");
+  assert.equal(
+    fs.statSync(city).size,
+    370900,
+    "city still stays the original NYC mesh, not a replacement JPEG",
   );
   const callsign = path.join(ROOT, "app", "public", "media", "themes", "glass-callsign.png");
   assert.ok(fs.existsSync(callsign), "glass call-sign overlay is vendored locally");
   assert.ok(
-    fs.statSync(callsign).size > 80_000,
-    "call-sign overlay stays a photographic asset, not a tiny icon",
+    fs.statSync(callsign).size > 20_000,
+    "call-sign overlay stays a photographic extract, not a tiny icon",
   );
   assert.equal(fs.existsSync(path.join(ROOT, "app", "public", "media", "themes", "glass-callsign.webp")), false);
   assert.doesNotMatch(css, /#7ee9ff|#5ec8e0|#f07a18|#c45a12/);

@@ -629,7 +629,6 @@ export function dogRow(row) {
 export function homeBody({ version }) {
   return `
     <div class="home-wordmark">
-      <span class="home-callsign" aria-hidden="true"></span>
       <a class="pixel-link" href="/" aria-label="ExitTrace home">${pixelWordmark("EXITTRACE")}</a>
     </div>
     <p class="ver">v${esc(version || "1.0.0")}</p>
