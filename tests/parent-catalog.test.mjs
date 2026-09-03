@@ -17,6 +17,7 @@ import {
   loadSeedFile,
   setMemory,
 } from "../app/lib/store.mjs";
+import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CITES = [
@@ -188,12 +189,14 @@ test("GET /indictments lists every indictment kind; child routes filter", async 
   assert.match(empty.body, /value="\/indictments\/non-civilians"/);
 
   const civilian = await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-08-01",
     category: "indictment_civilian",
     cite_urls: CITES,
   });
   const officer = await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Riley Shaw",
     event_date: "2024-09-15",
     category: "indictment_non_civilian",

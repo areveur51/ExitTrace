@@ -31,6 +31,7 @@ import {
   promoteSourcePost,
   setMemory,
 } from "../app/lib/store.mjs";
+import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 import { LIST_THUMB_CSS_H, LIST_THUMB_CSS_W } from "../app/lib/thumb.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -183,6 +184,7 @@ test("parked source posts rematch onto indictment KEEP kinds; parent lists the u
   setMemory(goldSeed());
   await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
   const created = await promoteSourcePost({
+    ...NEW_PERSON_LOCK,
     source_url: "https://example.com/n/arrest-1",
     subject: "Casey Vale",
     event_date: "2024-08-01",
@@ -216,6 +218,7 @@ test("per-kind tags: arrest + indictment stay one person; never two of the same 
   setMemory(goldSeed());
   await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
   const arrest = await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "arrests",

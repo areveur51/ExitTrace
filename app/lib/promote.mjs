@@ -3,11 +3,14 @@ import {
   isDeathCategory,
   isIndictmentKeepKind,
 } from "./categories.mjs";
+import { parseStoredAge, stampEventAge } from "./age.mjs";
 import {
   eventFromLead,
+  isMilitaryInput,
   mapLeadReason,
   mergeEventAttrs,
   normalizeEventAttrs,
+  parseOriginCountry,
   resolveEventCalendar,
 } from "./event-attrs.mjs";
 import { personTags } from "./tags.mjs";
@@ -127,11 +130,14 @@ export function normalizePersonEvent(raw, fallback = {}) {
       ? fallback.sources
       : [];
   const attrs = mergeEventAttrs(fallback, raw);
+  const age_at_event =
+    parseStoredAge(raw.age_at_event) ?? parseStoredAge(fallback.age_at_event);
   return {
     kind,
     event_date,
     sources,
     ...attrs,
+    age_at_event,
   };
 }
 
@@ -150,6 +156,8 @@ function uniqueEvents(events) {
       event_date: prior.event_date,
       sources: mergeCites(prior.sources, ev.sources).sources,
       ...mergeEventAttrs(prior, ev),
+      age_at_event:
+        parseStoredAge(prior.age_at_event) ?? parseStoredAge(ev.age_at_event),
     });
   }
   return [...byKind.values()].sort((a, b) => {
@@ -237,13 +245,23 @@ export function derivePersonFields(row, preferKinds) {
     event_date: chosen?.event_date || asEventDate(row.event_date),
     death_date: death?.event_date || (isDeathCategory(row.category) ? asEventDate(row.death_date) : null),
     sources: flattenEventSources(events),
+    age_at_event: parseStoredAge(chosen?.age_at_event),
   };
 }
 
 export function projectPerson(row, kinds) {
   const prefer = Array.isArray(kinds) ? kinds : kinds ? [kinds] : [];
   const derived = derivePersonFields(row, prefer.length ? prefer : undefined);
-  const projected = { ...row, ...derived };
+  const stamped = derived.events.map((ev) => stampEventAge(ev, row.birth_date));
+  const chosen = newestPersonEvent(stamped, prefer.length ? prefer : undefined);
+  const projected = {
+    ...row,
+    ...derived,
+    events: stamped,
+    age_at_event:
+      parseStoredAge(chosen?.age_at_event) ??
+      parseStoredAge(derived.age_at_event),
+  };
   projected.tags = personTags(projected);
   return projected;
 }
@@ -276,6 +294,8 @@ export function attachPersonEvent(person, incoming) {
       event_date: events[i].event_date,
       sources: merged.sources,
       ...mergeEventAttrs(events[i], ev),
+      age_at_event:
+        parseStoredAge(events[i].age_at_event) ?? parseStoredAge(ev.age_at_event),
     };
     return {
       person: projectPerson({ ...person, events: next }),
@@ -284,7 +304,10 @@ export function attachPersonEvent(person, incoming) {
     };
   }
   return {
-    person: projectPerson({ ...person, events: [...events, ev] }),
+    person: projectPerson({
+      ...person,
+      events: [...events, stampEventAge(ev, person.birth_date)],
+    }),
     added: ev.sources.slice(),
     existed: false,
   };
@@ -368,6 +391,7 @@ export function mergePersonAnnotate(gold, prior) {
       event_date: ev.event_date,
       sources: (ev.sources || []).slice(),
       ...mergeEventAttrs(ev, {}),
+      age_at_event: parseStoredAge(ev.age_at_event),
     });
   }
   for (const ev of extra.events) {
@@ -378,11 +402,15 @@ export function mergePersonAnnotate(gold, prior) {
         event_date: ev.event_date,
         sources: (ev.sources || []).slice(),
         ...mergeEventAttrs(ev, {}),
+        age_at_event: parseStoredAge(ev.age_at_event),
       });
       continue;
     }
     existing.sources = mergeCites(existing.sources, ev.sources).sources;
     Object.assign(existing, mergeEventAttrs(existing, ev));
+    if (existing.age_at_event == null) {
+      existing.age_at_event = parseStoredAge(ev.age_at_event);
+    }
   }
   return projectPerson({
     ...keep,
@@ -394,6 +422,7 @@ export function mergePersonAnnotate(gold, prior) {
     role: keep.role || extra.role || "",
     summary: keep.summary || extra.summary || "",
     birth_date: keep.birth_date || extra.birth_date || null,
+    country_of_origin: keep.country_of_origin || extra.country_of_origin || "",
     events: [...eventsByKind.values()],
     tags: [...(keep.tags || []), ...(extra.tags || [])],
   });
@@ -478,6 +507,21 @@ export function validateIdentifiedPersonInput(input = {}) {
   if (!slug) {
     throw new PromoteError("subject did not yield a person id", "invalid_subject");
   }
+  const birthRaw = String(
+    input.birth_date || input.birthDate || input["Birth Date"] || "",
+  ).trim();
+  let birth_date = null;
+  if (birthRaw) {
+    birth_date = parseEventDate(birthRaw);
+    if (!birth_date) {
+      throw new PromoteError(
+        "birth_date is required as YYYY-MM-DD",
+        "invalid_birth_date",
+      );
+    }
+  }
+  const country_of_origin = parseOriginCountry(input);
+  const military = isMilitaryInput(input);
   return {
     subject,
     event_date,
@@ -489,12 +533,56 @@ export function validateIdentifiedPersonInput(input = {}) {
     role: String(input.role || attrs.position || "").trim(),
     announced_date: calendar.announced_date,
     ...attrs,
+    birth_date,
+    country_of_origin,
+    military,
     photo: String(input.photo || "").trim(),
     photo_credit: String(input.photo_credit || "").trim(),
     net_worth_usd: input.net_worth_usd,
     net_worth_source: String(input.net_worth_source || "").trim(),
     net_worth_note: String(input.net_worth_note || "").trim(),
   };
+}
+
+/** Fail-closed on NEW person insert only. Existing rows stay empty until backfill. */
+export function assertNewPersonInsertLock(input = {}) {
+  if (!input.birth_date) {
+    throw new PromoteError(
+      "birth_date is required on new person insert",
+      "missing_birth_date",
+    );
+  }
+  if (!String(input.country_of_origin || "").trim()) {
+    throw new PromoteError(
+      "country of origin is required on new person insert",
+      "missing_origin_country",
+    );
+  }
+  if (!String(input.position || "").trim()) {
+    throw new PromoteError(
+      "position is required on new person insert",
+      "missing_position",
+    );
+  }
+  if (!String(input.organization || "").trim()) {
+    throw new PromoteError(
+      "organization is required on new person insert",
+      "missing_organization",
+    );
+  }
+  if (!String(input.comments || "").trim()) {
+    throw new PromoteError(
+      "reason of event is required on new person insert (comments/reason)",
+      "missing_reason",
+    );
+  }
+  if (isMilitaryInput(input) && !String(input.branch || "").trim()) {
+    throw new PromoteError(
+      "branch is required on new military person insert",
+      "missing_branch",
+    );
+  }
+  return input;
 }
 
 export function validatePromoteInput(input = {}) {
@@ -529,7 +617,11 @@ export function incomingPersonEvent(input, sources) {
 }
 
 export function buildPersonRow(input, people) {
-  const events = [incomingPersonEvent(input, citeRecords(input.cite_urls, input.event_date))];
+  const incoming = incomingPersonEvent(
+    input,
+    citeRecords(input.cite_urls, input.event_date),
+  );
+  const events = [stampEventAge(incoming, input.birth_date)];
   return projectPerson({
     id: nextPersonId(people, input.slug, input.event_date),
     category: input.category,
@@ -537,6 +629,8 @@ export function buildPersonRow(input, people) {
     role: input.role,
     event_date: input.event_date,
     death_date: isDeathCategory(input.category) ? input.event_date : null,
+    birth_date: input.birth_date || null,
+    country_of_origin: String(input.country_of_origin || "").trim(),
     photo: input.photo,
     photo_credit: input.photo_credit,
     net_worth_usd: null,

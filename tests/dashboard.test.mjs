@@ -20,6 +20,7 @@ import {
   loadSeedFile,
   setMemory,
 } from "../app/lib/store.mjs";
+import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CITES = [
@@ -113,6 +114,7 @@ test("unique-person corona tag raises reason count without a second card", async
   setMemory(goldSeed());
   const before = buildDashboard(goldSeed().people);
   const created = await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "arrests",

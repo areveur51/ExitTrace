@@ -26,8 +26,16 @@ const ATTR_ALIASES = {
   organization: ["organization", "Organization"],
   country: ["country", "Country"],
   branch: ["branch", "Branch"],
-  comments: ["comments", "Comments", "comment"],
+  // Reason of event maps onto comments. Reason→KEEP kind stays separate.
+  comments: ["comments", "Comments", "comment", "reason", "Reason"],
 };
+
+const ORIGIN_ALIASES = [
+  "country_of_origin",
+  "origin_country",
+  "originCountry",
+  "Country of Origin",
+];
 
 function firstText(row, keys) {
   if (!row || typeof row !== "object") return "";
@@ -44,6 +52,38 @@ export function normalizeEventAttrs(raw = {}) {
     out[field] = firstText(raw, ATTR_ALIASES[field] || [field]);
   }
   return out;
+}
+
+/**
+ * Person-level origin. Never event.country, name, or role.
+ * Empty stays empty — do not guess.
+ */
+export function parseOriginCountry(raw = {}) {
+  return firstText(raw, ORIGIN_ALIASES);
+}
+
+function asFlag(raw) {
+  if (raw === true || raw === 1) return true;
+  const text = String(raw || "")
+    .trim()
+    .toLowerCase();
+  return text === "true" || text === "1" || text === "yes" || text === "on";
+}
+
+/**
+ * Explicit military only. Do not guess from name, role, position, or country.
+ * Not a new KEEP kind — callers pass military=true (or a military input tag).
+ */
+export function isMilitaryInput(raw = {}) {
+  if (asFlag(raw.military) || asFlag(raw.Military) || asFlag(raw.is_military)) {
+    return true;
+  }
+  const tags = Array.isArray(raw.tags)
+    ? raw.tags
+    : typeof raw.tags === "string"
+      ? raw.tags.split(",")
+      : [];
+  return tags.some((item) => String(item || "").trim().toLowerCase() === "military");
 }
 
 /**

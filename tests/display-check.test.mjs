@@ -15,6 +15,7 @@ import {
   promoteSourcePost,
   setMemory,
 } from "../app/lib/store.mjs";
+import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import path from "path";
@@ -54,6 +55,7 @@ test("list paths skip the /deaths index", () => {
 test("after insert, list + detail HTML show the row; /deaths and health do not count", async () => {
   setMemory(goldSeed());
   const created = await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "arrests",
@@ -92,6 +94,7 @@ test("death promote displays on officials and the /deaths union", async () => {
     fs.readFileSync(path.join(ROOT, "tests", "fixtures", "source-posts.jsonl"), "utf8"),
   );
   const result = await promoteSourcePost({
+    ...NEW_PERSON_LOCK,
     source_url: "https://example.com/n/death-1",
     subject: "Casey Vale",
     event_date: "2024-05-10",

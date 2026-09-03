@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { PROMOTE_CATEGORY_IDS } from "./categories.mjs";
+import { isMilitaryInput } from "./event-attrs.mjs";
 import {
   handleFromUrl,
   handleKey,
@@ -176,6 +177,7 @@ export function validateQueueInput(input = {}) {
       );
     }
     const event_date = optionalDate(input.event_date, "event_date");
+    const birth_date = optionalDate(input.birth_date, "birth_date");
     const hint_url = optionalUrl(input.hint_url || input.source_url, "hint_url");
     const photo = optionalPortrait(input.photo || input.portrait_url);
     const worth = optionalNetWorth(input);
@@ -191,6 +193,17 @@ export function validateQueueInput(input = {}) {
       cite_urls: [],
       photo,
       photo_credit: String(input.photo_credit || "").trim(),
+      birth_date,
+      country_of_origin: String(
+        input.country_of_origin || input.origin_country || "",
+      ).trim(),
+      position: String(input.position || "").trim(),
+      organization: String(input.organization || "").trim(),
+      country: String(input.country || "").trim(),
+      branch: String(input.branch || "").trim(),
+      comments: String(input.comments || input.reason || "").trim(),
+      reason: String(input.reason || "").trim(),
+      military: isMilitaryInput(input),
       ...worth,
     };
   }
@@ -380,6 +393,17 @@ export function mergeProcessOverlay(request, overlay = {}) {
     country: String(overlay.country || request.country || "").trim(),
     branch: String(overlay.branch || request.branch || "").trim(),
     comments: String(overlay.comments || request.comments || "").trim(),
+    military:
+      overlay.military !== undefined && overlay.military !== ""
+        ? overlay.military
+        : request.military,
+    birth_date: String(overlay.birth_date || request.birth_date || "").trim(),
+    country_of_origin: String(
+      overlay.country_of_origin ||
+        overlay.origin_country ||
+        request.country_of_origin ||
+        "",
+    ).trim(),
     tags: overlay.tags || request.tags,
     photo: String(overlay.photo || request.photo || "").trim(),
     photo_credit: String(overlay.photo_credit || request.photo_credit || "").trim(),
@@ -466,6 +490,7 @@ async function applyQueuedPerson(merged) {
       last_day: merged.last_day,
       announced: merged.announced,
       reason: merged.reason,
+      military: merged.military,
       tags: merged.tags,
       cite_urls,
       extra_urls,
@@ -480,6 +505,7 @@ async function applyQueuedPerson(merged) {
       last_day: merged.last_day,
       announced: merged.announced,
       reason: merged.reason,
+      military: merged.military,
       tags: merged.tags,
       cite_urls,
       extra_urls,

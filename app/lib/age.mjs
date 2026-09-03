@@ -1,4 +1,4 @@
-/** Age at death from optional people.birth_date. Fail-closed: no guess. */
+/** Age at event from birth_date + that tag's event_date. Fail-closed: no guess. */
 
 function asCalendarDate(v) {
   if (!v) return null;
@@ -51,11 +51,37 @@ export function ageFilterActive({ minAge, maxAge } = {}) {
   return minAge != null || maxAge != null;
 }
 
-/** When a min or max is on, missing birth_date does not match. */
+export function parseStoredAge(raw) {
+  if (raw == null || raw === "") return null;
+  const n = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
+  if (!Number.isInteger(n) || n < 0 || n > 150) return null;
+  return n;
+}
+
+/**
+ * Prefer stored age_at_event for that tag. Missing birth_date or event_date
+ * is not age-filterable. Do not guess.
+ */
+export function storedAgeAtEvent(row, birthDate, eventDate) {
+  const stored = parseStoredAge(row?.age_at_event);
+  if (stored != null) return stored;
+  const at = eventDate || row?.death_date || row?.event_date;
+  return ageAtEvent(birthDate ?? row?.birth_date, at);
+}
+
+/** Stamp whole years onto an event when both calendar dates exist. */
+export function stampEventAge(ev, birthDate) {
+  if (!ev || typeof ev !== "object") return ev;
+  const stored = parseStoredAge(ev.age_at_event);
+  if (stored != null) return { ...ev, age_at_event: stored };
+  const age = ageAtEvent(birthDate, ev.event_date);
+  return { ...ev, age_at_event: age };
+}
+
+/** When a min or max is on, missing stored/derivable age does not match. */
 export function matchesAgeFilter(row, { minAge, maxAge } = {}) {
   if (!ageFilterActive({ minAge, maxAge })) return true;
-  const at = row?.death_date || row?.event_date;
-  const age = ageAtEvent(row?.birth_date, at);
+  const age = storedAgeAtEvent(row);
   if (age == null) return false;
   if (minAge != null && age < minAge) return false;
   if (maxAge != null && age > maxAge) return false;

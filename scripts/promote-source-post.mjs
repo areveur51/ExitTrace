@@ -34,13 +34,19 @@ function usage(exitCode = 0) {
   --event-date YYYY-MM-DD \\
   --category <${PROMOTE_CATEGORY_IDS.join("|")}> \\
   --cite-url <https://…> --cite-url <https://…> \\
-  [--summary "…"] [--role "…"] [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"] \\
+  [--summary "…"] [--role "…"] [--birth-date YYYY-MM-DD] [--country-of-origin "…"] \\
+  [--position "…"] [--organization "…"] [--reason "…"] [--comments "…"] [--country "…"] [--branch "…"] \\
+  [--military] \\
+  [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"] \\
   [--net-worth <USD>] [--net-worth-source <Forbes|Bloomberg URL>] [--net-worth-note "…"]
 
 Promote one Unsorted source post into an identified person row.
 Requires a named subject, a calendar event_date (not posted_at), a catalog
 category, and at least ${CITE_FLOOR} http(s) cite URLs supplied by the
-caller. Does not invent cites or a portrait. Attaches a local Wikimedia or
+caller. A new person insert is also fail-closed on birth_date, country of
+origin, position, organization, and reason of event (comments/reason).
+Military inserts also require branch (the existing event field).
+Does not invent cites or a portrait. Attaches a local Wikimedia or
 official-gov still under /media/people/ when one already exists. Does not
 overwrite an existing gold photo. Missing still stays blank. Fills net
 worth from a published Forbes or Bloomberg estimate when one exists.
@@ -94,6 +100,17 @@ function parseArgs(argv) {
     else if (arg === "--country") out.country = take();
     else if (arg === "--branch") out.branch = take();
     else if (arg === "--comments") out.comments = take();
+    else if (arg === "--birth-date" || arg === "--birth_date") out.birth_date = take();
+    else if (arg === "--country-of-origin" || arg === "--origin-country") {
+      out.country_of_origin = take();
+    } else if (arg === "--military") {
+      const peek = argv[i + 1];
+      if (peek && !String(peek).startsWith("--") && /^(true|false|yes|no|1|0)$/i.test(peek)) {
+        out.military = take();
+      } else {
+        out.military = true;
+      }
+    }
     else if (arg === "--photo") out.photo = take();
     else if (arg === "--photo-credit") out.photo_credit = take();
     else if (arg === "--net-worth" || arg === "--net-worth-usd") out.net_worth_usd = take();

@@ -3,6 +3,7 @@ import path from "path";
 import { databaseUrl } from "./env.mjs";
 import {
   PromoteError,
+  assertNewPersonInsertLock,
   attachPersonEvent,
   buildPersonRow,
   citeRecords,
@@ -21,7 +22,7 @@ import {
 import { isPeopleMediaHref, resolvePortrait } from "./portrait.mjs";
 import { hasRecordedNetWorth, resolveNetWorth } from "./net-worth.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
-import { ageFilterActive, matchesAgeFilter } from "./age.mjs";
+import { ageFilterActive, matchesAgeFilter, stampEventAge } from "./age.mjs";
 import {
   kindsImplyingTags,
   matchesTags,
@@ -67,7 +68,8 @@ function asDate(v) {
 }
 
 function normalizePerson(row) {
-  const events = personEvents(row);
+  const birth_date = asDate(row.birth_date);
+  const events = personEvents(row).map((ev) => stampEventAge(ev, birth_date));
   return projectPerson({
     id: row.id,
     category: row.category,
@@ -75,7 +77,8 @@ function normalizePerson(row) {
     role: row.role || "",
     event_date: asDate(row.event_date),
     death_date: asDate(row.death_date),
-    birth_date: asDate(row.birth_date),
+    birth_date,
+    country_of_origin: String(row.country_of_origin || "").trim(),
     photo: row.photo || "",
     photo_credit: row.photo_credit || "",
     net_worth_usd:
@@ -164,6 +167,19 @@ function normalizeAddRequest(row) {
           : "",
     net_worth_source: row.net_worth_source || payload.net_worth_source || "",
     net_worth_note: row.net_worth_note || payload.net_worth_note || "",
+    birth_date: asDate(row.birth_date || payload.birth_date) || "",
+    country_of_origin: String(
+      row.country_of_origin || payload.country_of_origin || "",
+    ).trim(),
+    position: String(row.position || payload.position || "").trim(),
+    organization: String(row.organization || payload.organization || "").trim(),
+    country: String(row.country || payload.country || "").trim(),
+    branch: String(row.branch || payload.branch || "").trim(),
+    comments: String(row.comments || payload.comments || "").trim(),
+    reason: String(row.reason || payload.reason || "").trim(),
+    military: row.military ?? payload.military ?? false,
+    last_day: String(row.last_day || payload.last_day || "").trim(),
+    announced: String(row.announced || payload.announced || "").trim(),
     error: row.error || "",
     result: row.result && typeof row.result === "object" ? row.result : null,
     created_at: created,
@@ -296,10 +312,11 @@ export async function importSeed(p, seed) {
         : normalizePerson(raw);
       await client.query(
         `INSERT INTO people (
-           id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
-           net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags
+           id, category, name, role, event_date, death_date, birth_date, country_of_origin,
+           photo, photo_credit, net_worth_usd, net_worth_note, net_worth_source, sources,
+           summary, events, tags
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -308,6 +325,7 @@ export async function importSeed(p, seed) {
            event_date = EXCLUDED.event_date,
            death_date = EXCLUDED.death_date,
            birth_date = EXCLUDED.birth_date,
+           country_of_origin = COALESCE(NULLIF(people.country_of_origin, ''), EXCLUDED.country_of_origin),
            photo = EXCLUDED.photo,
            photo_credit = EXCLUDED.photo_credit,
            net_worth_usd = EXCLUDED.net_worth_usd,
@@ -481,16 +499,51 @@ function listedEventDateSql(categories) {
   return `COALESCE(${deathDateSql()}, people.event_date)`;
 }
 
+function listedStoredAgeSql(categories) {
+  if (categories.length) {
+    return `COALESCE((
+      SELECT e.age_at_event FROM person_events e
+       WHERE e.person_id = people.id AND e.kind = ANY($KIND::text[])
+         AND e.age_at_event IS NOT NULL
+       ORDER BY e.event_date DESC
+       LIMIT 1
+    ), (
+      SELECT NULLIF(ev->>'age_at_event', '')::int
+        FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
+       WHERE ev->>'kind' = ANY($KIND::text[])
+         AND ev->>'age_at_event' IS NOT NULL
+         AND ev->>'age_at_event' <> ''
+       ORDER BY (ev->>'event_date') DESC
+       LIMIT 1
+    ))`;
+  }
+  return `COALESCE((
+    SELECT e.age_at_event FROM person_events e
+     WHERE e.person_id = people.id AND e.age_at_event IS NOT NULL
+     ORDER BY e.event_date DESC
+     LIMIT 1
+  ), (
+    SELECT NULLIF(ev->>'age_at_event', '')::int
+      FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
+     WHERE ev->>'age_at_event' IS NOT NULL
+       AND ev->>'age_at_event' <> ''
+     ORDER BY (ev->>'event_date') DESC
+     LIMIT 1
+  ))`;
+}
+
 function peopleAgeWhere(params, { minAge, maxAge } = {}, categories = []) {
   if (!ageFilterActive({ minAge, maxAge })) return "";
   let atDate = listedEventDateSql(categories);
+  let storedAge = listedStoredAgeSql(categories);
   if (categories.length) {
     params.push(categories);
     const n = params.length;
     atDate = atDate.replaceAll("$KIND", `$${n}`);
+    storedAge = storedAge.replaceAll("$KIND", `$${n}`);
   }
-  const ageExpr = `EXTRACT(YEAR FROM age(${atDate}, people.birth_date))::int`;
-  const clauses = ["people.birth_date IS NOT NULL", `${atDate} IS NOT NULL`];
+  const ageExpr = `COALESCE(${storedAge}, EXTRACT(YEAR FROM age(${atDate}, people.birth_date))::int)`;
+  const clauses = [`${ageExpr} IS NOT NULL`];
   if (minAge != null) {
     params.push(minAge);
     clauses.push(`${ageExpr} >= $${params.length}`);
@@ -799,6 +852,7 @@ function personValues(row) {
     person.event_date,
     person.death_date,
     person.birth_date,
+    person.country_of_origin || "",
     person.photo,
     person.photo_credit,
     person.net_worth_usd,
@@ -818,9 +872,9 @@ async function syncPersonEvents(client, row) {
     await client.query(
       `INSERT INTO person_events (
          person_id, kind, event_date, sources, announced_date,
-         position, organization, country, branch, comments
+         position, organization, country, branch, comments, age_at_event
        )
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (person_id, kind) DO UPDATE SET
          event_date = person_events.event_date,
          sources = EXCLUDED.sources,
@@ -829,7 +883,8 @@ async function syncPersonEvents(client, row) {
          organization = COALESCE(NULLIF(person_events.organization, ''), EXCLUDED.organization),
          country = COALESCE(NULLIF(person_events.country, ''), EXCLUDED.country),
          branch = COALESCE(NULLIF(person_events.branch, ''), EXCLUDED.branch),
-         comments = COALESCE(NULLIF(person_events.comments, ''), EXCLUDED.comments)`,
+         comments = COALESCE(NULLIF(person_events.comments, ''), EXCLUDED.comments),
+         age_at_event = COALESCE(person_events.age_at_event, EXCLUDED.age_at_event)`,
       [
         person.id,
         ev.kind,
@@ -841,6 +896,7 @@ async function syncPersonEvents(client, row) {
         ev.country || null,
         ev.branch || null,
         ev.comments || null,
+        ev.age_at_event ?? null,
       ],
     );
   }
@@ -859,10 +915,11 @@ export async function insertPerson(row) {
   }
   await p.query(
     `INSERT INTO people (
-       id, category, name, role, event_date, death_date, birth_date, photo, photo_credit,
-       net_worth_usd, net_worth_note, net_worth_source, sources, summary, events, tags
+       id, category, name, role, event_date, death_date, birth_date, country_of_origin,
+       photo, photo_credit, net_worth_usd, net_worth_note, net_worth_source, sources,
+       summary, events, tags
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16::jsonb
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb
      )`,
     personValues(person),
   );
@@ -890,9 +947,9 @@ export async function savePerson(row) {
   await p.query(
     `UPDATE people SET
        category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
-       birth_date = $7, photo = $8, photo_credit = $9, net_worth_usd = $10, net_worth_note = $11,
-       net_worth_source = $12, sources = $13::jsonb, summary = $14, events = $15::jsonb,
-       tags = $16::jsonb
+       birth_date = $7, country_of_origin = $8, photo = $9, photo_credit = $10,
+       net_worth_usd = $11, net_worth_note = $12, net_worth_source = $13,
+       sources = $14::jsonb, summary = $15, events = $16::jsonb, tags = $17::jsonb
      WHERE id = $1`,
     personValues(person),
   );
@@ -1039,8 +1096,13 @@ export async function applyIdentifiedPerson(input) {
   };
   if (existing) {
     const kind = resolveEventKind(existing, parsed.category);
+    const prior = {
+      ...existing,
+      birth_date: existing.birth_date || parsed.birth_date || null,
+      country_of_origin: existing.country_of_origin || parsed.country_of_origin || "",
+    };
     const attached = attachPersonEvent(
-      existing,
+      prior,
       incomingPersonEvent({ ...parsed, category: kind }, incoming),
     );
     let person = await savePerson(attached.person);
@@ -1054,6 +1116,7 @@ export async function applyIdentifiedPerson(input) {
       people: await countPeople(),
     };
   }
+  assertNewPersonInsertLock(parsed);
   const row = buildPersonRow({ ...parsed, photo: "", photo_credit: "" }, people);
   const created = await insertPerson(row);
   let person = await attachPersonPortrait(created, extras);
@@ -1398,6 +1461,17 @@ function addRequestValues(row) {
       net_worth_source: req.net_worth_source,
       net_worth_note: req.net_worth_note,
       extra_urls: req.extra_urls || [],
+      birth_date: req.birth_date || "",
+      country_of_origin: req.country_of_origin || "",
+      position: req.position || "",
+      organization: req.organization || "",
+      country: req.country || "",
+      branch: req.branch || "",
+      comments: req.comments || "",
+      reason: req.reason || "",
+      military: req.military || false,
+      last_day: req.last_day || "",
+      announced: req.announced || "",
     }),
     req.error || null,
     req.result ? JSON.stringify(req.result) : null,
