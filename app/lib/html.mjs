@@ -10,7 +10,7 @@ import {
 } from "./categories.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
 import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS } from "./event-attrs.mjs";
-import { careerLine, personCareer } from "./career.mjs";
+import { careerLine, visibleCareer } from "./career.mjs";
 import { personEvents } from "./promote.mjs";
 import {
   PAGE_SIZE,
@@ -726,7 +726,7 @@ export function eventTagRow(ev, { birthDate } = {}) {
 }
 
 export function careerHistory(row) {
-  const rows = personCareer(row)
+  const rows = visibleCareer(row, personEvents(row))
     .map((item) => {
       const line = careerLine(item);
       return line ? `<p class="meta-line career-line">${esc(line)}</p>` : "";

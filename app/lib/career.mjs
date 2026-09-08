@@ -123,19 +123,33 @@ export function mergeCareer(keep, extra) {
   return personCareer({ career: [...personCareer({ career: keep }), ...personCareer({ career: extra })] });
 }
 
+function foldCareer(raw) {
+  return String(raw || "")
+    .trim()
+    .toLowerCase();
+}
+
+function containsFold(hay, needle) {
+  const h = foldCareer(hay);
+  const n = foldCareer(needle);
+  return Boolean(h && n && h.includes(n));
+}
+
+/** Role/org; branch only when the row is military and not already in the label. */
 export function careerLabel(row) {
-  const parts = [];
   const title = String(row?.title || "").trim();
   const organization = String(row?.organization || "").trim();
   const branch = String(row?.branch || "").trim();
+  const parts = [];
   if (title) parts.push(title);
-  if (organization && organization.toLowerCase() !== title.toLowerCase()) {
+  if (organization && foldCareer(organization) !== foldCareer(title)) {
     parts.push(organization);
   }
+  const military = Boolean(branch);
   if (
-    branch &&
-    branch.toLowerCase() !== title.toLowerCase() &&
-    branch.toLowerCase() !== organization.toLowerCase()
+    military &&
+    !containsFold(title, branch) &&
+    !containsFold(organization, branch)
   ) {
     parts.push(branch);
   }
@@ -147,6 +161,29 @@ export function careerLine(row) {
   const years = formatCareerYears(row?.start_year, row?.end_year);
   if (!label || !years) return "";
   return `${label} · ${years}`;
+}
+
+/**
+ * True when this career row is the same occupation as a KEEP event tag.
+ * Detail must not restated that tag as history.
+ */
+export function careerOverlapsKeepEvent(row, ev) {
+  const title = foldCareer(row?.title);
+  const org = foldCareer(row?.organization);
+  const pos = foldCareer(ev?.position);
+  const evOrg = foldCareer(ev?.organization);
+  if (title && pos && title === pos) {
+    return !org || !evOrg || org === evOrg;
+  }
+  if (!title && org && evOrg && org === evOrg) return true;
+  return false;
+}
+
+/** History rows only — omit KEEP-event occupations. Empty stays empty. */
+export function visibleCareer(person, events) {
+  const rows = personCareer(person);
+  const tags = Array.isArray(events) ? events : [];
+  return rows.filter((row) => !tags.some((ev) => careerOverlapsKeepEvent(row, ev)));
 }
 
 export { TITLE_ALIASES, ORG_ALIASES, BRANCH_ALIASES, START_ALIASES, END_ALIASES };

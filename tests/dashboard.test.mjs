@@ -12,6 +12,7 @@ import {
   dashRankEvents,
   eventInDashRange,
   explicitAttr,
+  occupationAtDeath,
   filterPeopleToRange,
   occupationAtEvent,
   parseDashRangeSearch,
@@ -215,6 +216,9 @@ test("death ranks use death-event occupation only — career history is not coun
   assert.equal(dashRankEvents(people[0])[0].kind, "death_celebrity");
   assert.equal(occupationAtEvent(people[0].events[0], "organization"), "Example Desk");
   assert.equal(occupationAtEvent(people[0].career[0], "organization"), "");
+  assert.equal(occupationAtDeath(people[0], "organization"), "Example Desk");
+  assert.equal(occupationAtDeath(people[0], "branch"), "News");
+  assert.equal(occupationAtDeath(people[1], "organization"), "");
   const org = rankDimension(people, "organization");
   assert.deepEqual(
     org.map((r) => r.label),
@@ -235,6 +239,42 @@ test("death ranks use death-event occupation only — career history is not coun
   const reason = rankDimension(people, "reason");
   assert.ok(reason.some((r) => r.key === "death_celebrity" && r.count === 1));
   assert.ok(reason.some((r) => r.key === "firings" && r.count === 1));
+
+  const mixed = [
+    {
+      id: "mixed-vale",
+      name: "Mixed Vale",
+      career: [{ title: "U.S. Army", organization: "U.S. Army", branch: "Army", start_year: 1953, end_year: 1954 }],
+      events: [
+        {
+          kind: "firings",
+          event_date: "2023-01-01",
+          position: "Editor",
+          organization: "Desk A",
+          country: "UK",
+          branch: "Print",
+        },
+        {
+          kind: "death_official",
+          event_date: "2024-08-01",
+          position: "Host",
+          organization: "Death Desk",
+          country: "USA",
+          branch: "Broadcast",
+        },
+      ],
+    },
+  ];
+  assert.equal(occupationAtDeath(mixed[0], "organization"), "Death Desk");
+  assert.deepEqual(
+    rankDimension(mixed, "organization").map((r) => r.label).sort(),
+    ["Death Desk", "Desk A"],
+  );
+  assert.ok(!rankDimension(mixed, "organization").some((r) => /Army/.test(r.label)));
+  assert.deepEqual(
+    rankDimension(mixed, "branch").map((r) => r.label).sort(),
+    ["Broadcast", "Print"],
+  );
 });
 
 test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", async () => {

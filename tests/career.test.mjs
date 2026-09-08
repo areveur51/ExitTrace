@@ -3,11 +3,13 @@ import { test } from "node:test";
 import {
   CAREER_FIELDS,
   careerLine,
+  careerOverlapsKeepEvent,
   formatCareerYears,
   mergeCareer,
   normalizeCareerRow,
   parseCareerYear,
   personCareer,
+  visibleCareer,
 } from "../app/lib/career.mjs";
 
 test("career schema is title/org/branch plus years only", () => {
@@ -46,6 +48,20 @@ test("career rows require a label and at least one year — role is not guessed"
   assert.equal(personCareer({ career: [{ position: "Anchor", start_year: 2010, end_year: 2024 }] })[0].title, "Anchor");
   assert.equal(formatCareerYears(1953, 1954), "1953–1954");
   assert.equal(careerLine({ title: "U.S. Army", organization: "U.S. Army", start_year: 1953, end_year: 1954 }), "U.S. Army · 1953–1954");
+  assert.equal(
+    careerLine({ title: "U.S. Army", organization: "U.S. Army", branch: "Army", start_year: 1953, end_year: 1954 }),
+    "U.S. Army · 1953–1954",
+  );
+  assert.equal(
+    careerLine({
+      title: "Officer",
+      organization: "Department of Defense",
+      branch: "Navy",
+      start_year: 1953,
+      end_year: 1956,
+    }),
+    "Officer · Department of Defense · Navy · 1953–1956",
+  );
   assert.deepEqual(
     mergeCareer(
       [{ title: "U.S. Army", start_year: 1953, end_year: 1954 }],
@@ -53,4 +69,33 @@ test("career rows require a label and at least one year — role is not guessed"
     ).map((row) => row.title),
     ["U.S. Army", "Anchor"],
   );
+});
+
+test("career history omits rows that duplicate a KEEP event occupation", () => {
+  const arrest = {
+    kind: "arrests",
+    position: "Anchor, CNN",
+    organization: "Example Desk",
+  };
+  assert.equal(
+    careerOverlapsKeepEvent(
+      { title: "Anchor, CNN", organization: "Example Desk", start_year: 2010, end_year: 2024 },
+      arrest,
+    ),
+    true,
+  );
+  assert.equal(
+    careerOverlapsKeepEvent({ title: "U.S. Army", organization: "U.S. Army", start_year: 1953, end_year: 1954 }, arrest),
+    false,
+  );
+  const rows = visibleCareer(
+    {
+      career: [
+        { title: "U.S. Army", start_year: 1953, end_year: 1954 },
+        { position: "Anchor, CNN", organization: "Example Desk", start_year: 2010, end_year: 2024 },
+      ],
+    },
+    [arrest],
+  );
+  assert.deepEqual(rows.map((r) => r.title), ["U.S. Army"]);
 });

@@ -1,8 +1,8 @@
 /** Live unique-person dashboard ranks from the shared event columns. */
 
-import { categoryById, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
+import { categoryById, isDeathCategory, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
 import { EVENT_ATTR_FIELDS } from "./event-attrs.mjs";
-import { personEvents } from "./promote.mjs";
+import { deathPersonEvent, personEvents } from "./promote.mjs";
 
 export const DASH_TOP_N = 5;
 
@@ -100,6 +100,13 @@ export function occupationAtEvent(ev, field) {
   return explicitAttr(ev, field);
 }
 
+/** Death-event occupation only. Career history is never a pointer. */
+export function occupationAtDeath(row, field) {
+  const death = deathPersonEvent(dashRankEvents(row));
+  if (!death || !isDeathCategory(death.kind)) return "";
+  return occupationAtEvent(death, field);
+}
+
 function reasonLabel(kind) {
   const cat = categoryById(kind);
   return cat ? cat.title : String(kind || "").trim();
@@ -136,8 +143,10 @@ export function rankDimension(people, dimId, range) {
         continue;
       }
       if (!EVENT_FIELD_SET.has(dim.field)) continue;
-      // Current at this event only. Death kinds = death-event attrs, not career.
-      const label = occupationAtEvent(ev, dim.field);
+      // Death kinds: death-event occupation only. Career never. Non-death: this event.
+      const label = isDeathCategory(ev.kind)
+        ? occupationAtDeath(row, dim.field)
+        : occupationAtEvent(ev, dim.field);
       if (!label || seen.has(label)) continue;
       seen.add(label);
       counts.set(label, (counts.get(label) || 0) + 1);

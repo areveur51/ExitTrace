@@ -216,9 +216,11 @@ test("person detail renders career/service years when stored and does not copy e
   assert.match(section, /class="career-history"/);
   assert.match(section, /Career \/ Service/);
   assert.match(section, /U\.S\. Army · 1953–1954/);
-  assert.match(section, /Anchor, CNN · Example Desk · 2010–2024/);
+  assert.doesNotMatch(section, /2010–2024/);
+  assert.doesNotMatch(section, /Anchor, CNN · Example Desk · 2010/);
   assert.doesNotMatch(section, /Position ·|Organization ·|Country ·|Comments ·|Age at event|cite-list|Announced/);
   assert.doesNotMatch(section, /USA|lead note/);
+  assert.doesNotMatch(section, /Casey Vale|Birth date|Origin ·/);
 
   const html = personDetail(person);
   assert.equal(paneCount(html), 1);
