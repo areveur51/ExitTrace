@@ -81,6 +81,25 @@ export function explicitAttr(row, field) {
   return String(row?.[key] || "").trim();
 }
 
+/** KEEP events only. Career / service_history rows never feed ranks. */
+export function dashRankEvents(row) {
+  return personEvents(row).filter((ev) =>
+    PROMOTE_CATEGORY_IDS.includes(String(ev.kind || "").trim()),
+  );
+}
+
+/**
+ * Occupation at this event. Death kinds use the death event only —
+ * never career history, people.role, or another tag's attrs.
+ */
+export function occupationAtEvent(ev, field) {
+  if (!ev || typeof ev !== "object") return "";
+  const kind = String(ev.kind || "").trim();
+  if (!PROMOTE_CATEGORY_IDS.includes(kind)) return "";
+  if (!EVENT_FIELD_SET.has(field)) return "";
+  return explicitAttr(ev, field);
+}
+
 function reasonLabel(kind) {
   const cat = categoryById(kind);
   return cat ? cat.title : String(kind || "").trim();
@@ -105,11 +124,10 @@ export function rankDimension(people, dimId, range) {
   const meta = new Map();
   for (const row of filterPeopleToRange(people, range)) {
     const seen = new Set();
-    for (const ev of personEvents(row)) {
+    for (const ev of dashRankEvents(row)) {
       if (dim.source === "kind") {
         const kind = String(ev.kind || "").trim();
         if (!kind || seen.has(kind)) continue;
-        if (!PROMOTE_CATEGORY_IDS.includes(kind)) continue;
         seen.add(kind);
         counts.set(kind, (counts.get(kind) || 0) + 1);
         if (!meta.has(kind)) {
@@ -118,7 +136,8 @@ export function rankDimension(people, dimId, range) {
         continue;
       }
       if (!EVENT_FIELD_SET.has(dim.field)) continue;
-      const label = explicitAttr(ev, dim.field);
+      // Current at this event only. Death kinds = death-event attrs, not career.
+      const label = occupationAtEvent(ev, dim.field);
       if (!label || seen.has(label)) continue;
       seen.add(label);
       counts.set(label, (counts.get(label) || 0) + 1);

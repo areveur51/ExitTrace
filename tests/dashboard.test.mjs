@@ -9,9 +9,11 @@ import {
   DASH_RANGE_STORAGE_KEY,
   buildDashboard,
   dashRangeHref,
+  dashRankEvents,
   eventInDashRange,
   explicitAttr,
   filterPeopleToRange,
+  occupationAtEvent,
   parseDashRangeSearch,
   rankDimension,
   resolveDashRange,
@@ -170,6 +172,69 @@ test("unique-person corona tag raises reason count without a second card", async
   assert.equal(position[0].count, 1);
   assert.ok(model.trends.events > before.trends.events);
   assert.equal(eventFromLead({ last_day: "2024-06-15", reason: "Fired", Organization: "Example Desk" }).organization, "Example Desk");
+});
+
+test("death ranks use death-event occupation only — career history is not counted", () => {
+  const people = [
+    {
+      id: "vale-death",
+      name: "Casey Vale",
+      role: "U.S. Army veteran and later anchor",
+      career: [
+        { title: "U.S. Army", organization: "U.S. Army", branch: "Army", start_year: 1953, end_year: 1954 },
+        { title: "Reporter", organization: "Other Desk", start_year: 1980, end_year: 1990 },
+      ],
+      events: [
+        {
+          kind: "death_celebrity",
+          event_date: "2024-06-15",
+          position: "Anchor, CNN",
+          organization: "Example Desk",
+          country: "USA",
+          branch: "News",
+        },
+      ],
+    },
+    {
+      id: "desk-fire",
+      name: "Riley Fire",
+      career: [{ title: "U.S. Army", organization: "U.S. Army", branch: "Army", start_year: 1953, end_year: 1954 }],
+      events: [
+        {
+          kind: "firings",
+          event_date: "2024-07-01",
+          position: "Editor",
+          organization: "Desk A",
+          country: "UK",
+          branch: "Print",
+        },
+      ],
+    },
+  ];
+  assert.equal(dashRankEvents(people[0]).length, 1);
+  assert.equal(dashRankEvents(people[0])[0].kind, "death_celebrity");
+  assert.equal(occupationAtEvent(people[0].events[0], "organization"), "Example Desk");
+  assert.equal(occupationAtEvent(people[0].career[0], "organization"), "");
+  const org = rankDimension(people, "organization");
+  assert.deepEqual(
+    org.map((r) => r.label),
+    ["Desk A", "Example Desk"],
+  );
+  assert.ok(!org.some((r) => /Army|Other Desk/.test(r.label)));
+  const branch = rankDimension(people, "branch");
+  assert.deepEqual(
+    branch.map((r) => r.label),
+    ["News", "Print"],
+  );
+  assert.ok(!branch.some((r) => r.label === "Army"));
+  const position = rankDimension(people, "position");
+  assert.ok(position.some((r) => r.label === "Anchor, CNN"));
+  assert.ok(!position.some((r) => r.label === "Reporter"));
+  const country = rankDimension(people, "country");
+  assert.ok(country.some((r) => r.label === "USA"));
+  const reason = rankDimension(people, "reason");
+  assert.ok(reason.some((r) => r.key === "death_celebrity" && r.count === 1));
+  assert.ok(reason.some((r) => r.key === "firings" && r.count === 1));
 });
 
 test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", async () => {

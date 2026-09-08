@@ -14,6 +14,7 @@ import {
   resolveEventCalendar,
 } from "./event-attrs.mjs";
 import { personTags } from "./tags.mjs";
+import { mergeCareer, personCareer } from "./career.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
@@ -424,6 +425,7 @@ export function mergePersonAnnotate(gold, prior) {
     birth_date: keep.birth_date || extra.birth_date || null,
     country_of_origin: keep.country_of_origin || extra.country_of_origin || "",
     events: [...eventsByKind.values()],
+    career: mergeCareer(keep.career, extra.career),
     tags: [...(keep.tags || []), ...(extra.tags || [])],
   });
 }
@@ -536,6 +538,7 @@ export function validateIdentifiedPersonInput(input = {}) {
     birth_date,
     country_of_origin,
     military,
+    career: personCareer(input),
     photo: String(input.photo || "").trim(),
     photo_credit: String(input.photo_credit || "").trim(),
     net_worth_usd: input.net_worth_usd,
@@ -639,5 +642,6 @@ export function buildPersonRow(input, people) {
     sources: events[0].sources,
     summary: input.summary,
     events,
+    career: personCareer(input),
   });
 }

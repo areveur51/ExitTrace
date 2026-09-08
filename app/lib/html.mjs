@@ -10,6 +10,7 @@ import {
 } from "./categories.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
 import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS } from "./event-attrs.mjs";
+import { careerLine, personCareer } from "./career.mjs";
 import { personEvents } from "./promote.mjs";
 import {
   PAGE_SIZE,
@@ -724,6 +725,20 @@ export function eventTagRow(ev, { birthDate } = {}) {
   </article>`;
 }
 
+export function careerHistory(row) {
+  const rows = personCareer(row)
+    .map((item) => {
+      const line = careerLine(item);
+      return line ? `<p class="meta-line career-line">${esc(line)}</p>` : "";
+    })
+    .filter(Boolean);
+  if (!rows.length) return "";
+  return `<section class="career-history" aria-label="Career / Service history">
+    <h3 class="career-h">Career / Service</h3>
+    ${rows.join("")}
+  </section>`;
+}
+
 function eventTimeline(row) {
   const events = personEvents(row).filter((ev) =>
     PROMOTE_CATEGORY_IDS.includes(String(ev.kind || "").trim()),
@@ -756,7 +771,7 @@ export function personDetail(row) {
   return `<article class="detail person-detail">
     ${boxFrame(
       "Identity",
-      `${personHeader(row)}${eventTimeline(row)}`,
+      `${personHeader(row)}${careerHistory(row)}${eventTimeline(row)}`,
       { active: true, extraClass: "person-pane" },
     )}
   </article>`;

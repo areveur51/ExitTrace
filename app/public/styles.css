@@ -448,6 +448,21 @@ a:hover { color: var(--ink); }
   border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
 }
 .event-tag-row .cite-list { margin-top: 0.35rem; }
+.career-history {
+  margin: 0.85rem 0 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--brick) 40%, var(--rule));
+}
+.career-h {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-ui);
+  font-size: var(--hud-label);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brick);
+}
+.career-line { color: var(--muted); }
 
 .tui-group { margin: 0 0 0.85rem; }
 .tui-group-h {

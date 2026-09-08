@@ -33,6 +33,8 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS country_of_origin TEXT;
 -- Identity tags (civilian, non_civilian, celebrity, official, ceo). Multi-tag.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Person-level occupation / service years. Not event-tag attrs. Empty stays empty.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS career JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS person_events (
   person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
