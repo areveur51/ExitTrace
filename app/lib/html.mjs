@@ -6,7 +6,10 @@ import {
   initials,
   isDeathCategory,
   isIndictmentCategory,
+  PROMOTE_CATEGORY_IDS,
 } from "./categories.mjs";
+import { storedAgeAtEvent } from "./age.mjs";
+import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS } from "./event-attrs.mjs";
 import { personEvents } from "./promote.mjs";
 import {
   PAGE_SIZE,
@@ -27,7 +30,14 @@ import {
   normalizeTags,
   personTags,
 } from "./tags.mjs";
-import { DASH_DIMENSIONS } from "./dashboard.mjs";
+import {
+  DASH_DIMENSIONS,
+  DASH_RANGE_PRESETS,
+  DASH_RANGE_STORAGE_KEY,
+  dashRangeHref,
+  resolveDashRange,
+  serializeDashRange,
+} from "./dashboard.mjs";
 
 function esc(s) {
   return String(s ?? "")
@@ -117,6 +127,12 @@ function themeBootScript() {
 function pageSizeBootScript() {
   return `<script>
 (function(){try{var key=${JSON.stringify(PAGE_SIZE_STORAGE_KEY)};var allowed=${JSON.stringify(PAGE_SIZES)};var raw=localStorage.getItem(key);var n=Number(raw);var size=allowed.indexOf(n)!==-1?String(n):null;if(size)document.cookie=key+"="+size+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-page-size");var guard=key+"-sync";if(rendered&&size&&rendered!==size&&sessionStorage.getItem(guard)!==size){sessionStorage.setItem(guard,size);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+</script>`;
+}
+
+function dashRangeBootScript() {
+  return `<script>
+(function(){try{var key=${JSON.stringify(DASH_RANGE_STORAGE_KEY)};var path=location.pathname||"";if(path!=="/dashboard"&&path.indexOf("/dashboard/")!==0)return;var params=new URLSearchParams(location.search);var q=params.get("range");if(q){var token=q==="custom"?("custom:"+(params.get("from")||"")+":"+(params.get("to")||"")):q;localStorage.setItem(key,token);document.cookie=key+"="+encodeURIComponent(token)+"; Path=/; SameSite=Lax";return;}var raw=localStorage.getItem(key);if(!raw)return;document.cookie=key+"="+encodeURIComponent(raw)+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-dash-range");var guard=key+"-sync";if(rendered&&raw&&rendered!==raw&&sessionStorage.getItem(guard)!==raw){sessionStorage.setItem(guard,raw);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
 </script>`;
 }
 
@@ -372,20 +388,24 @@ export function layout({
   pageSize,
   categoryId,
   crumbLabel,
+  dashRange,
 }) {
   const home = mode === "home";
   const sizeAttr =
     pageSize != null && PAGE_SIZES.includes(Number(pageSize))
       ? ` data-page-size="${Number(pageSize)}"`
       : "";
+  const rangeToken = dashRange ? serializeDashRange(resolveDashRange(dashRange)) : "";
+  const rangeAttr = rangeToken ? ` data-dash-range="${esc(rangeToken)}"` : "";
   return `<!doctype html>
-<html lang="en" data-theme="${DEFAULT_THEME}"${sizeAttr}>
+<html lang="en" data-theme="${DEFAULT_THEME}"${sizeAttr}${rangeAttr}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${esc(title)} · ExitTrace</title>
   ${themeBootScript()}
   ${pageSizeBootScript()}
+  ${dashRangeBootScript()}
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="tui hud${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">
@@ -412,7 +432,7 @@ export function layout({
 </html>`;
 }
 
-function thumb(src, label, kind = "portrait") {
+export function localMediaThumb(src, label, kind = "portrait") {
   const href = listThumbHref(src);
   if (href) {
     return `<img class="${kind} thumb" src="${esc(href)}" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async">`;
@@ -420,8 +440,12 @@ function thumb(src, label, kind = "portrait") {
   return `<span class="initials thumb" aria-hidden="true">${esc(initials(label))}</span>`;
 }
 
-function sourceList(sources) {
-  return `<ol class="sources">${(sources || [])
+function thumb(src, label, kind = "portrait") {
+  return localMediaThumb(src, label, kind);
+}
+
+export function citeList(sources) {
+  return `<ol class="sources cite-list">${(sources || [])
     .map((s) => {
       const label = s.publisher || s.title || s.url;
       return `<li><a class="source-link" href="${esc(s.url)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="${esc(s.title || "")}" data-date="${esc(s.date || "")}">${esc(label)}</a>${
@@ -429,6 +453,10 @@ function sourceList(sources) {
       }</li>`;
     })
     .join("")}</ol>`;
+}
+
+function sourceList(sources) {
+  return citeList(sources);
 }
 
 function netWorthCell(row) {
@@ -646,68 +674,66 @@ function eventKindTitle(kind) {
   return cat ? cat.title : kind || "Event";
 }
 
-function personEventBlocks(row) {
-  const events = personEvents(row);
-  if (!events.length) {
-    const cat = categoryById(row.category);
-    const kind = cat ? cat.title : row.category;
-    const death = isDeathCategory(row.category)
-      ? `<p class="meta-line">Death date · <time datetime="${esc(row.death_date || "")}">${esc(formatDate(row.death_date))}</time></p>`
-      : "";
-    const origin = row.country_of_origin
-      ? `<p class="meta-line">Origin · ${esc(row.country_of_origin)}</p>`
-      : "";
-    const birth = row.birth_date
-      ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
-      : "";
-    return {
-      meta: `<p class="meta-line"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(row.role || "—")} · ${esc(kind)}</p>${origin}${birth}${death}`,
-      sourcesHtml: sourceList(row.sources || []),
-      sourceCount: (row.sources || []).length,
-    };
-  }
-  const meta = events
-    .map((ev) => {
-      const label = eventKindTitle(ev.kind);
-      const death = isDeathCategory(ev.kind)
-        ? ` · death date`
-        : "";
-      const announced = ev.announced_date
-        ? ` · announced <time datetime="${esc(ev.announced_date)}">${esc(formatDate(ev.announced_date))}</time>`
-        : "";
-      const bits = [
-        ev.position && `Position · ${ev.position}`,
-        ev.organization && `Organization · ${ev.organization}`,
-        ev.country && `Country · ${ev.country}`,
-        ev.branch && `Branch · ${ev.branch}`,
-      ].filter(Boolean);
-      const attrs = bits.length ? ` · ${esc(bits.join(" · "))}` : "";
-      const comments = ev.comments
-        ? `<p class="meta-line">Comments · ${esc(ev.comments)}</p>`
-        : "";
-      return `<p class="meta-line event-line"><time datetime="${esc(ev.event_date || "")}">${esc(formatDate(ev.event_date))}</time> · ${esc(label)}${death}${announced}${attrs}</p>${comments}`;
-    })
-    .join("");
-  const role = row.role
-    ? `<p class="meta-line">Role · ${esc(row.role)}</p>`
+export function personHeader(row) {
+  const birth = row.birth_date
+    ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
     : "";
   const origin = row.country_of_origin
     ? `<p class="meta-line">Origin · ${esc(row.country_of_origin)}</p>`
     : "";
-  const birth = row.birth_date
-    ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
-    : "";
-  const sourcesHtml = events
-    .map((ev) => {
-      const label = eventKindTitle(ev.kind);
-      return `<section class="event-cites">
-        <h4 class="event-h">${esc(label)} · <time datetime="${esc(ev.event_date || "")}">${esc(formatDate(ev.event_date))}</time></h4>
-        ${sourceList(ev.sources || [])}
-      </section>`;
-    })
+  return `<header class="person-header">
+    ${localMediaThumb(row.photo, row.name)}
+    <div class="detail-copy">
+      <h2 class="detail-title">${esc(row.name || "—")}</h2>
+      <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
+      ${birth}
+      ${origin}
+      ${personTagChips(row)}
+    </div>
+  </header>`;
+}
+
+export function eventTagRow(ev, { birthDate } = {}) {
+  const kind = String(ev?.kind || "").trim();
+  if (!kind || !PROMOTE_CATEGORY_IDS.includes(kind)) return "";
+  const label = eventKindTitle(kind);
+  const eventDate = String(ev.event_date || "").trim();
+  const announcedRaw = String(ev.announced_date || "").trim();
+  const announced =
+    announcedRaw && announcedRaw !== eventDate
+      ? `<p class="meta-line">Announced · <time datetime="${esc(announcedRaw)}">${esc(formatDate(announcedRaw))}</time></p>`
+      : "";
+  const age = storedAgeAtEvent(ev, birthDate, ev.event_date);
+  const ageLine =
+    age != null
+      ? `<p class="meta-line">Age at event · ${esc(String(age))}</p>`
+      : "";
+  const attrs = EVENT_ATTR_FIELDS.map((field) => {
+    const value = String(ev[field] || "").trim();
+    if (!value) return "";
+    const name = EVENT_ATTR_LABELS[field] || field;
+    return `<p class="meta-line">${esc(name)} · ${esc(value)}</p>`;
+  }).join("");
+  return `<article class="event-tag-row" data-kind="${esc(kind)}">
+    <h3 class="event-h">${esc(label)}</h3>
+    <p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>
+    ${announced}
+    ${ageLine}
+    ${attrs}
+    ${citeList(ev.sources || [])}
+  </article>`;
+}
+
+function eventTimeline(row) {
+  const events = personEvents(row).filter((ev) =>
+    PROMOTE_CATEGORY_IDS.includes(String(ev.kind || "").trim()),
+  );
+  if (!events.length) return "";
+  const rows = events
+    .map((ev) => eventTagRow(ev, { birthDate: row.birth_date }))
+    .filter(Boolean)
     .join("");
-  const sourceCount = events.reduce((n, ev) => n + (ev.sources || []).length, 0);
-  return { meta: `${role}${origin}${birth}${meta}`, sourcesHtml, sourceCount };
+  return `<section class="event-timeline" aria-label="Event timeline">${rows}</section>`;
 }
 
 function personTagChips(row) {
@@ -727,31 +753,11 @@ function personTagChips(row) {
 }
 
 export function personDetail(row) {
-  const photo = row.photo
-    ? `<img class="detail-photo" src="${esc(row.photo)}" alt="${esc(row.name)}" width="120" height="150" decoding="async">`
-    : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name) || "—")}</span>`;
-  const { meta, sourcesHtml, sourceCount } = personEventBlocks(row);
-  return `<article class="detail">
+  return `<article class="detail person-detail">
     ${boxFrame(
-      "Metadata",
-      `<div class="meta-pane">
-      ${photo}
-      <div class="detail-copy">
-        <h2 class="detail-title">${esc(row.name || "—")}</h2>
-        <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
-        ${meta}
-        ${personTagChips(row)}
-        <hr class="hr">
-        <h3 class="pane-h">Synopsis</h3>
-        <p class="synopsis">${esc(row.summary || "—")}</p>
-      </div>
-    </div>`,
-      { extraClass: "meta-box" },
-    )}
-    ${boxFrame(
-      `● Sources · ${sourceCount} available · 1/${sourceCount || 0}`,
-      sourcesHtml,
-      { active: true, extraClass: "sources-pane" },
+      "Identity",
+      `${personHeader(row)}${eventTimeline(row)}`,
+      { active: true, extraClass: "person-pane" },
     )}
   </article>`;
 }
@@ -925,7 +931,7 @@ function dashChart(series, { title, kind = "line" } = {}) {
   const pts = values.map((v, i) => {
     const x = padX + (values.length === 1 ? innerW / 2 : (i / (values.length - 1)) * innerW);
     const y = padY + innerH - (v / max) * innerH;
-    return { x, y, v };
+    return { x, y, v, key: rows[i]?.key || "" };
   });
   const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const bars =
@@ -935,17 +941,28 @@ function dashChart(series, { title, kind = "line" } = {}) {
             const bw = Math.max(2, innerW / Math.max(values.length, 1) - 1);
             const x = padX + (i + 0.5) * (innerW / values.length) - bw / 2;
             const bh = innerH - (p.y - padY);
-            return `<rect class="dash-bar" x="${x.toFixed(1)}" y="${p.y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, bh).toFixed(1)}"></rect>`;
+            return `<rect class="dash-bar" x="${x.toFixed(1)}" y="${p.y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, bh).toFixed(1)}" data-date="${esc(p.key)}" data-count="${p.v}" tabindex="0"><title>${esc(p.key)} · ${p.v}</title></rect>`;
           })
           .join("")
       : "";
+  const dots =
+    kind === "bar"
+      ? ""
+      : pts
+          .map(
+            (p) =>
+              `<circle class="dash-pt" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.2" data-date="${esc(p.key)}" data-count="${p.v}" tabindex="0"><title>${esc(p.key)} · ${p.v}</title></circle>`,
+          )
+          .join("");
   const first = rows[0]?.key || "";
   const last = rows[rows.length - 1]?.key || "";
   return `<div class="dash-chart" role="img" aria-label="${esc(title)}: ${values.length} points from ${esc(first)} to ${esc(last)}">
     <svg class="dash-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">
       <path class="dash-line" d="${esc(d)}" fill="none"></path>
       ${bars}
+      ${dots}
     </svg>
+    <p class="dash-tip" hidden role="tooltip"></p>
     <p class="dash-chart-ends"><span>${esc(first)}</span><span>${esc(last)}</span></p>
   </div>`;
 }
@@ -974,10 +991,38 @@ function dashRankTable(rows, { empty = "No rows on this page", selfPath = "" } =
   </table>`;
 }
 
-export function dashboardBody(model) {
+export function dashRangeNav(range, { path = "/dashboard" } = {}) {
+  const current = resolveDashRange(range);
+  const chips = DASH_RANGE_PRESETS.filter((p) => p.id !== "custom")
+    .map((p) => {
+      const on = current.id === p.id;
+      return `<a class="keychip dash-range-btn" href="${esc(dashRangeHref(path, { id: p.id }))}" data-dash-range-set="${esc(p.id)}"${
+        on ? ' aria-current="page"' : ""
+      }>${esc(p.label)}</a>`;
+    })
+    .join("");
+  const customOn = current.id === "custom";
+  return `<nav class="dash-range" aria-label="Event date range">
+    <span class="dash-range-label" id="dash-range-label">Event date</span>
+    <div class="dash-range-btns" role="group" aria-labelledby="dash-range-label">
+      ${chips}
+    </div>
+    <form class="dash-range-custom" method="get" action="${esc(String(path || "/dashboard").split("?")[0])}">
+      <input type="hidden" name="range" value="custom">
+      <label class="dash-range-field">From <input type="date" name="from" value="${esc(current.id === "custom" ? current.from : "")}"></label>
+      <label class="dash-range-field">To <input type="date" name="to" value="${esc(current.id === "custom" ? current.to : "")}"></label>
+      <button type="submit" class="keychip dash-range-apply" data-dash-range-set="custom"${
+        customOn ? ' aria-current="page"' : ""
+      }>Custom</button>
+    </form>
+  </nav>`;
+}
+
+export function dashboardBody(model, { path = "/dashboard", range } = {}) {
+  const active = resolveDashRange(range || model.range);
   const dims = (model.dimensions || [])
     .map((dim) => {
-      const more = `<p class="dash-more"><a class="keychip" href="${esc(dim.path)}">All by ${esc(dim.nav)}</a></p>`;
+      const more = `<p class="dash-more"><a class="keychip" href="${esc(dashRangeHref(dim.path, active))}">All by ${esc(dim.nav)}</a></p>`;
       return `<section class="dash-block" data-dash-dim="${esc(dim.id)}">
         ${boxFrame(
           `Top ${Math.max(dim.top.length, 1)} by ${dim.nav}`,
@@ -989,6 +1034,7 @@ export function dashboardBody(model) {
     .join("");
   const trends = model.trends || { total: [], perMonth: [], perWeek: [], events: 0, last: 0 };
   return `<div class="dash-hud">
+    ${dashRangeNav(active, { path })}
     <section class="dash-stats" aria-label="Live counts">
       <p class="dash-stat"><span class="dash-stat-label">People</span> ${dashCount(model.people)}</p>
       <p class="dash-stat"><span class="dash-stat-label">Events</span> ${dashCount(trends.events)}</p>
@@ -1008,8 +1054,10 @@ export function dashboardBody(model) {
   </div>`;
 }
 
-export function dashboardRankBody(dim, rows) {
+export function dashboardRankBody(dim, rows, { range } = {}) {
+  const active = resolveDashRange(range);
   return `<div class="dash-hud dash-rank-page" data-dash-dim="${esc(dim.id)}">
+    ${dashRangeNav(active, { path: dim.path })}
     ${boxFrame(`All by ${dim.nav}`, dashRankTable(rows, { selfPath: dim.path }), { extraClass: "dash-box", active: true })}
   </div>`;
 }

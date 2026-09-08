@@ -66,7 +66,13 @@ import {
 } from "./lib/paginate.mjs";
 import { parseAgeFilter } from "./lib/age.mjs";
 import { catalogMainPath, filterPath, parseTagFilter } from "./lib/tags.mjs";
-import { buildDashboard, dashDimensionByPath, rankDimension } from "./lib/dashboard.mjs";
+import {
+  buildDashboard,
+  dashDimensionByPath,
+  dashRangeHref,
+  parseDashRangeSearch,
+  rankDimension,
+} from "./lib/dashboard.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -419,12 +425,13 @@ async function handle(req, res) {
   if (p === "/dashboard" || p.startsWith("/dashboard/")) {
     const people = await listPeople();
     const dim = dashDimensionByPath(p);
+    const range = parseDashRangeSearch(url.searchParams, { cookie: req.headers.cookie });
     if (p !== "/dashboard" && !dim) {
       send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
     }
     if (dim) {
-      const ranked = rankDimension(people, dim.id);
+      const ranked = rankDimension(people, dim.id, range);
       const pageSize = parseCookiePageSize(req.headers.cookie);
       const meta = paginate({
         total: ranked.length,
@@ -432,6 +439,7 @@ async function handle(req, res) {
         pageSize,
       });
       const windowed = ranked.slice(meta.offset, meta.offset + meta.limit);
+      const rangePath = dashRangeHref(dim.path, range);
       return sendHtml(
         res,
         layout({
@@ -440,11 +448,12 @@ async function handle(req, res) {
           heading: `All by ${dim.nav}`,
           query: dim.nav,
           pageSize,
+          dashRange: range,
           countLabel: countText(dim.nav, meta, windowed.length),
           lede: "Live unique-person counts from event columns. Empty buckets stay empty. Country, organization, and branch are not guessed.",
           body: listSection(
-            dashboardRankBody(dim, windowed),
-            pager(meta, { basePath: dim.path, noun: "rows", pageSizes: PAGE_SIZES }),
+            dashboardRankBody(dim, windowed, { range }),
+            pager(meta, { basePath: rangePath, noun: "rows", pageSizes: PAGE_SIZES }),
             listHead({
               title: dim.nav,
               total: meta.total,
@@ -455,7 +464,7 @@ async function handle(req, res) {
         }),
       );
     }
-    const model = buildDashboard(people);
+    const model = buildDashboard(people, range);
     return sendHtml(
       res,
       layout({
@@ -463,9 +472,10 @@ async function handle(req, res) {
         path: "/dashboard",
         heading: "Dashboard",
         query: "dashboard",
+        dashRange: range,
         countLabel: `${model.people} people · ${model.trends.events} events`,
         lede: "Live unique-person ranks from the same event columns harvest writes. One card per person. Reason is the KEEP kind. Empty org, country, branch, and position stay empty.",
-        body: dashboardBody(model),
+        body: dashboardBody(model, { path: "/dashboard", range }),
       }),
     );
   }

@@ -649,7 +649,7 @@ test("optional API page= uses the same window without inventing rows", async () 
   }
 });
 
-test("list thumbs are small local JPEGs; detail and cache keep the full still", async () => {
+test("list thumbs are small local JPEGs; person detail uses the thumb and cache keeps the full still", async () => {
   const row = newestFirst(
     seed.people.filter((r) => r.category === "firings" && r.photo),
     "event_date",
@@ -663,9 +663,10 @@ test("list thumbs are small local JPEGs; detail and cache keep the full still", 
 
   assert.match(list.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg"`));
   assert.doesNotMatch(list.body, new RegExp(`src="/media/people/${stem}\\.`));
-  assert.match(detail.body, /class="detail-photo"/);
-  assert.match(detail.body, new RegExp(`src="${row.photo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
-  assert.doesNotMatch(detail.body, new RegExp(`/media/thumbs/people/${stem}`));
+  assert.match(detail.body, /class="person-header"/);
+  assert.match(detail.body, /class="portrait thumb"/);
+  assert.match(detail.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg"`));
+  assert.doesNotMatch(detail.body, new RegExp(`src="/media/people/${stem}\\.`));
 
   assert.equal(thumb.status, 200);
   assert.equal(original.status, 200);

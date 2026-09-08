@@ -427,6 +427,27 @@ a:hover { color: var(--ink); }
   gap: 0.35rem;
   margin: 0.45rem 0 0;
 }
+.person-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.person-header .portrait.thumb,
+.person-header .initials.thumb {
+  flex: 0 0 auto;
+}
+.event-timeline {
+  margin: 0.85rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.event-tag-row {
+  margin: 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
+}
+.event-tag-row .cite-list { margin-top: 0.35rem; }
 
 .tui-group { margin: 0 0 0.85rem; }
 .tui-group-h {
@@ -990,12 +1011,55 @@ pre {
   .age-filter-apply,
   .age-filter-field input,
   .identity-filter-select,
+  .dash-range-btn,
+  .dash-range-apply,
+  .dash-range-field input,
   .tui-search input {
     min-height: 44px;
   }
 }
 
 .dash-hud { position: relative; z-index: 1; }
+.dash-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+  margin: 0 0 1rem;
+}
+.dash-range-label {
+  font-family: var(--font-ui);
+  font-size: var(--hud-label);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dash-range-btns,
+.dash-range-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.dash-range-field {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.dash-range-field input {
+  min-height: 44px;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--rule);
+  background: var(--bg-2);
+  color: var(--ink);
+  font: inherit;
+}
+.dash-range-field input:focus {
+  outline: 1px solid var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
 .dash-stats {
   display: flex;
   flex-wrap: wrap;
@@ -1065,6 +1129,21 @@ pre {
   transform-origin: bottom;
   animation: dash-bar-in 0.7s ease both;
 }
+.dash-pt {
+  fill: var(--cyan);
+  stroke: color-mix(in srgb, var(--label) 70%, transparent);
+  stroke-width: 0.8;
+}
+.dash-bar,
+.dash-pt { cursor: pointer; }
+.dash-tip {
+  margin: 0.35rem 0 0;
+  min-height: 1.1em;
+  color: var(--amber);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.dash-tip[hidden] { display: none; }
 .dash-chart-ends {
   display: flex;
   justify-content: space-between;

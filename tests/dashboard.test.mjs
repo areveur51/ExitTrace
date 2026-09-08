@@ -3,11 +3,19 @@ import { test } from "node:test";
 import { fileURLToPath } from "url";
 import path from "path";
 import { THEME_IDS } from "../app/lib/themes.mjs";
+import fs from "fs";
 import {
   DASH_DIMENSIONS,
+  DASH_RANGE_STORAGE_KEY,
   buildDashboard,
+  dashRangeHref,
+  eventInDashRange,
   explicitAttr,
+  filterPeopleToRange,
+  parseDashRangeSearch,
   rankDimension,
+  resolveDashRange,
+  serializeDashRange,
   topN,
   weekKey,
 } from "../app/lib/dashboard.mjs";
@@ -189,6 +197,18 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.doesNotMatch(dash.body, />Cyberdeck</);
   assert.doesNotMatch(dash.body, />Resigned</);
   assert.doesNotMatch(dash.body, /data-theme-set="[^"]+"[^>]*>\s*Dashboard/);
+  assert.match(dash.body, /class="dash-range"/);
+  assert.match(dash.body, /data-dash-range-set="all"/);
+  assert.match(dash.body, /data-dash-range-set="30d"/);
+  assert.match(dash.body, /data-dash-range-set="ytd"/);
+  assert.match(dash.body, /data-dash-range-set="since-2017"/);
+  assert.match(dash.body, /data-dash-range-set="custom"/);
+  assert.match(dash.body, /data-dash-range="all"/);
+  assert.match(dash.body, /data-date=/);
+  assert.match(dash.body, /data-count=/);
+  assert.match(dash.body, /class="dash-pt"|class="dash-bar"/);
+  assert.match(dash.body, /class="dash-tip"/);
+  assert.doesNotMatch(dash.body, /webgl|WebGL|three\.js|dash-3d|preserveDrawingBuffer/i);
   const orgBlock = dash.body.split("Organization")[1] || "";
   assert.match(orgBlock, /No rows on this page/);
 
@@ -229,4 +249,90 @@ test("topN and week keys stay fail-closed", () => {
   assert.equal(weekKey("2024-01-04"), "2024-W01");
   assert.equal(weekKey(""), "");
   assert.equal(weekKey("not-a-date"), "");
+});
+
+test("date range filters ranks and trends from the same event_date series", () => {
+  const now = new Date("2024-12-31T00:00:00Z");
+  const people = [
+    {
+      id: "old-exit",
+      name: "Old Exit",
+      events: [{ kind: "firings", event_date: "2018-06-01", organization: "Desk A" }],
+    },
+    {
+      id: "new-exit",
+      name: "New Exit",
+      events: [
+        { kind: "resignations", event_date: "2024-12-10", organization: "Desk B" },
+        { kind: "arrests", event_date: "2019-03-01", organization: "Desk C" },
+      ],
+    },
+  ];
+  const ytd = resolveDashRange({ id: "ytd" }, { now });
+  assert.equal(ytd.from, "2024-01-01");
+  assert.equal(ytd.to, "2024-12-31");
+  assert.equal(eventInDashRange("2024-12-10", ytd), true);
+  assert.equal(eventInDashRange("2018-06-01", ytd), false);
+  const sliced = filterPeopleToRange(people, ytd);
+  assert.equal(sliced.length, 1);
+  assert.equal(sliced[0].id, "new-exit");
+  assert.equal(sliced[0].events.length, 1);
+  assert.equal(sliced[0].events[0].kind, "resignations");
+  const model = buildDashboard(people, ytd);
+  assert.equal(model.people, 1);
+  assert.equal(model.trends.events, 1);
+  const org = rankDimension(people, "organization", ytd);
+  assert.deepEqual(
+    org.map((r) => r.label),
+    ["Desk B"],
+  );
+  const thirty = resolveDashRange({ id: "30d" }, { now });
+  assert.equal(thirty.from, "2024-12-01");
+  const since = resolveDashRange({ id: "since-2017" }, { now });
+  assert.equal(since.from, "2017-01-01");
+  assert.equal(filterPeopleToRange(people, since).length, 2);
+  const custom = resolveDashRange({ id: "custom", from: "2018-01-01", to: "2018-12-31" });
+  assert.equal(filterPeopleToRange(people, custom).length, 1);
+  assert.equal(serializeDashRange(custom), "custom:2018-01-01:2018-12-31");
+  assert.equal(parseDashRangeSearch("range=ytd", { now }).id, "ytd");
+  assert.equal(
+    parseDashRangeSearch("", { cookie: `${DASH_RANGE_STORAGE_KEY}=30d`, now }).id,
+    "30d",
+  );
+  assert.match(dashRangeHref("/dashboard/reason", ytd), /range=ytd/);
+});
+
+test("GET /dashboard honors the same range on slices and trend points", async () => {
+  setMemory(goldSeed());
+  await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    category: "arrests",
+    cite_urls: CITES,
+    organization: "Example Desk",
+  });
+  const custom = await requestPage("/dashboard?range=custom&from=2024-01-01&to=2024-12-31");
+  assert.equal(custom.status, 200);
+  assert.match(custom.body, /data-dash-range="custom:2024-01-01:2024-12-31"/);
+  assert.match(custom.body, /data-date="2024-06-15"/);
+  assert.match(custom.body, /Example Desk/);
+  assert.doesNotMatch(custom.body, /webgl|WebGL|three\.js|dash-3d/i);
+  const child = await requestPage("/dashboard/organization?range=custom&from=2024-01-01&to=2024-12-31");
+  assert.match(child.body, /Example Desk/);
+  assert.match(child.body, /data-dash-range-set="30d"/);
+  const empty = await requestPage("/dashboard?range=custom&from=2030-01-01&to=2030-12-31");
+  assert.match(empty.body, /0 people|0<\/span>/);
+  assert.doesNotMatch(empty.body, /Example Desk/);
+});
+
+test("app.js persists dash range and paints hover tooltips without a fetch", () => {
+  const js = fs.readFileSync(path.join(ROOT, "app", "public", "app.js"), "utf8");
+  assert.match(js, /exittrace-dash-range/);
+  assert.match(js, /data-dash-range-set/);
+  assert.match(js, /bindDashTips|dash-tip/);
+  assert.match(js, /data-date/);
+  assert.match(js, /data-count/);
+  assert.doesNotMatch(js, /fetch\(/);
+  assert.doesNotMatch(js, /webgl|WebGL|THREE|getContext\(\s*["']webgl/i);
 });

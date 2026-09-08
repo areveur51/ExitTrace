@@ -70,6 +70,69 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => applyPageSize(btn.getAttribute("data-page-size-set")));
   }
 
+  const DASH_RANGE_KEY = "exittrace-dash-range";
+  const DASH_RANGE_IDS = ["all", "30d", "ytd", "since-2017", "custom"];
+
+  function persistDashRange(token) {
+    const text = String(token || "").trim();
+    if (!text) return;
+    try {
+      localStorage.setItem(DASH_RANGE_KEY, text);
+    } catch {
+      /* private mode / quota */
+    }
+    document.cookie = `${DASH_RANGE_KEY}=${encodeURIComponent(text)}; Path=/; SameSite=Lax`;
+  }
+
+  function dashRangeTokenFromHref(href) {
+    try {
+      const url = new URL(href, window.location.origin);
+      const id = url.searchParams.get("range") || "all";
+      if (!DASH_RANGE_IDS.includes(id)) return "all";
+      if (id !== "custom") return id;
+      return `custom:${url.searchParams.get("from") || ""}:${url.searchParams.get("to") || ""}`;
+    } catch {
+      return "all";
+    }
+  }
+
+  for (const link of document.querySelectorAll("a[data-dash-range-set]")) {
+    link.addEventListener("click", () => persistDashRange(dashRangeTokenFromHref(link.href)));
+  }
+  for (const form of document.querySelectorAll("form.dash-range-custom")) {
+    form.addEventListener("submit", () => {
+      const data = new FormData(form);
+      const from = String(data.get("from") || "");
+      const to = String(data.get("to") || "");
+      persistDashRange(`custom:${from}:${to}`);
+    });
+  }
+
+  function bindDashTips() {
+    for (const chart of document.querySelectorAll(".dash-chart")) {
+      const tip = chart.querySelector(".dash-tip");
+      if (!tip) continue;
+      const pts = chart.querySelectorAll("[data-date][data-count]");
+      const hide = () => {
+        tip.hidden = true;
+        tip.textContent = "";
+      };
+      const show = (pt) => {
+        const date = pt.getAttribute("data-date") || "";
+        const count = pt.getAttribute("data-count") || "0";
+        tip.textContent = `${date} · ${count}`;
+        tip.hidden = false;
+      };
+      for (const pt of pts) {
+        pt.addEventListener("pointerenter", () => show(pt));
+        pt.addEventListener("pointerleave", hide);
+        pt.addEventListener("focus", () => show(pt));
+        pt.addEventListener("blur", hide);
+      }
+    }
+  }
+  bindDashTips();
+
   const reduceMotion =
     typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   function countUp(el) {

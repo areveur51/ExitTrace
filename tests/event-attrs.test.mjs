@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   EVENT_ATTR_FIELDS,
+  EVENT_ATTR_LABELS,
   deathKindFromTags,
   eventFromLead,
   mapLeadReason,
@@ -24,6 +25,10 @@ test("event attr fields stay one shared list", () => {
     "branch",
     "comments",
   ]);
+  assert.deepEqual(
+    EVENT_ATTR_FIELDS.map((field) => EVENT_ATTR_LABELS[field]),
+    ["Position", "Organization", "Country", "Branch", "Comments"],
+  );
 });
 
 test("event_date is Last Day else Announced; both empty do not insert", () => {
