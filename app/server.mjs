@@ -43,8 +43,6 @@ import {
   dogDetail,
   dogList,
   downloadsBody,
-  grokipediaEntryBody,
-  grokipediaIndexBody,
   healthBody,
   homeBody,
   layout,
@@ -70,7 +68,11 @@ import { parseAgeFilter } from "./lib/age.mjs";
 import { catalogMainPath, filterPath, parseTagFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
+  fillEmptyFromGrokipedia,
   grokipediaIndex,
+  grokipediaEntryRedirect,
+  grokipediaIndexRedirect,
+  grokipediaSlug,
   GROKIPEDIA_PATH,
 } from "./lib/grokipedia.mjs";
 import {
@@ -132,6 +134,10 @@ function sendJson(res, status, obj) {
 
 function sendHtml(res, html) {
   send(res, 200, html, { "Content-Type": "text/html; charset=utf-8" });
+}
+
+function sendRedirect(res, location) {
+  send(res, 302, "", { Location: location });
 }
 
 async function readBody(req, limit = 32_000) {
@@ -294,6 +300,38 @@ async function handle(req, res) {
     }
     return sendJson(res, 200, { people: await listPeople(category) });
   }
+  if (p === "/api/grokipedia" || p.startsWith("/api/grokipedia/")) {
+    const people = await listPeople();
+    if (p === "/api/grokipedia") {
+      return sendJson(res, 200, {
+        ok: true,
+        entries: grokipediaIndex(people).map((entry) => ({
+          slug: entry.slug,
+          name: entry.name,
+          personHref: entry.personHref,
+          cite: entry.cite,
+        })),
+      });
+    }
+    const slug = safeId(p.slice("/api/grokipedia/".length));
+    const person = slug
+      ? people.find((row) => grokipediaSlug(row) === slug || row.id === slug)
+      : null;
+    if (!person) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    const filled = fillEmptyFromGrokipedia(person);
+    const entry = findGrokipediaEntry(people, grokipediaSlug(person));
+    return sendJson(res, 200, {
+      slug: grokipediaSlug(person),
+      name: person.name,
+      personHref: `/people/${person.id}`,
+      cite: filled.cite,
+      fills: filled.filled,
+      redundant: entry?.redundant ?? false,
+    });
+  }
   if (p === "/api/dog-comms") {
     if (url.searchParams.has("page")) {
       const total = await countDogComms();
@@ -430,58 +468,15 @@ async function handle(req, res) {
   }
 
   if (p === GROKIPEDIA_PATH || p.startsWith(`${GROKIPEDIA_PATH}/`)) {
-    const people = await listPeople();
-    const entries = grokipediaIndex(people);
     if (p === GROKIPEDIA_PATH) {
-      const pageSize = parseCookiePageSize(req.headers.cookie);
-      const meta = paginate({
-        total: entries.length,
-        page: parsePage(url.searchParams),
-        pageSize,
-      });
-      const windowed = entries.slice(meta.offset, meta.offset + meta.limit);
-      return sendHtml(
-        res,
-        layout({
-          title: "Grokipedia",
-          path: GROKIPEDIA_PATH,
-          heading: "Grokipedia",
-          query: "grokipedia",
-          pageSize,
-          countLabel: countText("Grokipedia", meta, windowed.length),
-          lede: "Local encyclopedia context from stored summaries. Not a cite. No live fetch.",
-          body: listSection(
-            grokipediaIndexBody(windowed),
-            pager(meta, { basePath: GROKIPEDIA_PATH, noun: "entries", pageSizes: PAGE_SIZES }),
-            listHead({
-              title: "Grokipedia",
-              total: meta.total,
-              index: 1,
-              of: windowed.length,
-            }),
-          ),
-        }),
-      );
+      return sendRedirect(res, grokipediaIndexRedirect());
     }
     const slug = safeId(p.slice(`${GROKIPEDIA_PATH}/`.length));
-    const entry = slug ? findGrokipediaEntry(people, slug) : null;
-    if (!entry) {
-      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
-      return;
-    }
-    return sendHtml(
-      res,
-      layout({
-        title: entry.name,
-        path: entry.href,
-        heading: entry.name,
-        query: entry.name,
-        crumbLabel: entry.name,
-        countLabel: "grokipedia",
-        lede: "Local encyclopedia context. Not a cite.",
-        body: grokipediaEntryBody(entry),
-      }),
-    );
+    const people = await listPeople();
+    const person = slug
+      ? people.find((row) => grokipediaSlug(row) === slug || row.id === slug)
+      : null;
+    return sendRedirect(res, grokipediaEntryRedirect(person, slug));
   }
 
   if (p === "/dashboard" || p.startsWith("/dashboard/")) {

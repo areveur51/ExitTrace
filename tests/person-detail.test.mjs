@@ -144,8 +144,7 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   const html = personDetail(person);
   assert.equal(paneCount(html), 1);
   assert.match(html, /class="person-header"/);
-  assert.match(html, /class="grokipedia"/);
-  assert.match(html, /Grokipedia/);
+  assert.doesNotMatch(html, /class="grokipedia-text"|Open Grokipedia/);
   assert.match(html, /class="event-timeline"/);
   assert.equal((html.match(/class="event-tag-row"/g) || []).length, 2);
   assert.match(html, /Arrests/);
@@ -184,9 +183,11 @@ test("gold person pages stay one card and do not invent birth or event attrs", a
   assert.equal(page.status, 200);
   assert.match(page.body, /James Comey/);
   assert.match(page.body, /class="person-header"/);
-  assert.match(page.body, /class="grokipedia"/);
+  assert.match(page.body, /grokipedia-cite/);
   assert.match(page.body, /Grokipedia/);
-  assert.match(page.body, /Removed as FBI director/);
+  assert.match(page.body, /grokipedia\.com\/page\/James_Comey/);
+  assert.doesNotMatch(page.body, /Removed as FBI director/);
+  assert.doesNotMatch(page.body, /class="grokipedia-text"|Open Grokipedia/);
   assert.match(page.body, /class="event-tag-row"/);
   assert.match(page.body, /Firings/);
   assert.match(page.body, /The New York Times/);
@@ -197,8 +198,9 @@ test("gold person pages stay one card and do not invent birth or event attrs", a
   assert.doesNotMatch(page.body, /Synopsis/);
   assert.doesNotMatch(page.body, /Career \/ Service|career-history|1953–1954|U\.S\. Army/);
   assert.equal(paneCount(page.body), 1);
-  assert.match(grokipediaBlock({ summary: "Stored encyclopedia note." }), /Stored encyclopedia note/);
-  assert.match(grokipediaBlock({}), /—/);
+  assert.match(grokipediaBlock({ name: "Casey Vale", summary: "Stored encyclopedia note." }), /grokipedia-cite/);
+  assert.doesNotMatch(grokipediaBlock({ name: "Casey Vale", summary: "Stored encyclopedia note." }), /Stored encyclopedia note/);
+  assert.equal(grokipediaBlock({}), "");
 });
 
 test("person detail renders career/service years when stored and does not copy event-tag fields", async () => {
