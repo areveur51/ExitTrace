@@ -29,6 +29,7 @@ import {
   normalizeTags,
   personTags,
 } from "./tags.mjs";
+import { mergeCareer, personCareer } from "./career.mjs";
 
 let pool = null;
 let memory = null;
@@ -90,6 +91,7 @@ function normalizePerson(row) {
     sources: Array.isArray(row.sources) ? row.sources : row.sources || [],
     summary: row.summary || "",
     events,
+    career: personCareer(row),
     tags: personTags({ ...row, events }),
   });
 }
@@ -314,9 +316,9 @@ export async function importSeed(p, seed) {
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, country_of_origin,
            photo, photo_credit, net_worth_usd, net_worth_note, net_worth_source, sources,
-           summary, events, tags
+           summary, events, tags, career
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb,$18::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -334,7 +336,8 @@ export async function importSeed(p, seed) {
            sources = EXCLUDED.sources,
            summary = EXCLUDED.summary,
            events = EXCLUDED.events,
-           tags = EXCLUDED.tags`,
+           tags = EXCLUDED.tags,
+           career = EXCLUDED.career`,
         personValues(row),
       );
       await syncPersonEvents(client, row);
@@ -862,6 +865,7 @@ function personValues(row) {
     person.summary,
     JSON.stringify(person.events || []),
     JSON.stringify(person.tags || []),
+    JSON.stringify(person.career || []),
   ];
 }
 
@@ -917,9 +921,9 @@ export async function insertPerson(row) {
     `INSERT INTO people (
        id, category, name, role, event_date, death_date, birth_date, country_of_origin,
        photo, photo_credit, net_worth_usd, net_worth_note, net_worth_source, sources,
-       summary, events, tags
+       summary, events, tags, career
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb,$18::jsonb
      )`,
     personValues(person),
   );
@@ -949,7 +953,8 @@ export async function savePerson(row) {
        category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
        birth_date = $7, country_of_origin = $8, photo = $9, photo_credit = $10,
        net_worth_usd = $11, net_worth_note = $12, net_worth_source = $13,
-       sources = $14::jsonb, summary = $15, events = $16::jsonb, tags = $17::jsonb
+       sources = $14::jsonb, summary = $15, events = $16::jsonb, tags = $17::jsonb,
+       career = $18::jsonb
      WHERE id = $1`,
     personValues(person),
   );
@@ -1100,6 +1105,7 @@ export async function applyIdentifiedPerson(input) {
       ...existing,
       birth_date: existing.birth_date || parsed.birth_date || null,
       country_of_origin: existing.country_of_origin || parsed.country_of_origin || "",
+      career: mergeCareer(existing.career, parsed.career),
     };
     const attached = attachPersonEvent(
       prior,

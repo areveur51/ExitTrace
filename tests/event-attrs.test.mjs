@@ -10,6 +10,7 @@ import {
   resignKindFromRole,
   resolveEventCalendar,
 } from "../app/lib/event-attrs.mjs";
+import { CAREER_FIELDS } from "../app/lib/career.mjs";
 import { PromoteError, validateIdentifiedPersonInput } from "../app/lib/promote.mjs";
 
 const CITES = [
@@ -29,6 +30,9 @@ test("event attr fields stay one shared list", () => {
     EVENT_ATTR_FIELDS.map((field) => EVENT_ATTR_LABELS[field]),
     ["Position", "Organization", "Country", "Branch", "Comments"],
   );
+  assert.ok(!CAREER_FIELDS.includes("comments"));
+  assert.ok(!CAREER_FIELDS.includes("country"));
+  assert.ok(CAREER_FIELDS.includes("start_year"));
 });
 
 test("event_date is Last Day else Announced; both empty do not insert", () => {

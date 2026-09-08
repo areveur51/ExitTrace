@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { EVENT_ATTR_FIELDS } from "../app/lib/event-attrs.mjs";
 import {
+  careerHistory,
   citeList,
   eventTagRow,
   localMediaThumb,
@@ -188,5 +189,54 @@ test("gold person pages stay one card and do not invent birth or event attrs", a
   assert.doesNotMatch(page.body, /Birth date|Age at event|Announced/);
   assert.doesNotMatch(page.body, /Director, Federal Bureau of Investigation/);
   assert.doesNotMatch(page.body, /Removed as FBI director/);
+  assert.doesNotMatch(page.body, /Career \/ Service|career-history|1953–1954|U\.S\. Army/);
   assert.equal(paneCount(page.body), 1);
+});
+
+test("person detail renders career/service years when stored and does not copy event-tag fields", async () => {
+  setMemory(goldSeed());
+  await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    category: "arrests",
+    cite_urls: CITES,
+    position: "Anchor, CNN",
+    organization: "Example Desk",
+    country: "USA",
+    branch: "News",
+    comments: "lead note",
+    career: [
+      { title: "U.S. Army", organization: "U.S. Army", start_year: 1953, end_year: 1954 },
+      { position: "Anchor, CNN", organization: "Example Desk", start_year: 2010, end_year: 2024 },
+    ],
+  });
+  const person = await getPerson("casey-vale");
+  const section = careerHistory(person);
+  assert.match(section, /class="career-history"/);
+  assert.match(section, /Career \/ Service/);
+  assert.match(section, /U\.S\. Army · 1953–1954/);
+  assert.doesNotMatch(section, /2010–2024/);
+  assert.doesNotMatch(section, /Anchor, CNN · Example Desk · 2010/);
+  assert.doesNotMatch(section, /Position ·|Organization ·|Country ·|Comments ·|Age at event|cite-list|Announced/);
+  assert.doesNotMatch(section, /USA|lead note/);
+  assert.doesNotMatch(section, /Casey Vale|Birth date|Origin ·/);
+
+  const html = personDetail(person);
+  assert.equal(paneCount(html), 1);
+  assert.match(html, /class="person-header"/);
+  assert.match(html, /class="career-history"/);
+  assert.match(html, /class="event-timeline"/);
+  assert.match(html, /Position · Anchor, CNN/);
+  const tags = html.match(/<article class="event-tag-row"[\s\S]*?<\/article>/g) || [];
+  assert.equal(tags.length, 1);
+  assert.doesNotMatch(tags[0], /1953–1954|2010–2024|Career \/ Service/);
+
+  const page = await requestPage("/people/casey-vale");
+  assert.equal(page.status, 200);
+  assert.match(page.body, /U\.S\. Army · 1953–1954/);
+  assert.equal(paneCount(page.body), 1);
+
+  assert.equal(careerHistory({ name: "Empty", role: "Actor" }), "");
+  assert.equal(careerHistory({ career: [{ title: "U.S. Army" }] }), "");
 });
