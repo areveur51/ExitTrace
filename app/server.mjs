@@ -43,6 +43,8 @@ import {
   dogDetail,
   dogList,
   downloadsBody,
+  grokipediaEntryBody,
+  grokipediaIndexBody,
   healthBody,
   homeBody,
   layout,
@@ -66,6 +68,11 @@ import {
 } from "./lib/paginate.mjs";
 import { parseAgeFilter } from "./lib/age.mjs";
 import { catalogMainPath, filterPath, parseTagFilter } from "./lib/tags.mjs";
+import {
+  findGrokipediaEntry,
+  grokipediaIndex,
+  GROKIPEDIA_PATH,
+} from "./lib/grokipedia.mjs";
 import {
   buildDashboard,
   dashDimensionByPath,
@@ -420,6 +427,61 @@ async function handle(req, res) {
   if (p === "/add") {
     const mode = url.searchParams.get("mode") === "dog" ? "dog" : "person";
     return sendHtml(res, addPage({ mode }));
+  }
+
+  if (p === GROKIPEDIA_PATH || p.startsWith(`${GROKIPEDIA_PATH}/`)) {
+    const people = await listPeople();
+    const entries = grokipediaIndex(people);
+    if (p === GROKIPEDIA_PATH) {
+      const pageSize = parseCookiePageSize(req.headers.cookie);
+      const meta = paginate({
+        total: entries.length,
+        page: parsePage(url.searchParams),
+        pageSize,
+      });
+      const windowed = entries.slice(meta.offset, meta.offset + meta.limit);
+      return sendHtml(
+        res,
+        layout({
+          title: "Grokipedia",
+          path: GROKIPEDIA_PATH,
+          heading: "Grokipedia",
+          query: "grokipedia",
+          pageSize,
+          countLabel: countText("Grokipedia", meta, windowed.length),
+          lede: "Local encyclopedia context from stored summaries. Not a cite. No live fetch.",
+          body: listSection(
+            grokipediaIndexBody(windowed),
+            pager(meta, { basePath: GROKIPEDIA_PATH, noun: "entries", pageSizes: PAGE_SIZES }),
+            listHead({
+              title: "Grokipedia",
+              total: meta.total,
+              index: 1,
+              of: windowed.length,
+            }),
+          ),
+        }),
+      );
+    }
+    const slug = safeId(p.slice(`${GROKIPEDIA_PATH}/`.length));
+    const entry = slug ? findGrokipediaEntry(people, slug) : null;
+    if (!entry) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    return sendHtml(
+      res,
+      layout({
+        title: entry.name,
+        path: entry.href,
+        heading: entry.name,
+        query: entry.name,
+        crumbLabel: entry.name,
+        countLabel: "grokipedia",
+        lede: "Local encyclopedia context. Not a cite.",
+        body: grokipediaEntryBody(entry),
+      }),
+    );
   }
 
   if (p === "/dashboard" || p.startsWith("/dashboard/")) {

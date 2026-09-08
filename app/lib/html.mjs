@@ -39,6 +39,12 @@ import {
   resolveDashRange,
   serializeDashRange,
 } from "./dashboard.mjs";
+import {
+  GROKIPEDIA_KEY,
+  GROKIPEDIA_PATH,
+  grokipediaEntry,
+  grokipediaText,
+} from "./grokipedia.mjs";
 
 function esc(s) {
   return String(s ?? "")
@@ -69,27 +75,56 @@ export function pixelWordmark(text = "EXITTRACE") {
   const width = letters.length * letterW + (letters.length - 1) * letterGap;
   const height = rows * cell + (rows - 1) * gap;
   const extra = 4;
-  const shadow = [];
-  const ink = [];
+  const pad = 3;
+  const exitShadow = [];
+  const exitInk = [];
+  const traceShadow = [];
+  const traceInk = [];
+  let traceOrigin = null;
+  let traceEnd = 0;
   letters.forEach((ch, li) => {
     const glyph = PIXELS[ch];
     if (!glyph) return;
     const ox = li * (letterW + letterGap);
+    const part = li < 4 ? "exit" : "trace";
+    if (part === "trace") {
+      if (traceOrigin == null) traceOrigin = ox;
+      traceEnd = ox + letterW;
+    }
     glyph.forEach((line, y) => {
       [...line].forEach((bit, x) => {
         if (bit !== "1") return;
         const px = ox + x * (cell + gap);
         const py = y * (cell + gap);
-        shadow.push(
-          `<rect x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="var(--brick)"/>`,
-        );
-        ink.push(
-          `<rect x="${px}" y="${py}" width="${cell}" height="${cell}" fill="var(--label)"/>`,
-        );
+        if (part === "exit") {
+          exitShadow.push(
+            `<rect class="wm-exit-shadow" x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="var(--brick)"/>`,
+          );
+          exitInk.push(
+            `<rect class="wm-exit-ink" x="${px}" y="${py}" width="${cell}" height="${cell}" fill="var(--label)"/>`,
+          );
+        } else {
+          traceShadow.push(
+            `<rect class="wm-trace-shadow wm-callsign-shadow" x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="var(--label)"/>`,
+          );
+          traceInk.push(
+            `<rect class="wm-trace-ink wm-callsign-ink" x="${px}" y="${py}" width="${cell}" height="${cell}" fill="var(--brick)"/>`,
+          );
+        }
       });
     });
   });
-  return `<svg class="pixel-wordmark" viewBox="0 0 ${width + extra} ${height + extra}" width="${width + extra}" height="${height + extra}" role="img" aria-label="ExitTrace" xmlns="http://www.w3.org/2000/svg">${shadow.join("")}${ink.join("")}</svg>`;
+  const plate =
+    traceOrigin == null
+      ? ""
+      : `<rect class="wm-trace-plate" x="${traceOrigin - pad}" y="${-pad}" width="${
+          traceEnd - traceOrigin + pad * 2
+        }" height="${height + pad * 2}" fill="var(--label)"/>`;
+  const vbX = -pad;
+  const vbY = -pad;
+  const vbW = width + extra + pad;
+  const vbH = height + extra + pad;
+  return `<svg class="pixel-wordmark" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="${vbW}" height="${vbH}" role="img" aria-label="ExitTrace" xmlns="http://www.w3.org/2000/svg"><g class="wm-exit">${exitShadow.join("")}${exitInk.join("")}</g><g class="wm-trace wm-callsign">${plate}${traceShadow.join("")}${traceInk.join("")}</g></svg>`;
 }
 
 function keymapItems(activePath) {
@@ -102,6 +137,7 @@ function keymapItems(activePath) {
     { key: "i", href: "/indictments" },
     { key: "d", href: "/deaths" },
     { key: "b", href: "/dashboard", label: "Dashboard" },
+    { key: GROKIPEDIA_KEY, href: GROKIPEDIA_PATH, label: "Grokipedia" },
     { key: "u", href: "/unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
     { key: "n", href: "/add", label: "Add" },
@@ -198,16 +234,17 @@ export function identityFilterNav(basePath, { tags = [], minAge, maxAge } = {}) 
 }
 
 export function keymapFooter(activePath) {
+  const chips = keymapItems(activePath)
+    .map((k, i) => {
+      const on = k.href === activePath;
+      return `<a class="keychip" href="${esc(k.href)}" data-key="${esc(k.key)}" style="--key-order:${i}"${
+        on ? ' aria-current="page"' : ""
+      }><span class="br">[</span>${esc(k.key)}<span class="br">]</span> ${esc(k.label)}</a>`;
+    })
+    .join("");
   return `<footer class="keymap" aria-label="Catalog">
-    ${keymapItems(activePath)
-      .map((k) => {
-        const on = k.href === activePath;
-        return `<a class="keychip" href="${esc(k.href)}" data-key="${esc(k.key)}"${
-          on ? ' aria-current="page"' : ""
-        }><span class="br">[</span>${esc(k.key)}<span class="br">]</span> ${esc(k.label)}</a>`;
-      })
-      .join("")}
-    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <div class="keymap-keys">${chips}</div>
+    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia is context, not a cite. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -339,6 +376,11 @@ export function breadcrumbItems({
     items.push({ href: "/dashboard", label: "Dashboard" });
     const dim = DASH_DIMENSIONS.find((d) => d.path === p);
     if (dim) items.push({ href: dim.path, label: dim.nav });
+    return items;
+  }
+  if (p === GROKIPEDIA_PATH || p.startsWith(`${GROKIPEDIA_PATH}/`)) {
+    items.push({ href: GROKIPEDIA_PATH, label: "Grokipedia" });
+    if (p !== GROKIPEDIA_PATH && label) items.push({ href: p, label });
     return items;
   }
   items.push({ href: p, label: label || p.replace(/^\//, "") });
@@ -691,7 +733,51 @@ export function personHeader(row) {
       ${origin}
       ${personTagChips(row)}
     </div>
-  </header>`;
+  </header>${grokipediaBlock(row)}`;
+}
+
+export function grokipediaBlock(row) {
+  const entry = grokipediaEntry(row);
+  const text = grokipediaText(row) || "—";
+  const more = entry
+    ? `<p class="grokipedia-more"><a class="keychip" href="${esc(entry.href)}" data-key="${GROKIPEDIA_KEY}">Open Grokipedia</a></p>`
+    : "";
+  return `<section class="grokipedia" aria-label="Grokipedia">
+    <h3 class="grokipedia-h">Grokipedia</h3>
+    <p class="grokipedia-text">${esc(text)}</p>
+    ${more}
+  </section>`;
+}
+
+export function grokipediaIndexBody(entries) {
+  if (!entries.length) return `<p class="empty">No encyclopedia rows.</p>`;
+  const rows = entries
+    .map((entry) => {
+      const blurb = entry.text || "—";
+      return `<a class="tui-row grokipedia-row" href="${esc(entry.href)}">
+        <div class="tui-row-text">
+          <div class="tui-title">${esc(entry.name)}</div>
+          <div class="tui-meta">${esc(blurb)}</div>
+        </div>
+      </a>`;
+    })
+    .join("");
+  return `<div class="people-list tui-list grokipedia-list">${rows}</div>`;
+}
+
+export function grokipediaEntryBody(entry) {
+  const person = entry.personHref
+    ? `<p class="grokipedia-more"><a class="keychip" href="${esc(entry.personHref)}">Person card</a></p>`
+    : "";
+  return `<article class="detail grokipedia-detail">
+    ${boxFrame(
+      "Grokipedia",
+      `<h2 class="detail-title">${esc(entry.name)}</h2>
+      <p class="grokipedia-text">${esc(entry.text || "—")}</p>
+      ${person}`,
+      { active: true, extraClass: "grokipedia-pane" },
+    )}
+  </article>`;
 }
 
 export function eventTagRow(ev, { birthDate } = {}) {

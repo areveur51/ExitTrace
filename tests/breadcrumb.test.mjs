@@ -21,6 +21,15 @@ test("list pages nest death and indictment indexes", () => {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/reason", label: "Reason" },
   ]);
+  assert.deepEqual(breadcrumbItems({ path: "/grokipedia" }), [
+    { href: "/", label: "Home" },
+    { href: "/grokipedia", label: "Grokipedia" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/grokipedia/james-comey", label: "James Comey" }), [
+    { href: "/", label: "Home" },
+    { href: "/grokipedia", label: "Grokipedia" },
+    { href: "/grokipedia/james-comey", label: "James Comey" },
+  ]);
   assert.deepEqual(breadcrumbItems({ path: "/deaths" }), [
     { href: "/", label: "Home" },
     { href: "/deaths", label: "Deaths" },
