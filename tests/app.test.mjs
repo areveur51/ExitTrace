@@ -286,6 +286,9 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /href="\/indictments"/);
   assert.match(res.body, /href="\/unsorted"/);
   assert.match(res.body, /data-key="u"/);
+  assert.match(res.body, /class="keymap-keys"/);
+  const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "b", "u", "c", "n", "s", "w"]);
   assert.doesNotMatch(res.body, /widgets\.js/);
 });
 
@@ -296,6 +299,10 @@ test("home keeps the ExitTrace wordmark; baked-in still is the only call-sign", 
 
   assert.match(home.body, /class="home-wordmark"/);
   assert.match(home.body, /class="pixel-wordmark"/);
+  assert.match(home.body, /class="wm-exit"/);
+  assert.match(home.body, /class="wm-trace"/);
+  assert.match(home.body, /class="wm-trace-plate"/);
+  assert.match(home.body, /class="keymap-keys"/);
   assert.doesNotMatch(home.body, /home-callsign/);
   assert.doesNotMatch(list.body, /home-wordmark|home-callsign/);
 
