@@ -738,7 +738,7 @@ export function personHeader(row, extras = {}) {
 export function grokipediaBlock(row, { filled = [], cite } = {}) {
   const item = cite || grokipediaCite(row, { filled });
   if (!item) return "";
-  return `<p class="meta-line grokipedia-cite">Grokipedia · <a class="source-link" href="${esc(item.url)}" rel="noopener noreferrer" data-label="Grokipedia" data-title="Grokipedia">${esc(item.publisher)}</a></p>`;
+  return `<p class="meta-line grokipedia-cite">Grokipedia · <a class="source-link" href="${esc(item.url)}" rel="noopener noreferrer" data-label="Grokipedia" data-title="Grokipedia">grokipedia.com</a></p>`;
 }
 
 export function eventTagRow(ev, { birthDate } = {}) {
