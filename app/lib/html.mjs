@@ -39,6 +39,12 @@ import {
   resolveDashRange,
   serializeDashRange,
 } from "./dashboard.mjs";
+import {
+  GROKIPEDIA_KEY,
+  GROKIPEDIA_PATH,
+  grokipediaEntry,
+  grokipediaText,
+} from "./grokipedia.mjs";
 
 function esc(s) {
   return String(s ?? "")
@@ -72,6 +78,7 @@ export function pixelWordmark(text = "EXITTRACE") {
   const pad = 3;
   const exitShadow = [];
   const exitInk = [];
+  const traceShadow = [];
   const traceInk = [];
   let traceOrigin = null;
   let traceEnd = 0;
@@ -97,8 +104,11 @@ export function pixelWordmark(text = "EXITTRACE") {
             `<rect class="wm-exit-ink" x="${px}" y="${py}" width="${cell}" height="${cell}" fill="var(--label)"/>`,
           );
         } else {
+          traceShadow.push(
+            `<rect class="wm-trace-shadow wm-callsign-shadow" x="${px + extra}" y="${py + extra}" width="${cell}" height="${cell}" fill="var(--label)"/>`,
+          );
           traceInk.push(
-            `<rect class="wm-trace-ink" x="${px}" y="${py}" width="${cell}" height="${cell}" fill="var(--void)"/>`,
+            `<rect class="wm-trace-ink wm-callsign-ink" x="${px}" y="${py}" width="${cell}" height="${cell}" fill="var(--brick)"/>`,
           );
         }
       });
@@ -114,7 +124,7 @@ export function pixelWordmark(text = "EXITTRACE") {
   const vbY = -pad;
   const vbW = width + extra + pad;
   const vbH = height + extra + pad;
-  return `<svg class="pixel-wordmark" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="${vbW}" height="${vbH}" role="img" aria-label="ExitTrace" xmlns="http://www.w3.org/2000/svg"><g class="wm-exit">${exitShadow.join("")}${exitInk.join("")}</g><g class="wm-trace">${plate}${traceInk.join("")}</g></svg>`;
+  return `<svg class="pixel-wordmark" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="${vbW}" height="${vbH}" role="img" aria-label="ExitTrace" xmlns="http://www.w3.org/2000/svg"><g class="wm-exit">${exitShadow.join("")}${exitInk.join("")}</g><g class="wm-trace wm-callsign">${plate}${traceShadow.join("")}${traceInk.join("")}</g></svg>`;
 }
 
 function keymapItems(activePath) {
@@ -127,6 +137,7 @@ function keymapItems(activePath) {
     { key: "i", href: "/indictments" },
     { key: "d", href: "/deaths" },
     { key: "b", href: "/dashboard", label: "Dashboard" },
+    { key: GROKIPEDIA_KEY, href: GROKIPEDIA_PATH, label: "Grokipedia" },
     { key: "u", href: "/unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
     { key: "n", href: "/add", label: "Add" },
@@ -365,6 +376,11 @@ export function breadcrumbItems({
     items.push({ href: "/dashboard", label: "Dashboard" });
     const dim = DASH_DIMENSIONS.find((d) => d.path === p);
     if (dim) items.push({ href: dim.path, label: dim.nav });
+    return items;
+  }
+  if (p === GROKIPEDIA_PATH || p.startsWith(`${GROKIPEDIA_PATH}/`)) {
+    items.push({ href: GROKIPEDIA_PATH, label: "Grokipedia" });
+    if (p !== GROKIPEDIA_PATH && label) items.push({ href: p, label });
     return items;
   }
   items.push({ href: p, label: label || p.replace(/^\//, "") });
@@ -721,11 +737,47 @@ export function personHeader(row) {
 }
 
 export function grokipediaBlock(row) {
-  const text = String(row?.summary || "").trim() || "—";
+  const entry = grokipediaEntry(row);
+  const text = grokipediaText(row) || "—";
+  const more = entry
+    ? `<p class="grokipedia-more"><a class="keychip" href="${esc(entry.href)}" data-key="${GROKIPEDIA_KEY}">Open Grokipedia</a></p>`
+    : "";
   return `<section class="grokipedia" aria-label="Grokipedia">
     <h3 class="grokipedia-h">Grokipedia</h3>
     <p class="grokipedia-text">${esc(text)}</p>
+    ${more}
   </section>`;
+}
+
+export function grokipediaIndexBody(entries) {
+  if (!entries.length) return `<p class="empty">No encyclopedia rows.</p>`;
+  const rows = entries
+    .map((entry) => {
+      const blurb = entry.text || "—";
+      return `<a class="tui-row grokipedia-row" href="${esc(entry.href)}">
+        <div class="tui-row-text">
+          <div class="tui-title">${esc(entry.name)}</div>
+          <div class="tui-meta">${esc(blurb)}</div>
+        </div>
+      </a>`;
+    })
+    .join("");
+  return `<div class="people-list tui-list grokipedia-list">${rows}</div>`;
+}
+
+export function grokipediaEntryBody(entry) {
+  const person = entry.personHref
+    ? `<p class="grokipedia-more"><a class="keychip" href="${esc(entry.personHref)}">Person card</a></p>`
+    : "";
+  return `<article class="detail grokipedia-detail">
+    ${boxFrame(
+      "Grokipedia",
+      `<h2 class="detail-title">${esc(entry.name)}</h2>
+      <p class="grokipedia-text">${esc(entry.text || "—")}</p>
+      ${person}`,
+      { active: true, extraClass: "grokipedia-pane" },
+    )}
+  </article>`;
 }
 
 export function eventTagRow(ev, { birthDate } = {}) {

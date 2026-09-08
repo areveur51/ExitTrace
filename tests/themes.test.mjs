@@ -95,6 +95,7 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.match(footer, /href="\/arrests"/);
   assert.match(footer, /href="\/corona-comms"/);
   assert.match(footer, /href="\/dashboard"/);
+  assert.match(footer, /href="\/grokipedia"/);
   assert.match(footer, /href="\/indictments"/);
   assert.match(footer, /href="\/unsorted"/);
   assert.match(footer, /href="\/add"/);
@@ -144,9 +145,17 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
   assert.match(css, /html\[data-theme="glass"\] \.crumbs a,\s*html\[data-theme="glass"\] \.crumb-current \{[^}]*backdrop-filter:\s*none;/);
   assert.match(css, /\.wm-trace-plate/);
   assert.match(css, /\.wm-trace-ink/);
+  assert.match(css, /\.wm-callsign-ink/);
   assert.match(css, /\.keymap-keys/);
   assert.match(css, /--key-order/);
-  assert.match(css, /@media \(min-width: 1101px\)[\s\S]*\.keymap \{[\s\S]*grid-column:\s*2;/);
+  assert.match(
+    css,
+    /@media \(min-width: 1101px\)[\s\S]*\.tui-main,\s*\.home-stage \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*1 \/ span 2;/,
+  );
+  assert.match(
+    css,
+    /@media \(min-width: 1101px\)[\s\S]*\.keymap \{[\s\S]*grid-column:\s*2;[\s\S]*grid-row:\s*1 \/ span 2;/,
+  );
   assert.match(css, /\.grokipedia/);
   assert.doesNotMatch(css, /pinterest|pinimg|i\.pinimg/i);
   const city = path.join(ROOT, "app", "public", "media", "themes", "glass-bg.webp");

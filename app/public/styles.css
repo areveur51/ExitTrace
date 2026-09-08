@@ -325,7 +325,10 @@ a:hover { color: var(--ink); }
 .pixel-wordmark .wm-exit-ink { fill: var(--label); }
 .pixel-wordmark .wm-exit-shadow { fill: var(--brick); }
 .pixel-wordmark .wm-trace-plate { fill: var(--label); }
-.pixel-wordmark .wm-trace-ink { fill: var(--void); }
+.pixel-wordmark .wm-trace-ink,
+.pixel-wordmark .wm-callsign-ink { fill: var(--brick); }
+.pixel-wordmark .wm-trace-shadow,
+.pixel-wordmark .wm-callsign-shadow { fill: var(--label); }
 .ver {
   margin: 0.65rem 0 1.6rem;
   color: var(--cyan);
@@ -465,6 +468,7 @@ a:hover { color: var(--ink); }
   margin: 0;
   color: var(--ink);
 }
+.grokipedia-more { margin: 0.55rem 0 0; }
 .event-tag-row {
   margin: 0;
   padding: 0.55rem 0 0;
@@ -1425,7 +1429,10 @@ html[data-theme="glass"] .pixel-wordmark .wm-exit-shadow { fill: var(--brick); }
 html[data-theme="glass"] .pixel-wordmark .wm-trace-plate {
   fill: color-mix(in srgb, var(--label) 82%, var(--amber));
 }
-html[data-theme="glass"] .pixel-wordmark .wm-trace-ink { fill: #000000; }
+html[data-theme="glass"] .pixel-wordmark .wm-trace-ink,
+html[data-theme="glass"] .pixel-wordmark .wm-callsign-ink { fill: var(--void); }
+html[data-theme="glass"] .pixel-wordmark .wm-trace-shadow,
+html[data-theme="glass"] .pixel-wordmark .wm-callsign-shadow { fill: var(--label); }
 html[data-theme="glass"] .grokipedia {
   border-color: rgba(255, 176, 0, 0.28);
   background: rgba(255, 255, 255, 0.06);
@@ -1598,7 +1605,7 @@ html[data-theme="glass"] .dash-stats {
   .hud-stage {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(15rem, 18rem);
-    grid-template-rows: 1fr;
+    grid-template-rows: 1fr auto;
     align-items: stretch;
     width: 100%;
     max-width: none;
@@ -1606,14 +1613,15 @@ html[data-theme="glass"] .dash-stats {
   .tui-main,
   .home-stage {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 1 / span 2;
     width: 100%;
     max-width: none;
     min-width: 0;
+    padding-bottom: 1.5rem;
   }
   .keymap {
     grid-column: 2;
-    grid-row: 1;
+    grid-row: 1 / span 2;
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
@@ -1629,10 +1637,12 @@ html[data-theme="glass"] .dash-stats {
     gap: 0.35rem;
   }
   .keymap .keychip {
+    flex: 0 0 auto;
     width: 100%;
     justify-content: space-between;
   }
   .keymap .fineprint {
+    flex: 1 1 auto;
     max-width: none;
     margin-top: 0.75rem;
   }
@@ -1641,25 +1651,26 @@ html[data-theme="glass"] .dash-stats {
 @media (min-width: 1280px) {
   .hud-stage {
     grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
-    grid-template-rows: 1fr;
+    grid-template-rows: 1fr auto;
     max-width: 96rem;
     margin: 0 auto;
     width: 100%;
   }
-  .tui-main {
+  .tui-main,
+  .home-stage {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 1 / span 2;
+  }
+  .tui-main {
     padding: 1.1rem 1.6rem 2rem;
   }
   .home-stage {
-    grid-column: 1;
-    grid-row: 1;
     width: 100%;
     padding: 3rem 2rem;
   }
   .keymap {
     grid-column: 2;
-    grid-row: 1;
+    grid-row: 1 / span 2;
   }
   .tui-row {
     min-height: 48px;
