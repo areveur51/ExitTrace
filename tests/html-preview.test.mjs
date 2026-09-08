@@ -78,12 +78,14 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
   assert.doesNotMatch(search, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
 });
 
-test("detail pages keep the full local still, not the list thumb", () => {
+test("person detail uses a local portrait thumb; dog snapshots keep the full still", () => {
   const person = personDetail(firing());
   const dogPage = dogDetail(dog());
-  assert.match(person, /class="detail-photo"/);
-  assert.match(person, /src="\/media\/people\/james-comey\.jpg"/);
-  assert.doesNotMatch(person, /\/media\/thumbs\//);
+  assert.match(person, /class="person-header"/);
+  assert.match(person, /class="portrait thumb"/);
+  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(person, /upload\.wikimedia\.org/);
   assert.match(dogPage, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
   assert.doesNotMatch(dogPage, /\/media\/thumbs\//);
 });

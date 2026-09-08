@@ -6,6 +6,18 @@ import { personEvents } from "./promote.mjs";
 
 export const DASH_TOP_N = 5;
 
+export const DASH_RANGE_STORAGE_KEY = "exittrace-dash-range";
+
+export const DASH_RANGE_IDS = ["all", "30d", "ytd", "since-2017", "custom"];
+
+export const DASH_RANGE_PRESETS = [
+  { id: "all", label: "All" },
+  { id: "30d", label: "30d" },
+  { id: "ytd", label: "YTD" },
+  { id: "since-2017", label: "Since 2017" },
+  { id: "custom", label: "Custom" },
+];
+
 export const DASH_DIMENSIONS = [
   {
     id: "organization",
@@ -86,12 +98,12 @@ function compareRank(a, b) {
 }
 
 /** Unique people per bucket. Empty/missing event attrs are skipped — never guessed. */
-export function rankDimension(people, dimId) {
+export function rankDimension(people, dimId, range) {
   const dim = dashDimensionById(dimId);
   if (!dim) return [];
   const counts = new Map();
   const meta = new Map();
-  for (const row of people || []) {
+  for (const row of filterPeopleToRange(people, range)) {
     const seen = new Set();
     for (const ev of personEvents(row)) {
       if (dim.source === "kind") {
@@ -131,6 +143,138 @@ export function topN(rows, n = DASH_TOP_N) {
 function asEventDate(raw) {
   const text = String(raw || "").slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+function utcDay(now) {
+  const d = now instanceof Date ? now : new Date(now || Date.now());
+  if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
+function addUtcDays(iso, days) {
+  const day = asEventDate(iso);
+  if (!day) return "";
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + Number(days || 0));
+  return d.toISOString().slice(0, 10);
+}
+
+/** Compact token for cookie / localStorage / data-dash-range. */
+export function serializeDashRange(range) {
+  const id = DASH_RANGE_IDS.includes(range?.id) ? range.id : "all";
+  if (id !== "custom") return id;
+  const from = asEventDate(range?.from) || "";
+  const to = asEventDate(range?.to) || "";
+  return `custom:${from}:${to}`;
+}
+
+export function parseDashRangeToken(raw) {
+  const text = decodeURIComponent(String(raw || "")).trim();
+  if (!text) return { id: "all", from: "", to: "" };
+  if (DASH_RANGE_IDS.includes(text) && text !== "custom") {
+    return { id: text, from: "", to: "" };
+  }
+  if (text === "custom") return { id: "custom", from: "", to: "" };
+  if (text.startsWith("custom:")) {
+    const parts = text.split(":");
+    return {
+      id: "custom",
+      from: asEventDate(parts[1]) || "",
+      to: asEventDate(parts[2]) || "",
+    };
+  }
+  return { id: "all", from: "", to: "" };
+}
+
+export function resolveDashRange(input = {}, { now } = {}) {
+  const raw =
+    typeof input === "string" ? parseDashRangeToken(input) : input && typeof input === "object" ? input : {};
+  const parsed = parseDashRangeToken(raw.id || serializeDashRange(raw));
+  const id = parsed.id;
+  const today = utcDay(now);
+  if (id === "30d") {
+    return { id, from: addUtcDays(today, -30), to: today };
+  }
+  if (id === "ytd") {
+    return { id, from: `${today.slice(0, 4)}-01-01`, to: today };
+  }
+  if (id === "since-2017") {
+    return { id, from: "2017-01-01", to: "" };
+  }
+  if (id === "custom") {
+    const from = asEventDate(raw.from ?? parsed.from) || "";
+    const to = asEventDate(raw.to ?? parsed.to) || "";
+    return { id, from, to };
+  }
+  return { id: "all", from: "", to: "" };
+}
+
+export function parseCookieDashRange(cookieHeader, { now } = {}) {
+  const raw = String(cookieHeader || "");
+  if (!raw) return resolveDashRange({ id: "all" }, { now });
+  for (const part of raw.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq < 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (key !== DASH_RANGE_STORAGE_KEY) continue;
+    return resolveDashRange(parseDashRangeToken(trimmed.slice(eq + 1)), { now });
+  }
+  return resolveDashRange({ id: "all" }, { now });
+}
+
+export function parseDashRangeSearch(searchParams, { cookie, now } = {}) {
+  const src =
+    searchParams instanceof URLSearchParams
+      ? searchParams
+      : new URLSearchParams(searchParams || "");
+  const qid = String(src.get("range") || "").trim();
+  if (qid) {
+    return resolveDashRange(
+      { id: qid, from: src.get("from"), to: src.get("to") },
+      { now },
+    );
+  }
+  if (cookie) return parseCookieDashRange(cookie, { now });
+  return resolveDashRange({ id: "all" }, { now });
+}
+
+export function dashRangeHref(path, range, extra = {}) {
+  const params = new URLSearchParams();
+  const resolved = resolveDashRange(range);
+  params.set("range", resolved.id);
+  if (resolved.id === "custom") {
+    if (resolved.from) params.set("from", resolved.from);
+    if (resolved.to) params.set("to", resolved.to);
+  }
+  const page = Number(extra.page);
+  if (Number.isFinite(page) && page > 1) params.set("page", String(page));
+  const base = String(path || "/dashboard").split("?")[0] || "/dashboard";
+  return `${base}?${params.toString()}`;
+}
+
+export function eventInDashRange(eventDate, range) {
+  const day = asEventDate(eventDate);
+  if (!day) return false;
+  if (!range || range.id === "all") return true;
+  if (range.from && day < range.from) return false;
+  if (range.to && day > range.to) return false;
+  return true;
+}
+
+/** People with only in-range events. Empty attrs stay empty. */
+export function filterPeopleToRange(people, range) {
+  const rows = people || [];
+  if (!range || range.id === "all") return rows;
+  const out = [];
+  for (const row of rows) {
+    const events = personEvents(row).filter((ev) =>
+      eventInDashRange(ev.event_date, range),
+    );
+    if (!events.length) continue;
+    out.push({ ...row, events });
+  }
+  return out;
 }
 
 export function eventDatesOf(people) {
@@ -175,8 +319,8 @@ function bucketCounts(dates, keyFn) {
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
-export function trendSeries(people) {
-  const dates = eventDatesOf(people);
+export function trendSeries(people, range) {
+  const dates = eventDatesOf(filterPeopleToRange(people, range));
   const perMonth = bucketCounts(dates, monthKey);
   const perWeek = bucketCounts(dates, weekKey);
   let running = 0;
@@ -194,8 +338,8 @@ export function trendSeries(people) {
   };
 }
 
-export function buildDashboard(people) {
-  const rows = people || [];
+export function buildDashboard(people, range) {
+  const rows = filterPeopleToRange(people, range);
   const dimensions = DASH_DIMENSIONS.map((dim) => {
     const ranked = rankDimension(rows, dim.id);
     return {
@@ -206,6 +350,7 @@ export function buildDashboard(people) {
   });
   return {
     people: rows.length,
+    range: resolveDashRange(range),
     trends: trendSeries(rows),
     dimensions,
   };

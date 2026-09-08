@@ -21,6 +21,15 @@ export const EVENT_ATTR_FIELDS = [
   "comments",
 ];
 
+/** Display labels for event-tag-row. Reason on the dashboard stays KEEP kinds. */
+export const EVENT_ATTR_LABELS = {
+  position: "Position",
+  organization: "Organization",
+  country: "Country",
+  branch: "Branch",
+  comments: "Comments",
+};
+
 const ATTR_ALIASES = {
   position: ["position", "Position"],
   organization: ["organization", "Organization"],
