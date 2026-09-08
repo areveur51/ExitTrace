@@ -40,10 +40,9 @@ import {
   serializeDashRange,
 } from "./dashboard.mjs";
 import {
-  GROKIPEDIA_KEY,
   GROKIPEDIA_PATH,
-  grokipediaEntry,
-  grokipediaText,
+  fillEmptyFromGrokipedia,
+  grokipediaCite,
 } from "./grokipedia.mjs";
 
 function esc(s) {
@@ -137,7 +136,6 @@ function keymapItems(activePath) {
     { key: "i", href: "/indictments" },
     { key: "d", href: "/deaths" },
     { key: "b", href: "/dashboard", label: "Dashboard" },
-    { key: GROKIPEDIA_KEY, href: GROKIPEDIA_PATH, label: "Grokipedia" },
     { key: "u", href: "/unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
     { key: "n", href: "/add", label: "Add" },
@@ -244,7 +242,7 @@ export function keymapFooter(activePath) {
     .join("");
   return `<footer class="keymap" aria-label="Catalog">
     <div class="keymap-keys">${chips}</div>
-    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia is context, not a cite. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -379,8 +377,7 @@ export function breadcrumbItems({
     return items;
   }
   if (p === GROKIPEDIA_PATH || p.startsWith(`${GROKIPEDIA_PATH}/`)) {
-    items.push({ href: GROKIPEDIA_PATH, label: "Grokipedia" });
-    if (p !== GROKIPEDIA_PATH && label) items.push({ href: p, label });
+    items.push({ href: "/search", label: "Search" });
     return items;
   }
   items.push({ href: p, label: label || p.replace(/^\//, "") });
@@ -717,7 +714,7 @@ function eventKindTitle(kind) {
   return cat ? cat.title : kind || "Event";
 }
 
-export function personHeader(row) {
+export function personHeader(row, extras = {}) {
   const birth = row.birth_date
     ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
     : "";
@@ -732,52 +729,16 @@ export function personHeader(row) {
       ${birth}
       ${origin}
       ${personTagChips(row)}
+      ${grokipediaBlock(row, extras)}
     </div>
-  </header>${grokipediaBlock(row)}`;
+  </header>`;
 }
 
-export function grokipediaBlock(row) {
-  const entry = grokipediaEntry(row);
-  const text = grokipediaText(row) || "—";
-  const more = entry
-    ? `<p class="grokipedia-more"><a class="keychip" href="${esc(entry.href)}" data-key="${GROKIPEDIA_KEY}">Open Grokipedia</a></p>`
-    : "";
-  return `<section class="grokipedia" aria-label="Grokipedia">
-    <h3 class="grokipedia-h">Grokipedia</h3>
-    <p class="grokipedia-text">${esc(text)}</p>
-    ${more}
-  </section>`;
-}
-
-export function grokipediaIndexBody(entries) {
-  if (!entries.length) return `<p class="empty">No encyclopedia rows.</p>`;
-  const rows = entries
-    .map((entry) => {
-      const blurb = entry.text || "—";
-      return `<a class="tui-row grokipedia-row" href="${esc(entry.href)}">
-        <div class="tui-row-text">
-          <div class="tui-title">${esc(entry.name)}</div>
-          <div class="tui-meta">${esc(blurb)}</div>
-        </div>
-      </a>`;
-    })
-    .join("");
-  return `<div class="people-list tui-list grokipedia-list">${rows}</div>`;
-}
-
-export function grokipediaEntryBody(entry) {
-  const person = entry.personHref
-    ? `<p class="grokipedia-more"><a class="keychip" href="${esc(entry.personHref)}">Person card</a></p>`
-    : "";
-  return `<article class="detail grokipedia-detail">
-    ${boxFrame(
-      "Grokipedia",
-      `<h2 class="detail-title">${esc(entry.name)}</h2>
-      <p class="grokipedia-text">${esc(entry.text || "—")}</p>
-      ${person}`,
-      { active: true, extraClass: "grokipedia-pane" },
-    )}
-  </article>`;
+/** Cite only. Never dumps synopsis/body already covered by news cites. */
+export function grokipediaBlock(row, { filled = [], cite } = {}) {
+  const item = cite || grokipediaCite(row, { filled });
+  if (!item) return "";
+  return `<p class="meta-line grokipedia-cite">Grokipedia · <a class="source-link" href="${esc(item.url)}" rel="noopener noreferrer" data-label="Grokipedia" data-title="Grokipedia">grokipedia.com</a></p>`;
 }
 
 export function eventTagRow(ev, { birthDate } = {}) {
@@ -854,10 +815,11 @@ function personTagChips(row) {
 }
 
 export function personDetail(row) {
+  const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   return `<article class="detail person-detail">
     ${boxFrame(
       "Identity",
-      `${personHeader(row)}${careerHistory(row)}${eventTimeline(row)}`,
+      `${personHeader(filled, { filled: keys, cite })}${careerHistory(filled)}${eventTimeline(filled)}`,
       { active: true, extraClass: "person-pane" },
     )}
   </article>`;
