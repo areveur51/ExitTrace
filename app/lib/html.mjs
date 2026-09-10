@@ -1118,7 +1118,7 @@ function dashChart(series, { title, kind = "line" } = {}) {
   </div>`;
 }
 
-function dashRankTable(rows, { empty = "No rows on this page", selfPath = "" } = {}) {
+function dashRankTable(rows, { empty = "No rows on this page", selfPath = "", rowData } = {}) {
   if (!rows.length) {
     return `<p class="empty">${esc(empty)}</p>`;
   }
@@ -1131,7 +1131,8 @@ function dashRankTable(rows, { empty = "No rows on this page", selfPath = "" } =
           const name = hop
             ? `<a class="dash-link" href="${esc(row.href)}">${esc(row.label)}</a>`
             : `<span class="dash-label">${esc(row.label)}</span>`;
-          return `<tr>
+          const extra = typeof rowData === "function" ? rowData(row, i) : "";
+          return `<tr${extra}>
             <td class="dash-rank">${i + 1}</td>
             <td>${name}</td>
             <td class="dash-n">${dashCount(row.count)}</td>
@@ -1225,44 +1226,32 @@ export function dashboardRankBody(dim, rows, { range } = {}) {
   </div>`;
 }
 
-function ageFillPct(count, max) {
-  const n = Math.max(0, Number(count) || 0);
-  const top = Math.max(0, Number(max) || 0);
-  if (!n || !top) return 0;
-  return Math.max(8, Math.round((n / top) * 100));
-}
-
 function ageStandingBlock(bands, range) {
   const rows = Array.isArray(bands) && bands.length ? bands : AGE_BANDS.map((b) => ({
     key: b.id,
     label: b.label,
     count: 0,
   }));
-  const max = Math.max(0, ...rows.map((r) => Number(r.count) || 0));
-  const extra = {};
-  const items = rows
-    .map((row) => {
-      const count = Math.max(0, Number(row.count) || 0);
-      const href = dashRangeHref(DASH_AGE.path, range, { ...extra, band: row.key });
-      const pct = ageFillPct(count, max);
-      return `<li>
-        <a class="dash-age-row" href="${esc(href)}" data-age-band="${esc(row.key)}" data-age-count="${count}" aria-label="${esc(row.label)} · ${count}">
-          <span class="dash-age-label">${esc(row.label)}</span>
-          <span class="dash-age-track" aria-hidden="true">
-            <span class="dash-age-fill" style="--age-fill:${pct}%"></span>
-          </span>
-        </a>
-      </li>`;
-    })
-    .join("");
+  const ranked = rows.map((row) => {
+    const count = Math.max(0, Number(row.count) || 0);
+    return {
+      key: row.key,
+      label: row.label,
+      count,
+      href: dashRangeHref(DASH_AGE.path, range, { band: row.key }),
+    };
+  });
+  const more = `<p class="dash-more"><a class="keychip" href="${esc(dashRangeHref(DASH_AGE.path, range))}">All by Age</a></p>`;
   return `<section class="dash-block" data-dash-dim="age" aria-label="Age standing">
-    <div class="dash-age-card">
-      <a class="dash-age-head" href="${esc(dashRangeHref(DASH_AGE.path, range))}">
-        <span class="dash-age-title">Age</span>
-        <span class="dash-age-chevron" aria-hidden="true">›</span>
-      </a>
-      <ul class="dash-age-bands">${items}</ul>
-    </div>
+    ${boxFrame(
+      `Top ${Math.max(ranked.length, 1)} by Age`,
+      `${dashRankTable(ranked, {
+        selfPath: DASH_AGE.path,
+        rowData: (row) =>
+          ` data-age-band="${esc(row.key)}" data-age-count="${Math.max(0, Number(row.count) || 0)}"`,
+      })}${more}`,
+      { extraClass: "dash-box" },
+    )}
   </section>`;
 }
 
