@@ -30,6 +30,14 @@ import {
   personTags,
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
+import {
+  buildOperationRow,
+  findOperationMatch,
+  mergeOperationAnnotate,
+  normalizeOperation,
+  operationHasTag,
+  validateIdentifiedOperationInput,
+} from "./operation.mjs";
 
 let pool = null;
 let memory = null;
@@ -138,7 +146,7 @@ function normalizeAddRequest(row) {
       : row.processed_at || "";
   return {
     id: row.id,
-    kind: row.kind === "dog" ? "dog" : "person",
+    kind: row.kind === "dog" ? "dog" : row.kind === "operation" ? "operation" : "person",
     status: row.status || "pending",
     subject: row.subject || "",
     category: row.category || "",
@@ -182,6 +190,33 @@ function normalizeAddRequest(row) {
     military: row.military ?? payload.military ?? false,
     last_day: String(row.last_day || payload.last_day || "").trim(),
     announced: String(row.announced || payload.announced || "").trim(),
+    announced_date: asDate(row.announced_date || payload.announced_date) || "",
+    agencies: Array.isArray(row.agencies)
+      ? row.agencies
+      : Array.isArray(payload.agencies)
+        ? payload.agencies
+        : String(row.agencies || payload.agencies || "").trim(),
+    victim_count:
+      row.victim_count !== undefined && row.victim_count !== null && row.victim_count !== ""
+        ? row.victim_count
+        : payload.victim_count !== undefined
+          ? payload.victim_count
+          : "",
+    arrest_count:
+      row.arrest_count !== undefined && row.arrest_count !== null && row.arrest_count !== ""
+        ? row.arrest_count
+        : payload.arrest_count !== undefined
+          ? payload.arrest_count
+          : "",
+    op_tags: Array.isArray(row.op_tags)
+      ? row.op_tags
+      : Array.isArray(row.tags)
+        ? row.tags
+        : Array.isArray(payload.op_tags)
+          ? payload.op_tags
+          : Array.isArray(payload.tags)
+            ? payload.tags
+            : [],
     error: row.error || "",
     result: row.result && typeof row.result === "object" ? row.result : null,
     created_at: created,
@@ -196,6 +231,7 @@ export function loadSeedFile(seedPath) {
     dog_comms: (raw.dog_comms || []).map(normalizeDog),
     source_posts: (raw.source_posts || []).map(normalizeSourcePost),
     add_requests: (raw.add_requests || []).map(normalizeAddRequest),
+    operations: (raw.operations || []).map(normalizeOperation),
     meta: raw.meta || {},
   };
 }
@@ -209,12 +245,20 @@ export function loadFileStore(dataDir) {
     dog_comms: (raw.dog_comms || []).map(normalizeDog),
     source_posts: (raw.source_posts || []).map(normalizeSourcePost),
     add_requests: (raw.add_requests || []).map(normalizeAddRequest),
+    operations: (raw.operations || []).map(normalizeOperation),
     meta: raw.meta || {},
   };
 }
 
 function emptyMemory() {
-  return { people: [], dog_comms: [], source_posts: [], add_requests: [], meta: {} };
+  return {
+    people: [],
+    dog_comms: [],
+    source_posts: [],
+    add_requests: [],
+    operations: [],
+    meta: {},
+  };
 }
 
 export function setMemory(seed) {
@@ -223,6 +267,7 @@ export function setMemory(seed) {
     dog_comms: (seed.dog_comms || []).map(normalizeDog),
     source_posts: (seed.source_posts || []).map(normalizeSourcePost),
     add_requests: (seed.add_requests || []).map(normalizeAddRequest),
+    operations: (seed.operations || []).map(normalizeOperation),
     meta: seed.meta || {},
   };
   return memory;
@@ -262,6 +307,29 @@ export function mergeGoldPeople(seedPeople, priorPeople) {
   return collapseDuplicatePeople(out);
 }
 
+/** Seed operations win identity; extra store ops are kept. Gold counts/cites are not overwritten. */
+export function mergeGoldOperations(seedOps, priorOps) {
+  const goldIds = new Set((seedOps || []).map((row) => row.id));
+  const goldNames = new Set(
+    (seedOps || []).map((row) => String(row.name || "").trim().toLowerCase()).filter(Boolean),
+  );
+  const extras = (priorOps || []).filter((row) => {
+    if (goldIds.has(row.id)) return false;
+    const name = String(row.name || "").trim().toLowerCase();
+    if (name && goldNames.has(name)) return false;
+    return true;
+  });
+  const merged = (seedOps || []).map((gold) => {
+    const prior = (priorOps || []).find(
+      (row) =>
+        row.id === gold.id ||
+        String(row.name || "").trim().toLowerCase() === String(gold.name || "").trim().toLowerCase(),
+    );
+    return prior ? mergeOperationAnnotate(gold, prior) : normalizeOperation(gold);
+  });
+  return [...merged, ...extras.map(normalizeOperation)];
+}
+
 /** Seed dogs win; extra store dogs are kept. Gold rows are not overwritten. */
 export function mergeGoldDogs(seedDogs, priorDogs) {
   const goldIds = new Set((seedDogs || []).map((row) => row.id));
@@ -282,6 +350,7 @@ export function hydrateFileMemory(dataDir, seed) {
   return setMemory({
     people: mergeGoldPeople(seed.people, prior.people),
     dog_comms: mergeGoldDogs(seed.dog_comms, prior.dog_comms),
+    operations: mergeGoldOperations(seed.operations, prior.operations),
     source_posts: prior.source_posts,
     add_requests: prior.add_requests || [],
     meta: seed.meta,
@@ -295,12 +364,14 @@ export async function importSeed(p, seed) {
     setMemory({
       people: seed.people,
       dog_comms: seed.dog_comms,
+      operations: seed.operations,
       source_posts: incoming.length ? incoming : existing,
       meta: seed.meta,
     });
     return {
       people: seed.people.length,
       dog_comms: seed.dog_comms.length,
+      operations: (seed.operations || []).length,
       source_posts: getMemory().source_posts.length,
     };
   }
@@ -371,6 +442,31 @@ export async function importSeed(p, seed) {
         ],
       );
     }
+    for (const raw of seed.operations || []) {
+      const existing = await client.query("SELECT * FROM operations WHERE id = $1", [raw.id]);
+      const row = existing.rows[0]
+        ? mergeOperationAnnotate(normalizeOperation(raw), normalizeOperation(existing.rows[0]))
+        : normalizeOperation(raw);
+      await client.query(
+        `INSERT INTO operations (
+           id, name, event_date, announced_date, agencies, summary,
+           victim_count, arrest_count, tags, sources
+         ) VALUES (
+           $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb
+         )
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           event_date = EXCLUDED.event_date,
+           announced_date = COALESCE(operations.announced_date, EXCLUDED.announced_date),
+           agencies = EXCLUDED.agencies,
+           summary = EXCLUDED.summary,
+           victim_count = COALESCE(operations.victim_count, EXCLUDED.victim_count),
+           arrest_count = COALESCE(operations.arrest_count, EXCLUDED.arrest_count),
+           tags = EXCLUDED.tags,
+           sources = EXCLUDED.sources`,
+        operationValues(row),
+      );
+    }
     await client.query(
       `INSERT INTO et_meta (k, v) VALUES ('seed', $1::jsonb)
        ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v`,
@@ -383,7 +479,11 @@ export async function importSeed(p, seed) {
   } finally {
     client.release();
   }
-  return { people: seed.people.length, dog_comms: seed.dog_comms.length };
+  return {
+    people: seed.people.length,
+    dog_comms: seed.dog_comms.length,
+    operations: (seed.operations || []).length,
+  };
 }
 
 function asCategories(category) {
@@ -440,6 +540,28 @@ function compareDogs(a, b) {
   const d = String(b.posted_at).localeCompare(String(a.posted_at));
   if (d !== 0) return d;
   return String(a.handle).localeCompare(String(b.handle));
+}
+
+function compareOperations(a, b) {
+  const d = String(b.event_date || "").localeCompare(String(a.event_date || ""));
+  if (d !== 0) return d;
+  return String(a.name).localeCompare(String(b.name));
+}
+
+function operationValues(row) {
+  const op = normalizeOperation(row);
+  return [
+    op.id,
+    op.name,
+    op.event_date,
+    op.announced_date || null,
+    JSON.stringify(op.agencies || []),
+    op.summary || "",
+    op.victim_count,
+    op.arrest_count,
+    JSON.stringify(op.tags || []),
+    JSON.stringify(op.sources || []),
+  ];
 }
 
 function compareSources(a, b) {
@@ -727,6 +849,157 @@ export async function countDogComms() {
   if (!p) return getMemory().dog_comms.length;
   const q = await p.query("SELECT COUNT(*)::int AS n FROM dog_comms");
   return q.rows[0].n;
+}
+
+export async function listOperations(opts = {}) {
+  const limit = finiteInt(opts.limit, null);
+  const offset = finiteInt(opts.offset, 0);
+  const tags = Array.isArray(opts.tags)
+    ? opts.tags
+    : opts.tag
+      ? [opts.tag]
+      : [];
+  const p = await getPool();
+  if (!p) {
+    let rows = (getMemory().operations || []).slice();
+    if (tags.length) rows = rows.filter((r) => operationHasTag(r, tags));
+    return applyWindow(rows.sort(compareOperations), limit, offset);
+  }
+  const params = [];
+  let sql = "SELECT * FROM operations";
+  if (tags.length) {
+    params.push(tags);
+    sql += ` WHERE EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(COALESCE(tags, '[]'::jsonb)) t
+       WHERE t = ANY($${params.length}::text[])
+    )`;
+  }
+  sql += " ORDER BY event_date DESC, name ASC";
+  if (limit != null) {
+    params.push(limit);
+    sql += ` LIMIT $${params.length}`;
+    params.push(offset);
+    sql += ` OFFSET $${params.length}`;
+  } else if (offset) {
+    params.push(offset);
+    sql += ` OFFSET $${params.length}`;
+  }
+  const q = await p.query(sql, params);
+  return q.rows.map(normalizeOperation);
+}
+
+export async function countOperations(opts = {}) {
+  const tags = Array.isArray(opts.tags)
+    ? opts.tags
+    : opts.tag
+      ? [opts.tag]
+      : [];
+  const p = await getPool();
+  if (!p) {
+    let rows = getMemory().operations || [];
+    if (tags.length) rows = rows.filter((r) => operationHasTag(r, tags));
+    return rows.length;
+  }
+  const params = [];
+  let sql = "SELECT COUNT(*)::int AS n FROM operations";
+  if (tags.length) {
+    params.push(tags);
+    sql += ` WHERE EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(COALESCE(tags, '[]'::jsonb)) t
+       WHERE t = ANY($1::text[])
+    )`;
+  }
+  const q = await p.query(sql, params);
+  return q.rows[0].n;
+}
+
+export async function getOperation(id) {
+  if (!id) return null;
+  const p = await getPool();
+  if (!p) return (getMemory().operations || []).find((r) => r.id === id) || null;
+  const q = await p.query("SELECT * FROM operations WHERE id = $1", [id]);
+  return q.rows[0] ? normalizeOperation(q.rows[0]) : null;
+}
+
+export async function insertOperation(row) {
+  const op = normalizeOperation(row);
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    if (!mem.operations) mem.operations = [];
+    if (mem.operations.some((r) => r.id === op.id)) {
+      throw new PromoteError(`operation exists: ${op.id}`, "id_collision");
+    }
+    mem.operations.push(op);
+    return op;
+  }
+  await p.query(
+    `INSERT INTO operations (
+       id, name, event_date, announced_date, agencies, summary,
+       victim_count, arrest_count, tags, sources
+     ) VALUES (
+       $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb
+     )`,
+    operationValues(op),
+  );
+  return op;
+}
+
+export async function saveOperation(row) {
+  const op = normalizeOperation(row);
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    if (!mem.operations) mem.operations = [];
+    const i = mem.operations.findIndex((r) => r.id === op.id);
+    if (i < 0) mem.operations.push(op);
+    else mem.operations[i] = op;
+    return op;
+  }
+  await p.query(
+    `INSERT INTO operations (
+       id, name, event_date, announced_date, agencies, summary,
+       victim_count, arrest_count, tags, sources
+     ) VALUES (
+       $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb
+     )
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       event_date = EXCLUDED.event_date,
+       announced_date = EXCLUDED.announced_date,
+       agencies = EXCLUDED.agencies,
+       summary = EXCLUDED.summary,
+       victim_count = EXCLUDED.victim_count,
+       arrest_count = EXCLUDED.arrest_count,
+       tags = EXCLUDED.tags,
+       sources = EXCLUDED.sources`,
+    operationValues(op),
+  );
+  return op;
+}
+
+export async function applyIdentifiedOperation(input) {
+  const parsed = validateIdentifiedOperationInput(input);
+  const existing = findOperationMatch(await listOperations(), parsed);
+  if (existing) {
+    const incoming = buildOperationRow({ ...parsed, slug: existing.id }, [existing]);
+    const merged = mergeOperationAnnotate(existing, incoming);
+    const operation = await saveOperation({ ...merged, id: existing.id });
+    return {
+      action: "annotated",
+      operation,
+      added_cites: Math.max(0, operation.sources.length - existing.sources.length),
+      operations: await countOperations(),
+    };
+  }
+  const row = buildOperationRow(parsed, await listOperations());
+  const operation = await insertOperation(row);
+  return {
+    action: "created",
+    operation,
+    added_cites: operation.sources.length,
+    operations: await countOperations(),
+  };
 }
 
 function sourcePostWhere(opts = {}) {
@@ -1263,22 +1536,37 @@ export async function counts() {
         byCategory[kind] = (byCategory[kind] || 0) + 1;
       }
     }
+    const operations = getMemory().operations || [];
     byCategory.dog_comms = dogs.length;
+    byCategory.operations = operations.length;
+    for (const row of operations) {
+      for (const tag of row.tags || []) {
+        byCategory[tag] = (byCategory[tag] || 0) + 1;
+      }
+    }
     return {
       people: people.length,
       dog_comms: dogs.length,
+      operations: operations.length,
       source_posts: (getMemory().source_posts || []).length,
       byCategory,
     };
   }
-  const [peopleCount, dogCount, postCount, grouped] = await Promise.all([
+  const [peopleCount, dogCount, postCount, opCount, grouped, opTags] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM people"),
     p.query("SELECT COUNT(*)::int AS n FROM dog_comms"),
     p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
+    p.query("SELECT COUNT(*)::int AS n FROM operations"),
     p.query(
       `SELECT kind AS category, COUNT(DISTINCT person_id)::int AS n
          FROM person_events
         GROUP BY kind`,
+    ),
+    p.query(
+      `SELECT t AS category, COUNT(*)::int AS n
+         FROM operations,
+              LATERAL jsonb_array_elements_text(COALESCE(tags, '[]'::jsonb)) t
+        GROUP BY t`,
     ),
   ]);
   const byCategory = {};
@@ -1290,9 +1578,12 @@ export async function counts() {
     for (const row of fallback.rows) byCategory[row.category] = row.n;
   }
   byCategory.dog_comms = dogCount.rows[0].n;
+  byCategory.operations = opCount.rows[0].n;
+  for (const row of opTags.rows) byCategory[row.category] = row.n;
   return {
     people: peopleCount.rows[0].n,
     dog_comms: dogCount.rows[0].n,
+    operations: opCount.rows[0].n,
     source_posts: postCount.rows[0].n,
     byCategory,
   };
@@ -1394,6 +1685,7 @@ export function persistAddRequests(dataDir) {
   const prior = fs.existsSync(file) ? loadFileStore(dataDir) : emptyMemory();
   return writeFileStore(dataDir, {
     ...prior,
+    operations: getMemory().operations || prior.operations || [],
     add_requests: getMemory().add_requests || [],
   });
 }
@@ -1478,6 +1770,11 @@ function addRequestValues(row) {
       military: req.military || false,
       last_day: req.last_day || "",
       announced: req.announced || "",
+      announced_date: req.announced_date || "",
+      agencies: req.agencies || [],
+      victim_count: req.victim_count,
+      arrest_count: req.arrest_count,
+      op_tags: req.op_tags || [],
     }),
     req.error || null,
     req.result ? JSON.stringify(req.result) : null,
@@ -1556,6 +1853,14 @@ function matchesPerson(row, needle) {
 
 function matchesDog(row, needle) {
   return [row.handle, row.account_name, row.text]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
+
+function matchesOperation(row, needle) {
+  return [row.name, row.summary, ...(row.agencies || [])]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
@@ -1647,14 +1952,38 @@ export async function searchSourcePosts(q) {
   return res.rows.map(normalizeSourcePost);
 }
 
+export async function searchOperations(q) {
+  const raw = String(q || "").trim();
+  if (!raw) return [];
+  const p = await getPool();
+  if (!p) {
+    const needle = raw.toLowerCase();
+    return (getMemory().operations || [])
+      .filter((r) => matchesOperation(r, needle))
+      .slice()
+      .sort(compareOperations);
+  }
+  const res = await p.query(
+    `SELECT * FROM operations
+     WHERE name ILIKE $1 ESCAPE '\\'
+        OR summary ILIKE $1 ESCAPE '\\'
+        OR agencies::text ILIKE $1 ESCAPE '\\'
+     ORDER BY event_date DESC, name ASC`,
+    [likeNeedle(raw)],
+  );
+  return res.rows.map(normalizeOperation);
+}
+
 export async function searchCatalog(q) {
-  const [people, dogs, posts] = await Promise.all([
+  const [people, dogs, posts, operations] = await Promise.all([
     searchPeople(q),
     searchDogComms(q),
     searchSourcePosts(q),
+    searchOperations(q),
   ]);
   return [
     ...people.map((row) => ({ type: "person", date: row.event_date || "", row })),
+    ...operations.map((row) => ({ type: "operation", date: row.event_date || "", row })),
     ...dogs.map((row) => ({ type: "dog", date: row.posted_at || "", row })),
     ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),
   ];

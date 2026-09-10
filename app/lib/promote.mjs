@@ -143,6 +143,7 @@ export function normalizePersonEvent(raw, fallback = {}) {
   const kind = String(raw.kind || raw.category || fallback.kind || fallback.category || "").trim();
   const event_date = asEventDate(raw.event_date || fallback.event_date);
   if (!kind || !event_date) return null;
+  if (kind === "missing_kids" || kind === "group_ops_unspecified") return null;
   const sources = Array.isArray(raw.sources)
     ? raw.sources
     : Array.isArray(fallback.sources)

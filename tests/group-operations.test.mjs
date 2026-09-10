@@ -14,27 +14,32 @@ import {
   isIndexCategory,
   mapImportCategory,
 } from "../app/lib/categories.mjs";
-import { DisplayError, checkPersonDisplayed, listPathForPerson } from "../app/lib/display-check.mjs";
-import { personRow } from "../app/lib/html.mjs";
+import { DisplayError, checkOperationDisplayed, listPathForOperation, listPathForPerson } from "../app/lib/display-check.mjs";
+import { operationRow } from "../app/lib/html.mjs";
 import {
   PromoteError,
   validateIdentifiedPersonInput,
 } from "../app/lib/promote.mjs";
+import {
+  assertNoNamedChildren,
+  validateIdentifiedOperationInput,
+} from "../app/lib/operation.mjs";
 import { handle } from "../app/server.mjs";
 import {
+  applyIdentifiedOperation,
   applyIdentifiedPerson,
-  countPeople,
-  getPerson,
+  countOperations,
+  getOperation,
   setMemory,
   loadSeedFile,
 } from "../app/lib/store.mjs";
+import { operationStanding, operationStandingByTag } from "../app/lib/dashboard.mjs";
 import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
-import { LIST_THUMB_CSS_H, LIST_THUMB_CSS_W } from "../app/lib/thumb.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CITES = [
-  "https://www.example.com/news/casey-vale-held",
-  "https://www.example.net/world/casey-vale-arrest",
+  "https://www.example.com/news/restore-justice",
+  "https://www.justice.gov/opa/pr/restore-justice",
 ];
 const SOCIAL = [
   "https://x.com/randomuser/status/1234567890123456789",
@@ -69,17 +74,28 @@ function requestPage(pathname) {
   });
 }
 
-test("group-ops IA matches deaths: parent index, signed KEEP child only", () => {
+const OP_LOCK = {
+  name: "Operation Restore Justice",
+  event_date: "2024-08-01",
+  agencies: ["U.S. Department of Justice"],
+  summary: "Federal operation recorded by official public cites.",
+  tags: ["missing_kids"],
+  cite_urls: CITES,
+};
+
+test("group-ops IA is an operation lane: parent lists all, child filters by tag", () => {
   const index = categoryByPath("/group-operations");
   const kids = categoryByPath("/group-operations/missing-kids");
   assert.equal(index.id, "group_ops_unspecified");
+  assert.equal(index.kind, "operation");
   assert.equal(index.nav, "Group Operations");
   assert.equal(kids.id, "missing_kids");
+  assert.equal(kids.kind, "operation");
   assert.equal(kids.nav, "Missing Kids");
   assert.deepEqual(GROUP_OPS_KEEP_IDS, ["missing_kids"]);
   assert.deepEqual(catalogListKinds("group_ops_unspecified"), ["missing_kids"]);
   assert.deepEqual(catalogListKinds("missing_kids"), ["missing_kids"]);
-  assert.ok(PROMOTE_CATEGORY_IDS.includes("missing_kids"));
+  assert.ok(!PROMOTE_CATEGORY_IDS.includes("missing_kids"));
   assert.ok(!PROMOTE_CATEGORY_IDS.includes("group_ops_unspecified"));
   assert.ok(!IMPORT_CATEGORY_IDS.includes("missing_kids"));
   assert.equal(mapImportCategory("missing_kids"), null);
@@ -92,7 +108,7 @@ test("group-ops IA matches deaths: parent index, signed KEEP child only", () => 
   assert.ok(!GROUP_OPS_KEEP_IDS.some((id) => id !== "missing_kids"));
 });
 
-test("group-ops routes render empty HUD lists; parent is not a dump", async () => {
+test("group-ops routes render empty HUD lists; parent is not a person dump", async () => {
   setMemory(goldSeed());
   const paths = ["/group-operations", "/group-operations/missing-kids"];
   for (const p of paths) {
@@ -107,13 +123,16 @@ test("group-ops routes render empty HUD lists; parent is not a dump", async () =
     assert.doesNotMatch(res.body, /widgets\.js/);
     assert.doesNotMatch(res.body, /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL/i);
     assert.doesNotMatch(res.body, /Operation Meridian/i);
+    assert.doesNotMatch(res.body, /ChronoTrace/i);
+    assert.doesNotMatch(res.body, /Batman|Warner/i);
+    assert.doesNotMatch(res.body, /class="age-filter"/);
   }
 
   const index = await requestPage("/group-operations");
   assert.match(index.body, /value="\/group-operations\/missing-kids"/);
   assert.match(index.body, />Missing Kids</);
   assert.match(index.body, />All</);
-  assert.match(index.body, />Civilians</);
+  assert.doesNotMatch(index.body, />Civilians</);
   assert.doesNotMatch(index.body, /source-card/);
   assert.doesNotMatch(index.body, /\/group-operations\/(?!missing-kids)/);
 
@@ -123,12 +142,12 @@ test("group-ops routes render empty HUD lists; parent is not a dump", async () =
   assert.match(kids.body, /value="\/group-operations\/missing-kids"[^>]*selected/);
   assert.match(kids.body, /Missing Kids/);
   assert.match(kids.body, /aria-label="Identity filters"/);
-  assert.match(kids.body, />Age</);
+  assert.doesNotMatch(kids.body, />Age</);
   assert.doesNotMatch(kids.body, /Age at death/);
   assert.doesNotMatch(kids.body, /href="\/deaths\/celebrities"/);
 });
 
-test("home and add nav know Group Operations; classify form lists missing_kids only", async () => {
+test("home and add nav know Group Operations; person form omits missing_kids", async () => {
   setMemory(goldSeed());
   const home = await requestPage("/");
   assert.equal(home.status, 200);
@@ -138,159 +157,234 @@ test("home and add nav know Group Operations; classify form lists missing_kids o
 
   const add = await requestPage("/add");
   assert.equal(add.status, 200);
-  assert.match(add.body, /value="missing_kids"/);
+  assert.doesNotMatch(add.body, /value="missing_kids"/);
   assert.doesNotMatch(add.body, /value="group_ops_unspecified"/);
+  assert.match(add.body, /href="\/add\?mode=operation"/);
+
+  const opAdd = await requestPage("/add?mode=operation");
+  assert.equal(opAdd.status, 200);
+  assert.match(opAdd.body, /value="operation"/);
+  assert.match(opAdd.body, /value="missing_kids"/);
+  assert.doesNotMatch(opAdd.body, /value="group_ops_unspecified"/);
+  assert.match(opAdd.body, /name="victim_count"/);
+  assert.match(opAdd.body, /name="arrest_count"/);
+  assert.match(opAdd.body, /Named children are not stored/);
 });
 
-test("classify accepts missing_kids and fail-closes the index slug", () => {
-  const kids = validateIdentifiedPersonInput({
-    subject: "Casey Vale",
-    event_date: "2024-08-01",
-    category: "missing_kids",
-    cite_urls: CITES,
-  });
-  assert.equal(kids.category, "missing_kids");
+test("person classify rejects missing_kids; operation validate fail-closes the index slug", () => {
   assert.throws(
     () =>
       validateIdentifiedPersonInput({
         subject: "Casey Vale",
         event_date: "2024-08-01",
-        category: "group_ops_unspecified",
+        category: "missing_kids",
         cite_urls: CITES,
       }),
     (err) => err instanceof PromoteError && err.code === "invalid_category",
   );
-});
-
-test("X and unofficial social are extra only — not missing_kids cites", () => {
+  const op = validateIdentifiedOperationInput(OP_LOCK);
+  assert.deepEqual(op.tags, ["missing_kids"]);
+  assert.equal(op.victim_count, null);
+  assert.equal(op.arrest_count, null);
   assert.throws(
     () =>
-      validateIdentifiedPersonInput({
-        subject: "Casey Vale",
-        event_date: "2024-08-01",
-        category: "missing_kids",
-        cite_urls: SOCIAL,
+      validateIdentifiedOperationInput({
+        ...OP_LOCK,
+        tags: ["group_ops_unspecified"],
       }),
+    (err) => err instanceof PromoteError && err.code === "invalid_tag",
+  );
+});
+
+test("X and unofficial social are extra only — not operation cites", () => {
+  assert.throws(
+    () => validateIdentifiedOperationInput({ ...OP_LOCK, cite_urls: SOCIAL }),
     (err) => err instanceof PromoteError && err.code === "cites_floor",
   );
   assert.throws(
     () =>
-      validateIdentifiedPersonInput({
-        subject: "Casey Vale",
-        event_date: "2024-08-01",
-        category: "missing_kids",
+      validateIdentifiedOperationInput({
+        ...OP_LOCK,
         cite_urls: [CITES[0], SOCIAL[0]],
       }),
     (err) => err instanceof PromoteError && err.code === "cites_floor",
   );
 });
 
-test("list paths skip the /group-operations index", () => {
-  assert.equal(listPathForPerson("missing_kids"), "/group-operations/missing-kids");
+test("operation insert refuses invented counts and named children", () => {
+  assert.throws(
+    () => validateIdentifiedOperationInput({ ...OP_LOCK, victim_count: "about 12" }),
+    (err) => err instanceof PromoteError && err.code === "invalid_count",
+  );
+  assert.throws(
+    () =>
+      validateIdentifiedOperationInput({
+        ...OP_LOCK,
+        child_names: ["do not store"],
+      }),
+    (err) => err instanceof PromoteError && err.code === "named_children",
+  );
+  assert.doesNotThrow(() => assertNoNamedChildren(OP_LOCK));
+  const stored = validateIdentifiedOperationInput({
+    ...OP_LOCK,
+    victim_count: 12,
+    arrest_count: 4,
+  });
+  assert.equal(stored.victim_count, 12);
+  assert.equal(stored.arrest_count, 4);
+});
+
+test("list paths skip person KEEP for group-ops", () => {
+  assert.throws(
+    () => listPathForPerson("missing_kids"),
+    (err) => err instanceof DisplayError && err.code === "invalid_list_path",
+  );
   assert.throws(
     () => listPathForPerson("group_ops_unspecified"),
+    (err) => err instanceof DisplayError && err.code === "invalid_list_path",
+  );
+  assert.throws(
+    () => listPathForOperation("group_ops_unspecified"),
     (err) => err instanceof DisplayError && err.code === "group_ops_index",
+  );
+  assert.equal(
+    listPathForOperation({ tags: ["missing_kids"] }),
+    "/group-operations/missing-kids",
   );
   assert.equal(categoryById("missing_kids").path, "/group-operations/missing-kids");
 });
 
-test("unique person: missing_kids is one card; parent lists the union", async () => {
+test("unique operation: parent lists all; child lists the tag; no person card", async () => {
   setMemory(goldSeed());
-  const created = await applyIdentifiedPerson({
-    ...NEW_PERSON_LOCK,
-    subject: "Casey Vale",
-    event_date: "2024-08-01",
-    category: "missing_kids",
-    cite_urls: CITES,
-  });
+  const created = await applyIdentifiedOperation(OP_LOCK);
   assert.equal(created.action, "created");
-  assert.equal(created.person.category, "missing_kids");
-  assert.equal(created.person.event_date, "2024-08-01");
-  assert.equal(created.person.death_date, null);
-  assert.equal(created.person.sources.length, 2);
-  assert.equal(created.person.birth_date, NEW_PERSON_LOCK.birth_date);
-  assert.equal(created.person.country_of_origin, NEW_PERSON_LOCK.country_of_origin);
-  assert.equal(created.person.events[0].position, NEW_PERSON_LOCK.position);
-  assert.equal(created.person.events[0].organization, NEW_PERSON_LOCK.organization);
-  assert.equal(created.person.events[0].comments, NEW_PERSON_LOCK.comments);
+  assert.equal(created.operation.name, "Operation Restore Justice");
+  assert.equal(created.operation.event_date, "2024-08-01");
+  assert.equal(created.operation.victim_count, null);
+  assert.equal(created.operation.arrest_count, null);
+  assert.deepEqual(created.operation.tags, ["missing_kids"]);
+  assert.equal(created.operation.sources.length, 2);
+  assert.equal(await countOperations(), 1);
 
-  const shown = await checkPersonDisplayed(created.person);
+  const shown = await checkOperationDisplayed(created.operation);
   assert.equal(shown.list, "/group-operations/missing-kids");
-  assert.equal(shown.detail, "/people/casey-vale");
+  assert.equal(shown.detail, "/operations/operation-restore-justice");
 
   const list = await requestPage("/group-operations/missing-kids");
-  assert.match(list.body, /Casey Vale/);
-  assert.match(list.body, /href="\/people\/casey-vale"/);
-  assert.match(list.body, /class="tui-row person-card/);
-  assert.match(list.body, / · Missing Kids · /);
+  assert.match(list.body, /Operation Restore Justice/);
+  assert.match(list.body, /href="\/operations\/operation-restore-justice"/);
+  assert.match(list.body, /class="tui-row operation-card/);
+  assert.doesNotMatch(list.body, /person-card/);
+  assert.doesNotMatch(list.body, /Casey Vale/);
   const index = await requestPage("/group-operations");
-  assert.match(index.body, /href="\/people\/casey-vale"/);
-  assert.match(index.body, /Casey Vale/);
+  assert.match(index.body, /href="\/operations\/operation-restore-justice"/);
+  assert.match(index.body, /Operation Restore Justice/);
   assert.match(index.body, /1 available/);
-  assert.match(index.body, /value="\/group-operations\/missing-kids"/);
   const firings = await requestPage("/firings");
-  assert.doesNotMatch(firings.body, /href="\/people\/casey-vale"/);
+  assert.doesNotMatch(firings.body, /href="\/operations\/operation-restore-justice"/);
 
-  const again = await applyIdentifiedPerson({
-    subject: "Casey Vale",
+  const again = await applyIdentifiedOperation({
+    ...OP_LOCK,
     event_date: "2024-09-01",
-    category: "missing_kids",
-    cite_urls: ["https://www.example.com/news/casey-vale-held", "https://www.example.org/n/extra"],
+    cite_urls: ["https://www.example.com/news/restore-justice", "https://www.example.org/n/extra"],
   });
   assert.equal(again.action, "annotated");
-  assert.equal(again.person.id, "casey-vale");
-  assert.equal(again.person.event_date, "2024-08-01");
-  assert.equal(await countPeople(), 73);
+  assert.equal(again.operation.id, "operation-restore-justice");
+  assert.equal(again.operation.event_date, "2024-08-01");
+  assert.equal(await countOperations(), 1);
+
+  const detail = await requestPage("/operations/operation-restore-justice");
+  assert.equal(detail.status, 200);
+  assert.match(detail.body, /Operation Restore Justice/);
+  assert.match(detail.body, /U\.S\. Department of Justice/);
+  assert.doesNotMatch(detail.body, /ChronoTrace/);
 });
 
-test("missing_kids annotates an existing person — no second row", async () => {
+test("operation is not a person KEEP annotation", async () => {
   setMemory(goldSeed());
   const arrest = await applyIdentifiedPerson({
     ...NEW_PERSON_LOCK,
     subject: "Casey Vale",
     event_date: "2024-06-15",
     category: "arrests",
-    cite_urls: CITES,
+    cite_urls: [
+      "https://www.example.com/news/casey-vale-held",
+      "https://www.example.net/world/casey-vale-arrest",
+    ],
   });
-  const tagged = await applyIdentifiedPerson({
-    subject: "Casey Vale",
-    event_date: "2024-08-01",
-    category: "missing_kids",
-    cite_urls: CITES,
-  });
-  assert.equal(tagged.action, "annotated");
-  assert.equal(tagged.person.id, arrest.person.id);
-  assert.equal(await countPeople(), 73);
-  const vale = await getPerson("casey-vale");
-  assert.ok(vale.events.some((ev) => ev.kind === "arrests" && ev.event_date === "2024-06-15"));
-  assert.ok(vale.events.some((ev) => ev.kind === "missing_kids" && ev.event_date === "2024-08-01"));
-
+  assert.equal(arrest.action, "created");
+  assert.throws(
+    () =>
+      validateIdentifiedPersonInput({
+        subject: "Casey Vale",
+        event_date: "2024-08-01",
+        category: "missing_kids",
+        cite_urls: CITES,
+      }),
+    (err) => err instanceof PromoteError && err.code === "invalid_category",
+  );
+  const op = await applyIdentifiedOperation(OP_LOCK);
+  assert.equal(op.action, "created");
+  const vale = await requestPage("/people/casey-vale");
+  assert.doesNotMatch(vale.body, /Group Operations — missing kids/);
   const list = await requestPage("/group-operations/missing-kids");
-  assert.match(list.body, /Casey Vale/);
-  const parent = await requestPage("/group-operations");
-  assert.match(parent.body, /Casey Vale/);
-  const detail = await requestPage("/people/casey-vale");
-  assert.equal(detail.status, 200);
-  assert.match(detail.body, /Casey Vale/);
-  assert.match(detail.body, /Group Operations — missing kids/);
-  assert.match(detail.body, /Arrests/);
+  assert.doesNotMatch(list.body, /Casey Vale/);
+  assert.match(list.body, /Operation Restore Justice/);
 });
 
-test("missing_kids person cards keep 40×52 local thumbs", () => {
-  const html = personRow(
-    {
-      id: "casey-vale",
-      name: "Casey Vale",
-      category: "missing_kids",
-      event_date: "2024-08-01",
-      photo: "/media/people/casey-vale.jpg",
-      net_worth_usd: null,
-    },
-    {},
-  );
-  assert.match(html, /class="tui-row person-card/);
-  assert.match(html, /class="portrait thumb"/);
-  assert.match(html, new RegExp(`width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}"`));
-  assert.match(html, /\/media\/thumbs\/people\/casey-vale\.jpg/);
-  assert.doesNotMatch(html, /src="\/media\/people\//);
+test("operation cards use initials, not person thumbs", () => {
+  const html = operationRow({
+    id: "operation-restore-justice",
+    name: "Operation Restore Justice",
+    event_date: "2024-08-01",
+    agencies: ["U.S. Department of Justice"],
+    tags: ["missing_kids"],
+    victim_count: null,
+    arrest_count: null,
+  });
+  assert.match(html, /class="tui-row operation-card/);
+  assert.match(html, /class="initials thumb"/);
+  assert.doesNotMatch(html, /person-card/);
+  assert.doesNotMatch(html, /\/media\/thumbs\/people\//);
+});
+
+test("dashboard standing sums stored counts only and respects date range", async () => {
+  setMemory(goldSeed());
+  await applyIdentifiedOperation({
+    ...OP_LOCK,
+    victim_count: 12,
+    arrest_count: 3,
+  });
+  await applyIdentifiedOperation({
+    name: "Operation Harbor Sweep",
+    event_date: "2018-03-01",
+    agencies: ["Department of Homeland Security"],
+    summary: "Earlier tagged operation with official cites.",
+    tags: ["missing_kids"],
+    cite_urls: [
+      "https://www.example.com/news/harbor-sweep",
+      "https://www.dhs.gov/news/harbor-sweep",
+    ],
+    victim_count: 4,
+    arrest_count: 1,
+  });
+  const { listOperations } = await import("../app/lib/store.mjs");
+  const ops = await listOperations();
+  const all = operationStanding(ops);
+  assert.equal(all.operations, 2);
+  assert.equal(all.victims, 16);
+  assert.equal(all.arrests, 4);
+  const ytd = operationStanding(ops, { id: "custom", from: "2024-01-01", to: "2024-12-31" });
+  assert.equal(ytd.operations, 1);
+  assert.equal(ytd.victims, 12);
+  assert.equal(ytd.arrests, 3);
+  const byTag = operationStandingByTag(ops);
+  assert.ok(byTag.byTag.some((r) => r.key === "missing_kids" && r.victims === 16));
+
+  const dash = await requestPage("/dashboard");
+  assert.match(dash.body, /Group Operations standing/);
+  assert.match(dash.body, /Victims/);
+  assert.match(dash.body, /Arrests/);
+  assert.match(dash.body, /Missing Kids/);
+  assert.doesNotMatch(dash.body, /ChronoTrace/);
 });

@@ -49,10 +49,13 @@ test("list paths skip the /deaths index", () => {
     () => listPathForPerson("indictment_unspecified"),
     (err) => err instanceof DisplayError && err.code === "indictments_index",
   );
-  assert.equal(listPathForPerson("missing_kids"), "/group-operations/missing-kids");
+  assert.throws(
+    () => listPathForPerson("missing_kids"),
+    (err) => err instanceof DisplayError && err.code === "invalid_list_path",
+  );
   assert.throws(
     () => listPathForPerson("group_ops_unspecified"),
-    (err) => err instanceof DisplayError && err.code === "group_ops_index",
+    (err) => err instanceof DisplayError && err.code === "invalid_list_path",
   );
   assert.throws(() => listPathForPerson("dog_comms"), (err) => err instanceof DisplayError);
 });

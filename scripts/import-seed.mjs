@@ -31,7 +31,7 @@ if (databaseUrl()) {
   const n = await importSeed(pool, seed);
   const migrated = await migrateUniquePeople();
   console.log(
-    `imported postgres people=${n.people} dog_comms=${n.dog_comms} unique=${migrated.people}`,
+    `imported postgres people=${n.people} dog_comms=${n.dog_comms} operations=${n.operations || 0} unique=${migrated.people}`,
   );
   await closeStore();
 } else {
@@ -39,6 +39,6 @@ if (databaseUrl()) {
   writeFileStore(dataDir, getMemory());
   const mem = getMemory();
   console.log(
-    `wrote file store people=${mem.people.length} dog_comms=${mem.dog_comms.length} source_posts=${mem.source_posts.length}`,
+    `wrote file store people=${mem.people.length} dog_comms=${mem.dog_comms.length} operations=${(mem.operations || []).length} source_posts=${mem.source_posts.length}`,
   );
 }

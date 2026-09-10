@@ -10,6 +10,7 @@ import {
   GROUP_OPS_KEEP_IDS,
   PROMOTE_CATEGORY_IDS,
 } from "./categories.mjs";
+import { normalizeOperationTags, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
 import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS } from "./event-attrs.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
@@ -231,10 +232,12 @@ export function identityFilterNav(basePath, { tags = [], minAge, maxAge } = {}) 
       });
     }
   }
-  for (const tag of IDENTITY_TAGS) {
-    if (locked.includes(tag.id)) continue;
-    const href = filterPath(main, { tags: [...new Set([...locked, tag.id])], ...age });
-    options.push({ href, label: tag.nav });
+  if (main !== "/group-operations") {
+    for (const tag of IDENTITY_TAGS) {
+      if (locked.includes(tag.id)) continue;
+      const href = filterPath(main, { tags: [...new Set([...locked, tag.id])], ...age });
+      options.push({ href, label: tag.nav });
+    }
   }
   const currentHref = filterPath(basePath, { tags: selected, ...age });
   const current = options.find((o) => o.href === currentHref) || options[0];
@@ -370,6 +373,12 @@ export function breadcrumbItems({
     items.push({ href: p, label: label || "Snapshot" });
     return items;
   }
+  if (p.startsWith("/operations/") && p !== "/operations") {
+    const trail = categoryTrail(categoryById(categoryId) || categoryById("group_ops_unspecified"));
+    items.push(...(trail.length ? trail : [{ href: "/group-operations", label: "Group Operations" }]));
+    items.push({ href: p, label: label || "Operation" });
+    return items;
+  }
 
   const cat = categoryByPath(p);
   if (cat) {
@@ -385,6 +394,7 @@ export function breadcrumbItems({
   if (p === "/add") {
     items.push({ href: "/add", label: "Add" });
     if (mode === "dog") items.push({ href: "/add?mode=dog", label: "Dog comms" });
+    else if (mode === "operation") items.push({ href: "/add?mode=operation", label: "Operation" });
     else if (String(label || "").toLowerCase() === "queued") {
       items.push({ href: p, label: "Queued" });
     }
@@ -574,6 +584,26 @@ export function sourcePostRow(row, { selected } = {}) {
   </a>`;
 }
 
+function countCell(n) {
+  if (n === null || n === undefined || n === "") return "—";
+  const num = Number(n);
+  return Number.isInteger(num) ? String(num) : "—";
+}
+
+export function operationRow(row, { selected } = {}) {
+  const href = `/operations/${encodeURIComponent(row.id)}`;
+  const tags = normalizeOperationTags(row.tags);
+  const tagLabel = tags.map((id) => operationTagLabel(id)).filter(Boolean).join(", ") || "Operation";
+  const agencies = (row.agencies || []).filter(Boolean).join(", ") || "—";
+  return `<a class="tui-row operation-card${selected ? " is-selected" : ""}" href="${esc(href)}">
+    <span class="initials thumb" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>
+    <div class="tui-row-text">
+      <div class="tui-title">${esc(row.name || "—")}</div>
+      <div class="tui-meta"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(tagLabel)} · ${esc(agencies)} · victims ${esc(countCell(row.victim_count))} · arrests ${esc(countCell(row.arrest_count))}</div>
+    </div>
+  </a>`;
+}
+
 export function dogListRow(row, { selected } = {}) {
   const href = `/dog-comms/${encodeURIComponent(row.id)}`;
   return `<a class="tui-row dog-card${selected ? " is-selected" : ""}" href="${esc(href)}">
@@ -635,6 +665,7 @@ export function catalogList(items, { showDeath } = {}) {
   return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => {
     if (item.type === "source") return sourcePostRow(item.row, opts);
     if (item.type === "dog") return dogListRow(item.row, opts);
+    if (item.type === "operation") return operationRow(item.row, opts);
     return personRow(item.row, { ...opts, showDeath });
   })}</div>`;
 }
@@ -654,6 +685,11 @@ export function indictmentsIndexNav() {
 
 export function groupOpsIndexNav() {
   return identityFilterNav("/group-operations", { tags: [] });
+}
+
+export function operationList(rows) {
+  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
+  return `<div class="people-list tui-list">${groupByYear(rows, "event_date", operationRow)}</div>`;
 }
 
 export function dogList(rows) {
@@ -906,6 +942,44 @@ export function sourcePostDetail(row) {
   </article>`;
 }
 
+export function operationDetail(row) {
+  const tags = normalizeOperationTags(row.tags);
+  const tagLine = tags.length
+    ? tags.map((id) => operationTagLabel(id)).join(", ")
+    : "—";
+  const agencies = (row.agencies || []).filter(Boolean).join(", ") || "—";
+  const announced =
+    row.announced_date && row.announced_date !== row.event_date
+      ? `<p class="meta-line">Announced · <time datetime="${esc(row.announced_date)}">${esc(formatDate(row.announced_date))}</time></p>`
+      : "";
+  return `<article class="detail operation-detail">
+    ${boxFrame(
+      "Operation",
+      `<div class="meta-pane">
+      <span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>
+      <div class="detail-copy">
+        <h2 class="detail-title">${esc(row.name || "—")}</h2>
+        <p class="meta-line">Event date · <time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time></p>
+        ${announced}
+        <p class="meta-line">Agencies · ${esc(agencies)}</p>
+        <p class="meta-line">Tags · ${esc(tagLine)}</p>
+        <p class="meta-line">Victims · ${esc(countCell(row.victim_count))}</p>
+        <p class="meta-line">Arrests · ${esc(countCell(row.arrest_count))}</p>
+        <hr class="hr">
+        <h3 class="pane-h">Summary</h3>
+        <p class="synopsis">${esc(row.summary || "—")}</p>
+      </div>
+    </div>`,
+      { extraClass: "meta-box" },
+    )}
+    ${boxFrame(
+      `● Sources · ${(row.sources || []).length} available · 1/${(row.sources || []).length || 0}`,
+      citeList(row.sources || []),
+      { active: true, extraClass: "sources-pane" },
+    )}
+  </article>`;
+}
+
 export function dogDetail(row) {
   const photo = row.still
     ? `<img class="detail-photo" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="120" height="150" decoding="async">`
@@ -944,11 +1018,13 @@ export function searchBody(items, q) {
     return `<p class="empty">No seeded rows match that query.</p>`;
   }
   const people = [];
+  const operations = [];
   const dogs = [];
   const sources = [];
   for (const item of items) {
     if (item.type === "source") sources.push(item);
     else if (item.type === "dog") dogs.push(item);
+    else if (item.type === "operation") operations.push(item);
     else people.push(item);
   }
   let first = true;
@@ -957,10 +1033,12 @@ export function searchBody(items, q) {
     first = false;
     if (item.type === "dog") return dogListRow(item.row, { selected });
     if (item.type === "source") return sourcePostRow(item.row, { selected });
+    if (item.type === "operation") return operationRow(item.row, { selected });
     return personRow(item.row, { selected, showDeath: isDeathCategory(item.row.category) });
   };
   const blocks = [];
   if (people.length) blocks.push(people.map(render).join(""));
+  if (operations.length) blocks.push(operations.map(render).join(""));
   if (dogs.length) blocks.push(dogs.map(render).join(""));
   if (sources.length) {
     blocks.push(
@@ -1004,6 +1082,9 @@ export function healthBody(payload) {
 }
 
 function dashCount(n) {
+  if (n === null || n === undefined || n === "") {
+    return `<span class="dash-count" data-count="">—</span>`;
+  }
   const num = Math.max(0, Number(n) || 0);
   return `<span class="dash-count" data-count="${num}">${num}</span>`;
 }
@@ -1133,7 +1214,11 @@ export function dashboardBody(model, { path = "/dashboard", range } = {}) {
     <section class="dash-stats" aria-label="Live counts">
       <p class="dash-stat"><span class="dash-stat-label">People</span> ${dashCount(model.people)}</p>
       <p class="dash-stat"><span class="dash-stat-label">Events</span> ${dashCount(trends.events)}</p>
+      <p class="dash-stat"><span class="dash-stat-label">Operations</span> ${dashCount(model.operations?.all?.operations)}</p>
+      <p class="dash-stat"><span class="dash-stat-label">Victims</span> ${dashCount(model.operations?.all?.victims)}</p>
+      <p class="dash-stat"><span class="dash-stat-label">Arrests</span> ${dashCount(model.operations?.all?.arrests)}</p>
     </section>
+    ${operationStandingBlock(model.operations)}
     <div class="dash-grid">${dims}</div>
     <section class="dash-trends" aria-label="Event-date trends">
       <section class="dash-block">
@@ -1157,6 +1242,29 @@ export function dashboardRankBody(dim, rows, { range } = {}) {
   </div>`;
 }
 
+function operationStandingBlock(standing) {
+  const byTag = standing?.byTag || [];
+  const rows = byTag
+    .map((row) => {
+      return `<tr>
+        <td><a href="${esc(row.href)}">${esc(row.label)}</a></td>
+        <td class="num">${dashCount(row.operations)}</td>
+        <td class="num">${dashCount(row.victims)}</td>
+        <td class="num">${dashCount(row.arrests)}</td>
+      </tr>`;
+    })
+    .join("");
+  const table = rows
+    ? `<table class="dash-table">
+        <thead><tr><th>Tag</th><th>Ops</th><th>Victims</th><th>Arrests</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`
+    : `<p class="empty">No rows on this page.</p>`;
+  return `<section class="dash-block" data-dash-dim="operations">
+    ${boxFrame("Group Operations standing", table, { extraClass: "dash-box" })}
+  </section>`;
+}
+
 const ADD_CATEGORIES = [
   { id: "", label: "Optional" },
   { id: "firings", label: "Firings" },
@@ -1169,11 +1277,10 @@ const ADD_CATEGORIES = [
   { id: "corona_comms", label: "Corona Comms" },
   { id: "indictment_civilian", label: "Indictments — civilians" },
   { id: "indictment_non_civilian", label: "Indictments — non-civilians" },
-  { id: "missing_kids", label: "Group Operations — missing kids" },
 ];
 
 export function addCiteRule() {
-  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. A new person insert is fail-closed: country of origin, position, organization, reason of event, event date, and two official cites. Birth date is optional — unknown stores as null and is not invented from age or month-year. Military inserts also require branch (the existing event field). Country of origin and branch are not guessed. Origin is not the event country. If the person already exists, the new kind is attached — a second row is not created. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. A host process looks up published sources and applies the row.</p>`;
+  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. A new person insert is fail-closed: country of origin, position, organization, reason of event, event date, and two official cites. Birth date is optional — unknown stores as null and is not invented from age or month-year. Military inserts also require branch (the existing event field). Country of origin and branch are not guessed. Origin is not the event country. If the person already exists, the new kind is attached — a second row is not created. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. Group operations are a separate operation card — not a person. Operations need a name, event date, agencies, summary, a signed tag, and two official DOJ/gov/news-org cites. Victim and arrest counts stay blank unless a cite states them. Named children are not stored. A host process looks up published sources and applies the row.</p>`;
 }
 
 export function addBody({
@@ -1182,10 +1289,13 @@ export function addBody({
   error,
   values = {},
 } = {}) {
-  const person = mode !== "dog";
+  const person = mode === "person" || (!mode && mode !== "dog" && mode !== "operation");
+  const dog = mode === "dog";
+  const operation = mode === "operation";
   const tabs = `<nav class="add-modes" aria-label="Add mode">
     <a class="keychip" href="/add"${person ? ' aria-current="page"' : ""} data-key="p"><span class="br">[</span>p<span class="br">]</span> Person</a>
-    <a class="keychip" href="/add?mode=dog"${person ? "" : ' aria-current="page"'} data-key="o"><span class="br">[</span>o<span class="br">]</span> Dog comms</a>
+    <a class="keychip" href="/add?mode=operation"${operation ? ' aria-current="page"' : ""} data-key="g"><span class="br">[</span>g<span class="br">]</span> Operation</a>
+    <a class="keychip" href="/add?mode=dog"${dog ? ' aria-current="page"' : ""} data-key="o"><span class="br">[</span>o<span class="br">]</span> Dog comms</a>
   </nav>`;
   if (queued) {
     return `${tabs}
@@ -1276,6 +1386,62 @@ export function addBody({
           <input type="url" name="net_worth_source" value="${esc(values.net_worth_source || "")}" placeholder="https://www.forbes.com/profile/… or https://www.bloomberg.com/…" inputmode="url">
         </label>
         <p class="hint">Published Forbes or Bloomberg estimate only. Leave both blank if none — do not invent a figure.</p>
+        <button type="submit" class="keychip add-submit"><span class="br">[</span>Enter<span class="br">]</span> Queue</button>
+      </form>
+      ${addCiteRule()}`,
+      { active: true, extraClass: "add-box" },
+    )}`;
+  }
+  if (operation) {
+    const tagOpts = GROUP_OPS_KEEP_IDS.map((id) => {
+      const cat = categoryById(id);
+      const on = (values.category || values.tag || "missing_kids") === id;
+      return `<option value="${esc(id)}"${on ? " selected" : ""}>${esc(cat?.title || id)}</option>`;
+    }).join("");
+    return `${tabs}
+    ${boxFrame(
+      "Add an operation",
+      `${err}
+      <form class="tui-form add-form" method="post" action="/add?mode=operation">
+        <input type="hidden" name="kind" value="operation">
+        <label class="field">
+          <span>Name</span>
+          <input type="text" name="subject" required value="${esc(values.subject || values.name || "")}" placeholder="Operation Restore Justice" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Tag</span>
+          <select name="category">${tagOpts}</select>
+        </label>
+        <label class="field">
+          <span>Event date</span>
+          <input type="date" name="event_date" value="${esc(values.event_date || "")}">
+        </label>
+        <label class="field">
+          <span>Announced date</span>
+          <input type="date" name="announced_date" value="${esc(values.announced_date || "")}">
+        </label>
+        <p class="hint">Announced date only when it differs from the event date.</p>
+        <label class="field">
+          <span>Agencies / orgs</span>
+          <input type="text" name="agencies" value="${esc(Array.isArray(values.agencies) ? values.agencies.join(", ") : values.agencies || "")}" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Reason / summary</span>
+          <input type="text" name="summary" value="${esc(values.summary || values.comments || "")}" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Victim count</span>
+          <input type="number" name="victim_count" min="0" inputmode="numeric" value="${esc(values.victim_count ?? "")}" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Arrest count</span>
+          <input type="number" name="arrest_count" min="0" inputmode="numeric" value="${esc(values.arrest_count ?? "")}" autocomplete="off">
+        </label>
+        <p class="hint">Leave counts blank unless a cite states them. Do not invent. Named children are not stored.</p>
+        <label class="field">
+          <span>Hint URL</span>
+          <input type="url" name="hint_url" value="${esc(values.hint_url || "")}" placeholder="https://…" inputmode="url">
+        </label>
         <button type="submit" class="keychip add-submit"><span class="br">[</span>Enter<span class="br">]</span> Queue</button>
       </form>
       ${addCiteRule()}`,

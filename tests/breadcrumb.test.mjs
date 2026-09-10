@@ -95,15 +95,15 @@ test("detail pages link back through the parent catalog", () => {
   );
   assert.deepEqual(
     breadcrumbItems({
-      path: "/people/casey-vale",
+      path: "/operations/operation-restore-justice",
       categoryId: "missing_kids",
-      label: "Casey Vale",
+      label: "Operation Restore Justice",
     }),
     [
       { href: "/", label: "Home" },
       { href: "/group-operations", label: "Group Operations" },
       { href: "/group-operations/missing-kids", label: "Missing Kids" },
-      { href: "/people/casey-vale", label: "Casey Vale" },
+      { href: "/operations/operation-restore-justice", label: "Operation Restore Justice" },
     ],
   );
   assert.deepEqual(
