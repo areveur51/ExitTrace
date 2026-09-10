@@ -323,9 +323,12 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /class="dash-pt"|class="dash-bar"/);
   assert.match(dash.body, /class="dash-tip"/);
   assert.match(dash.body, /Operations standing/);
-  assert.match(dash.body, /class="dash-age-card"/);
+  assert.match(dash.body, /Top 7 by Age|Top \d+ by Age/);
+  assert.match(dash.body, /All by Age/);
   assert.match(dash.body, /data-dash-dim="age"/);
-  assert.match(dash.body, />Age</);
+  assert.match(dash.body, /class="dash-table"/);
+  assert.match(dash.body, /data-dash-dim="age"[\s\S]*?dash-box/);
+  assert.doesNotMatch(dash.body, /dash-age-card|dash-age-fill|dash-age-chevron/);
   assert.match(dash.body, /data-age-band="13-17"/);
   assert.match(dash.body, /data-age-band="18-24"/);
   assert.match(dash.body, /data-age-band="25-34"/);
@@ -447,7 +450,9 @@ test("dashboard Age standing bands unique people and skips null birth_date", asy
   assert.match(dash.body, /data-age-band="18-24" data-age-count="1"/);
   assert.match(dash.body, /data-age-band="35-44" data-age-count="1"/);
   assert.match(dash.body, /data-age-band="13-17" data-age-count="0"/);
-  assert.match(dash.body, /class="dash-age-fill"/);
+  assert.match(dash.body, /Top 7 by Age|Top \d+ by Age/);
+  assert.match(dash.body, /All by Age/);
+  assert.match(dash.body, /class="dash-table"/);
   assert.match(dash.body, /Operations standing/);
 
   const band = await requestPage("/dashboard/age?band=35-44");
