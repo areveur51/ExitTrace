@@ -203,7 +203,7 @@ export function ageFilterForm(actionPath, { minAge, maxAge, tags, deaths } = {})
     rawAction.startsWith("/group-operations/")
       ? rawAction
       : catalogMainPath(rawAction);
-  return `<form class="age-filter" method="get" action="${esc(action)}" role="search">`
+  return `<form class="age-filter" method="get" action="${esc(action)}" role="search">
     ${hidden}
     <span class="age-filter-label" id="age-filter-label">${label}</span>
     <div class="age-filter-fields" role="group" aria-labelledby="age-filter-label">
