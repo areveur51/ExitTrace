@@ -172,6 +172,20 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
     css,
     /@media \(min-width: 1280px\)[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 13\.25rem;/,
   );
+  assert.match(css, /\.home-stage \{[^}]*justify-content:\s*center/);
+  assert.match(css, /\.home-stage \{[^}]*align-items:\s*center/);
+  assert.match(css, /body\.tui-home \{[^}]*min-height:\s*100vh/);
+  assert.match(css, /body\.tui-home \{[^}]*min-height:\s*100dvh/);
+  assert.match(css, /body\.tui-home \.home-stage \{[^}]*min-height:\s*calc\(100vh - 7\.25rem\)/);
+  assert.match(css, /body\.tui-home \.home-stage \{[^}]*min-height:\s*calc\(100dvh - 7\.25rem\)/);
+  assert.match(
+    css,
+    /@media \(min-width: 721px\)[\s\S]*body\.tui-home \.hud-stage \{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\);[\s\S]*align-items:\s*stretch;/,
+  );
+  assert.match(
+    css,
+    /@media \(min-width: 721px\)[\s\S]*body\.tui-home \.home-stage \{[\s\S]*align-self:\s*stretch;[\s\S]*min-height:\s*calc\(100dvh - 4\.75rem\)/,
+  );
   assert.match(css, /\.grokipedia-cite/);
   assert.doesNotMatch(css, /\.grokipedia-text/);
   assert.doesNotMatch(css, /pinterest|pinimg|i\.pinimg/i);

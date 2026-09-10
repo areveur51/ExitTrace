@@ -309,6 +309,20 @@ a:hover { color: var(--ink); }
   padding: 2rem 1rem 2.5rem;
   text-align: center;
 }
+/* Home cluster: fill the remaining viewport so logo + search sit in the middle,
+   not pinned under the top bar. Catalog pages keep their own .tui-main flow. */
+body.tui-home {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+body.tui-home .hud-stage {
+  flex: 1 1 auto;
+}
+body.tui-home .home-stage {
+  flex: 1 1 auto;
+  min-height: calc(100vh - 7.25rem);
+  min-height: calc(100dvh - 7.25rem);
+}
 .pixel-link { text-decoration: none; display: inline-block; }
 .home-wordmark {
   position: relative;
@@ -1702,5 +1716,22 @@ html[data-theme="glass"] .dash-stats {
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
     gap: 1rem;
     align-items: start;
+  }
+}
+
+/* Widescreen/tablet HUD grid is align-items:start + rows:auto for catalog
+   lists. On home, stretch the stage to the remaining dvh so the wordmark
+   + search stay in the viewport middle beside the keymap rail. */
+@media (min-width: 721px) {
+  body.tui-home .hud-stage {
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+    min-height: calc(100vh - 4.75rem);
+    min-height: calc(100dvh - 4.75rem);
+  }
+  body.tui-home .home-stage {
+    align-self: stretch;
+    min-height: calc(100vh - 4.75rem);
+    min-height: calc(100dvh - 4.75rem);
   }
 }
