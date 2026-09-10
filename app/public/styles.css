@@ -338,7 +338,7 @@ body.tui-home .home-stage {
 }
 .pixel-wordmark .wm-exit-ink { fill: var(--label); }
 .pixel-wordmark .wm-exit-shadow { fill: var(--brick); }
-.pixel-wordmark .wm-trace-plate { fill: var(--label); opacity: 0.84; }
+.pixel-wordmark .wm-trace-plate { fill: var(--label); opacity: 0.72; }
 .pixel-wordmark .wm-trace-ink,
 .pixel-wordmark .wm-callsign-ink { fill: var(--brick); }
 .pixel-wordmark .wm-trace-ink { opacity: 0.84; }
@@ -1395,7 +1395,7 @@ html[data-theme="glass"] .pixel-wordmark .wm-exit-ink { fill: var(--label); }
 html[data-theme="glass"] .pixel-wordmark .wm-exit-shadow { fill: var(--brick); }
 html[data-theme="glass"] .pixel-wordmark .wm-trace-plate {
   fill: color-mix(in srgb, var(--label) 82%, var(--amber));
-  opacity: 0.84;
+  opacity: 0.72;
 }
 html[data-theme="glass"] .pixel-wordmark .wm-trace-ink,
 html[data-theme="glass"] .pixel-wordmark .wm-callsign-ink { fill: var(--void); }
