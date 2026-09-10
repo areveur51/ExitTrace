@@ -317,6 +317,14 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /Group Operations standing/);
   assert.match(dash.body, /Victims/);
   assert.match(dash.body, /Arrests/);
+  assert.match(
+    dash.body,
+    /dash-stat-label">Victims<\/span> <span class="dash-count" data-count="">—<\/span>/,
+  );
+  assert.match(
+    dash.body,
+    /dash-stat-label">Arrests<\/span> <span class="dash-count" data-count="">—<\/span>/,
+  );
   assert.doesNotMatch(dash.body, /webgl|WebGL|three\.js|dash-3d|preserveDrawingBuffer/i);
   const orgBlock = dash.body.split("Organization")[1] || "";
   assert.match(orgBlock, /No rows on this page/);
@@ -466,6 +474,8 @@ test("app.js persists dash range and paints hover tooltips without a fetch", () 
   assert.match(js, /bindDashTips|dash-tip/);
   assert.match(js, /data-date/);
   assert.match(js, /data-count/);
+  assert.match(js, /getAttribute\("data-count"\)/);
+  assert.match(js, /raw === null \|\| raw === ""/);
   assert.doesNotMatch(js, /fetch\(/);
   assert.doesNotMatch(js, /webgl|WebGL|THREE|getContext\(\s*["']webgl/i);
 });
