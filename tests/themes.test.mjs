@@ -151,8 +151,13 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
   assert.match(css, /\.wm-trace-plate/);
   assert.match(css, /\.wm-trace-ink/);
   assert.match(css, /\.wm-callsign-ink/);
-  assert.match(css, /\.wm-trace-plate \{[^}]*opacity:\s*0\.84/);
+  assert.match(css, /\.wm-trace-plate \{[^}]*opacity:\s*0\.72/);
   assert.match(css, /\.wm-trace-ink \{[^}]*opacity:\s*0\.84/);
+  assert.match(
+    css,
+    /html\[data-theme="glass"\] \.pixel-wordmark \.wm-trace-plate \{[^}]*color-mix\(in srgb, var\(--label\) 82%, var\(--amber\)\)[^}]*opacity:\s*0\.72/,
+  );
+  assert.match(css, /html\[data-theme="glass"\] \.pixel-wordmark \.wm-trace-ink,\s*html\[data-theme="glass"\] \.pixel-wordmark \.wm-callsign-ink \{ fill: var\(--void\); \}/);
   assert.match(css, /\.keymap-keys/);
   assert.match(css, /--key-order/);
   assert.match(
