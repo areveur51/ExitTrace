@@ -854,7 +854,7 @@ function personValues(row) {
     person.role,
     person.event_date,
     person.death_date,
-    person.birth_date,
+    person.birth_date || null,
     person.country_of_origin || "",
     person.photo,
     person.photo_credit,

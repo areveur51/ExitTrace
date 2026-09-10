@@ -61,6 +61,24 @@ export function parseEventDate(raw) {
   return text;
 }
 
+/**
+ * Optional calendar birth date. Blank / missing → null (SQL NULL).
+ * Never invent from age, year-only, or month-year.
+ */
+export function parseOptionalBirthDate(raw) {
+  if (raw == null) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  const parsed = parseEventDate(text);
+  if (!parsed) {
+    throw new PromoteError(
+      "birth_date must be YYYY-MM-DD when present; do not invent from age or month-year",
+      "invalid_birth_date",
+    );
+  }
+  return parsed;
+}
+
 export function parseCiteUrls(raw) {
   const list = Array.isArray(raw) ? raw : [];
   const urls = [];
@@ -509,19 +527,9 @@ export function validateIdentifiedPersonInput(input = {}) {
   if (!slug) {
     throw new PromoteError("subject did not yield a person id", "invalid_subject");
   }
-  const birthRaw = String(
-    input.birth_date || input.birthDate || input["Birth Date"] || "",
-  ).trim();
-  let birth_date = null;
-  if (birthRaw) {
-    birth_date = parseEventDate(birthRaw);
-    if (!birth_date) {
-      throw new PromoteError(
-        "birth_date is required as YYYY-MM-DD",
-        "invalid_birth_date",
-      );
-    }
-  }
+  const birth_date = parseOptionalBirthDate(
+    input.birth_date ?? input.birthDate ?? input["Birth Date"],
+  );
   const country_of_origin = parseOriginCountry(input);
   const military = isMilitaryInput(input);
   return {
@@ -547,14 +555,11 @@ export function validateIdentifiedPersonInput(input = {}) {
   };
 }
 
-/** Fail-closed on NEW person insert only. Existing rows stay empty until backfill. */
+/**
+ * Fail-closed on NEW person insert only. Existing rows stay empty until backfill.
+ * birth_date is optional: unknown stores as null, never "".
+ */
 export function assertNewPersonInsertLock(input = {}) {
-  if (!input.birth_date) {
-    throw new PromoteError(
-      "birth_date is required on new person insert",
-      "missing_birth_date",
-    );
-  }
   if (!String(input.country_of_origin || "").trim()) {
     throw new PromoteError(
       "country of origin is required on new person insert",
@@ -632,7 +637,7 @@ export function buildPersonRow(input, people) {
     role: input.role,
     event_date: input.event_date,
     death_date: isDeathCategory(input.category) ? input.event_date : null,
-    birth_date: input.birth_date || null,
+    birth_date: input.birth_date || null, // never store "" as a fake date
     country_of_origin: String(input.country_of_origin || "").trim(),
     photo: input.photo,
     photo_credit: input.photo_credit,

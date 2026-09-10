@@ -46,8 +46,10 @@ Host-side process hook (scratch directory, two turns, one envelope):
 Fail-closed:
   people need subject + event_date + at least ${CITE_FLOOR} verified
   official news or official gov/news-org social cite URLs.
-  A new person insert also needs birth_date, country of origin, position,
+  A new person insert also needs country of origin, position,
   organization, and reason of event (comments/reason).
+  birth_date is optional: unknown stores as SQL NULL, never "". Do not invent
+  from age or month-year. Age filters skip a null birth_date.
   Military inserts also require branch (existing event field).
   Do not invent cites. Do not copy posted_at into event_date.
   Unofficial or commentary social is extra only, not a cite.

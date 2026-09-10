@@ -119,6 +119,8 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   assert.match(person.body, /value="indictment_non_civilian"/);
   assert.match(person.body, /name="event_date"/);
   assert.match(person.body, /name="birth_date"/);
+  assert.match(person.body, /Leave blank when unknown \(stored as null\)/);
+  assert.match(person.body, /Birth date is optional/);
   assert.match(person.body, /name="country_of_origin"/);
   assert.match(person.body, /name="position"/);
   assert.match(person.body, /name="organization"/);
@@ -229,6 +231,28 @@ test("process with two official cites creates a person; one cite is rejected", a
   assert.equal(replay.replayed, true);
   assert.equal(await countPeople(), 73);
   assert.equal(goldSeed().people.length, 72);
+});
+
+test("process without birth_date stores SQL null and does not invent age", async () => {
+  setMemory(goldSeed());
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const lock = { ...NEW_PERSON_LOCK };
+  delete lock.birth_date;
+  const created = await processAddRequest({
+    id: queued.request.id,
+    overlay: { ...lock, cite_urls: CITES },
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.person.birth_date, null);
+  assert.notEqual(created.person.birth_date, "");
+  assert.equal(created.person.events[0].age_at_event, null);
+  const vale = await getPerson("casey-vale");
+  assert.equal(vale.birth_date, null);
 });
 
 test("unofficial commentary social is extra only and posted_at is never event_date", async () => {
