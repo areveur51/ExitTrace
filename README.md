@@ -49,6 +49,8 @@ npm start
 
 `scripts/bootstrap-db.sql` is `CREATE TABLE IF NOT EXISTS` and safe to re-run. Do not commit `.env`. Copy `.env.example` only if you need to change defaults.
 
+Lab → existing Render Postgres dump/restore (not a second Render service) is documented in `docs/github-auto-deploy.md`. The Actions secret is environment `production` / `DATABASE_URL` only. Host port 5434 and any replica database are not a source.
+
 ## Promote one Unsorted post
 
 Fail-closed: named subject, calendar `event_date`, catalog category, and two or more `http(s)` cite URLs you already have. Does not invent cites or a portrait. Leaves the source post on Unsorted.
@@ -182,6 +184,8 @@ scripts/process-add-request.mjs  apply one queued add request (cites from caller
 scripts/build-thumbs.mjs    derive 40×52 list thumbs from stored stills
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
+docs/github-auto-deploy.md  lab → Render Postgres sync (Actions)
+.github/workflows/lab-to-render-sync.yml
 exittracectl.sh             start | stop | status | seed | import-posts | digest | promote | add-process | pack
 ```
 

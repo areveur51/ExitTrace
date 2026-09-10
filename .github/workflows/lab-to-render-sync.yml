@@ -1,0 +1,155 @@
+# Lab Postgres → existing Render Postgres (dump/restore only).
+# Media rsync is a separate host path. This workflow does not pack media
+# and does not change data-release.yml.
+#
+# Dump source: ExitTrace Postgres published on host port 5433
+# (docker grokbuild-postgres, database exittrace). Host port 5434 and
+# any replica database are excluded — do not dump them or fall back there.
+#
+# Schedule is UTC. cron 20 13 * * * is 9:20am America/New_York during EDT
+# (after the lab pack at 9:05 ET). During EST that same cron is 8:20am ET.
+# GitHub Actions cron does not honor a TZ key.
+#
+# Restore reads DATABASE_URL only from the GitHub Actions environment
+# named production (Render External connection string). Never put that
+# URL on the lab host or in this repository.
+
+name: lab-to-render-sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 13 * * *"
+
+concurrency:
+  group: lab-to-render-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: none
+
+jobs:
+  dump:
+    name: dump
+    runs-on: [self-hosted, pop-os, exittrace-lab]
+    # No production / Render secrets on this job.
+    timeout-minutes: 20
+    steps:
+      - name: Dump lab Postgres on host :5433
+        run: |
+          set -euo pipefail
+          DUMP_SH="/opt/GrokBuild/bin/et-lab-dump.sh"
+          LATEST="/opt/GrokBuild/projects/ExitTrace/scratch/exittrace-lab-latest.dump"
+          if [[ ! -x "$DUMP_SH" ]]; then
+            echo "missing $DUMP_SH; refusing to dump. host port 5434 is not a source."
+            exit 1
+          fi
+          "$DUMP_SH"
+          if [[ ! -e "$LATEST" ]]; then
+            echo "dump script did not update $LATEST"
+            exit 1
+          fi
+          resolved="$(readlink -f -- "$LATEST")"
+          if [[ ! -s "$resolved" ]]; then
+            echo "resolved dump is missing or empty"
+            exit 1
+          fi
+          gzip -c -- "$resolved" > "${RUNNER_TEMP}/exittrace-lab.dump.gz"
+          ls -lh -- "${RUNNER_TEMP}/exittrace-lab.dump.gz"
+
+      - name: Upload compressed dump artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exittrace-lab-dump
+          path: ${{ runner.temp }}/exittrace-lab.dump.gz
+          retention-days: 1
+          if-no-files-found: error
+
+  restore:
+    name: restore
+    needs: dump
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Require production DATABASE_URL
+        run: |
+          set -euo pipefail
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "GitHub environment 'production' secret DATABASE_URL is not set"
+            exit 1
+          fi
+
+      - name: Download dump artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: exittrace-lab-dump
+          path: dump
+
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-client
+
+      - name: Restore lab dump into Render Postgres
+        run: |
+          set -euo pipefail
+          set +x
+          redact() {
+            sed -E \
+              -e 's#[A-Za-z0-9+._~:/?#\[\]@!$&'"'"'()*+,;=-]+://[^[:space:]]+#[redacted-url]#g' \
+              -e 's#\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b#[redacted]#g' \
+              -e 's#\bdpg-[A-Za-z0-9.-]+#[redacted-host]#g'
+          }
+          ensure_ssl() {
+            local u="${1:-}"
+            if [[ "$u" == *sslmode=* ]]; then
+              printf '%s' "$u"
+            elif [[ "$u" == *\?* ]]; then
+              printf '%s&sslmode=require' "$u"
+            else
+              printf '%s?sslmode=require' "$u"
+            fi
+          }
+
+          if [[ ! -s dump/exittrace-lab.dump.gz ]]; then
+            echo "artifact dump/exittrace-lab.dump.gz is missing or empty"
+            exit 1
+          fi
+
+          work="${RUNNER_TEMP}/exittrace-lab.dump"
+          gzip -dc dump/exittrace-lab.dump.gz > "$work"
+          target="$(ensure_ssl "$DATABASE_URL")"
+          unset DATABASE_URL
+          export PGSSLMODE=require
+
+          err="${RUNNER_TEMP}/pg_restore.err"
+          if ! pg_restore \
+            --clean \
+            --if-exists \
+            --no-owner \
+            --no-acl \
+            --exit-on-error \
+            --dbname="$target" \
+            "$work" 2>"$err"; then
+            redact < "$err" >&2 || true
+            rm -f -- "$work" "$err"
+            exit 1
+          fi
+          redact < "$err" >&2 || true
+
+          if ! psql --no-psqlrc --dbname="$target" -v ON_ERROR_STOP=1 -At -c \
+            "SELECT 'people=' || (SELECT count(*) FROM people) ||
+                    ' dog_comms=' || (SELECT count(*) FROM dog_comms) ||
+                    ' operations=' || (SELECT count(*) FROM operations) ||
+                    ' source_posts=' || (SELECT count(*) FROM source_posts);" \
+            >"${RUNNER_TEMP}/restore.counts" 2>"$err"; then
+            redact < "$err" >&2 || true
+            rm -f -- "$work" "$err"
+            exit 1
+          fi
+          cat "${RUNNER_TEMP}/restore.counts"
+          rm -f -- "$work" "$err" "${RUNNER_TEMP}/restore.counts"
