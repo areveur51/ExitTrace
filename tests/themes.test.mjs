@@ -97,6 +97,7 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.match(footer, /href="\/dashboard"/);
   assert.doesNotMatch(footer, /href="\/grokipedia"/);
   assert.match(footer, /href="\/indictments"/);
+  assert.match(footer, /href="\/group-operations"/);
   assert.match(footer, /href="\/unsorted"/);
   assert.match(footer, /href="\/add"/);
   assert.match(footer, /href="\/dog-comms"/);
@@ -106,6 +107,7 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.match(footer, /\]<\/span> Corona</);
   assert.match(footer, /\]<\/span> Dashboard</);
   assert.match(footer, /\]<\/span> Indictments</);
+  assert.match(footer, /\]<\/span> Group Operations</);
   assert.match(footer, /\]<\/span> Unsorted</);
   assert.doesNotMatch(footer, /CLOSE HACK|BREACH PROTOCOL|SurveilTrack|ROOT@/i);
 });

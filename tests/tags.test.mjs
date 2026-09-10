@@ -136,6 +136,7 @@ test("main event pages expose identity and age filters", async () => {
     "/corona-comms",
     "/indictments",
     "/deaths",
+    "/group-operations",
     "/government",
   ]) {
     const res = await requestPage(pathName);

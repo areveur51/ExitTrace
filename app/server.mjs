@@ -65,7 +65,7 @@ import {
   parsePage,
 } from "./lib/paginate.mjs";
 import { parseAgeFilter } from "./lib/age.mjs";
-import { catalogMainPath, filterPath, parseTagFilter } from "./lib/tags.mjs";
+import { filterPath, parseTagFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
   fillEmptyFromGrokipedia,
@@ -627,9 +627,8 @@ async function handle(req, res) {
       limit: meta.limit,
       offset: meta.offset,
     });
-    const mainPath = catalogMainPath(cat.path);
     const heading = gov ? "Officials" : cat.title;
-    const listPath = filterPath(mainPath, { tags, ...ageFilter });
+    const listPath = filterPath(cat.path, { tags, ...ageFilter });
     return sendHtml(
       res,
       layout({
@@ -643,7 +642,7 @@ async function handle(req, res) {
           ? "People tagged official — government, appointed, military, or law-enforcement roles. One card per person; tags are not exclusive."
           : `${cat.blurb} One card per person. Identity tags are independent of the event. Seeded rows only — not exhaustive.`,
         body: `${identityFilterNav(cat.path, { tags, ...ageFilter })}${ageFilterForm(
-          mainPath,
+          cat.path,
           { ...ageFilter, tags, deaths },
         )}${listSection(
           peopleList(rows, { showDeath: deaths }),

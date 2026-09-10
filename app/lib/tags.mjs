@@ -110,6 +110,7 @@ export function catalogMainPath(pathname) {
   const p = String(pathname || "").split("?")[0];
   if (p.startsWith("/deaths")) return "/deaths";
   if (p.startsWith("/indictments")) return "/indictments";
+  if (p.startsWith("/group-operations")) return "/group-operations";
   if (p === "/government") return "/government";
   return p;
 }
@@ -145,7 +146,14 @@ export function pathForTagFilter(mainPath, tags) {
 
 export function filterPath(basePath, filter) {
   const selected = normalizeTags(filter?.tags);
-  const path = pathForTagFilter(catalogMainPath(basePath), selected);
+  const main = catalogMainPath(basePath);
+  const here = String(basePath || "").split("?")[0];
+  const path =
+    main === "/group-operations" &&
+    here.startsWith("/group-operations/") &&
+    !selected.length
+      ? here
+      : pathForTagFilter(main, selected);
   const q = filterQuery({
     tags:
       PATH_TAGS[path] &&

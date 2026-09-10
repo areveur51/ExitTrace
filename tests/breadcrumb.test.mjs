@@ -44,6 +44,15 @@ test("list pages nest death and indictment indexes", () => {
     { href: "/indictments", label: "Indictments" },
     { href: "/indictments/non-civilians", label: "Non-civilians" },
   ]);
+  assert.deepEqual(breadcrumbItems({ path: "/group-operations" }), [
+    { href: "/", label: "Home" },
+    { href: "/group-operations", label: "Group Operations" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/group-operations/missing-kids" }), [
+    { href: "/", label: "Home" },
+    { href: "/group-operations", label: "Group Operations" },
+    { href: "/group-operations/missing-kids", label: "Missing Kids" },
+  ]);
 });
 
 test("detail pages link back through the parent catalog", () => {
@@ -82,6 +91,19 @@ test("detail pages link back through the parent catalog", () => {
       { href: "/deaths", label: "Deaths" },
       { href: "/deaths/celebrities", label: "Celebrities" },
       { href: "/people/mary-tyler-moore", label: "Mary Tyler Moore" },
+    ],
+  );
+  assert.deepEqual(
+    breadcrumbItems({
+      path: "/people/casey-vale",
+      categoryId: "missing_kids",
+      label: "Casey Vale",
+    }),
+    [
+      { href: "/", label: "Home" },
+      { href: "/group-operations", label: "Group Operations" },
+      { href: "/group-operations/missing-kids", label: "Missing Kids" },
+      { href: "/people/casey-vale", label: "Casey Vale" },
     ],
   );
   assert.deepEqual(

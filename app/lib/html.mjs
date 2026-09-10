@@ -5,7 +5,9 @@ import {
   formatUsd,
   initials,
   isDeathCategory,
+  isGroupOpsCategory,
   isIndictmentCategory,
+  GROUP_OPS_KEEP_IDS,
   PROMOTE_CATEGORY_IDS,
 } from "./categories.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
@@ -135,6 +137,7 @@ function keymapItems(activePath) {
     { key: "o", href: "/corona-comms" },
     { key: "i", href: "/indictments" },
     { key: "d", href: "/deaths" },
+    { key: "m", href: "/group-operations" },
     { key: "b", href: "/dashboard", label: "Dashboard" },
     { key: "u", href: "/unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
@@ -194,7 +197,13 @@ export function ageFilterForm(actionPath, { minAge, maxAge, tags, deaths } = {})
     ? `<input type="hidden" name="tags" value="${esc(selected.join(","))}">`
     : "";
   const label = deaths ? "Age at death" : "Age";
-  return `<form class="age-filter" method="get" action="${esc(catalogMainPath(actionPath))}" role="search">
+  const rawAction = String(actionPath || "").split("?")[0];
+  const action =
+    catalogMainPath(rawAction) === "/group-operations" &&
+    rawAction.startsWith("/group-operations/")
+      ? rawAction
+      : catalogMainPath(rawAction);
+  return `<form class="age-filter" method="get" action="${esc(action)}" role="search">`
     ${hidden}
     <span class="age-filter-label" id="age-filter-label">${label}</span>
     <div class="age-filter-fields" role="group" aria-labelledby="age-filter-label">
@@ -212,12 +221,22 @@ export function identityFilterNav(basePath, { tags = [], minAge, maxAge } = {}) 
   const age = { minAge, maxAge };
   const allHref = filterPath(main, { tags: locked, ...age });
   const options = [{ href: allHref, label: "All" }];
+  if (main === "/group-operations") {
+    for (const kind of GROUP_OPS_KEEP_IDS) {
+      const child = categoryById(kind);
+      if (!child) continue;
+      options.push({
+        href: filterPath(child.path, { tags: [], ...age }),
+        label: child.nav,
+      });
+    }
+  }
   for (const tag of IDENTITY_TAGS) {
     if (locked.includes(tag.id)) continue;
     const href = filterPath(main, { tags: [...new Set([...locked, tag.id])], ...age });
     options.push({ href, label: tag.nav });
   }
-  const currentHref = filterPath(main, { tags: selected, ...age });
+  const currentHref = filterPath(basePath, { tags: selected, ...age });
   const current = options.find((o) => o.href === currentHref) || options[0];
   const opts = options
     .map((o) => {
@@ -308,6 +327,15 @@ function categoryTrail(cat) {
     }
     return [
       { href: "/indictments", label: "Indictments" },
+      { href: cat.path, label: cat.nav },
+    ];
+  }
+  if (isGroupOpsCategory(cat.id)) {
+    if (cat.id === "group_ops_unspecified") {
+      return [{ href: "/group-operations", label: "Group Operations" }];
+    }
+    return [
+      { href: "/group-operations", label: "Group Operations" },
       { href: cat.path, label: cat.nav },
     ];
   }
@@ -622,6 +650,10 @@ export function deathsIndexNav() {
 
 export function indictmentsIndexNav() {
   return identityFilterNav("/indictments", { tags: [] });
+}
+
+export function groupOpsIndexNav() {
+  return identityFilterNav("/group-operations", { tags: [] });
 }
 
 export function dogList(rows) {
@@ -1137,6 +1169,7 @@ const ADD_CATEGORIES = [
   { id: "corona_comms", label: "Corona Comms" },
   { id: "indictment_civilian", label: "Indictments — civilians" },
   { id: "indictment_non_civilian", label: "Indictments — non-civilians" },
+  { id: "missing_kids", label: "Group Operations — missing kids" },
 ];
 
 export function addCiteRule() {

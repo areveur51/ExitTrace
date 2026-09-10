@@ -127,6 +127,8 @@ test("html pages render", async () => {
     "/deaths/celebrities",
     "/deaths/officials",
     "/deaths/ceos",
+    "/group-operations",
+    "/group-operations/missing-kids",
     "/unsorted",
     "/dog-comms",
     "/add",
@@ -238,6 +240,8 @@ test("every category list page ships a pager", async () => {
     "/deaths/celebrities",
     "/deaths/officials",
     "/deaths/ceos",
+    "/group-operations",
+    "/group-operations/missing-kids",
     "/unsorted",
     "/dog-comms",
   ];
@@ -284,11 +288,12 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /href="\/corona-comms"/);
   assert.match(res.body, /href="\/dashboard"/);
   assert.match(res.body, /href="\/indictments"/);
+  assert.match(res.body, /href="\/group-operations"/);
   assert.match(res.body, /href="\/unsorted"/);
   assert.match(res.body, /data-key="u"/);
   assert.match(res.body, /class="keymap-keys"/);
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "b", "u", "c", "n", "s", "w"]);
+  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "n", "s", "w"]);
   assert.doesNotMatch(res.body, /widgets\.js/);
 });
 
@@ -338,6 +343,11 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   assert.match(indictments.body, /value="\/indictments\/civilians"/);
   assert.match(indictments.body, /value="\/indictments\/non-civilians"/);
   assert.doesNotMatch(indictments.body, /person-card/);
+  const groupOps = await get("/group-operations");
+  assert.equal(groupOps.status, 200);
+  assert.match(groupOps.body, /value="\/group-operations\/missing-kids"/);
+  assert.match(groupOps.body, />Missing Kids</);
+  assert.doesNotMatch(groupOps.body, /person-card/);
   const corona = await get("/corona-comms");
   assert.equal(corona.status, 200);
   assert.match(corona.body, /Corona Comms/);
@@ -368,6 +378,7 @@ test("list pages lock Glass only and keep catalog copy, not pin LARP", async () 
   assert.match(list.body, /href="\/corona-comms"/);
   assert.match(list.body, /href="\/dashboard"/);
   assert.match(list.body, /href="\/indictments"/);
+  assert.match(list.body, /href="\/group-operations"/);
   assert.match(list.body, /href="\/unsorted"/);
   assert.match(list.body, /href="\/add"/);
   assert.match(list.body, /href="\/dog-comms"/);

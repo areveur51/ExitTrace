@@ -733,6 +733,7 @@ img.still.thumb {
 .keychip[data-key="s"] { color: var(--cyan); }
 .keychip[data-key="p"] { color: var(--cyan); }
 .keychip[data-key="o"] { color: var(--rose); }
+.keychip[data-key="m"] { color: var(--amber); }
 .keychip[data-key="w"] { color: var(--muted); }
 .keychip[data-key="h"] { color: var(--ink); }
 .keychip[aria-current="page"] {
