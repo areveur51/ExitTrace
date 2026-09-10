@@ -274,6 +274,8 @@ test("dog-comms page paginates stored rows and opens local snapshots on detail",
 test("home is TUI chrome with local search and tap-friendly catalog keys", async () => {
   const res = await get("/");
   assert.equal(res.status, 200);
+  assert.match(res.body, /class="tui hud tui-home"/);
+  assert.match(res.body, /class="home-stage"/);
   assert.match(res.body, /pixel-wordmark/);
   assert.match(res.body, /EXITTRACE|ExitTrace/);
   assert.match(res.body, /action="\/search"/);
