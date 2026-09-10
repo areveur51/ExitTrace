@@ -125,9 +125,27 @@ CREATE TABLE IF NOT EXISTS et_meta (
 );
 
 -- Queued add requests. Cites are supplied at process time, not invent at submit.
+CREATE TABLE IF NOT EXISTS operations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  event_date DATE NOT NULL,
+  announced_date DATE,
+  agencies JSONB NOT NULL DEFAULT '[]'::jsonb,
+  summary TEXT,
+  victim_count INTEGER,
+  arrest_count INTEGER,
+  tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  sources JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS operations_event_date_idx ON operations (event_date DESC);
+CREATE INDEX IF NOT EXISTS operations_tags_idx ON operations USING GIN (tags);
+
+-- Distinct from unique-person KEEP. No child-name column.
+
 CREATE TABLE IF NOT EXISTS add_requests (
   id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL CHECK (kind IN ('person', 'dog')),
+  kind TEXT NOT NULL CHECK (kind IN ('person', 'dog', 'operation')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'applied', 'rejected')),
   subject TEXT,
   category TEXT,
@@ -145,3 +163,7 @@ CREATE TABLE IF NOT EXISTS add_requests (
 );
 
 CREATE INDEX IF NOT EXISTS add_requests_status_idx ON add_requests (status, created_at ASC);
+
+ALTER TABLE add_requests DROP CONSTRAINT IF EXISTS add_requests_kind_check;
+ALTER TABLE add_requests ADD CONSTRAINT add_requests_kind_check
+  CHECK (kind IN ('person', 'dog', 'operation'));

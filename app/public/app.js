@@ -136,7 +136,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const reduceMotion =
     typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   function countUp(el) {
-    const end = Number(el.getAttribute("data-count") || 0);
+    const raw = el.getAttribute("data-count");
+    if (raw === null || raw === "") return;
+    const end = Number(raw);
     if (!Number.isFinite(end)) return;
     if (reduceMotion || end <= 0) {
       el.textContent = String(end);

@@ -29,6 +29,7 @@ import {
 import { isEligiblePortraitUrl, isPeopleMediaHref } from "./portrait.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import {
+  applyIdentifiedOperation,
   applyIdentifiedPerson,
   countDogComms,
   createAddRequest,
@@ -43,6 +44,7 @@ import {
   promoteSourcePost,
   updateAddRequest,
 } from "./store.mjs";
+import { validateIdentifiedOperationInput } from "./operation.mjs";
 
 export class AddError extends Error {
   constructor(message, code) {
@@ -52,7 +54,7 @@ export class AddError extends Error {
   }
 }
 
-export const ADD_KINDS = ["person", "dog"];
+export const ADD_KINDS = ["person", "dog", "operation"];
 export const ADD_STATUSES = ["pending", "applied", "rejected"];
 
 export function newAddRequestId(seed = "") {
@@ -65,13 +67,25 @@ export function newAddRequestId(seed = "") {
 }
 
 export function requestFingerprint(row) {
-  const kind = row?.kind === "dog" ? "dog" : "person";
+  const kind =
+    row?.kind === "dog" ? "dog" : row?.kind === "operation" ? "operation" : "person";
   if (kind === "dog") {
     return [
       "dog",
       handleKey(row.handle),
       canonicalPublicUrl(row.source_url) || "",
       String(row.posted_at || ""),
+    ].join(":");
+  }
+  if (kind === "operation") {
+    return [
+      "operation",
+      String(row.subject || row.name || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " "),
+      String(row.event_date || ""),
+      String(row.category || ""),
     ].join(":");
   }
   return [
@@ -162,7 +176,34 @@ function optionalNetWorth(input = {}) {
 export function validateQueueInput(input = {}) {
   const kind = String(input.kind || "person").trim();
   if (!ADD_KINDS.includes(kind)) {
-    throw new AddError("kind must be person or dog", "invalid_kind");
+    throw new AddError("kind must be person, operation, or dog", "invalid_kind");
+  }
+  if (kind === "operation") {
+    const subject = String(input.subject || input.name || "").trim();
+    if (!subject) {
+      throw new AddError("operation name is required", "missing_subject");
+    }
+    const category = String(input.category || input.tag || "").trim();
+    const event_date = optionalDate(input.event_date, "event_date");
+    const announced_date = optionalDate(input.announced_date, "announced_date");
+    const hint_url = optionalUrl(input.hint_url || input.source_url, "hint_url");
+    return {
+      kind,
+      subject,
+      category,
+      event_date,
+      announced_date,
+      hint_url,
+      handle: "",
+      source_url: hint_url,
+      posted_at: "",
+      cite_urls: [],
+      agencies: input.agencies || "",
+      summary: String(input.summary || input.reason || input.comments || "").trim(),
+      victim_count: input.victim_count ?? "",
+      arrest_count: input.arrest_count ?? "",
+      op_tags: category ? [category] : [],
+    };
   }
   if (kind === "person") {
     const subject = String(input.subject || input.name || "").trim();
@@ -287,6 +328,36 @@ export function validateProcessPersonInput(input = {}) {
   return { ...parsed, cite_urls: official, extra_urls: extra };
 }
 
+export function validateProcessOperationInput(input = {}) {
+  let parsed;
+  try {
+    parsed = validateIdentifiedOperationInput({
+      ...input,
+      name: input.subject || input.name,
+      tags: input.op_tags || input.tags || input.category,
+      agencies: input.agencies,
+      summary: input.summary || input.reason || input.comments,
+    });
+  } catch (err) {
+    if (err instanceof PromoteError) {
+      throw new AddError(err.message, err.code);
+    }
+    throw err;
+  }
+  const { official, extra } = officialCiteUrls(
+    Array.isArray(input.cite_urls) && input.cite_urls.length
+      ? input.cite_urls
+      : parsed.cite_urls.map((c) => c.raw),
+  );
+  if (official.length < CITE_FLOOR) {
+    throw new AddError(
+      `need at least ${CITE_FLOOR} official DOJ/gov/news-org cite URLs`,
+      "cites_floor",
+    );
+  }
+  return { ...parsed, cite_urls: official, extra_urls: extra };
+}
+
 export function validateProcessDogInput(input = {}) {
   const source_url = String(input.source_url || input.hint_url || "").trim();
   if (!source_url || !canonicalPublicUrl(source_url)) {
@@ -387,6 +458,16 @@ export function mergeProcessOverlay(request, overlay = {}) {
     last_day: String(overlay.last_day || request.last_day || "").trim(),
     announced: String(overlay.announced || request.announced || "").trim(),
     announced_date: String(overlay.announced_date || request.announced_date || "").trim(),
+    agencies: overlay.agencies !== undefined ? overlay.agencies : request.agencies,
+    victim_count:
+      overlay.victim_count !== undefined && overlay.victim_count !== ""
+        ? overlay.victim_count
+        : request.victim_count,
+    arrest_count:
+      overlay.arrest_count !== undefined && overlay.arrest_count !== ""
+        ? overlay.arrest_count
+        : request.arrest_count,
+    op_tags: overlay.op_tags || overlay.tags || request.op_tags || request.tags,
     reason: String(overlay.reason || request.reason || "").trim(),
     position: String(overlay.position || request.position || "").trim(),
     organization: String(overlay.organization || request.organization || "").trim(),
@@ -518,6 +599,18 @@ async function applyQueuedPerson(merged) {
   return { ...result, extra_urls };
 }
 
+async function applyQueuedOperation(merged) {
+  const parsed = validateProcessOperationInput(merged);
+  const result = await applyIdentifiedOperation({
+    ...parsed,
+    last_day: merged.last_day,
+    announced: merged.announced,
+    announced_date: merged.announced_date,
+    cite_urls: citeUrlList(parsed.cite_urls),
+  });
+  return { ...result, extra_urls: parsed.extra_urls };
+}
+
 async function applyQueuedDog(merged) {
   const parsed = validateProcessDogInput(merged);
   const existing = await findDogMatch({
@@ -576,7 +669,11 @@ export async function processAddRequest({ id, next, overlay } = {}) {
   const merged = mergeProcessOverlay(request, overlay || {});
   try {
     const result =
-      request.kind === "dog" ? await applyQueuedDog(merged) : await applyQueuedPerson(merged);
+      request.kind === "dog"
+        ? await applyQueuedDog(merged)
+        : request.kind === "operation"
+          ? await applyQueuedOperation(merged)
+          : await applyQueuedPerson(merged);
     const updated = await updateAddRequest(request.id, {
       ...merged,
       extra_urls: result.extra_urls || merged.extra_urls || [],
@@ -586,10 +683,12 @@ export async function processAddRequest({ id, next, overlay } = {}) {
         action: result.action,
         person_id: result.person?.id || "",
         dog_id: result.dog?.id || "",
+        operation_id: result.operation?.id || "",
         added_cites: result.added_cites || 0,
         extra_urls: result.extra_urls || [],
         people: result.people,
         dog_comms: result.dog_comms,
+        operations: result.operations,
       },
       processed_at: new Date().toISOString(),
     });

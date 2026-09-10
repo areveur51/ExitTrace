@@ -107,6 +107,7 @@ test("health is 200 on file backend", async () => {
   assert.equal(json.backend, "file");
   assert.equal(json.people, seed.people.length);
   assert.equal(json.dog_comms, seed.dog_comms.length);
+  assert.equal(json.operations, (seed.operations || []).length);
 });
 
 test("html pages render", async () => {
@@ -133,6 +134,7 @@ test("html pages render", async () => {
     "/dog-comms",
     "/add",
     "/add?mode=dog",
+    "/add?mode=operation",
     "/downloads",
     "/health",
   ];

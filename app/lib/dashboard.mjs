@@ -1,7 +1,8 @@
 /** Live unique-person dashboard ranks from the shared event columns. */
 
-import { categoryById, isDeathCategory, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
+import { categoryById, isDeathCategory, GROUP_OPS_KEEP_IDS, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
 import { EVENT_ATTR_FIELDS } from "./event-attrs.mjs";
+import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
 import { deathPersonEvent, personEvents } from "./promote.mjs";
 
 export const DASH_TOP_N = 5;
@@ -366,7 +367,57 @@ export function trendSeries(people, range) {
   };
 }
 
-export function buildDashboard(people, range) {
+function sumStoredCounts(rows, field) {
+  let sum = 0;
+  let seen = false;
+  for (const row of rows || []) {
+    const n = row?.[field];
+    if (n === null || n === undefined || n === "") continue;
+    const num = Number(n);
+    if (!Number.isInteger(num) || num < 0) continue;
+    sum += num;
+    seen = true;
+  }
+  return seen ? sum : null;
+}
+
+/** Operations whose event_date is in range. Empty counts stay empty. */
+export function filterOperationsToRange(operations, range) {
+  const rows = operations || [];
+  if (!range || range.id === "all") return rows.slice();
+  return rows.filter((row) => eventInDashRange(row.event_date, range));
+}
+
+/** Sum stored victim/arrest counts only. Null stays null — never invent. */
+export function operationStanding(operations, range, tag) {
+  let rows = filterOperationsToRange(operations, range);
+  const tags = normalizeOperationTags(tag);
+  if (tags.length) rows = rows.filter((row) => operationHasTag(row, tags));
+  return {
+    operations: rows.length,
+    victims: sumStoredCounts(rows, "victim_count"),
+    arrests: sumStoredCounts(rows, "arrest_count"),
+  };
+}
+
+/** Standing by signed operation tag, plus the all-ops rollup. */
+export function operationStandingByTag(operations, range) {
+  const resolved = resolveDashRange(range);
+  const all = operationStanding(operations, resolved);
+  const byTag = GROUP_OPS_KEEP_IDS.map((id) => {
+    const standing = operationStanding(operations, resolved, id);
+    const cat = categoryById(id);
+    return {
+      key: id,
+      label: operationTagLabel(id),
+      href: cat?.path || "/group-operations",
+      ...standing,
+    };
+  });
+  return { range: resolved, all, byTag };
+}
+
+export function buildDashboard(people, range, operations = []) {
   const rows = filterPeopleToRange(people, range);
   const dimensions = DASH_DIMENSIONS.map((dim) => {
     const ranked = rankDimension(rows, dim.id);
@@ -381,5 +432,6 @@ export function buildDashboard(people, range) {
     range: resolveDashRange(range),
     trends: trendSeries(rows),
     dimensions,
+    operations: operationStandingByTag(operations, range),
   };
 }

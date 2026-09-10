@@ -114,8 +114,9 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   assert.match(person.body, /value="corona_comms"/);
   assert.match(person.body, />Corona Comms</);
     assert.match(person.body, /value="indictment_civilian"/);
-    assert.match(person.body, /value="missing_kids"/);
+    assert.doesNotMatch(person.body, /value="missing_kids"/);
     assert.doesNotMatch(person.body, /value="group_ops_unspecified"/);
+    assert.match(person.body, /href="\/add\?mode=operation"/);
   assert.match(person.body, /value="indictment_non_civilian"/);
   assert.match(person.body, /name="event_date"/);
   assert.match(person.body, /name="birth_date"/);
@@ -148,6 +149,10 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   const htmlDog = addBody({ mode: "dog" });
   assert.match(htmlPerson, /Add a person/);
   assert.match(htmlDog, /Add official dog comms/);
+  const htmlOp = addBody({ mode: "operation" });
+  assert.match(htmlOp, /Add an operation/);
+  assert.match(htmlOp, /value="missing_kids"/);
+  assert.doesNotMatch(htmlOp, /value="group_ops_unspecified"/);
 });
 
 test("pending add request is stored and does not change gold counts", async () => {

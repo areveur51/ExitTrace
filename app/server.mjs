@@ -9,6 +9,7 @@ import {
   catalogListKinds,
   categoryByPath,
   isDeathCategory,
+  isGroupOpsCategory,
   isIndictmentCategory,
 } from "./lib/categories.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "./lib/env.mjs";
@@ -20,12 +21,15 @@ import {
   importSeed,
   migrateUniquePeople,
   countDogComms,
+  countOperations,
   countPeople,
   countSourcePosts,
   getDogComm,
+  getOperation,
   getPerson,
   getSourcePost,
   listDogComms,
+  listOperations,
   listPeople,
   listSourcePosts,
   hydrateFileMemory,
@@ -48,6 +52,8 @@ import {
   layout,
   listHead,
   listSection,
+  operationDetail,
+  operationList,
   pager,
   peopleList,
   personDetail,
@@ -167,11 +173,11 @@ function addPage({ mode, queued, error, values }) {
     heading: queued ? "Queued" : "Add",
     mode: queued ? undefined : mode,
     crumbLabel: queued ? "Queued" : undefined,
-    query: queued ? "queued" : mode === "dog" ? "add dog" : "add person",
+    query: queued ? "queued" : mode === "dog" ? "add dog" : mode === "operation" ? "add operation" : "add person",
     countLabel: queued ? "queued" : "add",
     lede: queued
       ? "The request is stored. A host process supplies cites and applies the row."
-      : "Queue a person or an official government dog-comm. Cites are not invented here.",
+      : "Queue a person, an operation, or an official government dog-comm. Cites are not invented here.",
     body: addBody({ mode, queued, error, values }),
   });
 }
@@ -229,6 +235,7 @@ async function healthPayload() {
     port,
     people: c.people,
     dog_comms: c.dog_comms,
+    operations: c.operations,
     source_posts: c.source_posts,
     byCategory: c.byCategory,
   };
@@ -246,7 +253,8 @@ async function handle(req, res) {
       send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
     }
-    const mode = fields.kind === "dog" ? "dog" : "person";
+    const mode =
+      fields.kind === "dog" ? "dog" : fields.kind === "operation" ? "operation" : "person";
     try {
       const { request } = await queueAddRequest(fields);
       if (!databaseUrl()) persistAddRequests(dataDir);
@@ -332,6 +340,27 @@ async function handle(req, res) {
       redundant: entry?.redundant ?? false,
     });
   }
+  if (p === "/api/operations") {
+    const tag = url.searchParams.get("tag") || url.searchParams.get("category") || undefined;
+    const tags = tag && tag !== "group_ops_unspecified" ? [tag] : [];
+    if (url.searchParams.has("page")) {
+      const total = await countOperations({ tags });
+      const meta = paginate({
+        total,
+        page: parsePage(url.searchParams),
+        pageSize: parseCookiePageSize(req.headers.cookie),
+      });
+      return sendJson(res, 200, {
+        operations: await listOperations({
+          tags,
+          limit: meta.limit,
+          offset: meta.offset,
+        }),
+        ...meta,
+      });
+    }
+    return sendJson(res, 200, { operations: await listOperations({ tags }) });
+  }
   if (p === "/api/dog-comms") {
     if (url.searchParams.has("page")) {
       const total = await countDogComms();
@@ -403,7 +432,7 @@ async function handle(req, res) {
         heading: "ExitTrace",
         mode: "home",
         query: "home",
-        countLabel: `${c.people} people · ${c.dog_comms} dog comms`,
+        countLabel: `${c.people} people · ${c.operations || 0} operations · ${c.dog_comms} dog comms`,
         body: homeBody({ version: APP_VERSION }),
       }),
     );
@@ -428,7 +457,7 @@ async function handle(req, res) {
         crumbLabel: q || "Search",
         query: q || "search",
         countLabel: q ? countText(q, meta, windowed.length) : "local",
-        lede: "Matches names, roles, summaries, handles, and stored post text in the local catalog.",
+        lede: "Matches names, operation titles, roles, summaries, handles, and stored post text in the local catalog.",
         body: listSection(
           searchBody(windowed, q),
           q
@@ -463,7 +492,8 @@ async function handle(req, res) {
   }
 
   if (p === "/add") {
-    const mode = url.searchParams.get("mode") === "dog" ? "dog" : "person";
+    const rawMode = url.searchParams.get("mode");
+    const mode = rawMode === "dog" || rawMode === "operation" ? rawMode : "person";
     return sendHtml(res, addPage({ mode }));
   }
 
@@ -481,6 +511,7 @@ async function handle(req, res) {
 
   if (p === "/dashboard" || p.startsWith("/dashboard/")) {
     const people = await listPeople();
+    const operations = await listOperations();
     const dim = dashDimensionByPath(p);
     const range = parseDashRangeSearch(url.searchParams, { cookie: req.headers.cookie });
     if (p !== "/dashboard" && !dim) {
@@ -521,7 +552,7 @@ async function handle(req, res) {
         }),
       );
     }
-    const model = buildDashboard(people, range);
+    const model = buildDashboard(people, range, operations);
     return sendHtml(
       res,
       layout({
@@ -576,6 +607,29 @@ async function handle(req, res) {
         crumbLabel: "Source post",
         countLabel: "detail",
         body: sourcePostDetail(row),
+      }),
+    );
+  }
+
+  if (p.startsWith("/operations/") && p !== "/operations/") {
+    const id = safeId(p.slice("/operations/".length));
+    const row = id ? await getOperation(id) : null;
+    if (!row) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    const tag = (row.tags || [])[0] || "group_ops_unspecified";
+    return sendHtml(
+      res,
+      layout({
+        title: row.name,
+        path: `/operations/${row.id}`,
+        heading: row.name,
+        query: row.name,
+        categoryId: tag,
+        crumbLabel: row.name,
+        countLabel: "detail",
+        body: operationDetail(row),
       }),
     );
   }
@@ -649,6 +703,46 @@ async function handle(req, res) {
           pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({
             title: heading,
+            total: meta.total,
+            index: 1,
+            of: rows.length,
+          }),
+        )}`,
+      }),
+    );
+  }
+  if (cat && cat.kind === "operation") {
+    const tags = isGroupOpsCategory(cat.id) && cat.id !== "group_ops_unspecified"
+      ? catalogListKinds(cat.id)
+      : [];
+    const pageSize = parseCookiePageSize(req.headers.cookie);
+    const listOpts = { tags };
+    const total = await countOperations(listOpts);
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize,
+    });
+    const rows = await listOperations({
+      ...listOpts,
+      limit: meta.limit,
+      offset: meta.offset,
+    });
+    return sendHtml(
+      res,
+      layout({
+        title: cat.title,
+        path: cat.path,
+        heading: cat.title,
+        query: cat.title,
+        pageSize,
+        countLabel: countText(cat.title, meta, rows.length),
+        lede: cat.blurb,
+        body: `${identityFilterNav(cat.path)}${listSection(
+          operationList(rows),
+          pager(meta, { basePath: cat.path, noun: "rows", pageSizes: PAGE_SIZES }),
+          listHead({
+            title: cat.title,
             total: meta.total,
             index: 1,
             of: rows.length,
@@ -741,13 +835,13 @@ async function boot() {
     const imported = await importSeed(pool, seed);
     const migrated = await migrateUniquePeople();
     console.log(
-      `[exittrace] postgres people=${imported.people} dog_comms=${imported.dog_comms} unique=${migrated.people}`,
+      `[exittrace] postgres people=${imported.people} dog_comms=${imported.dog_comms} operations=${imported.operations || 0} unique=${migrated.people}`,
     );
   } else {
     const mem = hydrateFileMemory(dataDir, seed);
     writeFileStore(dataDir, mem);
     console.log(
-      `[exittrace] file store people=${mem.people.length} dog_comms=${mem.dog_comms.length} source_posts=${mem.source_posts.length}`,
+      `[exittrace] file store people=${mem.people.length} dog_comms=${mem.dog_comms.length} operations=${(mem.operations || []).length} source_posts=${mem.source_posts.length}`,
     );
   }
 

@@ -21,15 +21,10 @@ const INDICTMENT_LIST_PATHS = {
   indictment_non_civilian: "/indictments/non-civilians",
 };
 
-const GROUP_OPS_LIST_PATHS = {
-  missing_kids: "/group-operations/missing-kids",
-};
-
 export function listPathForPerson(category) {
   const id = String(category || "").trim();
   if (DEATH_LIST_PATHS[id]) return DEATH_LIST_PATHS[id];
   if (INDICTMENT_LIST_PATHS[id]) return INDICTMENT_LIST_PATHS[id];
-  if (GROUP_OPS_LIST_PATHS[id]) return GROUP_OPS_LIST_PATHS[id];
   const cat = categoryById(id);
   if (!cat || cat.kind !== "person") {
     throw new DisplayError(
@@ -60,6 +55,20 @@ export function listPathForPerson(category) {
 
 export function listPathForDog() {
   return "/dog-comms";
+}
+
+export function listPathForOperation(operation) {
+  const tags = Array.isArray(operation?.tags) ? operation.tags : [operation].filter(Boolean);
+  if (tags.includes("missing_kids") || operation === "missing_kids") {
+    return "/group-operations/missing-kids";
+  }
+  if (operation === "group_ops_unspecified") {
+    throw new DisplayError(
+      "/group-operations lists every operation; missing-kids is the tagged list page",
+      "group_ops_index",
+    );
+  }
+  return "/group-operations";
 }
 
 export async function fetchCatalogHtml(pathname) {
@@ -115,6 +124,20 @@ function hasDogOnList(html, dog) {
 function hasDogOnDetail(html, dog) {
   const handle = String(dog.handle || "").trim();
   return html.includes(handle) && html.includes(dog.id);
+}
+
+function hasOperationOnList(html, operation) {
+  const href = `/operations/${operation.id}`;
+  const name = String(operation.name || "").trim();
+  return html.includes(`href="${href}"`) && html.includes(name);
+}
+
+function hasOperationOnDetail(html, operation) {
+  const name = String(operation.name || "").trim();
+  return (
+    html.includes(name) &&
+    (html.includes(`href="/operations/${operation.id}"`) || html.includes(operation.id))
+  );
 }
 
 async function walkListPages(listPath, found) {
@@ -199,9 +222,42 @@ export async function checkDogDisplayed(dog) {
   return { list, detail: detailPath };
 }
 
+export async function checkOperationDisplayed(operation) {
+  if (!operation?.id) {
+    throw new DisplayError("operation id is required for the display check", "missing_operation");
+  }
+  const listPath = listPathForOperation(operation);
+  const list = await walkListPages(listPath, (html) => hasOperationOnList(html, operation));
+  if (!list) {
+    throw new DisplayError(
+      `operation ${operation.id} is not on ${listPath} HTML (health counts are not enough)`,
+      "list_missing",
+    );
+  }
+  const parent = await walkListPages("/group-operations", (html) =>
+    hasOperationOnList(html, operation),
+  );
+  if (!parent) {
+    throw new DisplayError(
+      `operation ${operation.id} is not on /group-operations HTML (parent lists every operation)`,
+      "list_missing",
+    );
+  }
+  const detailPath = `/operations/${operation.id}`;
+  const detail = await fetchCatalogHtml(detailPath);
+  if (detail.status !== 200 || !hasOperationOnDetail(detail.body, operation)) {
+    throw new DisplayError(
+      `operation ${operation.id} is not on ${detailPath} HTML (health counts are not enough)`,
+      "detail_missing",
+    );
+  }
+  return { list, detail: detailPath };
+}
+
 export async function assertDisplayed(result) {
   if (result?.person) return checkPersonDisplayed(result.person);
   if (result?.dog) return checkDogDisplayed(result.dog);
+  if (result?.operation) return checkOperationDisplayed(result.operation);
   throw new DisplayError(
     "insert/promote is not done until list + detail HTML show the row",
     "missing_row",

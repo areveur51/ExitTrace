@@ -132,11 +132,14 @@ test("unspecified classify and display-check paths stay fail-closed", () => {
   );
   assert.throws(
     () => listPathForPerson("group_ops_unspecified"),
-    (err) => err instanceof DisplayError && err.code === "group_ops_index",
+    (err) => err instanceof DisplayError && err.code === "invalid_list_path",
+  );
+  assert.throws(
+    () => listPathForPerson("missing_kids"),
+    (err) => err instanceof DisplayError && err.code === "invalid_list_path",
   );
   assert.equal(listPathForPerson("death_celebrity"), "/deaths/celebrities");
   assert.equal(listPathForPerson("indictment_civilian"), "/indictments/civilians");
-  assert.equal(listPathForPerson("missing_kids"), "/group-operations/missing-kids");
   assert.equal(listPathForPerson("corona_comms"), "/corona-comms");
 });
 

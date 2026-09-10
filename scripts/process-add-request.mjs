@@ -37,6 +37,7 @@ function usage(exitCode = 0) {
   [--birth-date YYYY-MM-DD] [--country-of-origin "…"]
   [--position "…"] [--organization "…"] [--reason "…"] [--comments "…"]
   [--country "…"] [--branch "…"] [--military]
+  [--agencies "…"] [--victim-count N] [--arrest-count N] [--announced-date YYYY-MM-DD]
   [--net-worth <USD>] [--net-worth-source <Forbes|Bloomberg URL>] [--net-worth-note "…"]
 
 Host-side process hook (scratch directory, two turns, one envelope):
@@ -61,6 +62,10 @@ Fail-closed:
   null and the note says no published Forbes/Bloomberg estimate was
   located. Do not overwrite existing gold net-worth.
   dog comms need an official government handle or official post URL, plus date.
+  operations need a name, event_date, agencies, summary, a signed tag, and
+  at least ${CITE_FLOOR} official DOJ/gov/news-org cite URLs. Victim and
+  arrest counts stay empty unless a cite states them. Named children are
+  not stored. Do not invent counts.
 
 If the person already exists (id/slug or normalized name), the new KEEP kind
 is attached as an event. A second person row is not created. Each event is
@@ -120,6 +125,11 @@ function parseArgs(argv) {
     else if (arg === "--country") out.country = take();
     else if (arg === "--branch") out.branch = take();
     else if (arg === "--comments") out.comments = take();
+    else if (arg === "--agencies") out.agencies = take();
+    else if (arg === "--victim-count" || arg === "--victim_count") out.victim_count = take();
+    else if (arg === "--arrest-count" || arg === "--arrest_count") out.arrest_count = take();
+    else if (arg === "--announced-date" || arg === "--announced_date") out.announced_date = take();
+    else if (arg === "--tag") out.category = take();
     else if (arg === "--birth-date" || arg === "--birth_date") out.birth_date = take();
     else if (arg === "--country-of-origin" || arg === "--origin-country") {
       out.country_of_origin = take();
@@ -194,7 +204,9 @@ if (!databaseUrl()) {
 
 const target = result.person
   ? `person=${result.person.id} people=${result.people}`
-  : `dog=${result.dog?.id || ""} dog_comms=${result.dog_comms}`;
+  : result.operation
+    ? `operation=${result.operation.id} operations=${result.operations}`
+    : `dog=${result.dog?.id || ""} dog_comms=${result.dog_comms}`;
 console.log(
   `add-process ${result.action} ${target} cites=${result.person?.sources?.length || 0} added=${result.added_cites || 0} request=${result.request.id}`,
 );

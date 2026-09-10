@@ -97,19 +97,19 @@ export const CATEGORIES = [
   },
   {
     id: "missing_kids",
-    kind: "person",
+    kind: "operation",
     title: "Group Operations — missing kids",
     nav: "Missing Kids",
     path: "/group-operations/missing-kids",
-    blurb: "Missing-kids cases recorded by contemporaneous news reports.",
+    blurb: "Operations tagged missing kids. Lists operations, not people. Named children are not stored.",
   },
   {
     id: "group_ops_unspecified",
-    kind: "person",
+    kind: "operation",
     title: "Group Operations",
     nav: "Group Operations",
     path: "/group-operations",
-    blurb: "Group operations recorded by contemporaneous news reports. Parent lists every signed child kind.",
+    blurb: "Identified operations. Parent lists every signed operation. Child paths filter by tag. Named children are not stored.",
   },
   {
     id: "unsorted",
@@ -152,7 +152,6 @@ export const PROMOTE_CATEGORY_IDS = [
   "corona_comms",
   "indictment_civilian",
   "indictment_non_civilian",
-  "missing_kids",
 ];
 
 /** KEEP kinds classify may write for identified death rows. */
@@ -168,7 +167,7 @@ export const INDICTMENT_KEEP_IDS = [
   "indictment_non_civilian",
 ];
 
-/** KEEP kinds classify may write for identified group-operations rows. */
+/** Signed operation filter tags. Not unique-person KEEP kinds. Later siblings append here. */
 export const GROUP_OPS_KEEP_IDS = ["missing_kids"];
 
 const IMPORT_ALIASES = {
@@ -221,10 +220,14 @@ export function isGroupOpsKeepKind(id) {
   return GROUP_OPS_KEEP_IDS.includes(String(id));
 }
 
-/** Parent index plus signed KEEP children. Later siblings append to GROUP_OPS_KEEP_IDS. */
+/** Parent index plus signed operation-tag children. Later siblings append to GROUP_OPS_KEEP_IDS. */
 export function isGroupOpsCategory(id) {
   const key = String(id);
   return key === "group_ops_unspecified" || isGroupOpsKeepKind(key);
+}
+
+export function isOperationCategory(id) {
+  return isGroupOpsCategory(id);
 }
 
 export function isIndexCategory(id) {
@@ -236,7 +239,7 @@ export function isIndexCategory(id) {
   );
 }
 
-/** Person kinds a catalog path lists. Parents are the KEEP union; children are one kind. */
+/** Catalog path kinds. Person parents are the KEEP union; group-ops parents are signed operation tags. */
 export function catalogListKinds(id) {
   const key = String(id);
   if (key === "death_unspecified") return DEATH_KEEP_IDS.slice();

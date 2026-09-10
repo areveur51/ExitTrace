@@ -11,6 +11,7 @@ import {
   dashRangeHref,
   dashRankEvents,
   eventInDashRange,
+  operationStanding,
   explicitAttr,
   occupationAtDeath,
   filterPeopleToRange,
@@ -313,6 +314,17 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /data-count=/);
   assert.match(dash.body, /class="dash-pt"|class="dash-bar"/);
   assert.match(dash.body, /class="dash-tip"/);
+  assert.match(dash.body, /Group Operations standing/);
+  assert.match(dash.body, /Victims/);
+  assert.match(dash.body, /Arrests/);
+  assert.match(
+    dash.body,
+    /dash-stat-label">Victims<\/span> <span class="dash-count" data-count="">—<\/span>/,
+  );
+  assert.match(
+    dash.body,
+    /dash-stat-label">Arrests<\/span> <span class="dash-count" data-count="">—<\/span>/,
+  );
   assert.doesNotMatch(dash.body, /webgl|WebGL|three\.js|dash-3d|preserveDrawingBuffer/i);
   const orgBlock = dash.body.split("Organization")[1] || "";
   assert.match(orgBlock, /No rows on this page/);
@@ -347,6 +359,30 @@ test("dashboard breadcrumbs nest children under Dashboard", () => {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/position", label: "Position" },
   ]);
+});
+
+test("operation standing does not invent victim or arrest counts", () => {
+  const empty = operationStanding([]);
+  assert.equal(empty.operations, 0);
+  assert.equal(empty.victims, null);
+  assert.equal(empty.arrests, null);
+  const known = operationStanding([
+    {
+      event_date: "2024-08-01",
+      tags: ["missing_kids"],
+      victim_count: 12,
+      arrest_count: null,
+    },
+    {
+      event_date: "2024-08-02",
+      tags: ["missing_kids"],
+      victim_count: null,
+      arrest_count: 3,
+    },
+  ]);
+  assert.equal(known.operations, 2);
+  assert.equal(known.victims, 12);
+  assert.equal(known.arrests, 3);
 });
 
 test("topN and week keys stay fail-closed", () => {
@@ -438,6 +474,8 @@ test("app.js persists dash range and paints hover tooltips without a fetch", () 
   assert.match(js, /bindDashTips|dash-tip/);
   assert.match(js, /data-date/);
   assert.match(js, /data-count/);
+  assert.match(js, /getAttribute\("data-count"\)/);
+  assert.match(js, /raw === null \|\| raw === ""/);
   assert.doesNotMatch(js, /fetch\(/);
   assert.doesNotMatch(js, /webgl|WebGL|THREE|getContext\(\s*["']webgl/i);
 });
