@@ -335,10 +335,10 @@ function categoryTrail(cat) {
   }
   if (isGroupOpsCategory(cat.id)) {
     if (cat.id === "group_ops_unspecified") {
-      return [{ href: "/group-operations", label: "Group Operations" }];
+      return [{ href: "/group-operations", label: "Operations" }];
     }
     return [
-      { href: "/group-operations", label: "Group Operations" },
+      { href: "/group-operations", label: "Operations" },
       { href: cat.path, label: cat.nav },
     ];
   }
@@ -375,7 +375,7 @@ export function breadcrumbItems({
   }
   if (p.startsWith("/operations/") && p !== "/operations") {
     const trail = categoryTrail(categoryById(categoryId) || categoryById("group_ops_unspecified"));
-    items.push(...(trail.length ? trail : [{ href: "/group-operations", label: "Group Operations" }]));
+    items.push(...(trail.length ? trail : [{ href: "/group-operations", label: "Operations" }]));
     items.push({ href: p, label: label || "Operation" });
     return items;
   }
@@ -1261,7 +1261,7 @@ function operationStandingBlock(standing) {
       </table>`
     : `<p class="empty">No rows on this page.</p>`;
   return `<section class="dash-block" data-dash-dim="operations">
-    ${boxFrame("Group Operations standing", table, { extraClass: "dash-box" })}
+    ${boxFrame("Operations standing", table, { extraClass: "dash-box" })}
   </section>`;
 }
 

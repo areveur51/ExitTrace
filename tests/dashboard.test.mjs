@@ -314,7 +314,7 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /data-count=/);
   assert.match(dash.body, /class="dash-pt"|class="dash-bar"/);
   assert.match(dash.body, /class="dash-tip"/);
-  assert.match(dash.body, /Group Operations standing/);
+  assert.match(dash.body, /Operations standing/);
   assert.match(dash.body, /Victims/);
   assert.match(dash.body, /Arrests/);
   assert.match(

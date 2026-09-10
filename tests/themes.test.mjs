@@ -107,7 +107,7 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.match(footer, /\]<\/span> Corona</);
   assert.match(footer, /\]<\/span> Dashboard</);
   assert.match(footer, /\]<\/span> Indictments</);
-  assert.match(footer, /\]<\/span> Group Operations</);
+  assert.match(footer, /\]<\/span> Operations</);
   assert.match(footer, /\]<\/span> Unsorted</);
   assert.doesNotMatch(footer, /CLOSE HACK|BREACH PROTOCOL|SurveilTrack|ROOT@/i);
 });

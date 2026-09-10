@@ -88,10 +88,12 @@ test("group-ops IA is an operation lane: parent lists all, child filters by tag"
   const kids = categoryByPath("/group-operations/missing-kids");
   assert.equal(index.id, "group_ops_unspecified");
   assert.equal(index.kind, "operation");
-  assert.equal(index.nav, "Group Operations");
+  assert.equal(index.nav, "Operations");
+  assert.equal(index.title, "Operations");
   assert.equal(kids.id, "missing_kids");
   assert.equal(kids.kind, "operation");
   assert.equal(kids.nav, "Missing Kids");
+  assert.equal(kids.title, "Operations — missing kids");
   assert.deepEqual(GROUP_OPS_KEEP_IDS, ["missing_kids"]);
   assert.deepEqual(catalogListKinds("group_ops_unspecified"), ["missing_kids"]);
   assert.deepEqual(catalogListKinds("missing_kids"), ["missing_kids"]);
@@ -128,31 +130,35 @@ test("group-ops routes render empty HUD lists; parent is not a person dump", asy
   }
 
   const index = await requestPage("/group-operations");
+  assert.match(index.body, /<title>Operations · ExitTrace/);
   assert.match(index.body, /value="\/group-operations\/missing-kids"/);
   assert.match(index.body, />Missing Kids</);
   assert.match(index.body, />All</);
+  assert.doesNotMatch(index.body, /Group Operations/);
   assert.doesNotMatch(index.body, />Civilians</);
   assert.doesNotMatch(index.body, /source-card/);
   assert.doesNotMatch(index.body, /\/group-operations\/(?!missing-kids)/);
 
   const kids = await requestPage("/group-operations/missing-kids");
+  assert.match(kids.body, /<title>Operations — missing kids · ExitTrace/);
   assert.match(kids.body, /data-key="m"/);
   assert.match(kids.body, /href="\/group-operations"/);
   assert.match(kids.body, /value="\/group-operations\/missing-kids"[^>]*selected/);
   assert.match(kids.body, /Missing Kids/);
+  assert.doesNotMatch(kids.body, /Group Operations/);
   assert.match(kids.body, /aria-label="Identity filters"/);
   assert.doesNotMatch(kids.body, />Age</);
   assert.doesNotMatch(kids.body, /Age at death/);
   assert.doesNotMatch(kids.body, /href="\/deaths\/celebrities"/);
 });
 
-test("home and add nav know Group Operations; person form omits missing_kids", async () => {
+test("home and add nav know Operations; person form omits missing_kids", async () => {
   setMemory(goldSeed());
   const home = await requestPage("/");
   assert.equal(home.status, 200);
   assert.match(home.body, /href="\/group-operations"/);
   assert.match(home.body, /data-key="m"/);
-  assert.match(home.body, /Group Operations/);
+  assert.match(home.body, /\]<\/span> Operations</);
 
   const add = await requestPage("/add");
   assert.equal(add.status, 200);
@@ -324,7 +330,7 @@ test("operation is not a person KEEP annotation", async () => {
   const op = await applyIdentifiedOperation(OP_LOCK);
   assert.equal(op.action, "created");
   const vale = await requestPage("/people/casey-vale");
-  assert.doesNotMatch(vale.body, /Group Operations — missing kids/);
+  assert.doesNotMatch(vale.body, /Operations — missing kids/);
   const list = await requestPage("/group-operations/missing-kids");
   assert.doesNotMatch(list.body, /Casey Vale/);
   assert.match(list.body, /Operation Restore Justice/);
@@ -380,7 +386,7 @@ test("dashboard standing sums stored counts only and respects date range", async
   assert.ok(byTag.byTag.some((r) => r.key === "missing_kids" && r.victims === 16));
 
   const dash = await requestPage("/dashboard");
-  assert.match(dash.body, /Group Operations standing/);
+  assert.match(dash.body, /Operations standing/);
   assert.match(dash.body, /Victims/);
   assert.match(dash.body, /Arrests/);
   assert.match(dash.body, /Missing Kids/);
