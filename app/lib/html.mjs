@@ -771,7 +771,7 @@ export function homeBody({ version }) {
     <form class="tui-search" action="/search" method="get" role="search">
       <label class="tui-search-label">
         <span class="chev" aria-hidden="true">〉</span>
-        <input type="search" name="q" placeholder="Search people, dog comms, and unsorted posts..." autocomplete="off" enterkeyhint="search">
+        <input type="search" name="q" placeholder="Search people, operations, dog comms, and unsorted posts..." autocomplete="off" enterkeyhint="search">
       </label>
     </form>
     <p class="home-tag">Sourced public-role exits and official government dog-comms since 2017. A seed set, not a census.</p>`;
@@ -952,7 +952,7 @@ export function operationDetail(row) {
     row.announced_date && row.announced_date !== row.event_date
       ? `<p class="meta-line">Announced · <time datetime="${esc(row.announced_date)}">${esc(formatDate(row.announced_date))}</time></p>`
       : "";
-  return `<article class="detail operation-detail">
+  return `<article class="detail operation-detail" data-operation-id="${esc(row.id)}">
     ${boxFrame(
       "Operation",
       `<div class="meta-pane">

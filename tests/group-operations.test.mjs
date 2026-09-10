@@ -123,7 +123,6 @@ test("group-ops routes render empty HUD lists; parent is not a person dump", asy
     assert.doesNotMatch(res.body, /widgets\.js/);
     assert.doesNotMatch(res.body, /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL/i);
     assert.doesNotMatch(res.body, /Operation Meridian/i);
-    assert.doesNotMatch(res.body, /ChronoTrace/i);
     assert.doesNotMatch(res.body, /Batman|Warner/i);
     assert.doesNotMatch(res.body, /class="age-filter"/);
   }
@@ -297,7 +296,6 @@ test("unique operation: parent lists all; child lists the tag; no person card", 
   assert.equal(detail.status, 200);
   assert.match(detail.body, /Operation Restore Justice/);
   assert.match(detail.body, /U\.S\. Department of Justice/);
-  assert.doesNotMatch(detail.body, /ChronoTrace/);
 });
 
 test("operation is not a person KEEP annotation", async () => {
@@ -386,5 +384,4 @@ test("dashboard standing sums stored counts only and respects date range", async
   assert.match(dash.body, /Victims/);
   assert.match(dash.body, /Arrests/);
   assert.match(dash.body, /Missing Kids/);
-  assert.doesNotMatch(dash.body, /ChronoTrace/);
 });

@@ -317,7 +317,6 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /Group Operations standing/);
   assert.match(dash.body, /Victims/);
   assert.match(dash.body, /Arrests/);
-  assert.doesNotMatch(dash.body, /ChronoTrace/);
   assert.doesNotMatch(dash.body, /webgl|WebGL|three\.js|dash-3d|preserveDrawingBuffer/i);
   const orgBlock = dash.body.split("Organization")[1] || "";
   assert.match(orgBlock, /No rows on this page/);

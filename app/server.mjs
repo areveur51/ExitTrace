@@ -457,7 +457,7 @@ async function handle(req, res) {
         crumbLabel: q || "Search",
         query: q || "search",
         countLabel: q ? countText(q, meta, windowed.length) : "local",
-        lede: "Matches names, roles, summaries, handles, and stored post text in the local catalog.",
+        lede: "Matches names, operation titles, roles, summaries, handles, and stored post text in the local catalog.",
         body: listSection(
           searchBody(windowed, q),
           q

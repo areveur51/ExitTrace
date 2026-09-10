@@ -136,7 +136,6 @@ test("main event pages expose identity and age filters", async () => {
     "/corona-comms",
     "/indictments",
     "/deaths",
-    "/group-operations",
     "/government",
   ]) {
     const res = await requestPage(pathName);
@@ -166,4 +165,18 @@ test("main event pages expose identity and age filters", async () => {
   const gov = await requestPage("/government");
   assert.match(gov.body, /data-key="g"/);
   assert.match(gov.body, />Officials</);
+});
+
+test("group-ops lists tag filters, not person identity or age", async () => {
+  setMemory(goldSeed());
+  for (const pathName of ["/group-operations", "/group-operations/missing-kids"]) {
+    const res = await requestPage(pathName);
+    assert.equal(res.status, 200, pathName);
+    assert.match(res.body, />All</);
+    assert.match(res.body, />Missing Kids</);
+    assert.doesNotMatch(res.body, />Civilians</);
+    assert.doesNotMatch(res.body, />Celebrities</);
+    assert.doesNotMatch(res.body, /name="min_age"/);
+    assert.doesNotMatch(res.body, /class="person-card"/);
+  }
 });
