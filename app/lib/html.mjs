@@ -1241,10 +1241,10 @@ function ageStandingBlock(bands, range) {
       href: dashRangeHref(DASH_AGE.path, range, { band: row.key }),
     };
   });
-  const more = `<p class="dash-more"><a class="keychip" href="${esc(dashRangeHref(DASH_AGE.path, range))}">All by Age</a></p>`;
-  return `<section class="dash-block" data-dash-dim="age" aria-label="Age standing">
+  const more = `<p class="dash-more"><a class="keychip" href="${esc(dashRangeHref(DASH_AGE.path, range))}" aria-label="All ages">All ages</a></p>`;
+  return `<section class="dash-block" data-dash-dim="age" aria-label="Counts by Age">
     ${boxFrame(
-      `Top ${Math.max(ranked.length, 1)} by Age`,
+      "Counts by Age",
       `${dashRankTable(ranked, {
         selfPath: DASH_AGE.path,
         rowData: (row) =>
@@ -1258,7 +1258,7 @@ function ageStandingBlock(bands, range) {
 export function ageBandFilterNav({ band, range } = {}) {
   const current = parseAgeBand(band);
   const options = [
-    { href: dashRangeHref(DASH_AGE.path, range), label: "All", id: "all" },
+    { href: dashRangeHref(DASH_AGE.path, range), label: "All ages", id: "all" },
     ...AGE_BANDS.map((b) => ({
       href: dashRangeHref(DASH_AGE.path, range, { band: b.id }),
       label: b.label,

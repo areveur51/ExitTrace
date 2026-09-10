@@ -529,7 +529,7 @@ async function handle(req, res) {
       });
       const windowed = matched.slice(meta.offset, meta.offset + meta.limit);
       const listPath = dashRangeHref(DASH_AGE.path, range, band ? { band: band.id } : {});
-      const heading = band ? `Age · ${band.label}` : "Age";
+      const heading = band ? `Age · ${band.label}` : "Counts by Age";
       return sendHtml(
         res,
         layout({
