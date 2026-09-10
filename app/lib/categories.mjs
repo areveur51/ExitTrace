@@ -98,7 +98,7 @@ export const CATEGORIES = [
   {
     id: "missing_kids",
     kind: "operation",
-    title: "Group Operations — missing kids",
+    title: "Operations — missing kids",
     nav: "Missing Kids",
     path: "/group-operations/missing-kids",
     blurb: "Operations tagged missing kids. Lists operations, not people. Named children are not stored.",
@@ -106,8 +106,8 @@ export const CATEGORIES = [
   {
     id: "group_ops_unspecified",
     kind: "operation",
-    title: "Group Operations",
-    nav: "Group Operations",
+    title: "Operations",
+    nav: "Operations",
     path: "/group-operations",
     blurb: "Identified operations. Parent lists every signed operation. Child paths filter by tag. Named children are not stored.",
   },

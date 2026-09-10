@@ -12,6 +12,7 @@ import {
   dashRankEvents,
   eventInDashRange,
   operationStanding,
+  operationStandingByTag,
   explicitAttr,
   occupationAtDeath,
   filterPeopleToRange,
@@ -28,7 +29,9 @@ import { breadcrumbItems } from "../app/lib/html.mjs";
 import { handle } from "../app/server.mjs";
 import {
   applyIdentifiedPerson,
+  applyIdentifiedOperation,
   countPeople,
+  listOperations,
   loadSeedFile,
   setMemory,
 } from "../app/lib/store.mjs";
@@ -83,6 +86,9 @@ test("dashboard dimensions stay ExitTrace kinds and event columns, not invented 
   const seed = goldSeed();
   const model = buildDashboard(seed.people);
   assert.equal(model.people, 72);
+  assert.equal(model.operations.all.operations, 0);
+  assert.equal(model.operations.all.victims, null);
+  assert.equal(model.operations.all.arrests, null);
   assert.ok(model.trends.events >= 72);
   const reason = model.dimensions.find((d) => d.id === "reason");
   const labels = reason.ranked.map((r) => r.label);
@@ -314,9 +320,13 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /data-count=/);
   assert.match(dash.body, /class="dash-pt"|class="dash-bar"/);
   assert.match(dash.body, /class="dash-tip"/);
-  assert.match(dash.body, /Group Operations standing/);
+  assert.match(dash.body, /Operations standing/);
   assert.match(dash.body, /Victims/);
   assert.match(dash.body, /Arrests/);
+  assert.match(
+    dash.body,
+    /dash-stat-label">Operations<\/span> <span class="dash-count" data-count="0">0<\/span>/,
+  );
   assert.match(
     dash.body,
     /dash-stat-label">Victims<\/span> <span class="dash-count" data-count="">—<\/span>/,
@@ -383,6 +393,107 @@ test("operation standing does not invent victim or arrest counts", () => {
   assert.equal(known.operations, 2);
   assert.equal(known.victims, 12);
   assert.equal(known.arrests, 3);
+  const liveShape = operationStanding([
+    {
+      id: "operation-restore-justice",
+      event_date: "2024-08-01",
+      tags: ["missing_kids"],
+      victim_count: 115,
+      arrest_count: 205,
+    },
+    {
+      id: "operation-iron-pursuit",
+      event_date: "2024-09-01",
+      tags: ["missing_kids"],
+      victim_count: null,
+      arrest_count: null,
+    },
+  ]);
+  assert.equal(liveShape.operations, 2);
+  assert.equal(liveShape.victims, 115);
+  assert.equal(liveShape.arrests, 205);
+});
+
+test("dashboard standing rolls up every operation entity and skips NULL counts", async () => {
+  setMemory(goldSeed());
+  const peopleOnly = buildDashboard(goldSeed().people, { id: "all" }, []);
+  assert.equal(peopleOnly.operations.all.operations, 0);
+  assert.equal(peopleOnly.operations.all.victims, null);
+  assert.equal(peopleOnly.operations.all.arrests, null);
+
+  await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    category: "arrests",
+    cite_urls: CITES,
+  });
+  const afterPerson = buildDashboard(goldSeed().people, { id: "all" }, await listOperations());
+  assert.equal(afterPerson.operations.all.operations, 0);
+  assert.equal(afterPerson.operations.all.victims, null);
+
+  const restore = await applyIdentifiedOperation({
+    name: "Operation Restore Justice",
+    event_date: "2024-08-01",
+    agencies: ["U.S. Department of Justice"],
+    summary: "Federal operation recorded by official public cites.",
+    tags: ["missing_kids"],
+    cite_urls: [
+      "https://www.example.com/news/restore-justice",
+      "https://www.justice.gov/opa/pr/restore-justice",
+    ],
+    victim_count: 115,
+    arrest_count: 205,
+  });
+  assert.equal(restore.action, "created");
+  const pursuit = await applyIdentifiedOperation({
+    name: "Operation Iron Pursuit",
+    event_date: "2024-09-01",
+    agencies: ["U.S. Department of Justice"],
+    summary: "Second tagged operation; counts stay blank unless a cite states them.",
+    tags: ["missing_kids"],
+    cite_urls: [
+      "https://www.example.com/news/iron-pursuit",
+      "https://www.justice.gov/opa/pr/iron-pursuit",
+    ],
+  });
+  assert.equal(pursuit.action, "created");
+  assert.equal(pursuit.operation.victim_count, null);
+  assert.equal(pursuit.operation.arrest_count, null);
+
+  const ops = await listOperations();
+  assert.equal(ops.length, 2);
+  assert.ok(ops.every((row) => (row.tags || []).includes("missing_kids")));
+  const model = buildDashboard(goldSeed().people, { id: "all" }, ops);
+  assert.equal(model.operations.all.operations, 2);
+  assert.equal(model.operations.all.victims, 115);
+  assert.equal(model.operations.all.arrests, 205);
+  const kids = operationStandingByTag(ops).byTag.find((r) => r.key === "missing_kids");
+  assert.equal(kids.operations, 2);
+  assert.equal(kids.victims, 115);
+  assert.equal(kids.arrests, 205);
+  assert.equal(kids.label, "Missing Kids");
+
+  const dash = await requestPage("/dashboard");
+  assert.equal(dash.status, 200);
+  assert.match(
+    dash.body,
+    /dash-stat-label">Operations<\/span> <span class="dash-count" data-count="2">2<\/span>/,
+  );
+  assert.match(
+    dash.body,
+    /dash-stat-label">Victims<\/span> <span class="dash-count" data-count="115">115<\/span>/,
+  );
+  assert.match(
+    dash.body,
+    /dash-stat-label">Arrests<\/span> <span class="dash-count" data-count="205">205<\/span>/,
+  );
+  assert.match(dash.body, /Operations standing/);
+  assert.match(dash.body, /Missing Kids/);
+  assert.match(
+    dash.body,
+    /Missing Kids<\/a><\/td>\s*<td class="num"><span class="dash-count" data-count="2">2<\/span><\/td>\s*<td class="num"><span class="dash-count" data-count="115">115<\/span><\/td>\s*<td class="num"><span class="dash-count" data-count="205">205<\/span><\/td>/,
+  );
 });
 
 test("topN and week keys stay fail-closed", () => {

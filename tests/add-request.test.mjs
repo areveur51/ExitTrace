@@ -102,7 +102,9 @@ test("/add renders person and dog modes in TUI chrome", async () => {
     assert.match(res.body, /ExitTrace/);
     assert.match(res.body, /class="keymap"/);
     assert.match(res.body, /href="\/add"/);
-    assert.match(res.body, /data-key="n"/);
+    assert.doesNotMatch(res.body, /data-key="n"/);
+    assert.doesNotMatch(res.body, /\]<\/span> Add</);
+    assert.doesNotMatch(res.body, /\]<\/span> Search</);
     assert.match(res.body, /verified official news or official government social/);
     assert.match(res.body, /Unofficial or commentary social is extra only/);
     assert.doesNotMatch(res.body, /widgets\.js/);

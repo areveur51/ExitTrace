@@ -46,11 +46,11 @@ test("list pages nest death and indictment indexes", () => {
   ]);
   assert.deepEqual(breadcrumbItems({ path: "/group-operations" }), [
     { href: "/", label: "Home" },
-    { href: "/group-operations", label: "Group Operations" },
+    { href: "/group-operations", label: "Operations" },
   ]);
   assert.deepEqual(breadcrumbItems({ path: "/group-operations/missing-kids" }), [
     { href: "/", label: "Home" },
-    { href: "/group-operations", label: "Group Operations" },
+    { href: "/group-operations", label: "Operations" },
     { href: "/group-operations/missing-kids", label: "Missing Kids" },
   ]);
 });
@@ -101,7 +101,7 @@ test("detail pages link back through the parent catalog", () => {
     }),
     [
       { href: "/", label: "Home" },
-      { href: "/group-operations", label: "Group Operations" },
+      { href: "/group-operations", label: "Operations" },
       { href: "/group-operations/missing-kids", label: "Missing Kids" },
       { href: "/operations/operation-restore-justice", label: "Operation Restore Justice" },
     ],
