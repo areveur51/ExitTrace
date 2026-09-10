@@ -225,7 +225,7 @@ test("age filter is not on catalog lists; listPeople still excludes rows without
   const child = await requestPage("/deaths/officials?min_age=70");
   assert.match(child.body, /href="\/people\/old-official"/);
   assert.doesNotMatch(child.body, /href="\/people\/young-star"/);
-  assert.match(child.body, /href="\/people\/unknown-birth"/);
+  assert.doesNotMatch(child.body, /href="\/people\/unknown-birth"/);
   assert.doesNotMatch(child.body, /class="age-filter"/);
 
   const unfiltered = await requestPage("/deaths");
