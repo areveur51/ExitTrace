@@ -309,7 +309,7 @@ a:hover { color: var(--ink); }
   padding: 2rem 1rem 2.5rem;
   text-align: center;
 }
-/* Home cluster: fill the leftover viewport so logo + search sit in the middle,
+/* Home cluster: fill the remaining viewport so logo + search sit in the middle,
    not pinned under the top bar. Catalog pages keep their own .tui-main flow. */
 body.tui-home {
   min-height: 100vh;
@@ -1719,7 +1719,7 @@ html[data-theme="glass"] .dash-stats {
 }
 
 /* Widescreen/tablet HUD grid is align-items:start + rows:auto for catalog
-   lists. On home, stretch the stage to the leftover dvh so the wordmark
+   lists. On home, stretch the stage to the remaining dvh so the wordmark
    + search stay in the viewport middle beside the keymap rail. */
 @media (min-width: 721px) {
   body.tui-home .hud-stage {
