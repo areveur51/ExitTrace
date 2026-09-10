@@ -43,8 +43,10 @@ function usage(exitCode = 0) {
 Promote one Unsorted source post into an identified person row.
 Requires a named subject, a calendar event_date (not posted_at), a catalog
 category, and at least ${CITE_FLOOR} http(s) cite URLs supplied by the
-caller. A new person insert is also fail-closed on birth_date, country of
+caller. A new person insert is also fail-closed on country of
 origin, position, organization, and reason of event (comments/reason).
+birth_date is optional: unknown stores as SQL NULL, never "". Do not invent
+from age or month-year. Age filters skip a null birth_date.
 Military inserts also require branch (the existing event field).
 Does not invent cites or a portrait. Attaches a local Wikimedia or
 official-gov still under /media/people/ when one already exists. Does not

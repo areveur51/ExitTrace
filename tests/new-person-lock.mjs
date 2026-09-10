@@ -1,4 +1,5 @@
-/** Shared lock fields for new person inserts. Existing gold annotate stays empty. */
+/** Shared lock fields for new person inserts. Existing gold annotate stays empty.
+ *  birth_date is optional on insert (null when unknown); tests that need age set it. */
 
 export const NEW_PERSON_LOCK = {
   birth_date: "1985-03-12",

@@ -1173,7 +1173,7 @@ const ADD_CATEGORIES = [
 ];
 
 export function addCiteRule() {
-  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. A new person insert is fail-closed: birth date, country of origin, position, organization, reason of event, event date, and two official cites. Military inserts also require branch (the existing event field). Country of origin and branch are not guessed. Origin is not the event country. If the person already exists, the new kind is attached — a second row is not created. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. A host process looks up published sources and applies the row.</p>`;
+  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. A new person insert is fail-closed: country of origin, position, organization, reason of event, event date, and two official cites. Birth date is optional — unknown stores as null and is not invented from age or month-year. Military inserts also require branch (the existing event field). Country of origin and branch are not guessed. Origin is not the event country. If the person already exists, the new kind is attached — a second row is not created. A Wikimedia or official government portrait is attached when an eligible still already exists; missing stills stay blank. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. A host process looks up published sources and applies the row.</p>`;
 }
 
 export function addBody({
@@ -1227,6 +1227,7 @@ export function addBody({
           <span>Birth date</span>
           <input type="date" name="birth_date" value="${esc(values.birth_date || "")}">
         </label>
+        <p class="hint">Optional. Leave blank when unknown (stored as null). Do not invent from age or month-year.</p>
         <label class="field">
           <span>Country of origin</span>
           <input type="text" name="country_of_origin" value="${esc(values.country_of_origin || "")}" autocomplete="off">

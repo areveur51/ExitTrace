@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { isMilitaryInput } from "../app/lib/event-attrs.mjs";
 import { handle } from "../app/server.mjs";
-import { PromoteError } from "../app/lib/promote.mjs";
+import { parseOptionalBirthDate, PromoteError } from "../app/lib/promote.mjs";
 import { rankDimension } from "../app/lib/dashboard.mjs";
 import {
   applyIdentifiedPerson,
@@ -59,7 +59,6 @@ const BASE = {
 test("new person insert is fail-closed on lock fields", async () => {
   setMemory(goldSeed());
   const missing = [
-    ["birth_date", "missing_birth_date"],
     ["country_of_origin", "missing_origin_country"],
     ["position", "missing_position"],
     ["organization", "missing_organization"],
@@ -81,6 +80,58 @@ test("new person insert is fail-closed on lock fields", async () => {
   await assert.rejects(
     () => applyIdentifiedPerson(withNewPersonLock({ ...BASE, cite_urls: [CITES[0]] })),
     (err) => err instanceof PromoteError && err.code === "cites_floor",
+  );
+  assert.equal(await getPerson("casey-vale"), null);
+});
+
+test("new person insert allows null birth_date and does not invent one", async () => {
+  setMemory(goldSeed());
+  assert.equal(parseOptionalBirthDate(null), null);
+  assert.equal(parseOptionalBirthDate(""), null);
+  assert.equal(parseOptionalBirthDate("   "), null);
+  assert.equal(parseOptionalBirthDate("1985-03-12"), "1985-03-12");
+  assert.throws(
+    () => parseOptionalBirthDate("1985-03"),
+    (err) => err instanceof PromoteError && err.code === "invalid_birth_date",
+  );
+  assert.throws(
+    () => parseOptionalBirthDate("40"),
+    (err) => err instanceof PromoteError && err.code === "invalid_birth_date",
+  );
+  assert.throws(
+    () => parseOptionalBirthDate("March 1985"),
+    (err) => err instanceof PromoteError && err.code === "invalid_birth_date",
+  );
+
+  for (const birth of [undefined, null, ""]) {
+    setMemory(goldSeed());
+    const input = withNewPersonLock({ ...BASE });
+    if (birth === undefined) delete input.birth_date;
+    else input.birth_date = birth;
+    input.age = 39;
+    input.birth_year = 1985;
+    const created = await applyIdentifiedPerson(input);
+    assert.equal(created.action, "created");
+    assert.equal(created.person.birth_date, null);
+    assert.notEqual(created.person.birth_date, "");
+    assert.equal(created.person.events[0].age_at_event, null);
+    const vale = await getPerson("casey-vale");
+    assert.equal(vale.birth_date, null);
+    assert.equal(vale.events[0].age_at_event, null);
+    const aged = await listPeople({ category: "firings", minAge: 1 });
+    assert.ok(!aged.some((r) => r.id === "casey-vale"));
+    const unfiltered = await listPeople({ category: "firings" });
+    assert.ok(unfiltered.some((r) => r.id === "casey-vale"));
+  }
+
+  setMemory(goldSeed());
+  await assert.rejects(
+    () => applyIdentifiedPerson(withNewPersonLock({ ...BASE, birth_date: "1985-03" })),
+    (err) => err instanceof PromoteError && err.code === "invalid_birth_date",
+  );
+  await assert.rejects(
+    () => applyIdentifiedPerson(withNewPersonLock({ ...BASE, birth_date: "40" })),
+    (err) => err instanceof PromoteError && err.code === "invalid_birth_date",
   );
   assert.equal(await getPerson("casey-vale"), null);
 });

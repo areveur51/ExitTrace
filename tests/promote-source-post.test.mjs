@@ -314,6 +314,27 @@ test("reject missing subject, missing date, and fewer than two cites", async () 
   assert.doesNotMatch(JSON.stringify(getMemory().people), /Casey Vale/);
 });
 
+test("promote new person without birth_date stores null and skips age", async () => {
+  await parkedFixture();
+  const lock = { ...NEW_PERSON_LOCK };
+  delete lock.birth_date;
+  const result = await promoteSourcePost({
+    ...lock,
+    source_url: "https://example.com/n/arrest-1",
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    category: "arrests",
+    cite_urls: CITES,
+  });
+  assert.equal(result.action, "created");
+  assert.equal(result.person.birth_date, null);
+  assert.notEqual(result.person.birth_date, "");
+  assert.equal(result.person.events[0].age_at_event, null);
+  const vale = await getPerson("casey-vale");
+  assert.equal(vale.birth_date, null);
+  assert.equal(vale.events[0].age_at_event, null);
+});
+
 test("validatePromoteInput never fills subject or date from a source post", () => {
   assert.throws(
     () => validatePromoteInput({ source_url: "https://example.com/n/arrest-1" }),
