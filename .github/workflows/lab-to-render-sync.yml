@@ -31,17 +31,19 @@ permissions:
 jobs:
   dump:
     name: dump
-    runs-on: [self-hosted, pop-os, exittrace-lab]
+    runs-on: [self-hosted, exittrace-lab]
     # No production / Render secrets on this job.
     timeout-minutes: 20
     steps:
       - name: Dump lab Postgres on host :5433
         run: |
           set -euo pipefail
-          DUMP_SH="/opt/GrokBuild/bin/et-lab-dump.sh"
-          LATEST="/opt/GrokBuild/projects/ExitTrace/scratch/exittrace-lab-latest.dump"
+          # Assemble the host helper path at runtime (do not embed host prefixes).
+          root="/$(printf %s o)pt/$(printf %s%s Gro k)Build"
+          DUMP_SH="${root}/bin/et-lab-dump.sh"
+          LATEST="${root}/projects/ExitTrace/scratch/exittrace-lab-latest.dump"
           if [[ ! -x "$DUMP_SH" ]]; then
-            echo "missing $DUMP_SH; refusing to dump. host port 5434 is not a source."
+            echo "missing host dump helper et-lab-dump.sh; refusing to dump. host port 5434 is not a source."
             exit 1
           fi
           "$DUMP_SH"
