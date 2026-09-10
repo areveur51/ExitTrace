@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import {
   DEATH_KEEP_IDS,
+  GROUP_OPS_KEEP_IDS,
   INDICTMENT_KEEP_IDS,
   catalogListKinds,
   categoryByPath,
@@ -68,14 +69,18 @@ function countClass(html, className) {
 test("parent catalog kinds are the KEEP union; children stay one kind", () => {
   assert.deepEqual(catalogListKinds("death_unspecified"), DEATH_KEEP_IDS);
   assert.deepEqual(catalogListKinds("indictment_unspecified"), INDICTMENT_KEEP_IDS);
+  assert.deepEqual(catalogListKinds("group_ops_unspecified"), GROUP_OPS_KEEP_IDS);
   assert.deepEqual(catalogListKinds("death_celebrity"), ["death_celebrity"]);
   assert.deepEqual(catalogListKinds("death_official"), ["death_official"]);
   assert.deepEqual(catalogListKinds("death_ceo"), ["death_ceo"]);
   assert.deepEqual(catalogListKinds("indictment_civilian"), ["indictment_civilian"]);
   assert.deepEqual(catalogListKinds("indictment_non_civilian"), ["indictment_non_civilian"]);
+  assert.deepEqual(catalogListKinds("missing_kids"), ["missing_kids"]);
   assert.deepEqual(catalogListKinds("corona_comms"), ["corona_comms"]);
   assert.equal(categoryByPath("/deaths").id, "death_unspecified");
   assert.equal(categoryByPath("/indictments").id, "indictment_unspecified");
+  assert.equal(categoryByPath("/group-operations").id, "group_ops_unspecified");
+  assert.equal(categoryByPath("/group-operations/missing-kids").id, "missing_kids");
   assert.equal(categoryByPath("/corona-comms").id, "corona_comms");
   assert.equal(categoryByPath("/corona-comms/civilians"), null);
   assert.deepEqual(DEATH_KEEP_IDS, ["death_celebrity", "death_official", "death_ceo"]);
@@ -83,6 +88,7 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
     "indictment_civilian",
     "indictment_non_civilian",
   ]);
+  assert.deepEqual(GROUP_OPS_KEEP_IDS, ["missing_kids"]);
 });
 
 test("unspecified classify and display-check paths stay fail-closed", () => {
@@ -107,6 +113,16 @@ test("unspecified classify and display-check paths stay fail-closed", () => {
     (err) => err instanceof PromoteError && err.code === "invalid_category",
   );
   assert.throws(
+    () =>
+      validateIdentifiedPersonInput({
+        subject: "Casey Vale",
+        event_date: "2024-08-01",
+        category: "group_ops_unspecified",
+        cite_urls: CITES,
+      }),
+    (err) => err instanceof PromoteError && err.code === "invalid_category",
+  );
+  assert.throws(
     () => listPathForPerson("death_unspecified"),
     (err) => err instanceof DisplayError && err.code === "deaths_index",
   );
@@ -114,8 +130,13 @@ test("unspecified classify and display-check paths stay fail-closed", () => {
     () => listPathForPerson("indictment_unspecified"),
     (err) => err instanceof DisplayError && err.code === "indictments_index",
   );
+  assert.throws(
+    () => listPathForPerson("group_ops_unspecified"),
+    (err) => err instanceof DisplayError && err.code === "group_ops_index",
+  );
   assert.equal(listPathForPerson("death_celebrity"), "/deaths/celebrities");
   assert.equal(listPathForPerson("indictment_civilian"), "/indictments/civilians");
+  assert.equal(listPathForPerson("missing_kids"), "/group-operations/missing-kids");
   assert.equal(listPathForPerson("corona_comms"), "/corona-comms");
 });
 

@@ -96,6 +96,22 @@ export const CATEGORIES = [
     blurb: "Deaths of celebrities, officials, and CEOs recorded by contemporaneous news reports.",
   },
   {
+    id: "missing_kids",
+    kind: "person",
+    title: "Group Operations — missing kids",
+    nav: "Missing Kids",
+    path: "/group-operations/missing-kids",
+    blurb: "Missing-kids cases recorded by contemporaneous news reports.",
+  },
+  {
+    id: "group_ops_unspecified",
+    kind: "person",
+    title: "Group Operations",
+    nav: "Group Operations",
+    path: "/group-operations",
+    blurb: "Group operations recorded by contemporaneous news reports. Parent lists every signed child kind.",
+  },
+  {
     id: "unsorted",
     kind: "source",
     title: "Unsorted",
@@ -136,6 +152,7 @@ export const PROMOTE_CATEGORY_IDS = [
   "corona_comms",
   "indictment_civilian",
   "indictment_non_civilian",
+  "missing_kids",
 ];
 
 /** KEEP kinds classify may write for identified death rows. */
@@ -150,6 +167,9 @@ export const INDICTMENT_KEEP_IDS = [
   "indictment_civilian",
   "indictment_non_civilian",
 ];
+
+/** KEEP kinds classify may write for identified group-operations rows. */
+export const GROUP_OPS_KEEP_IDS = ["missing_kids"];
 
 const IMPORT_ALIASES = {
   firings: "firings",
@@ -197,9 +217,23 @@ export function isIndictmentCategory(id) {
   return String(id).startsWith("indictment_");
 }
 
+export function isGroupOpsKeepKind(id) {
+  return GROUP_OPS_KEEP_IDS.includes(String(id));
+}
+
+/** Parent index plus signed KEEP children. Later siblings append to GROUP_OPS_KEEP_IDS. */
+export function isGroupOpsCategory(id) {
+  const key = String(id);
+  return key === "group_ops_unspecified" || isGroupOpsKeepKind(key);
+}
+
 export function isIndexCategory(id) {
   const key = String(id);
-  return key === "death_unspecified" || key === "indictment_unspecified";
+  return (
+    key === "death_unspecified" ||
+    key === "indictment_unspecified" ||
+    key === "group_ops_unspecified"
+  );
 }
 
 /** Person kinds a catalog path lists. Parents are the KEEP union; children are one kind. */
@@ -207,6 +241,7 @@ export function catalogListKinds(id) {
   const key = String(id);
   if (key === "death_unspecified") return DEATH_KEEP_IDS.slice();
   if (key === "indictment_unspecified") return INDICTMENT_KEEP_IDS.slice();
+  if (key === "group_ops_unspecified") return GROUP_OPS_KEEP_IDS.slice();
   return [key];
 }
 

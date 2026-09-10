@@ -21,10 +21,15 @@ const INDICTMENT_LIST_PATHS = {
   indictment_non_civilian: "/indictments/non-civilians",
 };
 
+const GROUP_OPS_LIST_PATHS = {
+  missing_kids: "/group-operations/missing-kids",
+};
+
 export function listPathForPerson(category) {
   const id = String(category || "").trim();
   if (DEATH_LIST_PATHS[id]) return DEATH_LIST_PATHS[id];
   if (INDICTMENT_LIST_PATHS[id]) return INDICTMENT_LIST_PATHS[id];
+  if (GROUP_OPS_LIST_PATHS[id]) return GROUP_OPS_LIST_PATHS[id];
   const cat = categoryById(id);
   if (!cat || cat.kind !== "person") {
     throw new DisplayError(
@@ -42,6 +47,12 @@ export function listPathForPerson(category) {
     throw new DisplayError(
       "/indictments is an empty index; civilians/non-civilians are the list pages",
       "indictments_index",
+    );
+  }
+  if (cat.id === "group_ops_unspecified" || cat.path === "/group-operations") {
+    throw new DisplayError(
+      "/group-operations is an empty index; missing-kids is the list page",
+      "group_ops_index",
     );
   }
   return cat.path;
@@ -139,6 +150,12 @@ export async function checkPersonDisplayed(person) {
     throw new DisplayError(
       "/indictments is an empty index; civilians/non-civilians are the list pages",
       "indictments_index",
+    );
+  }
+  if (listPath === "/group-operations") {
+    throw new DisplayError(
+      "/group-operations is an empty index; missing-kids is the list page",
+      "group_ops_index",
     );
   }
   const list = await walkListPages(listPath, (html) => hasPersonOnList(html, person));
