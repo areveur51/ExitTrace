@@ -1,9 +1,26 @@
 /** Live unique-person dashboard ranks from the shared event columns. */
 
+import {
+  AGE_BANDS,
+  ageBandFor,
+  knownBirthDate,
+  matchesAgeBand,
+  parseAgeBand,
+  storedAgeAtEvent,
+} from "./age.mjs";
 import { categoryById, isDeathCategory, GROUP_OPS_KEEP_IDS, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
 import { EVENT_ATTR_FIELDS } from "./event-attrs.mjs";
 import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
 import { deathPersonEvent, personEvents } from "./promote.mjs";
+
+export { AGE_BANDS, parseAgeBand } from "./age.mjs";
+
+export const DASH_AGE = {
+  id: "age",
+  title: "Age",
+  nav: "Age",
+  path: "/dashboard/age",
+};
 
 export const DASH_TOP_N = 5;
 
@@ -278,6 +295,8 @@ export function dashRangeHref(path, range, extra = {}) {
   }
   const page = Number(extra.page);
   if (Number.isFinite(page) && page > 1) params.set("page", String(page));
+  const band = parseAgeBand(extra.band);
+  if (band) params.set("band", band.id);
   const base = String(path || "/dashboard").split("?")[0] || "/dashboard";
   return `${base}?${params.toString()}`;
 }
@@ -400,6 +419,68 @@ export function operationStanding(operations, range, tag) {
   };
 }
 
+/**
+ * Ages at in-range KEEP events. Missing birth_date contributes nothing —
+ * stored age_at_event is not a substitute for a calendar DOB.
+ */
+export function eventAgesOf(row) {
+  if (!knownBirthDate(row?.birth_date)) return [];
+  const ages = [];
+  for (const ev of dashRankEvents(row)) {
+    const age = storedAgeAtEvent(ev, row.birth_date, ev.event_date);
+    if (age != null) ages.push(age);
+  }
+  return ages;
+}
+
+export function personAgeBands(row) {
+  const seen = new Set();
+  const out = [];
+  for (const age of eventAgesOf(row)) {
+    const band = ageBandFor(age);
+    if (!band || seen.has(band.id)) continue;
+    seen.add(band.id);
+    out.push(band);
+  }
+  return out;
+}
+
+/** Unique people per fixed age band. Null DOB never enters a band. */
+export function ageStanding(people, range) {
+  const rows = filterPeopleToRange(people, range);
+  const counts = new Map(AGE_BANDS.map((b) => [b.id, 0]));
+  for (const row of rows) {
+    for (const band of personAgeBands(row)) {
+      counts.set(band.id, (counts.get(band.id) || 0) + 1);
+    }
+  }
+  return AGE_BANDS.map((band) => ({
+    key: band.id,
+    label: band.label,
+    minAge: band.minAge,
+    maxAge: band.maxAge,
+    count: counts.get(band.id) || 0,
+  }));
+}
+
+function compareListedPeople(a, b) {
+  const d = String(b.event_date || "").localeCompare(String(a.event_date || ""));
+  if (d !== 0) return d;
+  return String(a.name || "").localeCompare(String(b.name || ""));
+}
+
+/** People with at least one in-range KEEP age in the band. All = union of bands. */
+export function peopleInAgeBand(people, bandId, range) {
+  const rows = filterPeopleToRange(people, range);
+  const token = String(bandId || "").trim();
+  const band = parseAgeBand(token);
+  if (token && token !== "all" && !band) return [];
+  return rows
+    .filter((row) => eventAgesOf(row).some((age) => matchesAgeBand(age, band)))
+    .slice()
+    .sort(compareListedPeople);
+}
+
 /** Standing by signed operation tag, plus the all-ops rollup. */
 export function operationStandingByTag(operations, range) {
   const resolved = resolveDashRange(range);
@@ -433,5 +514,6 @@ export function buildDashboard(people, range, operations = []) {
     trends: trendSeries(rows),
     dimensions,
     operations: operationStandingByTag(operations, range),
+    age: ageStanding(people, range),
   };
 }

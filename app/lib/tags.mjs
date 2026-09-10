@@ -115,12 +115,10 @@ export function catalogMainPath(pathname) {
   return p;
 }
 
-export function filterQuery({ tags, minAge, maxAge } = {}) {
+export function filterQuery({ tags } = {}) {
   const params = new URLSearchParams();
   const selected = normalizeTags(tags);
   if (selected.length) params.set("tags", selected.join(","));
-  if (minAge != null) params.set("min_age", String(minAge));
-  if (maxAge != null) params.set("max_age", String(maxAge));
   return params.toString();
 }
 
@@ -161,8 +159,6 @@ export function filterPath(basePath, filter) {
       PATH_TAGS[path].every((id) => selected.includes(id))
         ? []
         : selected,
-    minAge: filter?.minAge,
-    maxAge: filter?.maxAge,
   });
   if (!q) return path;
   return `${path}?${q}`;

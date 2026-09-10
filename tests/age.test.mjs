@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  AGE_BANDS,
   ageAtDeath,
+  ageBandFor,
   ageFilterActive,
   ageFilterPath,
+  knownBirthDate,
+  matchesAgeBand,
   matchesAgeFilter,
+  parseAgeBand,
   parseAgeBound,
   parseAgeFilter,
 } from "../app/lib/age.mjs";
@@ -97,6 +102,24 @@ test("age bounds and filter stay fail-closed", () => {
     ageFilterPath("/deaths/officials", { minAge: 50, maxAge: 80 }),
     "/deaths/officials?min_age=50&max_age=80",
   );
+  assert.deepEqual(
+    AGE_BANDS.map((b) => b.label),
+    ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"],
+  );
+  assert.equal(parseAgeBand("35-44")?.id, "35-44");
+  assert.equal(parseAgeBand("65+")?.label, "65+");
+  assert.equal(parseAgeBand("all"), null);
+  assert.equal(parseAgeBand("nope"), null);
+  assert.equal(ageBandFor(16)?.id, "13-17");
+  assert.equal(ageBandFor(70)?.id, "65+");
+  assert.equal(ageBandFor(12), null);
+  assert.equal(matchesAgeBand(40, parseAgeBand("35-44")), true);
+  assert.equal(matchesAgeBand(null, parseAgeBand("35-44")), false);
+  assert.equal(matchesAgeBand(40, null), true);
+  assert.equal(matchesAgeBand(12, null), false);
+  assert.equal(knownBirthDate("2000-01-01"), true);
+  assert.equal(knownBirthDate(null), false);
+  assert.equal(knownBirthDate(""), false);
 
   const aged = { birth_date: "1950-01-01", death_date: "2020-01-01" };
   const missing = { death_date: "2020-01-01" };
@@ -116,7 +139,7 @@ test("gold seed does not backfill birth_date", () => {
   }
 });
 
-test("age filter is on catalog lists and excludes rows without birth_date", async () => {
+test("age filter is not on catalog lists; listPeople still excludes rows without birth_date", async () => {
   const seed = goldSeed();
   setMemory({
     people: [
@@ -180,18 +203,11 @@ test("age filter is on catalog lists and excludes rows without birth_date", asyn
   const add = await requestPage("/add");
   const detail = await requestPage("/people/james-comey");
 
-  for (const res of [deaths, celebs, officials]) {
+  for (const res of [deaths, celebs, officials, firings, arrests]) {
     assert.equal(res.status, 200);
-    assert.match(res.body, /class="age-filter"/);
-    assert.match(res.body, /name="min_age"/);
-    assert.match(res.body, /name="max_age"/);
-    assert.match(res.body, /Age at death/);
-  }
-  for (const res of [firings, arrests]) {
-    assert.equal(res.status, 200);
-    assert.match(res.body, /class="age-filter"/);
-    assert.match(res.body, /name="min_age"/);
-    assert.match(res.body, />Age</);
+    assert.doesNotMatch(res.body, /class="age-filter"/);
+    assert.doesNotMatch(res.body, /name="min_age"/);
+    assert.doesNotMatch(res.body, /name="max_age"/);
     assert.doesNotMatch(res.body, /Age at death/);
   }
   for (const res of [unsorted, dogs, home, add, detail]) {
@@ -199,19 +215,18 @@ test("age filter is on catalog lists and excludes rows without birth_date", asyn
     assert.doesNotMatch(res.body, /name="min_age"/);
   }
 
-  const filtered = await requestPage("/deaths?min_age=1&max_age=30");
-  assert.equal(filtered.status, 200);
-  assert.match(filtered.body, /href="\/people\/young-star"/);
-  assert.doesNotMatch(filtered.body, /href="\/people\/old-official"/);
-  assert.doesNotMatch(filtered.body, /href="\/people\/unknown-birth"/);
-  assert.match(filtered.body, /1 available/);
-  assert.match(filtered.body, /href="\/deaths\?min_age=1&amp;max_age=30"/);
-  assert.doesNotMatch(filtered.body, /href="\/deaths\?page=/);
+  const ignored = await requestPage("/deaths?min_age=1&max_age=30");
+  assert.equal(ignored.status, 200);
+  assert.match(ignored.body, /href="\/people\/young-star"/);
+  assert.match(ignored.body, /href="\/people\/old-official"/);
+  assert.match(ignored.body, /href="\/people\/unknown-birth"/);
+  assert.doesNotMatch(ignored.body, /class="age-filter"/);
 
   const child = await requestPage("/deaths/officials?min_age=70");
   assert.match(child.body, /href="\/people\/old-official"/);
   assert.doesNotMatch(child.body, /href="\/people\/young-star"/);
   assert.doesNotMatch(child.body, /href="\/people\/unknown-birth"/);
+  assert.doesNotMatch(child.body, /class="age-filter"/);
 
   const unfiltered = await requestPage("/deaths");
   assert.match(unfiltered.body, /href="\/people\/unknown-birth"/);

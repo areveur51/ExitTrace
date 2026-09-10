@@ -40,8 +40,8 @@ import {
 } from "./lib/store.mjs";
 import {
   addBody,
-  ageFilterForm,
   identityFilterNav,
+  dashboardAgeBody,
   dashboardBody,
   dashboardRankBody,
   dogDetail,
@@ -70,7 +70,7 @@ import {
   parseCookiePageSize,
   parsePage,
 } from "./lib/paginate.mjs";
-import { parseAgeFilter } from "./lib/age.mjs";
+import { parseAgeBand } from "./lib/age.mjs";
 import { filterPath, parseTagFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
@@ -82,10 +82,12 @@ import {
   GROKIPEDIA_PATH,
 } from "./lib/grokipedia.mjs";
 import {
+  DASH_AGE,
   buildDashboard,
   dashDimensionByPath,
   dashRangeHref,
   parseDashRangeSearch,
+  peopleInAgeBand,
   rankDimension,
 } from "./lib/dashboard.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
@@ -514,6 +516,44 @@ async function handle(req, res) {
     const operations = await listOperations();
     const dim = dashDimensionByPath(p);
     const range = parseDashRangeSearch(url.searchParams, { cookie: req.headers.cookie });
+    if (p === DASH_AGE.path) {
+      const bandToken = String(url.searchParams.get("band") || "").trim();
+      const band = parseAgeBand(bandToken);
+      const invalid = Boolean(bandToken) && bandToken !== "all" && !band;
+      const matched = invalid ? [] : peopleInAgeBand(people, band?.id, range);
+      const pageSize = parseCookiePageSize(req.headers.cookie);
+      const meta = paginate({
+        total: matched.length,
+        page: parsePage(url.searchParams),
+        pageSize,
+      });
+      const windowed = matched.slice(meta.offset, meta.offset + meta.limit);
+      const listPath = dashRangeHref(DASH_AGE.path, range, band ? { band: band.id } : {});
+      const heading = band ? `Age · ${band.label}` : "Age";
+      return sendHtml(
+        res,
+        layout({
+          title: `Dashboard · ${heading}`,
+          path: DASH_AGE.path,
+          heading,
+          query: heading,
+          pageSize,
+          dashRange: range,
+          countLabel: countText(heading, meta, windowed.length),
+          lede: "Unique people by age at a tagged event. Missing birth date is not guessed and is not listed.",
+          body: `${dashboardAgeBody({ range, band })}${listSection(
+            peopleList(windowed),
+            pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+            listHead({
+              title: heading,
+              total: meta.total,
+              index: 1,
+              of: windowed.length,
+            }),
+          )}`,
+        }),
+      );
+    }
     if (p !== "/dashboard" && !dim) {
       send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
@@ -666,10 +706,9 @@ async function handle(req, res) {
         : isIndictmentCategory(cat.id)
           ? catalogListKinds("indictment_unspecified")
           : catalogListKinds(cat.id);
-    const ageFilter = parseAgeFilter(url.searchParams);
     const tags = parseTagFilter(url.searchParams, p);
     const pageSize = parseCookiePageSize(req.headers.cookie);
-    const listOpts = { category: kinds, tags, ...ageFilter };
+    const listOpts = { category: kinds, tags };
     const total = await countPeople(listOpts);
     const meta = paginate({
       total,
@@ -682,7 +721,7 @@ async function handle(req, res) {
       offset: meta.offset,
     });
     const heading = gov ? "Officials" : cat.title;
-    const listPath = filterPath(cat.path, { tags, ...ageFilter });
+    const listPath = filterPath(cat.path, { tags });
     return sendHtml(
       res,
       layout({
@@ -695,10 +734,7 @@ async function handle(req, res) {
         lede: gov
           ? "People tagged official — government, appointed, military, or law-enforcement roles. One card per person; tags are not exclusive."
           : `${cat.blurb} One card per person. Identity tags are independent of the event. Seeded rows only — not exhaustive.`,
-        body: `${identityFilterNav(cat.path, { tags, ...ageFilter })}${ageFilterForm(
-          cat.path,
-          { ...ageFilter, tags, deaths },
-        )}${listSection(
+        body: `${identityFilterNav(cat.path, { tags })}${listSection(
           peopleList(rows, { showDeath: deaths }),
           pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({

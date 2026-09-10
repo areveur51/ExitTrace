@@ -120,6 +120,7 @@ test("html pages render", async () => {
     "/corona-comms",
     "/dashboard",
     "/dashboard/reason",
+    "/dashboard/age",
     "/dashboard/organization",
     "/indictments",
     "/indictments/civilians",
@@ -214,8 +215,10 @@ test("people list pages paginate newest-first with shareable ?page=", async () =
   assert.match(second.body, /href="\/deaths"/);
   assert.match(first.body, /data-page-size-set="17"/);
   assert.match(firings.body, /data-page-size-set="17"/);
-  assert.match(firings.body, /class="age-filter"/);
-  assert.match(first.body, /class="age-filter"/);
+  assert.doesNotMatch(firings.body, /class="age-filter"/);
+  assert.doesNotMatch(first.body, /class="age-filter"/);
+  assert.doesNotMatch(firings.body, /name="min_age"/);
+  assert.doesNotMatch(first.body, /name="min_age"/);
 
   assert.match(first.body, new RegExp(deaths[0].name));
   assert.doesNotMatch(first.body, new RegExp(deaths[PAGE_SIZE].name));
@@ -235,6 +238,7 @@ test("every category list page ships a pager", async () => {
     "/arrests",
     "/corona-comms",
     "/dashboard/reason",
+    "/dashboard/age",
     "/indictments",
     "/indictments/civilians",
     "/indictments/non-civilians",

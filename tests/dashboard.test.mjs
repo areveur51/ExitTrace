@@ -7,6 +7,7 @@ import fs from "fs";
 import {
   DASH_DIMENSIONS,
   DASH_RANGE_STORAGE_KEY,
+  ageStanding,
   buildDashboard,
   dashRangeHref,
   dashRankEvents,
@@ -18,6 +19,7 @@ import {
   filterPeopleToRange,
   occupationAtEvent,
   parseDashRangeSearch,
+  peopleInAgeBand,
   rankDimension,
   resolveDashRange,
   serializeDashRange,
@@ -321,6 +323,17 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /class="dash-pt"|class="dash-bar"/);
   assert.match(dash.body, /class="dash-tip"/);
   assert.match(dash.body, /Operations standing/);
+  assert.match(dash.body, /class="dash-age-card"/);
+  assert.match(dash.body, /data-dash-dim="age"/);
+  assert.match(dash.body, />Age</);
+  assert.match(dash.body, /data-age-band="13-17"/);
+  assert.match(dash.body, /data-age-band="18-24"/);
+  assert.match(dash.body, /data-age-band="25-34"/);
+  assert.match(dash.body, /data-age-band="35-44"/);
+  assert.match(dash.body, /data-age-band="45-54"/);
+  assert.match(dash.body, /data-age-band="55-64"/);
+  assert.match(dash.body, /data-age-band="65\+"/);
+  assert.match(dash.body, /href="\/dashboard\/age\?range=all"/);
   assert.match(dash.body, /Victims/);
   assert.match(dash.body, /Arrests/);
   assert.match(
@@ -369,6 +382,91 @@ test("dashboard breadcrumbs nest children under Dashboard", () => {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/position", label: "Position" },
   ]);
+  assert.deepEqual(breadcrumbItems({ path: "/dashboard/age" }), [
+    { href: "/", label: "Home" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/age", label: "Age" },
+  ]);
+});
+
+test("dashboard Age standing bands unique people and skips null birth_date", async () => {
+  setMemory(goldSeed());
+  const empty = ageStanding(goldSeed().people);
+  assert.deepEqual(
+    empty.map((row) => row.label),
+    ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"],
+  );
+  assert.ok(empty.every((row) => row.count === 0));
+  assert.equal(peopleInAgeBand(goldSeed().people).length, 0);
+
+  await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
+    subject: "Young Star",
+    event_date: "2024-12-01",
+    category: "death_celebrity",
+    cite_urls: CITES,
+    birth_date: "2000-01-01",
+  });
+  await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
+    subject: "Mid Official",
+    event_date: "2024-11-15",
+    category: "death_official",
+    cite_urls: MORE,
+    birth_date: "1984-06-16",
+  });
+  await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
+    subject: "Unknown Birth",
+    event_date: "2024-10-01",
+    category: "death_ceo",
+    cite_urls: [
+      "https://www.example.com/news/unknown-birth-held",
+      "https://www.example.net/world/unknown-birth-arrest",
+    ],
+    birth_date: null,
+  });
+  const { listPeople } = await import("../app/lib/store.mjs");
+  const people = await listPeople();
+  const bands = ageStanding(people);
+  const byKey = Object.fromEntries(bands.map((row) => [row.key, row.count]));
+  assert.equal(byKey["18-24"], 1);
+  assert.equal(byKey["35-44"], 1);
+  assert.equal(byKey["13-17"], 0);
+  assert.equal(byKey["65+"], 0);
+  const mid = peopleInAgeBand(people, "35-44");
+  assert.ok(mid.some((row) => row.id === "mid-official"));
+  assert.ok(!mid.some((row) => row.id === "young-star"));
+  assert.ok(!mid.some((row) => row.id === "unknown-birth"));
+  const allAged = peopleInAgeBand(people);
+  assert.ok(allAged.some((row) => row.id === "young-star"));
+  assert.ok(allAged.some((row) => row.id === "mid-official"));
+  assert.ok(!allAged.some((row) => row.id === "unknown-birth"));
+
+  const dash = await requestPage("/dashboard");
+  assert.match(dash.body, /data-age-band="18-24" data-age-count="1"/);
+  assert.match(dash.body, /data-age-band="35-44" data-age-count="1"/);
+  assert.match(dash.body, /data-age-band="13-17" data-age-count="0"/);
+  assert.match(dash.body, /class="dash-age-fill"/);
+  assert.match(dash.body, /Operations standing/);
+
+  const band = await requestPage("/dashboard/age?band=35-44");
+  assert.equal(band.status, 200);
+  assert.match(band.body, /aria-current="page">Age/);
+  assert.match(band.body, /aria-label="Age filters"/);
+  assert.match(band.body, /id="age-band-filter"/);
+  assert.match(band.body, /data-filter-select/);
+  assert.match(band.body, /href="\/people\/mid-official"/);
+  assert.doesNotMatch(band.body, /href="\/people\/young-star"/);
+  assert.doesNotMatch(band.body, /href="\/people\/unknown-birth"/);
+  assert.match(band.body, /value="\/dashboard\/age\?range=all&amp;band=35-44"[^>]*selected/);
+
+  const listed = await requestPage("/dashboard/age");
+  assert.match(listed.body, /href="\/people\/young-star"/);
+  assert.match(listed.body, /href="\/people\/mid-official"/);
+  assert.doesNotMatch(listed.body, /href="\/people\/unknown-birth"/);
+  assert.doesNotMatch(listed.body, /class="age-filter"/);
+  assert.doesNotMatch(listed.body, /name="min_age"/);
 });
 
 test("operation standing does not invent victim or arrest counts", () => {

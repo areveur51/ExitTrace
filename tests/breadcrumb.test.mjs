@@ -21,6 +21,11 @@ test("list pages nest death and indictment indexes", () => {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/reason", label: "Reason" },
   ]);
+  assert.deepEqual(breadcrumbItems({ path: "/dashboard/age" }), [
+    { href: "/", label: "Home" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/age", label: "Age" },
+  ]);
   assert.deepEqual(breadcrumbItems({ path: "/grokipedia" }), [
     { href: "/", label: "Home" },
     { href: "/search", label: "Search" },
