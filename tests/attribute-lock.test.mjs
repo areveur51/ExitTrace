@@ -219,9 +219,10 @@ test("age filter uses stored age_at_event on a non-death KEEP list", async () =>
   const page = await requestPage("/firings?min_age=20&max_age=30");
   assert.equal(page.status, 200);
   assert.match(page.body, /href="\/people\/young-analyst"/);
-  assert.doesNotMatch(page.body, /href="\/people\/old-analyst"/);
-  assert.match(page.body, /class="age-filter"/);
+  assert.match(page.body, /href="\/people\/old-analyst"/);
+  assert.doesNotMatch(page.body, /class="age-filter"/);
   assert.doesNotMatch(page.body, /Age at death/);
+  assert.doesNotMatch(page.body, /name="min_age"/);
 });
 
 test("gold rows still load empty; annotate does not require the lock", async () => {

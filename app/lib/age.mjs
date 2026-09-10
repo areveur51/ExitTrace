@@ -1,5 +1,17 @@
 /** Age at event from birth_date + that tag's event_date. Fail-closed: no guess. */
 
+export const AGE_BANDS = [
+  { id: "13-17", label: "13-17", minAge: 13, maxAge: 17 },
+  { id: "18-24", label: "18-24", minAge: 18, maxAge: 24 },
+  { id: "25-34", label: "25-34", minAge: 25, maxAge: 34 },
+  { id: "35-44", label: "35-44", minAge: 35, maxAge: 44 },
+  { id: "45-54", label: "45-54", minAge: 45, maxAge: 54 },
+  { id: "55-64", label: "55-64", minAge: 55, maxAge: 64 },
+  { id: "65+", label: "65+", minAge: 65, maxAge: null },
+];
+
+const AGE_BAND_BY_ID = new Map(AGE_BANDS.map((b) => [b.id, b]));
+
 function asCalendarDate(v) {
   if (!v) return null;
   const text =
@@ -34,6 +46,33 @@ export function parseAgeBound(raw) {
   const n = Number.parseInt(String(raw), 10);
   if (!Number.isFinite(n) || n < 0 || n > 150) return null;
   return n;
+}
+
+/** Calendar birth_date only. Empty / invalid is not a date and is not guessed. */
+export function knownBirthDate(raw) {
+  return asCalendarDate(raw) != null;
+}
+
+export function parseAgeBand(raw) {
+  const id = decodeURIComponent(String(raw || "")).trim();
+  if (!id || id === "all") return null;
+  return AGE_BAND_BY_ID.get(id) || null;
+}
+
+export function ageBandFor(age) {
+  const n = parseStoredAge(age);
+  if (n == null) return null;
+  return AGE_BANDS.find((b) => n >= b.minAge && (b.maxAge == null || n <= b.maxAge)) || null;
+}
+
+/** All = any bandable age. Missing age never matches a selected band. */
+export function matchesAgeBand(age, band) {
+  if (!band) return ageBandFor(age) != null;
+  const n = parseStoredAge(age);
+  if (n == null) return false;
+  if (n < band.minAge) return false;
+  if (band.maxAge != null && n > band.maxAge) return false;
+  return true;
 }
 
 export function parseAgeFilter(searchParams) {

@@ -682,8 +682,7 @@ img.still.thumb {
   gap: 0.3rem 0.45rem;
   margin-top: 0.45rem;
 }
-.page-size-label,
-.age-filter-label {
+.page-size-label {
   flex: 1 1 100%;
   font-family: var(--font-ui);
   font-size: var(--hud-label);
@@ -701,36 +700,6 @@ img.still.thumb {
   border-color: var(--cyan);
   color: var(--cyan);
   box-shadow: var(--glow-cyan);
-}
-.age-filter {
-  margin: 0 0 0.85rem;
-}
-.age-filter-fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 0.55rem;
-}
-.age-filter-field {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-height: 44px;
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 0.82rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.age-filter-field input {
-  width: 4.5rem;
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0.3rem 0.45rem;
-  border: 1px solid var(--rule);
-  background: var(--panel);
-  color: var(--ink);
-  font: inherit;
 }
 .br { color: var(--amber); }
 .keychip[data-key="f"] { color: var(--cyan); }
@@ -1055,9 +1024,9 @@ pre {
   .pager-pages a,
   .add-submit,
   .page-size-btn,
-  .age-filter-apply,
-  .age-filter-field input,
   .identity-filter-select,
+  .dash-age-head,
+  .dash-age-row,
   .dash-range-btn,
   .dash-range-apply,
   .dash-range-field input,
@@ -1130,11 +1099,74 @@ pre {
   text-shadow: var(--glow-cyan);
 }
 .dash-grid,
+.dash-standings,
 .dash-trends {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.85rem;
   margin: 0 0 1rem;
+}
+.dash-age-card {
+  background: #141416;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 0.85rem 1.05rem 1.05rem;
+}
+.dash-age-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  margin: 0 0 0.55rem;
+  color: #f4f4f5;
+  text-decoration: none;
+  font-family: var(--font-ui);
+  font-size: 1.12rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.dash-age-chevron {
+  color: rgba(244, 244, 245, 0.55);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.dash-age-bands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+.dash-age-row {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 28px;
+  text-decoration: none;
+  color: inherit;
+}
+.dash-age-label {
+  color: rgba(228, 228, 231, 0.82);
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+.dash-age-track {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.dash-age-fill {
+  display: block;
+  height: 100%;
+  width: var(--age-fill, 0%);
+  border-radius: 999px;
+  background: #3b82f6;
+}
+.dash-age-row[data-age-count]:not([data-age-count="0"]) .dash-age-fill {
+  min-width: 8px;
 }
 .dash-block { min-width: 0; }
 .dash-box .box-inner { overflow-x: auto; }
@@ -1392,7 +1424,6 @@ html[data-theme="glass"] .pager-pages a,
 html[data-theme="glass"] .tui-form input,
 html[data-theme="glass"] .tui-form select,
 html[data-theme="glass"] .identity-filter-select,
-html[data-theme="glass"] .age-filter-field input,
 html[data-theme="glass"] .add-submit,
 html[data-theme="glass"] pre {
   clip-path: none;
@@ -1499,9 +1530,17 @@ html[data-theme="glass"] .dash-stat {
   padding: 0.65rem 0.9rem;
 }
 html[data-theme="glass"] .dash-grid,
+html[data-theme="glass"] .dash-standings,
 html[data-theme="glass"] .dash-trends,
 html[data-theme="glass"] .dash-stats {
   gap: 1rem 1.5rem;
+}
+html[data-theme="glass"] .dash-age-card {
+  background: rgba(16, 16, 18, 0.92);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
 }
 @media (hover: hover) and (pointer: fine) {
   html[data-theme="glass"] .tui-row:hover {
@@ -1513,6 +1552,8 @@ html[data-theme="glass"] .dash-stats {
   html[data-theme="glass"] .tui-row:hover::before {
     background: var(--status-ok);
   }
+  .dash-age-row:hover .dash-age-label { color: #fff; }
+  .dash-age-row:hover .dash-age-fill { background: #60a5fa; }
 }
 
 
@@ -1710,6 +1751,7 @@ html[data-theme="glass"] .dash-stats {
   .pixel-wordmark { width: min(48rem, 70vw); }
   .tui-search { width: min(36rem, 70vw); }
   .dash-grid { grid-template-columns: 1fr 1fr; }
+  .dash-standings { grid-template-columns: 1fr 1fr; }
   .dash-trends { grid-template-columns: 1fr 1fr 1fr; }
   .detail {
     display: grid;

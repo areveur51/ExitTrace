@@ -119,7 +119,8 @@ test("one person can carry firing + celebrity + official + ceo tags", async () =
   assert.match(firings.body, new RegExp(`href="/people/${row.id}"`));
   assert.match(firings.body, /aria-label="Identity filters"/);
   assert.match(firings.body, /value="\/firings\?tags=celebrity"[^>]*selected/);
-  assert.match(firings.body, />Age</);
+  assert.doesNotMatch(firings.body, /class="age-filter"/);
+  assert.doesNotMatch(firings.body, /name="min_age"/);
 
   const officials = await requestPage("/government");
   assert.match(officials.body, /Officials/);
@@ -127,7 +128,7 @@ test("one person can carry firing + celebrity + official + ceo tags", async () =
   assert.match(officials.body, new RegExp(`href="/people/${row.id}"`));
 });
 
-test("main event pages expose identity and age filters", async () => {
+test("main event pages expose identity filters without age controls", async () => {
   setMemory(goldSeed());
   for (const pathName of [
     "/firings",
@@ -150,10 +151,11 @@ test("main event pages expose identity and age filters", async () => {
     assert.match(res.body, />Officials</);
     assert.match(res.body, />Executives</);
     assert.doesNotMatch(res.body, />CEOs</);
-    assert.match(res.body, /name="min_age"/);
+    assert.doesNotMatch(res.body, /name="min_age"/);
+    assert.doesNotMatch(res.body, /class="age-filter"/);
+    assert.doesNotMatch(res.body, /Age at death/);
   }
   const deaths = await requestPage("/deaths");
-  assert.match(deaths.body, /Age at death/);
   assert.match(deaths.body, /value="\/deaths\/celebrities"/);
   assert.match(deaths.body, /value="\/deaths\/officials"/);
   assert.match(deaths.body, /value="\/deaths\/ceos"/);

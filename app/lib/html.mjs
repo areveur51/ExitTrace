@@ -34,7 +34,9 @@ import {
   normalizeTags,
   personTags,
 } from "./tags.mjs";
+import { AGE_BANDS, parseAgeBand } from "./age.mjs";
 import {
+  DASH_AGE,
   DASH_DIMENSIONS,
   DASH_RANGE_PRESETS,
   DASH_RANGE_STORAGE_KEY,
@@ -188,44 +190,18 @@ export function pageSizeSelector(activeSize = PAGE_SIZE) {
   </nav>`;
 }
 
-export function ageFilterForm(actionPath, { minAge, maxAge, tags, deaths } = {}) {
-  const minVal = minAge != null ? String(minAge) : "";
-  const maxVal = maxAge != null ? String(maxAge) : "";
-  const selected = normalizeTags(tags);
-  const hidden = selected.length
-    ? `<input type="hidden" name="tags" value="${esc(selected.join(","))}">`
-    : "";
-  const label = deaths ? "Age at death" : "Age";
-  const rawAction = String(actionPath || "").split("?")[0];
-  const action =
-    catalogMainPath(rawAction) === "/group-operations" &&
-    rawAction.startsWith("/group-operations/")
-      ? rawAction
-      : catalogMainPath(rawAction);
-  return `<form class="age-filter" method="get" action="${esc(action)}" role="search">
-    ${hidden}
-    <span class="age-filter-label" id="age-filter-label">${label}</span>
-    <div class="age-filter-fields" role="group" aria-labelledby="age-filter-label">
-      <label class="age-filter-field">Min <input type="number" name="min_age" min="0" max="150" inputmode="numeric" value="${esc(minVal)}"></label>
-      <label class="age-filter-field">Max <input type="number" name="max_age" min="0" max="150" inputmode="numeric" value="${esc(maxVal)}"></label>
-      <button type="submit" class="keychip age-filter-apply">Apply</button>
-    </div>
-  </form>`;
-}
-
-export function identityFilterNav(basePath, { tags = [], minAge, maxAge } = {}) {
+export function identityFilterNav(basePath, { tags = [] } = {}) {
   const main = catalogMainPath(basePath);
   const selected = normalizeTags(tags);
   const locked = main === "/government" ? ["official"] : [];
-  const age = { minAge, maxAge };
-  const allHref = filterPath(main, { tags: locked, ...age });
+  const allHref = filterPath(main, { tags: locked });
   const options = [{ href: allHref, label: "All" }];
   if (main === "/group-operations") {
     for (const kind of GROUP_OPS_KEEP_IDS) {
       const child = categoryById(kind);
       if (!child) continue;
       options.push({
-        href: filterPath(child.path, { tags: [], ...age }),
+        href: filterPath(child.path, { tags: [] }),
         label: child.nav,
       });
     }
@@ -233,11 +209,11 @@ export function identityFilterNav(basePath, { tags = [], minAge, maxAge } = {}) 
   if (main !== "/group-operations") {
     for (const tag of IDENTITY_TAGS) {
       if (locked.includes(tag.id)) continue;
-      const href = filterPath(main, { tags: [...new Set([...locked, tag.id])], ...age });
+      const href = filterPath(main, { tags: [...new Set([...locked, tag.id])] });
       options.push({ href, label: tag.nav });
     }
   }
-  const currentHref = filterPath(basePath, { tags: selected, ...age });
+  const currentHref = filterPath(basePath, { tags: selected });
   const current = options.find((o) => o.href === currentHref) || options[0];
   const opts = options
     .map((o) => {
@@ -410,6 +386,7 @@ export function breadcrumbItems({
     items.push({ href: "/dashboard", label: "Dashboard" });
     const dim = DASH_DIMENSIONS.find((d) => d.path === p);
     if (dim) items.push({ href: dim.path, label: dim.nav });
+    else if (p === DASH_AGE.path) items.push({ href: DASH_AGE.path, label: DASH_AGE.nav });
     return items;
   }
   if (p === GROKIPEDIA_PATH || p.startsWith(`${GROKIPEDIA_PATH}/`)) {
@@ -1165,17 +1142,21 @@ function dashRankTable(rows, { empty = "No rows on this page", selfPath = "" } =
   </table>`;
 }
 
-export function dashRangeNav(range, { path = "/dashboard" } = {}) {
+export function dashRangeNav(range, { path = "/dashboard", extra = {} } = {}) {
   const current = resolveDashRange(range);
   const chips = DASH_RANGE_PRESETS.filter((p) => p.id !== "custom")
     .map((p) => {
       const on = current.id === p.id;
-      return `<a class="keychip dash-range-btn" href="${esc(dashRangeHref(path, { id: p.id }))}" data-dash-range-set="${esc(p.id)}"${
+      return `<a class="keychip dash-range-btn" href="${esc(dashRangeHref(path, { id: p.id }, extra))}" data-dash-range-set="${esc(p.id)}"${
         on ? ' aria-current="page"' : ""
       }>${esc(p.label)}</a>`;
     })
     .join("");
   const customOn = current.id === "custom";
+  const band = parseAgeBand(extra.band);
+  const bandHidden = band
+    ? `<input type="hidden" name="band" value="${esc(band.id)}">`
+    : "";
   return `<nav class="dash-range" aria-label="Event date range">
     <span class="dash-range-label" id="dash-range-label">Event date</span>
     <div class="dash-range-btns" role="group" aria-labelledby="dash-range-label">
@@ -1183,6 +1164,7 @@ export function dashRangeNav(range, { path = "/dashboard" } = {}) {
     </div>
     <form class="dash-range-custom" method="get" action="${esc(String(path || "/dashboard").split("?")[0])}">
       <input type="hidden" name="range" value="custom">
+      ${bandHidden}
       <label class="dash-range-field">From <input type="date" name="from" value="${esc(current.id === "custom" ? current.from : "")}"></label>
       <label class="dash-range-field">To <input type="date" name="to" value="${esc(current.id === "custom" ? current.to : "")}"></label>
       <button type="submit" class="keychip dash-range-apply" data-dash-range-set="custom"${
@@ -1216,7 +1198,10 @@ export function dashboardBody(model, { path = "/dashboard", range } = {}) {
       <p class="dash-stat"><span class="dash-stat-label">Victims</span> ${dashCount(model.operations?.all?.victims)}</p>
       <p class="dash-stat"><span class="dash-stat-label">Arrests</span> ${dashCount(model.operations?.all?.arrests)}</p>
     </section>
-    ${operationStandingBlock(model.operations)}
+    <div class="dash-standings">
+      ${operationStandingBlock(model.operations)}
+      ${ageStandingBlock(model.age, active)}
+    </div>
     <div class="dash-grid">${dims}</div>
     <section class="dash-trends" aria-label="Event-date trends">
       <section class="dash-block">
@@ -1237,6 +1222,79 @@ export function dashboardRankBody(dim, rows, { range } = {}) {
   return `<div class="dash-hud dash-rank-page" data-dash-dim="${esc(dim.id)}">
     ${dashRangeNav(active, { path: dim.path })}
     ${boxFrame(`All by ${dim.nav}`, dashRankTable(rows, { selfPath: dim.path }), { extraClass: "dash-box", active: true })}
+  </div>`;
+}
+
+function ageFillPct(count, max) {
+  const n = Math.max(0, Number(count) || 0);
+  const top = Math.max(0, Number(max) || 0);
+  if (!n || !top) return 0;
+  return Math.max(8, Math.round((n / top) * 100));
+}
+
+function ageStandingBlock(bands, range) {
+  const rows = Array.isArray(bands) && bands.length ? bands : AGE_BANDS.map((b) => ({
+    key: b.id,
+    label: b.label,
+    count: 0,
+  }));
+  const max = Math.max(0, ...rows.map((r) => Number(r.count) || 0));
+  const extra = {};
+  const items = rows
+    .map((row) => {
+      const count = Math.max(0, Number(row.count) || 0);
+      const href = dashRangeHref(DASH_AGE.path, range, { ...extra, band: row.key });
+      const pct = ageFillPct(count, max);
+      return `<li>
+        <a class="dash-age-row" href="${esc(href)}" data-age-band="${esc(row.key)}" data-age-count="${count}" aria-label="${esc(row.label)} · ${count}">
+          <span class="dash-age-label">${esc(row.label)}</span>
+          <span class="dash-age-track" aria-hidden="true">
+            <span class="dash-age-fill" style="--age-fill:${pct}%"></span>
+          </span>
+        </a>
+      </li>`;
+    })
+    .join("");
+  return `<section class="dash-block" data-dash-dim="age" aria-label="Age standing">
+    <div class="dash-age-card">
+      <a class="dash-age-head" href="${esc(dashRangeHref(DASH_AGE.path, range))}">
+        <span class="dash-age-title">Age</span>
+        <span class="dash-age-chevron" aria-hidden="true">›</span>
+      </a>
+      <ul class="dash-age-bands">${items}</ul>
+    </div>
+  </section>`;
+}
+
+export function ageBandFilterNav({ band, range } = {}) {
+  const current = parseAgeBand(band);
+  const options = [
+    { href: dashRangeHref(DASH_AGE.path, range), label: "All", id: "all" },
+    ...AGE_BANDS.map((b) => ({
+      href: dashRangeHref(DASH_AGE.path, range, { band: b.id }),
+      label: b.label,
+      id: b.id,
+    })),
+  ];
+  const currentId = current?.id || "all";
+  const opts = options
+    .map((o) => {
+      const on = o.id === currentId;
+      return `<option value="${esc(o.href)}"${on ? " selected" : ""}>${esc(o.label)}</option>`;
+    })
+    .join("");
+  return `<nav class="identity-filters age-band-filters" aria-label="Age filters">
+    <label class="identity-filters-label" for="age-band-filter">Age</label>
+    <select class="identity-filter-select" id="age-band-filter" data-filter-select>${opts}</select>
+  </nav>`;
+}
+
+export function dashboardAgeBody({ range, band } = {}) {
+  const active = resolveDashRange(range);
+  const extra = band ? { band: band.id } : {};
+  return `<div class="dash-hud dash-age-page" data-dash-dim="age">
+    ${dashRangeNav(active, { path: DASH_AGE.path, extra })}
+    ${ageBandFilterNav({ band: band?.id, range: active })}
   </div>`;
 }
 
