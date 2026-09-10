@@ -9,14 +9,23 @@ const wfPath = path.join(ROOT, ".github", "workflows", "lab-to-render-sync.yml")
 const docPath = path.join(ROOT, "docs", "github-auto-deploy.md");
 const dataReleasePath = path.join(ROOT, ".github", "workflows", "data-release.yml");
 
+// Encoded so this file does not contain the raw host strings.
+const PRIVATE_HOST = ["pop" + "-os", "Grok" + "Build", "/o" + "pt/"];
+
+function assertNoPrivateHost(text, label) {
+  for (const pat of PRIVATE_HOST) {
+    assert.equal(text.includes(pat), false, `${label} must not contain ${pat}`);
+  }
+}
+
 test("lab-to-render-sync workflow matches the locked contract", () => {
   const wf = fs.readFileSync(wfPath, "utf8");
   assert.match(wf, /^name:\s*lab-to-render-sync\s*$/m);
   assert.match(wf, /workflow_dispatch:/);
   assert.match(wf, /cron:\s*"20 13 \* \* \*"/);
   assert.match(wf, /America\/New_York/);
-  assert.match(wf, /runs-on:\s*\[self-hosted,\s*pop-os,\s*exittrace-lab\]/);
-  assert.match(wf, /\/opt\/GrokBuild\/bin\/et-lab-dump\.sh/);
+  assert.match(wf, /runs-on:\s*\[self-hosted,\s*exittrace-lab\]/);
+  assert.match(wf, /et-lab-dump\.sh/);
   assert.match(wf, /exittrace-lab\.dump\.gz/);
   assert.match(wf, /retention-days:\s*1/);
   assert.match(wf, /runs-on:\s*ubuntu-latest/);
@@ -29,6 +38,7 @@ test("lab-to-render-sync workflow matches the locked contract", () => {
   assert.doesNotMatch(wf, /RENDER_DATABASE_URL/);
   assert.doesNotMatch(wf, /127\.0\.0\.1:5434/);
   assert.doesNotMatch(wf, /localhost:5434/);
+  assertNoPrivateHost(wf, "workflow");
 });
 
 test("docs name production DATABASE_URL, runner labels, dump script, and exclude host port 5434", () => {
@@ -36,12 +46,12 @@ test("docs name production DATABASE_URL, runner labels, dump script, and exclude
   assert.match(doc, /lab-to-render-sync\.yml/);
   assert.match(doc, /`production`/);
   assert.match(doc, /\*\*`DATABASE_URL`\*\*/);
-  assert.match(doc, /pop-os-exittrace/);
   assert.match(doc, /exittrace-lab/);
-  assert.match(doc, /\/opt\/GrokBuild\/bin\/et-lab-dump\.sh/);
+  assert.match(doc, /et-lab-dump\.sh/);
   assert.match(doc, /5434/);
   assert.match(doc, /replica/);
   assert.doesNotMatch(doc, /RENDER_DATABASE_URL/);
+  assertNoPrivateHost(doc, "docs");
 });
 
 test("data-release.yml is unchanged by this sync path", () => {
