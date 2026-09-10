@@ -111,9 +111,9 @@ test("public chrome keeps catalog labels and omits pin larp copy", () => {
   assert.doesNotMatch(html, /href: GROKIPEDIA_PATH|href: "\/grokipedia"/);
   assert.match(html, /href: "\/indictments"/);
   assert.match(html, /href: "\/unsorted"/);
-  assert.match(html, /href: "\/add"/);
   assert.match(html, /href: "\/dog-comms"/);
-  assert.match(html, /href: "\/search"/);
+  assert.doesNotMatch(html, /key: "n", href: "\/add"/);
+  assert.doesNotMatch(html, /key: "s", href: "\/search"/);
   assert.doesNotMatch(
     html,
     /CLOSE HACK|CLOSE HACK IMMEDIATELY|SAMURAI PROTOCOL|BREACH PROTOCOL|ROOT@|SurveilTrack|BIO-INTERFACE|ADMIN ACCESS GRANTED|BATTLEDECK|Batman|Batmobile|Warner|DC Comics/i,

@@ -99,7 +99,8 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.match(footer, /href="\/indictments"/);
   assert.match(footer, /href="\/group-operations"/);
   assert.match(footer, /href="\/unsorted"/);
-  assert.match(footer, /href="\/add"/);
+  assert.doesNotMatch(footer, /href="\/add"/);
+  assert.doesNotMatch(footer, /href="\/search"/);
   assert.match(footer, /href="\/dog-comms"/);
   assert.match(footer, /\]<\/span> Firings</);
   assert.match(footer, /\]<\/span> Resignations</);
@@ -109,6 +110,8 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.match(footer, /\]<\/span> Indictments</);
   assert.match(footer, /\]<\/span> Operations</);
   assert.match(footer, /\]<\/span> Unsorted</);
+  assert.doesNotMatch(footer, /\]<\/span> Add</);
+  assert.doesNotMatch(footer, /\]<\/span> Search</);
   assert.doesNotMatch(footer, /CLOSE HACK|BREACH PROTOCOL|SurveilTrack|ROOT@/i);
 });
 

@@ -142,8 +142,6 @@ function keymapItems(activePath) {
     { key: "b", href: "/dashboard", label: "Dashboard" },
     { key: "u", href: "/unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
-    { key: "n", href: "/add", label: "Add" },
-    { key: "s", href: "/search", label: "Search" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ].map((item) => ({
     ...item,

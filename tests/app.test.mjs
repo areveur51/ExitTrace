@@ -297,7 +297,11 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /data-key="u"/);
   assert.match(res.body, /class="keymap-keys"/);
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "n", "s", "w"]);
+  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "w"]);
+  assert.doesNotMatch(res.body, /data-key="n"/);
+  assert.doesNotMatch(res.body, /data-key="s"/);
+  assert.doesNotMatch(res.body, /\]<\/span> Add</);
+  assert.doesNotMatch(res.body, /\]<\/span> Search</);
   assert.doesNotMatch(res.body, /widgets\.js/);
 });
 
@@ -384,7 +388,8 @@ test("list pages lock Glass only and keep catalog copy, not pin LARP", async () 
   assert.match(list.body, /href="\/indictments"/);
   assert.match(list.body, /href="\/group-operations"/);
   assert.match(list.body, /href="\/unsorted"/);
-  assert.match(list.body, /href="\/add"/);
+  assert.doesNotMatch(list.body, /href="\/add"/);
+  assert.doesNotMatch(list.body, /href="\/search"/);
   assert.match(list.body, /href="\/dog-comms"/);
   assert.match(list.body, /data-key="f"/);
   assert.match(list.body, />Firings</);
@@ -448,8 +453,8 @@ test("HUD palette uses red/black/gold tokens and documents phone/iPad/desktop la
   assert.match(home.body, /fill="var\(--label\)"/);
   assert.match(home.body, /class="tui hud/);
   assert.match(home.body, /class="hud-stage"/);
-  assert.match(home.body, /href="\/search"/);
-  assert.match(home.body, /data-key="s"/);
+  assert.doesNotMatch(home.body, /href="\/search"/);
+  assert.doesNotMatch(home.body, /data-key="s"/);
   assert.doesNotMatch(home.body, /#c4b5fd|#4c1d95|#e6c384/);
   assert.match(list.body, /list-head/);
   assert.match(list.body, /class="hud-stage"/);
