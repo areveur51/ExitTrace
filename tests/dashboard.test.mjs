@@ -323,8 +323,11 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /class="dash-pt"|class="dash-bar"/);
   assert.match(dash.body, /class="dash-tip"/);
   assert.match(dash.body, /Operations standing/);
-  assert.match(dash.body, /Top 7 by Age|Top \d+ by Age/);
-  assert.match(dash.body, /All by Age/);
+  assert.match(dash.body, /Counts by Age/);
+  assert.match(dash.body, /aria-label="Counts by Age"/);
+  assert.match(dash.body, /All ages/);
+  assert.match(dash.body, /aria-label="All ages"/);
+  assert.doesNotMatch(dash.body, /Top \d+ by Age|All by Age/);
   assert.match(dash.body, /data-dash-dim="age"/);
   assert.match(dash.body, /class="dash-table"/);
   assert.match(dash.body, /data-dash-dim="age"[\s\S]*?dash-box/);
@@ -450,8 +453,9 @@ test("dashboard Age standing bands unique people and skips null birth_date", asy
   assert.match(dash.body, /data-age-band="18-24" data-age-count="1"/);
   assert.match(dash.body, /data-age-band="35-44" data-age-count="1"/);
   assert.match(dash.body, /data-age-band="13-17" data-age-count="0"/);
-  assert.match(dash.body, /Top 7 by Age|Top \d+ by Age/);
-  assert.match(dash.body, /All by Age/);
+  assert.match(dash.body, /Counts by Age/);
+  assert.match(dash.body, /All ages/);
+  assert.doesNotMatch(dash.body, /Top \d+ by Age|All by Age/);
   assert.match(dash.body, /class="dash-table"/);
   assert.match(dash.body, /Operations standing/);
 
@@ -467,6 +471,9 @@ test("dashboard Age standing bands unique people and skips null birth_date", asy
   assert.match(band.body, /value="\/dashboard\/age\?range=all&amp;band=35-44"[^>]*selected/);
 
   const listed = await requestPage("/dashboard/age");
+  assert.match(listed.body, /Counts by Age/);
+  assert.match(listed.body, />All ages</);
+  assert.doesNotMatch(listed.body, /Top \d+ by Age|All by Age/);
   assert.match(listed.body, /href="\/people\/young-star"/);
   assert.match(listed.body, /href="\/people\/mid-official"/);
   assert.doesNotMatch(listed.body, /href="\/people\/unknown-birth"/);

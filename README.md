@@ -122,7 +122,8 @@ Releases:
 | `/group-operations/missing-kids` | Operations tagged `missing_kids` |
 | `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
-| `/dashboard` | Live unique-person ranks and event-date trends |
+| `/dashboard` | Live unique-person ranks, Counts by Age, and event-date trends |
+| `/dashboard/age` | Counts by Age — unique people in fixed bands (missing birth date is not guessed) |
 | `/dashboard/organization` | Ranked organizations (empty unless organization is stored) |
 | `/dashboard/country` | Ranked countries (empty unless country is stored) |
 | `/dashboard/reason` | Ranked KEEP tags (firings, resignations, deaths, corona comms, …) |
@@ -133,7 +134,7 @@ Releases:
 
 Each person is one card. The same person can carry more than one KEEP tag (firings, resignations, government step-downs, arrests, corona comms, indictments, deaths). Group operations are a separate operation card — not a person KEEP kind. Named children are not stored. Victim and arrest counts stay blank unless a cite states them. Each tagged event has its own calendar date (`event_date` is Last Day when present, otherwise Announced) and two official news sources. Optional event fields — position, organization, country, branch, comments — stay empty unless supplied. The dashboard reads those same event columns. A stored Wikimedia or official `.gov` photo or initials and a published-estimate net worth (Forbes, Bloomberg, or official disclosure) or blank sit on the person. Source posts on Unsorted keep the original public URL(s), post text, poster handle (reporter/poster, not the subject), posted date, and a category guess. Subject, event date, photo, and net worth may be an em dash until those fields are filled in. Posted date is never copied into event date.
 
-Identified people use the same list card on every people page: a small local portrait thumb, name, and one date · category · net worth (or em dash). Source posts that still render as posted (em dash title, poster handle) live only on Unsorted. Person and unsorted lists paginate (`?page=`, 17 rows per page by default, selector 17 / 34 / 51 persisted in localStorage, newest event first). Dog-comm lists stay at 10 rows. Age bands live on Dashboard (`/dashboard/age`): unique people by stored `age_at_event` — whole years from `birth_date` plus that tag's `event_date`. A missing birth date is not guessed and does not enter a band. KEEP category lists do not carry an age-range control. The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person, source post, or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
+Identified people use the same list card on every people page: a small local portrait thumb, name, and one date · category · net worth (or em dash). Source posts that still render as posted (em dash title, poster handle) live only on Unsorted. Person and unsorted lists paginate (`?page=`, 17 rows per page by default, selector 17 / 34 / 51 persisted in localStorage, newest event first). Dog-comm lists stay at 10 rows. Counts by Age live on Dashboard (`/dashboard/age`): unique people by stored `age_at_event` — whole years from `birth_date` plus that tag's `event_date`. A missing birth date is not guessed and does not enter a band. KEEP category lists do not carry an age-range control. The local web UI uses a terminal-inspired chrome: a pixel wordmark and catalog search on the home page, row lists with a result count, and a tap-friendly footer of catalog keys. Phones and tablets keep 44px targets. Open a row for the person, source post, or dog-comm detail (net-worth estimate or em dash, sources, stored snapshot).
 
 Dog comms store the post text, poster handle, date, and a local still when one is freely licensed. The source URL is a citation only. Tap a dog-comm row to open the stored snapshot. The pages do not load `widgets.js` and do not fetch X, Wikimedia, or news sites at view time.
 
@@ -148,7 +149,8 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /operations/:id` | One operation row |
 | `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm snapshot |
-| `GET /dashboard` | Unique-person ranks, operation standing, and event-date trends |
+| `GET /dashboard` | Unique-person ranks, Counts by Age, operation standing, and event-date trends |
+| `GET /dashboard/age` | Counts by Age — people in a fixed band (`?band=`), or all ages |
 | `GET /dashboard/:dimension` | Full ranked list (organization, country, reason, branch, position) |
 | `GET /add` | Queue a person, an operation, or an official dog-comm |
 | `POST /add` | Store a pending add request |
