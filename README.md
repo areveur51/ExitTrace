@@ -6,6 +6,20 @@ Sourced tracker of public-role exits since 2017 — firings, resignations, gover
 
 **Repo:** [https://github.com/areveur51/ExitTrace](https://github.com/areveur51/ExitTrace)
 
+## Screenshots
+
+![ExitTrace home](docs/screenshots/home.jpg)
+
+| Firings | Deaths |
+|:--:|:--:|
+| ![Firings](docs/screenshots/firings.jpg) | ![Deaths](docs/screenshots/deaths.jpg) |
+
+| Operations | Dog comms |
+|:--:|:--:|
+| ![Operations](docs/screenshots/operations.jpg) | ![Dog comms](docs/screenshots/dog-comms.jpg) |
+
+![Downloads](docs/screenshots/downloads.jpg)
+
 ## Quick start
 
 Needs [Node.js 20+](https://nodejs.org/).
@@ -193,6 +207,7 @@ scripts/build-thumbs.mjs    derive 40×52 list thumbs from stored stills
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
 docs/github-auto-deploy.md  lab → Render Postgres sync (Actions)
+docs/screenshots/           README captures of home, lists, and downloads
 .github/workflows/lab-to-render-sync.yml
 exittracectl.sh             start | stop | status | seed | import-posts | digest | promote | add-process | pack
 ```
