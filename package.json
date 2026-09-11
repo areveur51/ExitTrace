@@ -20,7 +20,7 @@
     "digest": "node scripts/seed-rss-digest.mjs",
     "promote": "node scripts/promote-source-post.mjs",
     "add-process": "node scripts/process-add-request.mjs",
-    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "env DATABASE_URL= node --test --test-concurrency=1 tests/*.test.mjs",
     "thumbs": "node scripts/build-thumbs.mjs",
     "pack": "bash scripts/pack-data.sh",
     "fetch-data": "bash scripts/fetch-data.sh"

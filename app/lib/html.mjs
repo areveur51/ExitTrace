@@ -49,6 +49,21 @@ import {
   fillEmptyFromGrokipedia,
   grokipediaCite,
 } from "./grokipedia.mjs";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const ROOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const PUBLIC_DIR = path.join(ROOT_DIR, "app", "public");
+const PKG_VERSION = JSON.parse(readFileSync(path.join(ROOT_DIR, "package.json"), "utf8")).version;
+/** Content hash so immutable Cache-Control busts when CSS/JS bytes change. */
+export const ASSET_VERSION = `${PKG_VERSION}-${createHash("sha1")
+  .update(readFileSync(path.join(PUBLIC_DIR, "styles.css")))
+  .update("\0")
+  .update(readFileSync(path.join(PUBLIC_DIR, "app.js")))
+  .digest("hex")
+  .slice(0, 10)}`;
 
 function esc(s) {
   return String(s ?? "")
@@ -459,7 +474,7 @@ export function layout({
   ${themeBootScript()}
   ${pageSizeBootScript()}
   ${dashRangeBootScript()}
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=${esc(ASSET_VERSION)}">
 </head>
 <body class="tui hud${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">
   ${topBar({
@@ -480,7 +495,7 @@ export function layout({
     ${keymapFooter(path)}
   </div>
   ${chromeWidgets()}
-  <script src="/app.js" defer></script>
+  <script src="/app.js?v=${esc(ASSET_VERSION)}" defer></script>
 </body>
 </html>`;
 }
@@ -1064,8 +1079,27 @@ function dashCount(n) {
   return `<span class="dash-count" data-count="${num}">${num}</span>`;
 }
 
+/** Cap SVG points so dashboard HTML stays small. First and last keys remain. */
+export const DASH_CHART_MAX_POINTS = 96;
+
+export function downsampleChartSeries(rows, max = DASH_CHART_MAX_POINTS) {
+  const list = Array.isArray(rows) ? rows : [];
+  const cap = Math.max(2, Number(max) || DASH_CHART_MAX_POINTS);
+  if (list.length <= cap) return list;
+  const out = [];
+  const last = list.length - 1;
+  let prev = -1;
+  for (let i = 0; i < cap; i++) {
+    const idx = i === cap - 1 ? last : Math.round((i * last) / (cap - 1));
+    if (idx === prev) continue;
+    out.push(list[idx]);
+    prev = idx;
+  }
+  return out;
+}
+
 function dashChart(series, { title, kind = "line" } = {}) {
-  const rows = Array.isArray(series) ? series : [];
+  const rows = downsampleChartSeries(Array.isArray(series) ? series : []);
   const values = rows.map((r) => Number(r.count) || 0);
   const w = 360;
   const h = 96;
