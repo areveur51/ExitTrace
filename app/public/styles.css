@@ -848,7 +848,7 @@ img.still.thumb {
 }
 .tui-toast {
   position: fixed;
-  top: 0.7rem;
+  bottom: 0.7rem;
   right: 0.7rem;
   z-index: 60;
   width: min(18rem, calc(100vw - 1.4rem));
