@@ -371,10 +371,11 @@ export function trendSeries(people, range) {
   const dates = eventDatesOf(filterPeopleToRange(people, range));
   const perMonth = bucketCounts(dates, monthKey);
   const perWeek = bucketCounts(dates, weekKey);
+  const perDay = bucketCounts(dates, (day) => day);
   let running = 0;
-  const total = dates.map((key) => {
-    running += 1;
-    return { key, count: running };
+  const total = perDay.map((row) => {
+    running += row.count;
+    return { key: row.key, count: running };
   });
   const last = total[total.length - 1]?.count || 0;
   return {

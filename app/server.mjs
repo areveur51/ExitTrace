@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import crypto from "crypto";
 import fs from "fs";
 import http from "http";
 import path from "path";
+import zlib from "zlib";
 import { fileURLToPath } from "url";
 import {
   CATEGORIES,
@@ -124,12 +126,102 @@ const MIME = {
   ".txt": "text/plain; charset=utf-8",
 };
 
+function acceptsGzip(req) {
+  return /\bgzip\b/i.test(String(req?.headers?.["accept-encoding"] || ""));
+}
+
+function gzippableType(contentType) {
+  const type = String(contentType || "");
+  return (
+    type.startsWith("text/") ||
+    type.includes("javascript") ||
+    type.includes("json") ||
+    type.includes("svg")
+  );
+}
+
 function send(res, status, body, headers = {}) {
-  const payload = Buffer.isBuffer(body) ? body : Buffer.from(body ?? "");
+  let payload = Buffer.isBuffer(body) ? body : Buffer.from(body ?? "");
+  const extra = { ...headers };
+  const contentType = extra["Content-Type"] || extra["content-type"] || "";
+  const req = res.req;
+  if (
+    req &&
+    status === 200 &&
+    payload.length >= 512 &&
+    gzippableType(contentType) &&
+    acceptsGzip(req)
+  ) {
+    payload = zlib.gzipSync(payload);
+    extra["Content-Encoding"] = "gzip";
+    extra.Vary = extra.Vary ? `${extra.Vary}, Accept-Encoding` : "Accept-Encoding";
+  }
   res.writeHead(status, {
     "Content-Length": payload.length,
-    "Cache-Control": "no-store",
+    "Cache-Control": extra["Cache-Control"] || extra["cache-control"] || "no-store",
+    ...extra,
+  });
+  res.end(payload);
+}
+
+const staticCache = new Map();
+const STATIC_CACHE_MAX_BYTES = 1024 * 1024;
+
+function cachedFile(filePath, { gzippable = false } = {}) {
+  const st = fs.statSync(filePath);
+  const hit = staticCache.get(filePath);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit;
+  const body = fs.readFileSync(filePath);
+  const etag = `"${crypto.createHash("sha1").update(body).digest("hex")}"`;
+  const entry = {
+    body,
+    gzip: gzippable ? zlib.gzipSync(body) : null,
+    etag,
+    mtimeMs: st.mtimeMs,
+    size: st.size,
+  };
+  if (gzippable && st.size <= STATIC_CACHE_MAX_BYTES) staticCache.set(filePath, entry);
+  return entry;
+}
+
+function sendStatic(req, res, filePath, contentType, cacheControl) {
+  const gzippable = gzippableType(contentType);
+  if (!gzippable) {
+    const st = fs.statSync(filePath);
+    const etag = `W/"${st.size.toString(16)}-${Math.trunc(st.mtimeMs).toString(16)}"`;
+    const headers = {
+      "Content-Type": contentType,
+      "Cache-Control": cacheControl,
+      ETag: etag,
+    };
+    if (String(req.headers["if-none-match"] || "") === etag) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
+    const body = fs.readFileSync(filePath);
+    res.writeHead(200, { ...headers, "Content-Length": body.length });
+    res.end(body);
+    return;
+  }
+  const asset = cachedFile(filePath, { gzippable: true });
+  const headers = {
+    "Content-Type": contentType,
+    "Cache-Control": cacheControl,
+    ETag: asset.etag,
+    Vary: "Accept-Encoding",
+  };
+  if (String(req.headers["if-none-match"] || "") === asset.etag) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+  const gzip = Boolean(asset.gzip) && acceptsGzip(req);
+  const payload = gzip ? asset.gzip : asset.body;
+  res.writeHead(200, {
     ...headers,
+    "Content-Length": payload.length,
+    ...(gzip ? { "Content-Encoding": "gzip" } : {}),
   });
   res.end(payload);
 }
@@ -205,27 +297,30 @@ function safeJoin(root, reqPath) {
   return resolved;
 }
 
-function serveFile(res, filePath) {
+function serveFile(res, filePath, req) {
   if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
     send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
     return;
   }
   const ext = path.extname(filePath).toLowerCase();
+  const type = MIME[ext] || "application/octet-stream";
+  const cache = "public, max-age=31536000, immutable";
+  if (req) return sendStatic(req, res, filePath, type, cache);
   send(res, 200, fs.readFileSync(filePath), {
-    "Content-Type": MIME[ext] || "application/octet-stream",
-    "Cache-Control": "public, max-age=31536000, immutable",
+    "Content-Type": type,
+    "Cache-Control": cache,
   });
 }
 
-function serveMedia(res, reqPath) {
+function serveMedia(res, reqPath, req) {
   const rel = decodeURIComponent(String(reqPath || "")).replace(/^\/+/, "");
   if (rel.startsWith("thumbs/")) {
     const href = `/media/${rel}`;
     const thumbRel = thumbRelFromHref(href);
     const dest = thumbRel ? ensureThumbFile(mediaDir, thumbRel) : null;
-    return serveFile(res, dest);
+    return serveFile(res, dest, req);
   }
-  return serveFile(res, safeJoin(mediaDir, rel));
+  return serveFile(res, safeJoin(mediaDir, rel), req);
 }
 
 async function healthPayload() {
@@ -409,19 +504,22 @@ async function handle(req, res) {
     const filePath = p.startsWith("/media/themes/")
       ? safeJoin(PUBLIC, p.slice(1))
       : path.join(PUBLIC, p.slice(1));
-    if (!filePath || !fs.existsSync(filePath)) {
+    if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
       send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    send(res, 200, fs.readFileSync(filePath), {
-      "Content-Type": MIME[ext] || "application/octet-stream",
-      "Cache-Control": "no-store",
-    });
+    sendStatic(
+      req,
+      res,
+      filePath,
+      MIME[ext] || "application/octet-stream",
+      "public, max-age=31536000, immutable",
+    );
     return;
   }
   if (p.startsWith("/media/")) {
-    return serveMedia(res, p.slice("/media/".length));
+    return serveMedia(res, p.slice("/media/".length), req);
   }
 
   if (p === "/") {
