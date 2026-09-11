@@ -18,7 +18,7 @@ The restore job runs on `ubuntu-latest` and reads only `secrets.DATABASE_URL` fr
 | Piece | Value |
 |--|--|
 | Workflow file | `.github/workflows/lab-to-render-sync.yml` |
-| Triggers | `workflow_dispatch`, plus cron `20 13 * * *` (13:20 UTC = 9:20am America/New_York during EDT, after the 9:05 ET lab pack; during EST that cron is 8:20am ET) |
+| Triggers | `workflow_dispatch`, plus cron `0 */2 * * *` (every even UTC hour at minute 0; America/New_York: every 2 hours ET — EDT UTC-4 is 8:00pm, 10:00pm, …, 6:00pm ET; EST UTC-5 is 7:00pm, 9:00pm, …, 5:00pm ET). GitHub Actions cron is UTC and does not honor a TZ key. |
 | Dump runner | Self-hosted labels `self-hosted`, `pop-os`, `exittrace-lab` (runner name `pop-os-exittrace`) |
 | Dump script | `/opt/GrokBuild/bin/et-lab-dump.sh` — `docker exec grokbuild-postgres pg_dump -Fc` of database `exittrace` on host **:5433** |
 | Artifact | `exittrace-lab-dump` (`exittrace-lab.dump.gz`), retention 1 day |

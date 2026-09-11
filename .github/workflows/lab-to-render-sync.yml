@@ -6,9 +6,12 @@
 # (docker grokbuild-postgres, database exittrace). Host port 5434 and
 # any replica database are excluded — do not dump them or fall back there.
 #
-# Schedule is UTC. cron 20 13 * * * is 9:20am America/New_York during EDT
-# (after the lab pack at 9:05 ET). During EST that same cron is 8:20am ET.
-# GitHub Actions cron does not honor a TZ key.
+# GitHub Actions cron is UTC and does not honor a TZ key.
+# cron 0 */2 * * * fires at minute 0 of every even UTC hour
+# (00:00, 02:00, 04:00, …, 22:00 UTC).
+# America/New_York intent: every 2 hours in Eastern Time.
+#   EDT (UTC-4): 8:00pm, 10:00pm, 12:00am, 2:00am, …, 6:00pm ET
+#   EST (UTC-5): 7:00pm, 9:00pm, 11:00pm, 1:00am, …, 5:00pm ET
 #
 # Restore reads DATABASE_URL only from the GitHub Actions environment
 # named production (Render External connection string). Never put that
@@ -19,7 +22,7 @@ name: lab-to-render-sync
 on:
   workflow_dispatch:
   schedule:
-    - cron: "20 13 * * *"
+    - cron: "0 */2 * * *"
 
 concurrency:
   group: lab-to-render-sync

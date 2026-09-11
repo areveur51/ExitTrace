@@ -13,7 +13,7 @@ test("lab-to-render-sync workflow matches the locked contract", () => {
   const wf = fs.readFileSync(wfPath, "utf8");
   assert.match(wf, /^name:\s*lab-to-render-sync\s*$/m);
   assert.match(wf, /workflow_dispatch:/);
-  assert.match(wf, /cron:\s*"20 13 \* \* \*"/);
+  assert.match(wf, /cron:\s*"0 \*\/2 \* \* \*"/);
   assert.match(wf, /America\/New_York/);
   assert.match(wf, /runs-on:\s*\[self-hosted,\s*pop-os,\s*exittrace-lab\]/);
   assert.match(wf, /\/opt\/GrokBuild\/bin\/et-lab-dump\.sh/);
@@ -34,6 +34,8 @@ test("lab-to-render-sync workflow matches the locked contract", () => {
 test("docs name production DATABASE_URL, runner labels, dump script, and exclude host port 5434", () => {
   const doc = fs.readFileSync(docPath, "utf8");
   assert.match(doc, /lab-to-render-sync\.yml/);
+  assert.match(doc, /cron `0 \*\/2 \* \* \*`/);
+  assert.match(doc, /America\/New_York/);
   assert.match(doc, /`production`/);
   assert.match(doc, /\*\*`DATABASE_URL`\*\*/);
   assert.match(doc, /pop-os-exittrace/);
