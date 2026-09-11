@@ -76,11 +76,23 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
   assert.deepEqual(catalogListKinds("indictment_civilian"), ["indictment_civilian"]);
   assert.deepEqual(catalogListKinds("indictment_non_civilian"), ["indictment_non_civilian"]);
   assert.deepEqual(catalogListKinds("missing_kids"), ["missing_kids"]);
+  assert.deepEqual(catalogListKinds("human_smuggling"), ["human_smuggling"]);
+  assert.deepEqual(catalogListKinds("fugitives"), ["fugitives"]);
+  assert.deepEqual(catalogListKinds("cybercrime"), ["cybercrime"]);
+  assert.deepEqual(catalogListKinds("drug_trafficking"), ["drug_trafficking"]);
+  assert.deepEqual(catalogListKinds("violent_crime"), ["violent_crime"]);
+  assert.deepEqual(catalogListKinds("fraud"), ["fraud"]);
   assert.deepEqual(catalogListKinds("corona_comms"), ["corona_comms"]);
   assert.equal(categoryByPath("/deaths").id, "death_unspecified");
   assert.equal(categoryByPath("/indictments").id, "indictment_unspecified");
   assert.equal(categoryByPath("/group-operations").id, "group_ops_unspecified");
   assert.equal(categoryByPath("/group-operations/missing-kids").id, "missing_kids");
+  assert.equal(categoryByPath("/group-operations/human-smuggling").id, "human_smuggling");
+  assert.equal(categoryByPath("/group-operations/fugitives").id, "fugitives");
+  assert.equal(categoryByPath("/group-operations/cybercrime").id, "cybercrime");
+  assert.equal(categoryByPath("/group-operations/drug-trafficking").id, "drug_trafficking");
+  assert.equal(categoryByPath("/group-operations/violent-crime").id, "violent_crime");
+  assert.equal(categoryByPath("/group-operations/fraud").id, "fraud");
   assert.equal(categoryByPath("/corona-comms").id, "corona_comms");
   assert.equal(categoryByPath("/corona-comms/civilians"), null);
   assert.deepEqual(DEATH_KEEP_IDS, ["death_celebrity", "death_official", "death_ceo"]);
@@ -88,7 +100,15 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
     "indictment_civilian",
     "indictment_non_civilian",
   ]);
-  assert.deepEqual(GROUP_OPS_KEEP_IDS, ["missing_kids"]);
+  assert.deepEqual(GROUP_OPS_KEEP_IDS, [
+    "missing_kids",
+    "human_smuggling",
+    "fugitives",
+    "cybercrime",
+    "drug_trafficking",
+    "violent_crime",
+    "fraud",
+  ]);
 });
 
 test("unspecified classify and display-check paths stay fail-closed", () => {

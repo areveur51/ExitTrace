@@ -94,25 +94,85 @@ test("group-ops IA is an operation lane: parent lists all, child filters by tag"
   assert.equal(kids.kind, "operation");
   assert.equal(kids.nav, "Missing Kids");
   assert.equal(kids.title, "Operations — missing kids");
-  assert.deepEqual(GROUP_OPS_KEEP_IDS, ["missing_kids"]);
-  assert.deepEqual(catalogListKinds("group_ops_unspecified"), ["missing_kids"]);
+  assert.deepEqual(GROUP_OPS_KEEP_IDS, [
+    "missing_kids",
+    "human_smuggling",
+    "fugitives",
+    "cybercrime",
+    "drug_trafficking",
+    "violent_crime",
+    "fraud",
+  ]);
+  assert.deepEqual(catalogListKinds("group_ops_unspecified"), [
+    "missing_kids",
+    "human_smuggling",
+    "fugitives",
+    "cybercrime",
+    "drug_trafficking",
+    "violent_crime",
+    "fraud",
+  ]);
   assert.deepEqual(catalogListKinds("missing_kids"), ["missing_kids"]);
+  assert.deepEqual(catalogListKinds("human_smuggling"), ["human_smuggling"]);
+  assert.deepEqual(catalogListKinds("fugitives"), ["fugitives"]);
+  assert.deepEqual(catalogListKinds("cybercrime"), ["cybercrime"]);
+  assert.deepEqual(catalogListKinds("drug_trafficking"), ["drug_trafficking"]);
+  assert.deepEqual(catalogListKinds("violent_crime"), ["violent_crime"]);
+  assert.deepEqual(catalogListKinds("fraud"), ["fraud"]);
   assert.ok(!PROMOTE_CATEGORY_IDS.includes("missing_kids"));
+  assert.ok(!PROMOTE_CATEGORY_IDS.includes("human_smuggling"));
+  assert.ok(!PROMOTE_CATEGORY_IDS.includes("fugitives"));
+  assert.ok(!PROMOTE_CATEGORY_IDS.includes("cybercrime"));
+  assert.ok(!PROMOTE_CATEGORY_IDS.includes("drug_trafficking"));
+  assert.ok(!PROMOTE_CATEGORY_IDS.includes("violent_crime"));
+  assert.ok(!PROMOTE_CATEGORY_IDS.includes("fraud"));
   assert.ok(!PROMOTE_CATEGORY_IDS.includes("group_ops_unspecified"));
   assert.ok(!IMPORT_CATEGORY_IDS.includes("missing_kids"));
+  assert.ok(!IMPORT_CATEGORY_IDS.includes("human_smuggling"));
+  assert.ok(!IMPORT_CATEGORY_IDS.includes("fugitives"));
+  assert.ok(!IMPORT_CATEGORY_IDS.includes("cybercrime"));
+  assert.ok(!IMPORT_CATEGORY_IDS.includes("drug_trafficking"));
+  assert.ok(!IMPORT_CATEGORY_IDS.includes("violent_crime"));
+  assert.ok(!IMPORT_CATEGORY_IDS.includes("fraud"));
   assert.equal(mapImportCategory("missing_kids"), null);
+  assert.equal(mapImportCategory("human_smuggling"), null);
+  assert.equal(mapImportCategory("fugitives"), null);
+  assert.equal(mapImportCategory("cybercrime"), null);
+  assert.equal(mapImportCategory("drug_trafficking"), null);
+  assert.equal(mapImportCategory("violent_crime"), null);
+  assert.equal(mapImportCategory("fraud"), null);
   assert.equal(isGroupOpsKeepKind("missing_kids"), true);
+  assert.equal(isGroupOpsKeepKind("human_smuggling"), true);
+  assert.equal(isGroupOpsKeepKind("fugitives"), true);
+  assert.equal(isGroupOpsKeepKind("cybercrime"), true);
+  assert.equal(isGroupOpsKeepKind("drug_trafficking"), true);
+  assert.equal(isGroupOpsKeepKind("violent_crime"), true);
+  assert.equal(isGroupOpsKeepKind("fraud"), true);
   assert.equal(isGroupOpsKeepKind("group_ops_unspecified"), false);
   assert.equal(isGroupOpsCategory("missing_kids"), true);
+  assert.equal(isGroupOpsCategory("human_smuggling"), true);
+  assert.equal(isGroupOpsCategory("fugitives"), true);
+  assert.equal(isGroupOpsCategory("cybercrime"), true);
+  assert.equal(isGroupOpsCategory("drug_trafficking"), true);
+  assert.equal(isGroupOpsCategory("violent_crime"), true);
+  assert.equal(isGroupOpsCategory("fraud"), true);
   assert.equal(isGroupOpsCategory("group_ops_unspecified"), true);
   assert.equal(isGroupOpsCategory("death_celebrity"), false);
   assert.equal(isIndexCategory("group_ops_unspecified"), true);
-  assert.ok(!GROUP_OPS_KEEP_IDS.some((id) => id !== "missing_kids"));
 });
 
 test("group-ops routes render empty HUD lists; parent is not a person dump", async () => {
   setMemory(goldSeed());
-  const paths = ["/group-operations", "/group-operations/missing-kids"];
+  const paths = [
+    "/group-operations",
+    "/group-operations/missing-kids",
+    "/group-operations/human-smuggling",
+    "/group-operations/fugitives",
+    "/group-operations/cybercrime",
+    "/group-operations/drug-trafficking",
+    "/group-operations/violent-crime",
+    "/group-operations/fraud",
+  ];
   for (const p of paths) {
     const res = await requestPage(p);
     assert.equal(res.status, 200, p);
@@ -132,12 +192,27 @@ test("group-ops routes render empty HUD lists; parent is not a person dump", asy
   const index = await requestPage("/group-operations");
   assert.match(index.body, /<title>Operations · ExitTrace/);
   assert.match(index.body, /value="\/group-operations\/missing-kids"/);
+  assert.match(index.body, /value="\/group-operations\/human-smuggling"/);
+  assert.match(index.body, /value="\/group-operations\/fugitives"/);
+  assert.match(index.body, /value="\/group-operations\/cybercrime"/);
+  assert.match(index.body, /value="\/group-operations\/drug-trafficking"/);
+  assert.match(index.body, /value="\/group-operations\/violent-crime"/);
+  assert.match(index.body, /value="\/group-operations\/fraud"/);
   assert.match(index.body, />Missing Kids</);
+  assert.match(index.body, />Human Smuggling</);
+  assert.match(index.body, />Fugitives</);
+  assert.match(index.body, />Cybercrime</);
+  assert.match(index.body, />Drug Trafficking</);
+  assert.match(index.body, />Violent Crime</);
+  assert.match(index.body, />Fraud</);
   assert.match(index.body, />All</);
   assert.doesNotMatch(index.body, /Group Operations/);
   assert.doesNotMatch(index.body, />Civilians</);
   assert.doesNotMatch(index.body, /source-card/);
-  assert.doesNotMatch(index.body, /\/group-operations\/(?!missing-kids)/);
+  assert.doesNotMatch(
+    index.body,
+    /\/group-operations\/(?!missing-kids|human-smuggling|fugitives|cybercrime|drug-trafficking|violent-crime|fraud)/,
+  );
 
   const kids = await requestPage("/group-operations/missing-kids");
   assert.match(kids.body, /<title>Operations — missing kids · ExitTrace/);
@@ -150,6 +225,48 @@ test("group-ops routes render empty HUD lists; parent is not a person dump", asy
   assert.doesNotMatch(kids.body, />Age</);
   assert.doesNotMatch(kids.body, /Age at death/);
   assert.doesNotMatch(kids.body, /href="\/deaths\/celebrities"/);
+
+  const smug = await requestPage("/group-operations/human-smuggling");
+  assert.match(smug.body, /<title>Operations — human smuggling · ExitTrace/);
+  assert.match(smug.body, /value="\/group-operations\/human-smuggling"[^>]*selected/);
+  assert.match(smug.body, /Human Smuggling/);
+  assert.doesNotMatch(smug.body, /Group Operations/);
+  assert.doesNotMatch(smug.body, /person-card/);
+
+  const fug = await requestPage("/group-operations/fugitives");
+  assert.match(fug.body, /<title>Operations — fugitives · ExitTrace/);
+  assert.match(fug.body, /value="\/group-operations\/fugitives"[^>]*selected/);
+  assert.match(fug.body, /Fugitives/);
+  assert.doesNotMatch(fug.body, /Group Operations/);
+  assert.doesNotMatch(fug.body, /person-card/);
+
+  const cyber = await requestPage("/group-operations/cybercrime");
+  assert.match(cyber.body, /<title>Operations — cybercrime · ExitTrace/);
+  assert.match(cyber.body, /value="\/group-operations\/cybercrime"[^>]*selected/);
+  assert.match(cyber.body, /Cybercrime/);
+  assert.doesNotMatch(cyber.body, /Group Operations/);
+  assert.doesNotMatch(cyber.body, /person-card/);
+
+  const drugs = await requestPage("/group-operations/drug-trafficking");
+  assert.match(drugs.body, /<title>Operations — drug trafficking · ExitTrace/);
+  assert.match(drugs.body, /value="\/group-operations\/drug-trafficking"[^>]*selected/);
+  assert.match(drugs.body, /Drug Trafficking/);
+  assert.doesNotMatch(drugs.body, /Group Operations/);
+  assert.doesNotMatch(drugs.body, /person-card/);
+
+  const violent = await requestPage("/group-operations/violent-crime");
+  assert.match(violent.body, /<title>Operations — violent crime · ExitTrace/);
+  assert.match(violent.body, /value="\/group-operations\/violent-crime"[^>]*selected/);
+  assert.match(violent.body, /Violent Crime/);
+  assert.doesNotMatch(violent.body, /Group Operations/);
+  assert.doesNotMatch(violent.body, /person-card/);
+
+  const fraud = await requestPage("/group-operations/fraud");
+  assert.match(fraud.body, /<title>Operations — fraud · ExitTrace/);
+  assert.match(fraud.body, /value="\/group-operations\/fraud"[^>]*selected/);
+  assert.match(fraud.body, /Fraud/);
+  assert.doesNotMatch(fraud.body, /Group Operations/);
+  assert.doesNotMatch(fraud.body, /person-card/);
 });
 
 test("home and add nav know Operations; person form omits missing_kids", async () => {
@@ -163,6 +280,12 @@ test("home and add nav know Operations; person form omits missing_kids", async (
   const add = await requestPage("/add");
   assert.equal(add.status, 200);
   assert.doesNotMatch(add.body, /value="missing_kids"/);
+  assert.doesNotMatch(add.body, /value="human_smuggling"/);
+  assert.doesNotMatch(add.body, /value="fugitives"/);
+  assert.doesNotMatch(add.body, /value="cybercrime"/);
+  assert.doesNotMatch(add.body, /value="drug_trafficking"/);
+  assert.doesNotMatch(add.body, /value="violent_crime"/);
+  assert.doesNotMatch(add.body, /value="fraud"/);
   assert.doesNotMatch(add.body, /value="group_ops_unspecified"/);
   assert.match(add.body, /href="\/add\?mode=operation"/);
 
@@ -170,6 +293,12 @@ test("home and add nav know Operations; person form omits missing_kids", async (
   assert.equal(opAdd.status, 200);
   assert.match(opAdd.body, /value="operation"/);
   assert.match(opAdd.body, /value="missing_kids"/);
+  assert.match(opAdd.body, /value="human_smuggling"/);
+  assert.match(opAdd.body, /value="fugitives"/);
+  assert.match(opAdd.body, /value="cybercrime"/);
+  assert.match(opAdd.body, /value="drug_trafficking"/);
+  assert.match(opAdd.body, /value="violent_crime"/);
+  assert.match(opAdd.body, /value="fraud"/);
   assert.doesNotMatch(opAdd.body, /value="group_ops_unspecified"/);
   assert.match(opAdd.body, /name="victim_count"/);
   assert.match(opAdd.body, /name="arrest_count"/);
@@ -189,6 +318,44 @@ test("person classify rejects missing_kids; operation validate fail-closes the i
   );
   const op = validateIdentifiedOperationInput(OP_LOCK);
   assert.deepEqual(op.tags, ["missing_kids"]);
+  const smug = validateIdentifiedOperationInput({
+    ...OP_LOCK,
+    name: "Clan Del Golfo Human Smuggling",
+    tags: ["human_smuggling"],
+  });
+  assert.deepEqual(smug.tags, ["human_smuggling"]);
+  const fug = validateIdentifiedOperationInput({
+    ...OP_LOCK,
+    name: "Operation North Star",
+    tags: ["fugitives"],
+    arrest_count: 3421,
+  });
+  assert.deepEqual(fug.tags, ["fugitives"]);
+  assert.equal(fug.arrest_count, 3421);
+  const cyber = validateIdentifiedOperationInput({
+    ...OP_LOCK,
+    name: "911 S5 Botnet",
+    tags: ["cybercrime"],
+  });
+  assert.deepEqual(cyber.tags, ["cybercrime"]);
+  const drugs = validateIdentifiedOperationInput({
+    ...OP_LOCK,
+    name: "Sinaloa Cartel Global Operation",
+    tags: ["drug_trafficking"],
+  });
+  assert.deepEqual(drugs.tags, ["drug_trafficking"]);
+  const violent = validateIdentifiedOperationInput({
+    ...OP_LOCK,
+    name: "Operation Legend",
+    tags: ["violent_crime"],
+  });
+  assert.deepEqual(violent.tags, ["violent_crime"]);
+  const fraud = validateIdentifiedOperationInput({
+    ...OP_LOCK,
+    name: "2018 National Health Care Fraud Takedown",
+    tags: ["fraud"],
+  });
+  assert.deepEqual(fraud.tags, ["fraud"]);
   assert.equal(op.victim_count, null);
   assert.equal(op.arrest_count, null);
   assert.throws(
@@ -256,7 +423,37 @@ test("list paths skip person KEEP for group-ops", () => {
     listPathForOperation({ tags: ["missing_kids"] }),
     "/group-operations/missing-kids",
   );
+  assert.equal(
+    listPathForOperation({ tags: ["human_smuggling"] }),
+    "/group-operations/human-smuggling",
+  );
+  assert.equal(
+    listPathForOperation({ tags: ["fugitives"] }),
+    "/group-operations/fugitives",
+  );
+  assert.equal(
+    listPathForOperation({ tags: ["cybercrime"] }),
+    "/group-operations/cybercrime",
+  );
+  assert.equal(
+    listPathForOperation({ tags: ["drug_trafficking"] }),
+    "/group-operations/drug-trafficking",
+  );
+  assert.equal(
+    listPathForOperation({ tags: ["violent_crime"] }),
+    "/group-operations/violent-crime",
+  );
+  assert.equal(
+    listPathForOperation({ tags: ["fraud"] }),
+    "/group-operations/fraud",
+  );
   assert.equal(categoryById("missing_kids").path, "/group-operations/missing-kids");
+  assert.equal(categoryById("human_smuggling").path, "/group-operations/human-smuggling");
+  assert.equal(categoryById("fugitives").path, "/group-operations/fugitives");
+  assert.equal(categoryById("cybercrime").path, "/group-operations/cybercrime");
+  assert.equal(categoryById("drug_trafficking").path, "/group-operations/drug-trafficking");
+  assert.equal(categoryById("violent_crime").path, "/group-operations/violent-crime");
+  assert.equal(categoryById("fraud").path, "/group-operations/fraud");
 });
 
 test("unique operation: parent lists all; child lists the tag; no person card", async () => {
@@ -302,6 +499,52 @@ test("unique operation: parent lists all; child lists the tag; no person card", 
   assert.equal(detail.status, 200);
   assert.match(detail.body, /Operation Restore Justice/);
   assert.match(detail.body, /U\.S\. Department of Justice/);
+});
+
+test("human_smuggling lists on its child path and the parent, not missing-kids", async () => {
+  setMemory(goldSeed());
+  const created = await applyIdentifiedOperation({
+    name: "Clan Del Golfo Human Smuggling",
+    event_date: "2024-06-11",
+    agencies: ["U.S. Department of Justice", "U.S. Department of State"],
+    summary: "Official rewards for information on Clan del Golfo human smuggling leaders.",
+    tags: ["human_smuggling"],
+    cite_urls: CITES,
+  });
+  assert.equal(created.action, "created");
+  assert.deepEqual(created.operation.tags, ["human_smuggling"]);
+  const shown = await checkOperationDisplayed(created.operation);
+  assert.equal(shown.list, "/group-operations/human-smuggling");
+  assert.equal(shown.detail, "/operations/clan-del-golfo-human-smuggling");
+  const list = await requestPage("/group-operations/human-smuggling");
+  assert.match(list.body, /Clan Del Golfo Human Smuggling/);
+  const kids = await requestPage("/group-operations/missing-kids");
+  assert.doesNotMatch(kids.body, /Clan Del Golfo Human Smuggling/);
+  const index = await requestPage("/group-operations");
+  assert.match(index.body, /Clan Del Golfo Human Smuggling/);
+});
+
+test("fraud lists on its child path and the parent, not missing-kids", async () => {
+  setMemory(goldSeed());
+  const created = await applyIdentifiedOperation({
+    name: "2018 National Health Care Fraud Takedown",
+    event_date: "2018-06-28",
+    agencies: ["U.S. Department of Justice", "U.S. Department of Health and Human Services"],
+    summary: "Medicare Fraud Strike Force national health care fraud takedown.",
+    tags: ["fraud"],
+    cite_urls: CITES,
+  });
+  assert.equal(created.action, "created");
+  assert.deepEqual(created.operation.tags, ["fraud"]);
+  const shown = await checkOperationDisplayed(created.operation);
+  assert.equal(shown.list, "/group-operations/fraud");
+  assert.equal(shown.detail, "/operations/2018-national-health-care-fraud-takedown");
+  const list = await requestPage("/group-operations/fraud");
+  assert.match(list.body, /2018 National Health Care Fraud Takedown/);
+  const kids = await requestPage("/group-operations/missing-kids");
+  assert.doesNotMatch(kids.body, /2018 National Health Care Fraud Takedown/);
+  const index = await requestPage("/group-operations");
+  assert.match(index.body, /2018 National Health Care Fraud Takedown/);
 });
 
 test("operation is not a person KEEP annotation", async () => {

@@ -104,6 +104,54 @@ export const CATEGORIES = [
     blurb: "Operations tagged missing kids. Lists operations, not people. Named children are not stored.",
   },
   {
+    id: "human_smuggling",
+    kind: "operation",
+    title: "Operations — human smuggling",
+    nav: "Human Smuggling",
+    path: "/group-operations/human-smuggling",
+    blurb: "Operations tagged human smuggling. Lists operations, not people. Named children are not stored.",
+  },
+  {
+    id: "fugitives",
+    kind: "operation",
+    title: "Operations — fugitives",
+    nav: "Fugitives",
+    path: "/group-operations/fugitives",
+    blurb: "Operations tagged fugitives. Lists operations, not people. Named children are not stored.",
+  },
+  {
+    id: "cybercrime",
+    kind: "operation",
+    title: "Operations — cybercrime",
+    nav: "Cybercrime",
+    path: "/group-operations/cybercrime",
+    blurb: "Operations tagged cybercrime. Lists operations, not people. Named children are not stored.",
+  },
+  {
+    id: "drug_trafficking",
+    kind: "operation",
+    title: "Operations — drug trafficking",
+    nav: "Drug Trafficking",
+    path: "/group-operations/drug-trafficking",
+    blurb: "Operations tagged drug trafficking. Lists operations, not people. Named children are not stored.",
+  },
+  {
+    id: "violent_crime",
+    kind: "operation",
+    title: "Operations — violent crime",
+    nav: "Violent Crime",
+    path: "/group-operations/violent-crime",
+    blurb: "Operations tagged violent crime. Lists operations, not people. Named children are not stored.",
+  },
+  {
+    id: "fraud",
+    kind: "operation",
+    title: "Operations — fraud",
+    nav: "Fraud",
+    path: "/group-operations/fraud",
+    blurb: "Operations tagged fraud. Lists operations, not people. Named children are not stored.",
+  },
+  {
     id: "group_ops_unspecified",
     kind: "operation",
     title: "Operations",
@@ -168,7 +216,15 @@ export const INDICTMENT_KEEP_IDS = [
 ];
 
 /** Signed operation filter tags. Not unique-person KEEP kinds. Later siblings append here. */
-export const GROUP_OPS_KEEP_IDS = ["missing_kids"];
+export const GROUP_OPS_KEEP_IDS = [
+  "missing_kids",
+  "human_smuggling",
+  "fugitives",
+  "cybercrime",
+  "drug_trafficking",
+  "violent_crime",
+  "fraud",
+];
 
 const IMPORT_ALIASES = {
   firings: "firings",

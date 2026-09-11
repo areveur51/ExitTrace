@@ -131,6 +131,12 @@ test("html pages render", async () => {
     "/deaths/ceos",
     "/group-operations",
     "/group-operations/missing-kids",
+    "/group-operations/human-smuggling",
+    "/group-operations/fugitives",
+    "/group-operations/cybercrime",
+    "/group-operations/drug-trafficking",
+    "/group-operations/violent-crime",
+    "/group-operations/fraud",
     "/unsorted",
     "/dog-comms",
     "/add",
@@ -248,6 +254,12 @@ test("every category list page ships a pager", async () => {
     "/deaths/ceos",
     "/group-operations",
     "/group-operations/missing-kids",
+    "/group-operations/human-smuggling",
+    "/group-operations/fugitives",
+    "/group-operations/cybercrime",
+    "/group-operations/drug-trafficking",
+    "/group-operations/violent-crime",
+    "/group-operations/fraud",
     "/unsorted",
     "/dog-comms",
   ];
@@ -358,7 +370,19 @@ test("Arrests page uses the same TUI chrome and empty subject is not invented", 
   const groupOps = await get("/group-operations");
   assert.equal(groupOps.status, 200);
   assert.match(groupOps.body, /value="\/group-operations\/missing-kids"/);
+  assert.match(groupOps.body, /value="\/group-operations\/human-smuggling"/);
+  assert.match(groupOps.body, /value="\/group-operations\/fugitives"/);
+  assert.match(groupOps.body, /value="\/group-operations\/cybercrime"/);
+  assert.match(groupOps.body, /value="\/group-operations\/drug-trafficking"/);
+  assert.match(groupOps.body, /value="\/group-operations\/violent-crime"/);
+  assert.match(groupOps.body, /value="\/group-operations\/fraud"/);
   assert.match(groupOps.body, />Missing Kids</);
+  assert.match(groupOps.body, />Human Smuggling</);
+  assert.match(groupOps.body, />Fugitives</);
+  assert.match(groupOps.body, />Cybercrime</);
+  assert.match(groupOps.body, />Drug Trafficking</);
+  assert.match(groupOps.body, />Violent Crime</);
+  assert.match(groupOps.body, />Fraud</);
   assert.doesNotMatch(groupOps.body, /person-card/);
   const corona = await get("/corona-comms");
   assert.equal(corona.status, 200);

@@ -1,6 +1,6 @@
 /** After insert/promote, live list + detail HTML must show the row. Counts are not enough. */
 
-import { categoryById } from "./categories.mjs";
+import { categoryById, isGroupOpsKeepKind } from "./categories.mjs";
 
 export class DisplayError extends Error {
   constructor(message, code = "display_failed") {
@@ -46,7 +46,7 @@ export function listPathForPerson(category) {
   }
   if (cat.id === "group_ops_unspecified" || cat.path === "/group-operations") {
     throw new DisplayError(
-      "/group-operations is an empty index; missing-kids is the list page",
+      "/group-operations lists every operation; signed tags are the list pages",
       "group_ops_index",
     );
   }
@@ -58,17 +58,24 @@ export function listPathForDog() {
 }
 
 export function listPathForOperation(operation) {
-  const tags = Array.isArray(operation?.tags) ? operation.tags : [operation].filter(Boolean);
-  if (tags.includes("missing_kids") || operation === "missing_kids") {
-    return "/group-operations/missing-kids";
-  }
   if (operation === "group_ops_unspecified") {
     throw new DisplayError(
-      "/group-operations lists every operation; missing-kids is the tagged list page",
+      "/group-operations lists every operation; signed tags are the list pages",
       "group_ops_index",
     );
   }
-  return "/group-operations";
+  const tags = Array.isArray(operation?.tags)
+    ? operation.tags
+    : [typeof operation === "string" ? operation : operation?.tags].flat().filter(Boolean);
+  for (const id of tags) {
+    if (!isGroupOpsKeepKind(id)) continue;
+    const cat = categoryById(id);
+    if (cat?.path && cat.id !== "group_ops_unspecified") return cat.path;
+  }
+  throw new DisplayError(
+    "/group-operations lists every operation; signed tags are the list pages",
+    "group_ops_index",
+  );
 }
 
 export async function fetchCatalogHtml(pathname) {
@@ -177,7 +184,7 @@ export async function checkPersonDisplayed(person) {
   }
   if (listPath === "/group-operations") {
     throw new DisplayError(
-      "/group-operations is an empty index; missing-kids is the list page",
+      "/group-operations lists every operation; signed tags are the list pages",
       "group_ops_index",
     );
   }
