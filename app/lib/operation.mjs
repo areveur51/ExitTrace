@@ -132,7 +132,12 @@ export function operationHasTag(row, tags) {
 
 export function listPathForOperation(row) {
   const tags = normalizeOperationTags(row?.tags);
-  if (tags.includes("missing_kids")) return "/group-operations/missing-kids";
+  for (const id of tags) {
+    const cat = categoryById(id);
+    if (cat?.kind === "operation" && cat.path && cat.id !== "group_ops_unspecified") {
+      return cat.path;
+    }
+  }
   return "/group-operations";
 }
 

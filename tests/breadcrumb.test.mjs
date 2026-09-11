@@ -58,6 +58,36 @@ test("list pages nest death and indictment indexes", () => {
     { href: "/group-operations", label: "Operations" },
     { href: "/group-operations/missing-kids", label: "Missing Kids" },
   ]);
+  assert.deepEqual(breadcrumbItems({ path: "/group-operations/human-smuggling" }), [
+    { href: "/", label: "Home" },
+    { href: "/group-operations", label: "Operations" },
+    { href: "/group-operations/human-smuggling", label: "Human Smuggling" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/group-operations/fugitives" }), [
+    { href: "/", label: "Home" },
+    { href: "/group-operations", label: "Operations" },
+    { href: "/group-operations/fugitives", label: "Fugitives" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/group-operations/cybercrime" }), [
+    { href: "/", label: "Home" },
+    { href: "/group-operations", label: "Operations" },
+    { href: "/group-operations/cybercrime", label: "Cybercrime" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/group-operations/drug-trafficking" }), [
+    { href: "/", label: "Home" },
+    { href: "/group-operations", label: "Operations" },
+    { href: "/group-operations/drug-trafficking", label: "Drug Trafficking" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/group-operations/violent-crime" }), [
+    { href: "/", label: "Home" },
+    { href: "/group-operations", label: "Operations" },
+    { href: "/group-operations/violent-crime", label: "Violent Crime" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/group-operations/fraud" }), [
+    { href: "/", label: "Home" },
+    { href: "/group-operations", label: "Operations" },
+    { href: "/group-operations/fraud", label: "Fraud" },
+  ]);
 });
 
 test("detail pages link back through the parent catalog", () => {

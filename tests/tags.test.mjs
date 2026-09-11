@@ -171,11 +171,26 @@ test("main event pages expose identity filters without age controls", async () =
 
 test("group-ops lists tag filters, not person identity or age", async () => {
   setMemory(goldSeed());
-  for (const pathName of ["/group-operations", "/group-operations/missing-kids"]) {
+  for (const pathName of [
+    "/group-operations",
+    "/group-operations/missing-kids",
+    "/group-operations/human-smuggling",
+    "/group-operations/fugitives",
+    "/group-operations/cybercrime",
+    "/group-operations/drug-trafficking",
+    "/group-operations/violent-crime",
+    "/group-operations/fraud",
+  ]) {
     const res = await requestPage(pathName);
     assert.equal(res.status, 200, pathName);
     assert.match(res.body, />All</);
     assert.match(res.body, />Missing Kids</);
+    assert.match(res.body, />Human Smuggling</);
+    assert.match(res.body, />Fugitives</);
+    assert.match(res.body, />Cybercrime</);
+    assert.match(res.body, />Drug Trafficking</);
+    assert.match(res.body, />Violent Crime</);
+    assert.match(res.body, />Fraud</);
     assert.doesNotMatch(res.body, />Civilians</);
     assert.doesNotMatch(res.body, />Celebrities</);
     assert.doesNotMatch(res.body, /name="min_age"/);
