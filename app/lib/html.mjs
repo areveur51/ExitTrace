@@ -46,9 +46,12 @@ import { AGE_BANDS, parseAgeBand } from "./age.mjs";
 import {
   DASH_AGE,
   DASH_DIMENSIONS,
+  DASH_MISSING,
+  DASH_MISSING_FIELDS,
   DASH_RANGE_PRESETS,
   DASH_RANGE_STORAGE_KEY,
   dashRangeHref,
+  parseMissingField,
   resolveDashRange,
   serializeDashRange,
 } from "./dashboard.mjs";
@@ -410,6 +413,7 @@ export function breadcrumbItems({
     const dim = DASH_DIMENSIONS.find((d) => d.path === p);
     if (dim) items.push({ href: dim.path, label: dim.nav });
     else if (p === DASH_AGE.path) items.push({ href: DASH_AGE.path, label: DASH_AGE.nav });
+    else if (p === DASH_MISSING.path) items.push({ href: DASH_MISSING.path, label: DASH_MISSING.nav });
     return items;
   }
   if (p === GROKIPEDIA_PATH || p.startsWith(`${GROKIPEDIA_PATH}/`)) {
@@ -1208,6 +1212,10 @@ export function dashRangeNav(range, { path = "/dashboard", extra = {} } = {}) {
   const bandHidden = band
     ? `<input type="hidden" name="band" value="${esc(band.id)}">`
     : "";
+  const missing = parseMissingField(extra.field);
+  const fieldHidden = missing
+    ? `<input type="hidden" name="field" value="${esc(missing.id)}">`
+    : "";
   return `<nav class="dash-range" aria-label="Event date range">
     <span class="dash-range-label" id="dash-range-label">Event date</span>
     <div class="dash-range-btns" role="group" aria-labelledby="dash-range-label">
@@ -1216,6 +1224,7 @@ export function dashRangeNav(range, { path = "/dashboard", extra = {} } = {}) {
     <form class="dash-range-custom" method="get" action="${esc(String(path || "/dashboard").split("?")[0])}">
       <input type="hidden" name="range" value="custom">
       ${bandHidden}
+      ${fieldHidden}
       <label class="dash-range-field">From <input type="date" name="from" value="${esc(current.id === "custom" ? current.from : "")}"></label>
       <label class="dash-range-field">To <input type="date" name="to" value="${esc(current.id === "custom" ? current.to : "")}"></label>
       <button type="submit" class="keychip dash-range-apply" data-dash-range-set="custom"${
@@ -1252,6 +1261,7 @@ export function dashboardBody(model, { path = "/dashboard", range } = {}) {
     <div class="dash-standings">
       ${operationStandingBlock(model.operations)}
       ${ageStandingBlock(model.age, active)}
+      ${missingStandingBlock(model.missing, model.operationsMissing, active)}
     </div>
     <div class="dash-grid">${dims}</div>
     <section class="dash-trends" aria-label="Event-date trends">
@@ -1334,6 +1344,85 @@ export function dashboardAgeBody({ range, band } = {}) {
   return `<div class="dash-hud dash-age-page" data-dash-dim="age">
     ${dashRangeNav(active, { path: DASH_AGE.path, extra })}
     ${ageBandFilterNav({ band: band?.id, range: active })}
+  </div>`;
+}
+
+function missingStandingBlock(peopleRows, operationsMissing, range) {
+  const rows = Array.isArray(peopleRows) ? peopleRows : [];
+  const peopleBody = rows
+    .map((row) => {
+      const count = Math.max(0, Number(row.count) || 0);
+      const total = Math.max(0, Number(row.total) || 0);
+      return `<tr data-missing-field="${esc(row.key)}" data-missing-count="${count}">
+        <td><a class="dash-link" href="${esc(row.href)}">${esc(row.label)}</a></td>
+        <td class="num">${dashCount(count)}</td>
+        <td class="num">${dashCount(total)}</td>
+      </tr>`;
+    })
+    .join("");
+  const peopleTable = peopleBody
+    ? `<table class="dash-table">
+        <thead><tr><th>People</th><th>Missing</th><th>Of</th></tr></thead>
+        <tbody>${peopleBody}</tbody>
+      </table>`
+    : `<p class="empty">No rows on this page.</p>`;
+  const opFields = operationsMissing?.fields || [];
+  const opTotal = Math.max(0, Number(operationsMissing?.total) || 0);
+  const opBody = opFields
+    .map((row) => {
+      const count = Math.max(0, Number(row.count) || 0);
+      return `<tr data-missing-op="${esc(row.key)}" data-missing-count="${count}">
+        <td>${esc(row.label)}</td>
+        <td class="num">${dashCount(count)}</td>
+        <td class="num">${dashCount(opTotal)}</td>
+      </tr>`;
+    })
+    .join("");
+  const opTable = opBody
+    ? `<table class="dash-table">
+        <thead><tr><th>Operations</th><th>Missing</th><th>Of</th></tr></thead>
+        <tbody>${opBody}</tbody>
+      </table>`
+    : "";
+  const more = `<p class="dash-more"><a class="keychip" href="${esc(dashRangeHref(DASH_MISSING.path, range))}" aria-label="All missing fields">All missing</a></p>`;
+  return `<section class="dash-block" data-dash-dim="missing" aria-label="Missing metadata">
+    ${boxFrame(
+      "Missing metadata",
+      `<div class="dash-missing-tables">${peopleTable}${opTable}</div>${more}`,
+      { extraClass: "dash-box" },
+    )}
+  </section>`;
+}
+
+export function missingFieldFilterNav({ field, range } = {}) {
+  const current = parseMissingField(field);
+  const options = [
+    { href: dashRangeHref(DASH_MISSING.path, range), label: "All fields", id: "all" },
+    ...DASH_MISSING_FIELDS.map((f) => ({
+      href: dashRangeHref(DASH_MISSING.path, range, { field: f.id }),
+      label: f.label,
+      id: f.id,
+    })),
+  ];
+  const currentId = current?.id || "all";
+  const opts = options
+    .map((o) => {
+      const on = o.id === currentId;
+      return `<option value="${esc(o.href)}"${on ? " selected" : ""}>${esc(o.label)}</option>`;
+    })
+    .join("");
+  return `<nav class="identity-filters missing-field-filters" aria-label="Missing field">
+    <label class="identity-filters-label" for="missing-field-filter">Field</label>
+    <select class="identity-filter-select" id="missing-field-filter" data-filter-select>${opts}</select>
+  </nav>`;
+}
+
+export function dashboardMissingBody({ range, field } = {}) {
+  const active = resolveDashRange(range);
+  const extra = field ? { field: field.id } : {};
+  return `<div class="dash-hud dash-missing-page" data-dash-dim="missing">
+    ${dashRangeNav(active, { path: DASH_MISSING.path, extra })}
+    ${missingFieldFilterNav({ field: field?.id, range: active })}
   </div>`;
 }
 

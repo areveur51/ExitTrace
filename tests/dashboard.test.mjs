@@ -6,9 +6,15 @@ import { THEME_IDS } from "../app/lib/themes.mjs";
 import fs from "fs";
 import {
   DASH_DIMENSIONS,
+  DASH_MISSING,
+  DASH_MISSING_FIELDS,
   DASH_RANGE_STORAGE_KEY,
   ageStanding,
   buildDashboard,
+  missingStanding,
+  operationMissingStanding,
+  peopleMissingField,
+  personMissingField,
   dashRangeHref,
   dashRankEvents,
   eventInDashRange,
@@ -323,6 +329,20 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /class="dash-pt"|class="dash-bar"/);
   assert.match(dash.body, /class="dash-tip"/);
   assert.match(dash.body, /Operations standing/);
+  assert.match(dash.body, /Missing metadata/);
+  assert.match(dash.body, /aria-label="Missing metadata"/);
+  assert.match(dash.body, /data-dash-dim="missing"/);
+  assert.match(dash.body, /data-missing-field="photo"/);
+  assert.match(dash.body, /data-missing-field="summary"/);
+  assert.match(dash.body, /data-missing-field="birth_date"/);
+  assert.match(dash.body, /data-missing-field="age"/);
+  assert.match(dash.body, /data-missing-field="net_worth"/);
+  assert.match(dash.body, /data-missing-field="origin"/);
+  assert.match(dash.body, /data-missing-field="comments"/);
+  assert.match(dash.body, /data-missing-field="position"/);
+  assert.match(dash.body, /data-missing-field="organization"/);
+  assert.match(dash.body, /All missing/);
+  assert.match(dash.body, /href="\/dashboard\/missing\?range=all"/);
   assert.match(dash.body, /Counts by Age/);
   assert.match(dash.body, /aria-label="Counts by Age"/);
   assert.match(dash.body, /All ages/);
@@ -355,7 +375,7 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
     /dash-stat-label">Arrests<\/span> <span class="dash-count" data-count="">—<\/span>/,
   );
   assert.doesNotMatch(dash.body, /webgl|WebGL|three\.js|dash-3d|preserveDrawingBuffer/i);
-  const orgBlock = dash.body.split("Organization")[1] || "";
+  const orgBlock = dash.body.split('data-dash-dim="organization"')[1] || "";
   assert.match(orgBlock, /No rows on this page/);
 
   const reason = await requestPage("/dashboard/reason");
@@ -392,6 +412,11 @@ test("dashboard breadcrumbs nest children under Dashboard", () => {
     { href: "/", label: "Home" },
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/age", label: "Age" },
+  ]);
+  assert.deepEqual(breadcrumbItems({ path: "/dashboard/missing" }), [
+    { href: "/", label: "Home" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/missing", label: "Missing" },
   ]);
 });
 
@@ -479,6 +504,86 @@ test("dashboard Age standing bands unique people and skips null birth_date", asy
   assert.doesNotMatch(listed.body, /href="\/people\/unknown-birth"/);
   assert.doesNotMatch(listed.body, /class="age-filter"/);
   assert.doesNotMatch(listed.body, /name="min_age"/);
+});
+
+test("dashboard missing-metadata standing counts empty fields and does not guess", async () => {
+  setMemory(goldSeed());
+  const seedPeople = goldSeed().people;
+  const gold = missingStanding(seedPeople);
+  assert.deepEqual(
+    gold.map((row) => row.key),
+    DASH_MISSING_FIELDS.map((f) => f.id),
+  );
+  assert.equal(DASH_MISSING.path, "/dashboard/missing");
+  const byKey = Object.fromEntries(gold.map((row) => [row.key, row]));
+  assert.equal(byKey.birth_date.count, seedPeople.length);
+  assert.equal(byKey.birth_date.total, seedPeople.length);
+  const missingNetWorth = seedPeople.filter((row) => {
+    const n = row?.net_worth_usd;
+    return n === null || n === undefined || n === "" || !Number.isFinite(Number(n));
+  }).length;
+  assert.equal(byKey.net_worth.count, missingNetWorth);
+  assert.ok(missingNetWorth < seedPeople.length);
+  const withPhoto = seedPeople.filter((row) => row.photo && String(row.photo).startsWith("/media/people/")).length;
+  assert.equal(byKey.photo.count, seedPeople.length - withPhoto);
+  assert.ok(personMissingField({ photo: "" }, "photo"));
+  assert.equal(personMissingField({ photo: "/media/people/liz-magill-hearing.jpg" }, "photo"), false);
+  assert.ok(personMissingField({ summary: "" }, "summary"));
+  assert.equal(personMissingField({ summary: "Stored note." }, "summary"), false);
+
+  const opsMiss = operationMissingStanding([
+    { summary: "", victim_count: null, arrest_count: 2 },
+    { summary: "Named op", victim_count: 4, arrest_count: null },
+  ]);
+  assert.equal(opsMiss.total, 2);
+  assert.equal(opsMiss.fields.find((row) => row.key === "summary").count, 1);
+  assert.equal(opsMiss.fields.find((row) => row.key === "victim_count").count, 1);
+  assert.equal(opsMiss.fields.find((row) => row.key === "arrest_count").count, 1);
+
+  await applyIdentifiedPerson({
+    ...NEW_PERSON_LOCK,
+    subject: "Has Dates",
+    event_date: "2024-06-15",
+    category: "arrests",
+    cite_urls: CITES,
+    birth_date: "1985-03-12",
+    comments: "lead note",
+    summary: "A stored summary.",
+    net_worth_usd: 2500000000,
+    net_worth_source: "https://www.forbes.com/profile/has-dates/",
+  });
+  const { listPeople } = await import("../app/lib/store.mjs");
+  const people = await listPeople();
+  const after = missingStanding(people);
+  const afterKey = Object.fromEntries(after.map((row) => [row.key, row]));
+  assert.equal(afterKey.birth_date.count, people.length - 1);
+  assert.equal(afterKey.net_worth.count, missingNetWorth);
+  const noDob = peopleMissingField(people, "birth_date");
+  assert.ok(!noDob.some((row) => row.id === "has-dates"));
+  const noSummary = peopleMissingField(people, "summary");
+  assert.ok(!noSummary.some((row) => row.id === "has-dates"));
+  const noAge = peopleMissingField(people, "age");
+  assert.ok(!noAge.some((row) => row.id === "has-dates"));
+  const noNetWorth = peopleMissingField(people, "net_worth");
+  assert.ok(!noNetWorth.some((row) => row.id === "has-dates"));
+  const anyGap = peopleMissingField(people, "all");
+  assert.ok(anyGap.some((row) => row.id === "has-dates"));
+
+  const dash = await requestPage("/dashboard");
+  assert.match(dash.body, /Missing metadata/);
+  assert.match(dash.body, /data-missing-field="birth_date"/);
+  assert.match(dash.body, /data-missing-op="summary"/);
+
+  const listed = await requestPage("/dashboard/missing?field=birth_date");
+  assert.equal(listed.status, 200);
+  assert.match(listed.body, /Missing · Birth date/);
+  assert.match(listed.body, /id="missing-field-filter"/);
+  assert.doesNotMatch(listed.body, /href="\/people\/has-dates"/);
+  const allMissing = await requestPage("/dashboard/missing");
+  assert.match(allMissing.body, /href="\/people\/has-dates"/);
+  const bogus = await requestPage("/dashboard/missing?field=not-a-field");
+  assert.equal(bogus.status, 200);
+  assert.doesNotMatch(bogus.body, /href="\/people\//);
 });
 
 test("operation standing does not invent victim or arrest counts", () => {

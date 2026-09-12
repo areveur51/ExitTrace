@@ -45,6 +45,7 @@ import {
   identityFilterNav,
   dashboardAgeBody,
   dashboardBody,
+  dashboardMissingBody,
   dashboardRankBody,
   dogDetail,
   dogList,
@@ -85,11 +86,14 @@ import {
 } from "./lib/grokipedia.mjs";
 import {
   DASH_AGE,
+  DASH_MISSING,
   buildDashboard,
   dashDimensionByPath,
   dashRangeHref,
   parseDashRangeSearch,
+  parseMissingField,
   peopleInAgeBand,
+  peopleMissingField,
   rankDimension,
 } from "./lib/dashboard.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
@@ -614,6 +618,44 @@ async function handle(req, res) {
     const operations = await listOperations();
     const dim = dashDimensionByPath(p);
     const range = parseDashRangeSearch(url.searchParams, { cookie: req.headers.cookie });
+    if (p === DASH_MISSING.path) {
+      const fieldToken = String(url.searchParams.get("field") || "").trim();
+      const field = parseMissingField(fieldToken);
+      const invalid = Boolean(fieldToken) && fieldToken !== "all" && !field;
+      const matched = invalid ? [] : peopleMissingField(people, field?.id || "all", range);
+      const pageSize = parseCookiePageSize(req.headers.cookie);
+      const meta = paginate({
+        total: matched.length,
+        page: parsePage(url.searchParams),
+        pageSize,
+      });
+      const windowed = matched.slice(meta.offset, meta.offset + meta.limit);
+      const listPath = dashRangeHref(DASH_MISSING.path, range, field ? { field: field.id } : {});
+      const heading = field ? `Missing · ${field.label}` : "Missing metadata";
+      return sendHtml(
+        res,
+        layout({
+          title: `Dashboard · ${heading}`,
+          path: DASH_MISSING.path,
+          heading,
+          query: heading,
+          pageSize,
+          dashRange: range,
+          countLabel: countText(heading, meta, windowed.length),
+          lede: "Unique people missing a stored field. Empty stays empty and is not guessed. Portrait means no local /media/people/ still.",
+          body: `${dashboardMissingBody({ range, field })}${listSection(
+            peopleList(windowed),
+            pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+            listHead({
+              title: heading,
+              total: meta.total,
+              index: 1,
+              of: windowed.length,
+            }),
+          )}`,
+        }),
+      );
+    }
     if (p === DASH_AGE.path) {
       const bandToken = String(url.searchParams.get("band") || "").trim();
       const band = parseAgeBand(bandToken);

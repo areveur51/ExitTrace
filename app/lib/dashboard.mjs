@@ -11,6 +11,7 @@ import {
 import { categoryById, isDeathCategory, GROUP_OPS_KEEP_IDS, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
 import { EVENT_ATTR_FIELDS } from "./event-attrs.mjs";
 import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
+import { isPeopleMediaHref } from "./portrait.mjs";
 import { deathPersonEvent, personEvents } from "./promote.mjs";
 
 export { AGE_BANDS, parseAgeBand } from "./age.mjs";
@@ -21,6 +22,34 @@ export const DASH_AGE = {
   nav: "Age",
   path: "/dashboard/age",
 };
+
+export const DASH_MISSING = {
+  id: "missing",
+  title: "Missing metadata",
+  nav: "Missing",
+  path: "/dashboard/missing",
+};
+
+/** Unique-person gaps. Empty stays empty — not guessed. */
+export const DASH_MISSING_FIELDS = [
+  { id: "photo", label: "Portrait" },
+  { id: "summary", label: "Summary" },
+  { id: "birth_date", label: "Birth date" },
+  { id: "age", label: "Age at event" },
+  { id: "net_worth", label: "Net worth" },
+  { id: "origin", label: "Origin country" },
+  { id: "comments", label: "Event comments" },
+  { id: "position", label: "Position" },
+  { id: "organization", label: "Organization" },
+];
+
+const MISSING_BY_ID = new Map(DASH_MISSING_FIELDS.map((f) => [f.id, f]));
+
+export function parseMissingField(raw) {
+  const id = decodeURIComponent(String(raw || "")).trim();
+  if (!id || id === "all") return null;
+  return MISSING_BY_ID.get(id) || null;
+}
 
 export const DASH_TOP_N = 5;
 
@@ -297,6 +326,8 @@ export function dashRangeHref(path, range, extra = {}) {
   if (Number.isFinite(page) && page > 1) params.set("page", String(page));
   const band = parseAgeBand(extra.band);
   if (band) params.set("band", band.id);
+  const missing = parseMissingField(extra.field);
+  if (missing) params.set("field", missing.id);
   const base = String(path || "/dashboard").split("?")[0] || "/dashboard";
   return `${base}?${params.toString()}`;
 }
@@ -482,6 +513,125 @@ export function peopleInAgeBand(people, bandId, range) {
     .sort(compareListedPeople);
 }
 
+function inRangeKeepEvents(row, range) {
+  const events = dashRankEvents(row);
+  if (!range || range.id === "all") return events;
+  return events.filter((ev) => eventInDashRange(ev.event_date, range));
+}
+
+function missingNetWorth(row) {
+  const n = row?.net_worth_usd;
+  if (n === null || n === undefined || n === "") return true;
+  return !Number.isFinite(Number(n));
+}
+
+function eventFieldBlank(events, field) {
+  if (!events.length) return false;
+  return events.every((ev) => !String(ev?.[field] || "").trim());
+}
+
+/** True when this unique person is missing the named stored field. */
+export function personMissingField(row, fieldId, range) {
+  const field = parseMissingField(fieldId);
+  if (!field || !row) return false;
+  const events = inRangeKeepEvents(row, range);
+  switch (field.id) {
+    case "photo":
+      return !isPeopleMediaHref(row.photo);
+    case "summary":
+      return !String(row.summary || "").trim();
+    case "birth_date":
+      return !knownBirthDate(row.birth_date);
+    case "age":
+      return !events.some(
+        (ev) => storedAgeAtEvent(ev, row.birth_date, ev.event_date) != null,
+      );
+    case "net_worth":
+      return missingNetWorth(row);
+    case "origin":
+      return !String(row.country_of_origin || "").trim();
+    case "comments":
+      return eventFieldBlank(events, "comments");
+    case "position":
+      return eventFieldBlank(events, "position");
+    case "organization":
+      return eventFieldBlank(events, "organization");
+    default:
+      return false;
+  }
+}
+
+/** Unique people in range missing each tracked field. */
+export function missingStanding(people, range) {
+  const rows = filterPeopleToRange(people, range);
+  const total = rows.length;
+  const resolved = resolveDashRange(range);
+  return DASH_MISSING_FIELDS.map((field) => {
+    const count = rows.filter((row) => personMissingField(row, field.id, resolved)).length;
+    return {
+      key: field.id,
+      label: field.label,
+      count,
+      total,
+      href: dashRangeHref(DASH_MISSING.path, resolved, { field: field.id }),
+    };
+  });
+}
+
+/** True when this unique person is missing at least one tracked field. */
+export function personMissingAnyField(row, range) {
+  return DASH_MISSING_FIELDS.some((field) => personMissingField(row, field.id, range));
+}
+
+export function peopleMissingField(people, fieldId, range) {
+  const rows = filterPeopleToRange(people, range);
+  const field = parseMissingField(fieldId);
+  const resolved = resolveDashRange(range);
+  if (String(fieldId || "").trim() && fieldId !== "all" && !field) return [];
+  const matched = field
+    ? rows.filter((row) => personMissingField(row, field.id, resolved))
+    : rows.filter((row) => personMissingAnyField(row, resolved));
+  return matched.slice().sort(compareListedPeople);
+}
+
+function missingStoredCount(rows, field) {
+  let n = 0;
+  for (const row of rows || []) {
+    const v = row?.[field];
+    if (v === null || v === undefined || v === "") n += 1;
+  }
+  return n;
+}
+
+/** Operations in range missing summary or published counts. Null counts stay missing. */
+export function operationMissingStanding(operations, range) {
+  const rows = filterOperationsToRange(operations, range);
+  const total = rows.length;
+  return {
+    total,
+    fields: [
+      {
+        key: "summary",
+        label: "Summary",
+        count: rows.filter((row) => !String(row.summary || "").trim()).length,
+        total,
+      },
+      {
+        key: "victim_count",
+        label: "Victim count",
+        count: missingStoredCount(rows, "victim_count"),
+        total,
+      },
+      {
+        key: "arrest_count",
+        label: "Arrest count",
+        count: missingStoredCount(rows, "arrest_count"),
+        total,
+      },
+    ],
+  };
+}
+
 /** Standing by signed operation tag, plus the all-ops rollup. */
 export function operationStandingByTag(operations, range) {
   const resolved = resolveDashRange(range);
@@ -516,5 +666,7 @@ export function buildDashboard(people, range, operations = []) {
     dimensions,
     operations: operationStandingByTag(operations, range),
     age: ageStanding(people, range),
+    missing: missingStanding(people, range),
+    operationsMissing: operationMissingStanding(operations, range),
   };
 }
