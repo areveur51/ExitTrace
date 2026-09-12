@@ -1128,6 +1128,13 @@ pre {
   padding: 0.25rem 0.4rem;
 }
 .dash-table td { padding: 0.3rem 0.4rem; border-top: 1px solid color-mix(in srgb, var(--rule) 45%, transparent); }
+.dash-box .dash-table + .dash-table { margin-top: 0.85rem; }
+.dash-missing-tables {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+.dash-standings [data-dash-dim="missing"] { grid-column: 1 / -1; }
 .dash-rank { color: var(--amber); width: 2.2rem; }
 .dash-n { text-align: right; width: 4.5rem; }
 .dash-link,
@@ -1697,6 +1704,7 @@ html[data-theme="glass"] .dash-stats {
   .tui-search { width: min(36rem, 70vw); }
   .dash-grid { grid-template-columns: 1fr 1fr; }
   .dash-standings { grid-template-columns: 1fr 1fr; }
+  .dash-missing-tables { grid-template-columns: 1fr 1fr; }
   .dash-trends { grid-template-columns: 1fr 1fr 1fr; }
   .detail {
     display: grid;
