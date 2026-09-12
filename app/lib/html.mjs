@@ -1347,48 +1347,73 @@ export function dashboardAgeBody({ range, band } = {}) {
   </div>`;
 }
 
+function missingPct(count, total) {
+  const c = Math.max(0, Number(count) || 0);
+  const t = Math.max(0, Number(total) || 0);
+  if (!t) return 0;
+  return Math.min(100, Math.round((c / t) * 100));
+}
+
+function missingTile({ key, label, count, total, href, op = false }) {
+  const c = Math.max(0, Number(count) || 0);
+  const t = Math.max(0, Number(total) || 0);
+  const pct = missingPct(c, t);
+  const done = c === 0 ? " is-complete" : "";
+  const data = op
+    ? ` data-missing-op="${esc(key)}" data-missing-count="${c}"`
+    : ` data-missing-field="${esc(key)}" data-missing-count="${c}"`;
+  const inner = `<span class="dash-stat-label">${esc(label)}</span>
+    <span class="dash-missing-nums">${dashCount(c)} <span class="dash-missing-of">of ${t}</span></span>
+    <span class="dash-missing-meter" aria-hidden="true"><span class="dash-missing-fill" style="--missing-pct:${pct}"></span></span>`;
+  if (href) {
+    return `<a class="dash-stat dash-missing-tile${done}" href="${esc(href)}" aria-label="${esc(label)} · ${c} missing of ${t}"${data}>${inner}</a>`;
+  }
+  return `<p class="dash-stat dash-missing-tile is-static${done}"${data}>${inner}</p>`;
+}
+
 function missingStandingBlock(peopleRows, operationsMissing, range) {
   const rows = Array.isArray(peopleRows) ? peopleRows : [];
-  const peopleBody = rows
-    .map((row) => {
-      const count = Math.max(0, Number(row.count) || 0);
-      const total = Math.max(0, Number(row.total) || 0);
-      return `<tr data-missing-field="${esc(row.key)}" data-missing-count="${count}">
-        <td><a class="dash-link" href="${esc(row.href)}">${esc(row.label)}</a></td>
-        <td class="num">${dashCount(count)}</td>
-        <td class="num">${dashCount(total)}</td>
-      </tr>`;
-    })
+  const peopleGrid = rows
+    .map((row) =>
+      missingTile({
+        key: row.key,
+        label: row.label,
+        count: row.count,
+        total: row.total,
+        href: row.href,
+      }),
+    )
     .join("");
-  const peopleTable = peopleBody
-    ? `<table class="dash-table">
-        <thead><tr><th>People</th><th>Missing</th><th>Of</th></tr></thead>
-        <tbody>${peopleBody}</tbody>
-      </table>`
+  const peopleBlock = peopleGrid
+    ? `<div class="dash-missing-group">
+        <p class="dash-missing-kicker">People</p>
+        <div class="dash-missing-grid">${peopleGrid}</div>
+      </div>`
     : `<p class="empty">No rows on this page.</p>`;
   const opFields = operationsMissing?.fields || [];
   const opTotal = Math.max(0, Number(operationsMissing?.total) || 0);
-  const opBody = opFields
-    .map((row) => {
-      const count = Math.max(0, Number(row.count) || 0);
-      return `<tr data-missing-op="${esc(row.key)}" data-missing-count="${count}">
-        <td>${esc(row.label)}</td>
-        <td class="num">${dashCount(count)}</td>
-        <td class="num">${dashCount(opTotal)}</td>
-      </tr>`;
-    })
+  const opGrid = opFields
+    .map((row) =>
+      missingTile({
+        key: row.key,
+        label: row.label,
+        count: row.count,
+        total: opTotal,
+        op: true,
+      }),
+    )
     .join("");
-  const opTable = opBody
-    ? `<table class="dash-table">
-        <thead><tr><th>Operations</th><th>Missing</th><th>Of</th></tr></thead>
-        <tbody>${opBody}</tbody>
-      </table>`
+  const opBlock = opGrid
+    ? `<div class="dash-missing-group">
+        <p class="dash-missing-kicker">Operations</p>
+        <div class="dash-missing-grid dash-missing-ops">${opGrid}</div>
+      </div>`
     : "";
   const more = `<p class="dash-more"><a class="keychip" href="${esc(dashRangeHref(DASH_MISSING.path, range))}" aria-label="All missing fields">All missing</a></p>`;
   return `<section class="dash-block" data-dash-dim="missing" aria-label="Missing metadata">
     ${boxFrame(
       "Missing metadata",
-      `<div class="dash-missing-tables">${peopleTable}${opTable}</div>${more}`,
+      `<div class="dash-missing">${peopleBlock}${opBlock}</div>${more}`,
       { extraClass: "dash-box" },
     )}
   </section>`;
