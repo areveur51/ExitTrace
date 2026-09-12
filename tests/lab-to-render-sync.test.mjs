@@ -28,6 +28,12 @@ test("lab-to-render-sync workflow matches the locked contract", () => {
   const wf = fs.readFileSync(wfPath, "utf8");
   assert.match(wf, /^name:\s*lab-to-render-sync\s*$/m);
   assert.match(wf, /workflow_dispatch:/);
+  assert.match(wf, /SYNC_MODE/);
+  assert.match(wf, /default:\s*dump/);
+  assert.match(wf, /dump\|logical/);
+  assert.match(wf, /not configured on this public workflow/);
+  assert.match(wf, /needs\.mode\.outputs\.sync_mode == 'dump'/);
+  assert.match(wf, /needs\.mode\.outputs\.sync_mode == 'logical'/);
   assert.match(wf, /cron:\s*"0 \*\/2 \* \* \*"/);
   assert.match(wf, /America\/New_York/);
   assert.match(wf, /fromJSON\(vars\.ET_LAB_RUNNER_LABELS/);
@@ -62,8 +68,11 @@ test("docs name production DATABASE_URL, generic runner labels, and dump env pla
   assert.match(doc, /ET_LAB_DUMP_SH/);
   assert.match(doc, /ET_LAB_DUMP_OUT/);
   assert.match(doc, /\/path\/to\/et-lab-dump\.sh/);
+  assert.match(doc, /`SYNC_MODE`/);
+  assert.match(doc, /default is \*\*`dump`\*\*/i);
   assert.match(doc, /dump\/restore/i);
   assert.match(doc, /logical replica is optional/i);
+  assert.match(doc, /not configured on this public workflow/);
   assert.doesNotMatch(doc, /RENDER_DATABASE_URL/);
   assertNoPrivateHost(doc, "docs");
 });

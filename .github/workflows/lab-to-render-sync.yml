@@ -1,11 +1,14 @@
-# Lab Postgres → existing Render Postgres (dump/restore only).
+# Lab Postgres → existing Render Postgres.
 # Media rsync is a separate host path. This workflow does not pack media
 # and does not change data-release.yml.
 #
+# SYNC_MODE=dump|logical. Default dump (dump/restore path).
+# logical is optional and is not configured on this public workflow
+# (no-op skip). A private env may set SYNC_MODE=logical later; do not
+# embed host wiring here.
+#
 # Dump source: the lab ExitTrace database, via a host helper whose path
 # is supplied at runtime (ET_LAB_DUMP_SH / ET_LAB_DUMP_OUT).
-# Dump/restore is the default path. A logical replica is optional and
-# is not configured in this repository.
 #
 # GitHub Actions cron is UTC and does not honor a TZ key.
 # cron 0 */2 * * * fires at minute 0 of every even UTC hour
@@ -22,6 +25,15 @@ name: lab-to-render-sync
 
 on:
   workflow_dispatch:
+    inputs:
+      SYNC_MODE:
+        description: Sync mode. dump is the default dump/restore path. logical is optional and not configured on this public workflow.
+        type: choice
+        required: false
+        default: dump
+        options:
+          - dump
+          - logical
   schedule:
     - cron: "0 */2 * * *"
 
@@ -33,8 +45,35 @@ permissions:
   contents: none
 
 jobs:
+  mode:
+    name: resolve-sync-mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sync_mode: ${{ steps.resolve.outputs.sync_mode }}
+    steps:
+      - id: resolve
+        name: Resolve SYNC_MODE (default dump)
+        env:
+          SYNC_MODE_INPUT: ${{ inputs.SYNC_MODE }}
+          SYNC_MODE_VAR: ${{ vars.SYNC_MODE }}
+        run: |
+          set -euo pipefail
+          mode="${SYNC_MODE_INPUT:-${SYNC_MODE_VAR:-dump}}"
+          case "$mode" in
+            dump|logical) ;;
+            *)
+              echo "SYNC_MODE must be dump or logical (default dump)."
+              exit 1
+              ;;
+          esac
+          echo "sync_mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "SYNC_MODE=$mode"
+
   dump:
     name: dump
+    needs: mode
+    if: needs.mode.outputs.sync_mode == 'dump'
     # Runner labels are env-configurable. Default generic labels:
     # self-hosted, lab. Override with repository variable
     # ET_LAB_RUNNER_LABELS (JSON array) to match your runner.
@@ -86,6 +125,7 @@ jobs:
   restore:
     name: restore
     needs: dump
+    if: needs.dump.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -170,3 +210,15 @@ jobs:
           fi
           cat "${RUNNER_TEMP}/restore.counts"
           rm -f -- "$work" "$err" "${RUNNER_TEMP}/restore.counts"
+
+  logical:
+    name: logical
+    needs: mode
+    if: needs.mode.outputs.sync_mode == 'logical'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Optional logical replica is not configured here
+        run: |
+          set -euo pipefail
+          echo "SYNC_MODE=logical: optional logical replica is not configured on this public workflow. Skipping."
