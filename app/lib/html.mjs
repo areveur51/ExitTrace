@@ -22,7 +22,14 @@ import {
   pageHref,
   pageWindow,
 } from "./paginate.mjs";
-import { listThumbHref, LIST_THUMB_CSS_H, LIST_THUMB_CSS_W } from "./thumb.mjs";
+import {
+  listThumbHref,
+  DETAIL_PORTRAIT_CSS_H,
+  DETAIL_PORTRAIT_CSS_W,
+  LIST_THUMB_CSS_H,
+  LIST_THUMB_CSS_W,
+} from "./thumb.mjs";
+import { isPeopleMediaHref } from "./portrait.mjs";
 import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
@@ -508,6 +515,15 @@ export function localMediaThumb(src, label, kind = "portrait") {
   return `<span class="initials thumb" aria-hidden="true">${esc(initials(label))}</span>`;
 }
 
+/** Full local still on person detail. List thumbs stay 40×52. External URLs are dropped. */
+export function localMediaPortrait(src, label) {
+  const href = String(src || "").trim();
+  if (isPeopleMediaHref(href)) {
+    return `<img class="detail-photo portrait" src="${esc(href)}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">`;
+  }
+  return `<span class="initials detail-photo" aria-hidden="true">${esc(initials(label))}</span>`;
+}
+
 function thumb(src, label, kind = "portrait") {
   return localMediaThumb(src, label, kind);
 }
@@ -780,7 +796,7 @@ export function personHeader(row, extras = {}) {
     ? `<p class="meta-line">Origin · ${esc(row.country_of_origin)}</p>`
     : "";
   return `<header class="person-header">
-    ${localMediaThumb(row.photo, row.name)}
+    ${localMediaPortrait(row.photo, row.name)}
     <div class="detail-copy">
       <h2 class="detail-title">${esc(row.name || "—")}</h2>
       <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>

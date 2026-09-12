@@ -161,7 +161,8 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   assert.match(html, /casey-vale-quit/);
   assert.doesNotMatch(html, /dog-comm|dog_comms/);
   assert.doesNotMatch(html, /Synopsis|Role ·/);
-  assert.doesNotMatch(html, /class="detail-photo"/);
+  assert.match(html, /class="initials detail-photo"/);
+  assert.doesNotMatch(html, /class="portrait thumb"/);
   assert.doesNotMatch(html, /upload\.wikimedia\.org/);
   const tags = html.match(/<article class="event-tag-row"[\s\S]*?<\/article>/g) || [];
   assert.equal(tags.length, 2);
@@ -191,8 +192,8 @@ test("gold person pages stay one card and do not invent birth or event attrs", a
   assert.match(page.body, /class="event-tag-row"/);
   assert.match(page.body, /Firings/);
   assert.match(page.body, /The New York Times/);
-  assert.match(page.body, /\/media\/thumbs\/people\/james-comey\.jpg/);
-  assert.doesNotMatch(page.body, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.match(page.body, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(page.body, /\/media\/thumbs\/people\/james-comey\.jpg/);
   assert.doesNotMatch(page.body, /Birth date|Age at event|Announced/);
   assert.doesNotMatch(page.body, /Director, Federal Bureau of Investigation/);
   assert.doesNotMatch(page.body, /Synopsis/);
