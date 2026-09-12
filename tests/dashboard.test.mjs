@@ -341,6 +341,10 @@ test("GET /dashboard and child ranks render HUD chrome and stay fail-closed", as
   assert.match(dash.body, /data-missing-field="comments"/);
   assert.match(dash.body, /data-missing-field="position"/);
   assert.match(dash.body, /data-missing-field="organization"/);
+  assert.match(dash.body, /class="dash-missing"/);
+  assert.match(dash.body, /class="dash-missing-grid"/);
+  assert.match(dash.body, /class="dash-stat dash-missing-tile/);
+  assert.match(dash.body, /class="dash-missing-meter"/);
   assert.match(dash.body, /All missing/);
   assert.match(dash.body, /href="\/dashboard\/missing\?range=all"/);
   assert.match(dash.body, /Counts by Age/);

@@ -1038,6 +1038,7 @@ pre {
   .dash-range-btn,
   .dash-range-apply,
   .dash-range-field input,
+  .dash-missing-tile,
   .tui-search input {
     min-height: 44px;
   }
@@ -1129,12 +1130,76 @@ pre {
 }
 .dash-table td { padding: 0.3rem 0.4rem; border-top: 1px solid color-mix(in srgb, var(--rule) 45%, transparent); }
 .dash-box .dash-table + .dash-table { margin-top: 0.85rem; }
-.dash-missing-tables {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-}
 .dash-standings [data-dash-dim="missing"] { grid-column: 1 / -1; }
+.dash-missing {
+  display: grid;
+  gap: 0.9rem;
+}
+.dash-missing-kicker {
+  margin: 0 0 0.45rem;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--hud-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dash-missing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.2rem, 1fr));
+  gap: 0.55rem 0.65rem;
+}
+.dash-missing-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.15rem;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.dash-missing-tile .dash-stat-label {
+  line-height: 1.2;
+}
+.dash-missing-nums {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.dash-missing-tile .dash-count {
+  font-size: 1.15rem;
+  line-height: 1.15;
+}
+.dash-missing-of {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.dash-missing-meter {
+  display: block;
+  margin-top: 0.4rem;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.dash-missing-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--amber);
+  box-shadow: 0 0 8px rgba(255, 176, 0, 0.35);
+  transform-origin: left center;
+  transform: scaleX(calc(var(--missing-pct, 0) / 100));
+  animation: dash-missing-fill 0.7s ease;
+}
+.dash-missing-tile.is-complete .dash-missing-fill {
+  transform: scaleX(0);
+  box-shadow: none;
+}
+@keyframes dash-missing-fill {
+  from { transform: scaleX(0); opacity: 0.35; }
+}
 .dash-rank { color: var(--amber); width: 2.2rem; }
 .dash-n { text-align: right; width: 4.5rem; }
 .dash-link,
@@ -1193,7 +1258,8 @@ pre {
 @media (prefers-reduced-motion: reduce) {
   .dash-line,
   .dash-bar,
-  .dash-count { animation: none; }
+  .dash-count,
+  .dash-missing-fill { animation: none; }
   .dash-line { stroke-dashoffset: 0; }
 }
 
@@ -1482,6 +1548,17 @@ html[data-theme="glass"] .dash-bar {
 html[data-theme="glass"] .dash-stat {
   padding: 0.65rem 0.9rem;
 }
+html[data-theme="glass"] .dash-missing-tile:focus-visible {
+  outline: 1px solid var(--amber);
+  border-color: var(--status-ok);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-ok) 45%, transparent);
+}
+html[data-theme="glass"] .dash-missing-meter {
+  background: rgba(255, 255, 255, 0.14);
+}
+html[data-theme="glass"] .dash-missing-fill {
+  background: var(--amber);
+}
 html[data-theme="glass"] .dash-grid,
 html[data-theme="glass"] .dash-standings,
 html[data-theme="glass"] .dash-trends,
@@ -1497,6 +1574,10 @@ html[data-theme="glass"] .dash-stats {
   }
   html[data-theme="glass"] .tui-row:hover::before {
     background: var(--status-ok);
+  }
+  html[data-theme="glass"] a.dash-missing-tile:hover {
+    background-color: rgba(255, 176, 0, 0.1);
+    border-color: color-mix(in srgb, var(--amber) 55%, transparent);
   }
 }
 
@@ -1704,7 +1785,6 @@ html[data-theme="glass"] .dash-stats {
   .tui-search { width: min(36rem, 70vw); }
   .dash-grid { grid-template-columns: 1fr 1fr; }
   .dash-standings { grid-template-columns: 1fr 1fr; }
-  .dash-missing-tables { grid-template-columns: 1fr 1fr; }
   .dash-trends { grid-template-columns: 1fr 1fr 1fr; }
   .detail {
     display: grid;
