@@ -28,6 +28,7 @@ import {
   DETAIL_PORTRAIT_CSS_W,
   LIST_THUMB_CSS_H,
   LIST_THUMB_CSS_W,
+  isDogMediaHref,
 } from "./thumb.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import {
@@ -515,13 +516,14 @@ export function localMediaThumb(src, label, kind = "portrait") {
   return `<span class="initials thumb" aria-hidden="true">${esc(initials(label))}</span>`;
 }
 
-/** Full local still on person detail. List thumbs stay 40×52. External URLs are dropped. */
-export function localMediaPortrait(src, label) {
+/** Full local still on person/dog detail. List thumbs stay 40×52. External URLs are dropped. */
+export function localMediaPortrait(src, label, { dog = false } = {}) {
   const href = String(src || "").trim();
-  if (isPeopleMediaHref(href)) {
+  const ok = dog ? isDogMediaHref(href) : isPeopleMediaHref(href);
+  if (ok) {
     return `<img class="detail-photo portrait" src="${esc(href)}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">`;
   }
-  return `<span class="initials detail-photo" aria-hidden="true">${esc(initials(label))}</span>`;
+  return `<span class="initials detail-photo portrait" aria-hidden="true">${esc(initials(label))}</span>`;
 }
 
 function thumb(src, label, kind = "portrait") {
@@ -987,9 +989,7 @@ export function operationDetail(row) {
 }
 
 export function dogDetail(row) {
-  const photo = row.still
-    ? `<img class="detail-photo" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="120" height="150" decoding="async">`
-    : `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.handle))}</span>`;
+  const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, { dog: true });
   return `<article class="detail">
     ${boxFrame(
       "Metadata",

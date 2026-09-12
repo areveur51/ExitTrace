@@ -592,6 +592,8 @@ test("dog-comm list and search cards use still.thumb, not the large snapshot sti
   assert.match(search.body, /\/media\/thumbs\/dog-comms\//);
 
   assert.equal(detail.status, 200);
+  assert.match(detail.body, /class="detail-photo portrait"/);
+  assert.match(detail.body, /width="192" height="250"/);
   assert.match(detail.body, /class="still"/);
   assert.match(detail.body, /width="320" height="200"/);
 });
