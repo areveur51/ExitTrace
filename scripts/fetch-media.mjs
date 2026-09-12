@@ -35,7 +35,7 @@ const PEOPLE_PAGES = {
   "liz-truss.jpg": "Liz Truss",
   "jacinda-ardern.jpg": "Jacinda Ardern",
   "nicola-sturgeon.jpg": "Nicola Sturgeon",
-  "liz-magill.jpg": "Liz Magill",
+  "liz-magill-hearing.jpg": "Liz Magill",
   "claudine-gay.jpg": "Claudine Gay",
   "reince-priebus.jpg": "Reince Priebus",
   "john-kelly.jpg": "John F. Kelly",
