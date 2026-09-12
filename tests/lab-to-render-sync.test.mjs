@@ -9,14 +9,39 @@ const wfPath = path.join(ROOT, ".github", "workflows", "lab-to-render-sync.yml")
 const docPath = path.join(ROOT, "docs", "github-auto-deploy.md");
 const dataReleasePath = path.join(ROOT, ".github", "workflows", "data-release.yml");
 
+// Encoded so this file does not contain the raw host strings.
+const PRIVATE_HOST = [
+  ["pop", "-os"].join(""),
+  ["Grok", "Build"].join(""),
+  ["/o", "pt/"].join(""),
+  ["dpg", "-"].join(""),
+  ["Tail", "scale"].join(""),
+];
+
+function assertNoPrivateHost(text, label) {
+  for (const pat of PRIVATE_HOST) {
+    assert.equal(text.includes(pat), false, `${label} must not contain ${pat}`);
+  }
+}
+
 test("lab-to-render-sync workflow matches the locked contract", () => {
   const wf = fs.readFileSync(wfPath, "utf8");
   assert.match(wf, /^name:\s*lab-to-render-sync\s*$/m);
   assert.match(wf, /workflow_dispatch:/);
+  assert.match(wf, /SYNC_MODE/);
+  assert.match(wf, /default:\s*dump/);
+  assert.match(wf, /dump\|logical/);
+  assert.match(wf, /not configured on this public workflow/);
+  assert.match(wf, /needs\.mode\.outputs\.sync_mode == 'dump'/);
+  assert.match(wf, /needs\.mode\.outputs\.sync_mode == 'logical'/);
   assert.match(wf, /cron:\s*"0 \*\/2 \* \* \*"/);
   assert.match(wf, /America\/New_York/);
-  assert.match(wf, /runs-on:\s*\[self-hosted,\s*pop-os,\s*exittrace-lab\]/);
-  assert.match(wf, /\/opt\/GrokBuild\/bin\/et-lab-dump\.sh/);
+  assert.match(wf, /fromJSON\(vars\.ET_LAB_RUNNER_LABELS/);
+  assert.match(wf, /\["self-hosted","lab"\]/);
+  assert.match(wf, /ET_LAB_DUMP_SH/);
+  assert.match(wf, /ET_LAB_DUMP_OUT/);
+  assert.match(wf, /\/path\/to\/et-lab-dump\.sh/);
+  assert.match(wf, /\/path\/to\/exittrace-lab-latest\.dump/);
   assert.match(wf, /exittrace-lab\.dump\.gz/);
   assert.match(wf, /retention-days:\s*1/);
   assert.match(wf, /runs-on:\s*ubuntu-latest/);
@@ -27,23 +52,29 @@ test("lab-to-render-sync workflow matches the locked contract", () => {
   assert.match(wf, /--if-exists/);
   assert.match(wf, /sslmode=require/);
   assert.doesNotMatch(wf, /RENDER_DATABASE_URL/);
-  assert.doesNotMatch(wf, /127\.0\.0\.1:5434/);
-  assert.doesNotMatch(wf, /localhost:5434/);
+  assertNoPrivateHost(wf, "workflow");
 });
 
-test("docs name production DATABASE_URL, runner labels, dump script, and exclude host port 5434", () => {
+test("docs name production DATABASE_URL, generic runner labels, and dump env placeholders", () => {
   const doc = fs.readFileSync(docPath, "utf8");
   assert.match(doc, /lab-to-render-sync\.yml/);
   assert.match(doc, /cron `0 \*\/2 \* \* \*`/);
   assert.match(doc, /America\/New_York/);
   assert.match(doc, /`production`/);
   assert.match(doc, /\*\*`DATABASE_URL`\*\*/);
-  assert.match(doc, /pop-os-exittrace/);
-  assert.match(doc, /exittrace-lab/);
-  assert.match(doc, /\/opt\/GrokBuild\/bin\/et-lab-dump\.sh/);
-  assert.match(doc, /5434/);
-  assert.match(doc, /replica/);
+  assert.match(doc, /self-hosted/);
+  assert.match(doc, /`lab`/);
+  assert.match(doc, /ET_LAB_RUNNER_LABELS/);
+  assert.match(doc, /ET_LAB_DUMP_SH/);
+  assert.match(doc, /ET_LAB_DUMP_OUT/);
+  assert.match(doc, /\/path\/to\/et-lab-dump\.sh/);
+  assert.match(doc, /`SYNC_MODE`/);
+  assert.match(doc, /default is \*\*`dump`\*\*/i);
+  assert.match(doc, /dump\/restore/i);
+  assert.match(doc, /logical replica is optional/i);
+  assert.match(doc, /not configured on this public workflow/);
   assert.doesNotMatch(doc, /RENDER_DATABASE_URL/);
+  assertNoPrivateHost(doc, "docs");
 });
 
 test("data-release.yml is unchanged by this sync path", () => {

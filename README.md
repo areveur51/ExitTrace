@@ -65,7 +65,7 @@ npm start
 
 `scripts/bootstrap-db.sql` is `CREATE TABLE IF NOT EXISTS` and safe to re-run. Do not commit `.env`. Copy `.env.example` only if you need to change defaults.
 
-Lab → existing Render Postgres dump/restore (not a second Render service) is documented in `docs/github-auto-deploy.md`. The Actions secret is environment `production` / `DATABASE_URL` only. Host port 5434 and any replica database are not a source.
+Lab → existing Render Postgres dump/restore (not a second Render service) is documented in `docs/github-auto-deploy.md`. The Actions secret is environment `production` / `DATABASE_URL` only. `SYNC_MODE` defaults to `dump`; `logical` is optional and not configured on the public workflow.
 
 ## Promote one Unsorted post
 

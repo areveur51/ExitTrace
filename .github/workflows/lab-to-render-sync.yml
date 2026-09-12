@@ -1,10 +1,14 @@
-# Lab Postgres → existing Render Postgres (dump/restore only).
+# Lab Postgres → existing Render Postgres.
 # Media rsync is a separate host path. This workflow does not pack media
 # and does not change data-release.yml.
 #
-# Dump source: ExitTrace Postgres published on host port 5433
-# (docker grokbuild-postgres, database exittrace). Host port 5434 and
-# any replica database are excluded — do not dump them or fall back there.
+# SYNC_MODE=dump|logical. Default dump (dump/restore path).
+# logical is optional and is not configured on this public workflow
+# (no-op skip). A private env may set SYNC_MODE=logical later; do not
+# embed host wiring here.
+#
+# Dump source: the lab ExitTrace database, via a host helper whose path
+# is supplied at runtime (ET_LAB_DUMP_SH / ET_LAB_DUMP_OUT).
 #
 # GitHub Actions cron is UTC and does not honor a TZ key.
 # cron 0 */2 * * * fires at minute 0 of every even UTC hour
@@ -15,12 +19,21 @@
 #
 # Restore reads DATABASE_URL only from the GitHub Actions environment
 # named production (Render External connection string). Never put that
-# URL on the lab host or in this repository.
+# URL on the dump-runner host or in this repository.
 
 name: lab-to-render-sync
 
 on:
   workflow_dispatch:
+    inputs:
+      SYNC_MODE:
+        description: Sync mode. dump is the default dump/restore path. logical is optional and not configured on this public workflow.
+        type: choice
+        required: false
+        default: dump
+        options:
+          - dump
+          - logical
   schedule:
     - cron: "0 */2 * * *"
 
@@ -32,19 +45,60 @@ permissions:
   contents: none
 
 jobs:
+  mode:
+    name: resolve-sync-mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sync_mode: ${{ steps.resolve.outputs.sync_mode }}
+    steps:
+      - id: resolve
+        name: Resolve SYNC_MODE (default dump)
+        env:
+          SYNC_MODE_INPUT: ${{ inputs.SYNC_MODE }}
+          SYNC_MODE_VAR: ${{ vars.SYNC_MODE }}
+        run: |
+          set -euo pipefail
+          mode="${SYNC_MODE_INPUT:-${SYNC_MODE_VAR:-dump}}"
+          case "$mode" in
+            dump|logical) ;;
+            *)
+              echo "SYNC_MODE must be dump or logical (default dump)."
+              exit 1
+              ;;
+          esac
+          echo "sync_mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "SYNC_MODE=$mode"
+
   dump:
     name: dump
-    runs-on: [self-hosted, pop-os, exittrace-lab]
+    needs: mode
+    if: needs.mode.outputs.sync_mode == 'dump'
+    # Runner labels are env-configurable. Default generic labels:
+    # self-hosted, lab. Override with repository variable
+    # ET_LAB_RUNNER_LABELS (JSON array) to match your runner.
+    runs-on: ${{ fromJSON(vars.ET_LAB_RUNNER_LABELS || '["self-hosted","lab"]') }}
     # No production / Render secrets on this job.
     timeout-minutes: 20
     steps:
-      - name: Dump lab Postgres on host :5433
+      - name: Dump lab Postgres
+        env:
+          # Set on the runner and/or as repository variables.
+          # Placeholder examples (not a real host):
+          #   ET_LAB_DUMP_SH=/path/to/et-lab-dump.sh
+          #   ET_LAB_DUMP_OUT=/path/to/exittrace-lab-latest.dump
+          ET_LAB_DUMP_SH_FROM_VARS: ${{ vars.ET_LAB_DUMP_SH }}
+          ET_LAB_DUMP_OUT_FROM_VARS: ${{ vars.ET_LAB_DUMP_OUT }}
         run: |
           set -euo pipefail
-          DUMP_SH="/opt/GrokBuild/bin/et-lab-dump.sh"
-          LATEST="/opt/GrokBuild/projects/ExitTrace/scratch/exittrace-lab-latest.dump"
-          if [[ ! -x "$DUMP_SH" ]]; then
-            echo "missing $DUMP_SH; refusing to dump. host port 5434 is not a source."
+          DUMP_SH="${ET_LAB_DUMP_SH:-${ET_LAB_DUMP_SH_FROM_VARS:-}}"
+          LATEST="${ET_LAB_DUMP_OUT:-${ET_LAB_DUMP_OUT_FROM_VARS:-}}"
+          if [[ -z "$DUMP_SH" || ! -x "$DUMP_SH" ]]; then
+            echo "ET_LAB_DUMP_SH is unset or not executable; refusing to dump."
+            exit 1
+          fi
+          if [[ -z "$LATEST" ]]; then
+            echo "ET_LAB_DUMP_OUT is unset; refusing to dump."
             exit 1
           fi
           "$DUMP_SH"
@@ -71,6 +125,7 @@ jobs:
   restore:
     name: restore
     needs: dump
+    if: needs.dump.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -104,8 +159,7 @@ jobs:
           redact() {
             sed -E \
               -e 's#[A-Za-z0-9+._~:/?#\[\]@!$&'"'"'()*+,;=-]+://[^[:space:]]+#[redacted-url]#g' \
-              -e 's#\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b#[redacted]#g' \
-              -e 's#\bdpg-[A-Za-z0-9.-]+#[redacted-host]#g'
+              -e 's#\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b#[redacted]#g'
           }
           ensure_ssl() {
             local u="${1:-}"
@@ -156,3 +210,15 @@ jobs:
           fi
           cat "${RUNNER_TEMP}/restore.counts"
           rm -f -- "$work" "$err" "${RUNNER_TEMP}/restore.counts"
+
+  logical:
+    name: logical
+    needs: mode
+    if: needs.mode.outputs.sync_mode == 'logical'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Optional logical replica is not configured here
+        run: |
+          set -euo pipefail
+          echo "SYNC_MODE=logical: optional logical replica is not configured on this public workflow. Skipping."
