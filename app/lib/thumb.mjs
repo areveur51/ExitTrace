@@ -7,6 +7,9 @@ import { PNG } from "pngjs";
 
 export const LIST_THUMB_CSS_W = 40;
 export const LIST_THUMB_CSS_H = 52;
+/** Person detail portrait. Same 10:13 ratio as list thumbs, large enough to read a face. */
+export const DETAIL_PORTRAIT_CSS_W = 192;
+export const DETAIL_PORTRAIT_CSS_H = 250;
 export const LIST_THUMB_PX_W = 80;
 export const LIST_THUMB_PX_H = 104;
 export const LIST_THUMB_QUALITY = 72;

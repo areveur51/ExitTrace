@@ -455,9 +455,16 @@ body.tui-home .home-stage {
   gap: 1rem;
   align-items: flex-start;
 }
-.person-header .portrait.thumb,
-.person-header .initials.thumb {
+.person-header .detail-photo.portrait,
+.person-header .initials.detail-photo {
   flex: 0 0 auto;
+  width: 192px;
+  height: 250px;
+  max-width: 192px;
+  object-fit: cover;
+}
+.person-header .initials.detail-photo {
+  font-size: 2.4rem;
 }
 .event-timeline {
   margin: 0.85rem 0 0;
@@ -1506,6 +1513,12 @@ html[data-theme="glass"] .dash-stats {
   .initials.detail-photo {
     width: 90px;
     height: 160px;
+  }
+  .person-header .detail-photo.portrait,
+  .person-header .initials.detail-photo {
+    width: 160px;
+    height: 208px;
+    max-width: 160px;
   }
   .tui-row .thumb,
   .tui-row img.still.thumb,

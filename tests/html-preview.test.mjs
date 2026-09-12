@@ -78,13 +78,15 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
   assert.doesNotMatch(search, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
 });
 
-test("person detail uses a local portrait thumb; dog snapshots keep the full still", () => {
+test("person detail uses the full local portrait; dog snapshots keep the full still", () => {
   const person = personDetail(firing());
   const dogPage = dogDetail(dog());
   assert.match(person, /class="person-header"/);
-  assert.match(person, /class="portrait thumb"/);
-  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg"/);
-  assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.match(person, /class="detail-photo portrait"/);
+  assert.match(person, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.match(person, /width="192" height="250"/);
+  assert.doesNotMatch(person, /class="portrait thumb"/);
+  assert.doesNotMatch(person, /src="\/media\/thumbs\/people\/james-comey\.jpg"/);
   assert.doesNotMatch(person, /upload\.wikimedia\.org/);
   assert.match(dogPage, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
   assert.doesNotMatch(dogPage, /\/media\/thumbs\//);
@@ -142,6 +144,9 @@ test("CSS keeps list still.thumb at portrait size on all viewports including 720
   assert.match(mobile, /width:\s*40px/);
   assert.match(mobile, /height:\s*52px/);
   assert.doesNotMatch(mobile, /\.still\s*\{[^}]*320px/);
+  assert.match(css, /\.person-header \.detail-photo\.portrait/);
+  assert.match(css, /width:\s*192px/);
+  assert.match(css, /height:\s*250px/);
 });
 
 test("death list and search previews print one death date and never 'died <date>'", () => {
