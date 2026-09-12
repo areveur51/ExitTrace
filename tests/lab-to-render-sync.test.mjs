@@ -13,7 +13,7 @@ const dataReleasePath = path.join(ROOT, ".github", "workflows", "data-release.ym
 const PRIVATE_HOST = [
   ["pop", "-os"].join(""),
   ["Grok", "Build"].join(""),
-  ["/opt/", "Grok", "Build"].join(""),
+  ["/o", "pt/"].join(""),
   ["dpg", "-"].join(""),
   ["Tail", "scale"].join(""),
 ];
