@@ -88,7 +88,10 @@ test("person detail uses the full local portrait; dog snapshots keep the full st
   assert.doesNotMatch(person, /class="portrait thumb"/);
   assert.doesNotMatch(person, /src="\/media\/thumbs\/people\/james-comey\.jpg"/);
   assert.doesNotMatch(person, /upload\.wikimedia\.org/);
+  assert.match(dogPage, /class="detail-photo portrait"/);
   assert.match(dogPage, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.match(dogPage, /width="192" height="250"/);
+  assert.doesNotMatch(dogPage, /width="120" height="150"/);
   assert.doesNotMatch(dogPage, /\/media\/thumbs\//);
 });
 

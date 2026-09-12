@@ -6,6 +6,7 @@ import { test } from "node:test";
 import jpeg from "jpeg-js";
 import {
   ensureThumbFile,
+  isDogMediaHref,
   isThumbHref,
   listThumbHref,
   renderListThumb,
@@ -43,6 +44,9 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
   assert.equal(listThumbHref("/media/people/nested/path.jpg"), "");
   assert.equal(isThumbHref("/media/thumbs/people/james-comey.jpg"), true);
   assert.equal(isThumbHref("/media/people/james-comey.jpg"), false);
+  assert.equal(isDogMediaHref("/media/dog-comms/dod-k9-2020.jpg"), true);
+  assert.equal(isDogMediaHref("/media/people/james-comey.jpg"), false);
+  assert.equal(isDogMediaHref("/media/dog-comms/../people/x.jpg"), false);
   assert.deepEqual(sourceRelCandidates("thumbs/people/james-comey.jpg"), [
     "people/james-comey.jpg",
     "people/james-comey.jpeg",
