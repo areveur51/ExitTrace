@@ -321,7 +321,12 @@ function serveMedia(res, reqPath, req) {
   if (rel.startsWith("thumbs/")) {
     const href = `/media/${rel}`;
     const thumbRel = thumbRelFromHref(href);
-    const dest = thumbRel ? ensureThumbFile(mediaDir, thumbRel) : null;
+    let dest = null;
+    try {
+      dest = thumbRel ? ensureThumbFile(mediaDir, thumbRel) : null;
+    } catch {
+      dest = null;
+    }
     return serveFile(res, dest, req);
   }
   return serveFile(res, safeJoin(mediaDir, rel), req);

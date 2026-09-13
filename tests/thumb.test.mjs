@@ -79,9 +79,32 @@ test("ensureThumbFile derives from a stored still and refuses traversal", () => 
     const dest = ensureThumbFile(dir, "thumbs/people/casey-vale.jpg");
     assert.ok(dest);
     assert.ok(fs.existsSync(dest));
-    assert.ok(fs.statSync(dest).size < fs.statSync(src).size);
+    const decoded = jpeg.decode(fs.readFileSync(dest), { useTArray: true });
+    assert.equal(decoded.width, PORTRAIT_PX_W);
+    assert.equal(decoded.height, PORTRAIT_PX_H);
     assert.equal(ensureThumbFile(dir, "thumbs/people/../people/casey-vale.jpg"), null);
     assert.equal(ensureThumbFile(dir, "thumbs/people/missing.jpg"), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("request-path reuse keeps an existing thumb instead of crashing on a huge source", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "exittrace-thumbs-reuse-"));
+  try {
+    fs.mkdirSync(path.join(dir, "people"));
+    fs.mkdirSync(path.join(dir, "thumbs", "people"), { recursive: true });
+    const src = path.join(dir, "people", "casey-vale.jpg");
+    const dest = path.join(dir, "thumbs", "people", "casey-vale.jpg");
+    const small = solidJpeg({ width: 80, height: 104 });
+    fs.writeFileSync(dest, small);
+    const huge = Buffer.alloc(4 * 1024 * 1024 + 100);
+    huge[0] = 0xff;
+    huge[1] = 0xd8;
+    fs.writeFileSync(src, huge);
+    const reused = ensureThumbFile(dir, "thumbs/people/casey-vale.jpg");
+    assert.equal(reused, dest);
+    assert.equal(fs.readFileSync(dest).length, small.length);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
