@@ -169,7 +169,7 @@ export function renderPortraitJpeg(buf) {
   }
 }
 
-/** @deprecated same bytes as renderPortraitJpeg — one crop for list and detail. */
+/** Alias of renderPortraitJpeg so list and detail stay on one crop. */
 export function renderListThumb(buf) {
   return renderPortraitJpeg(buf);
 }
