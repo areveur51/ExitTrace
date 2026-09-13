@@ -28,9 +28,9 @@ import {
   DETAIL_PORTRAIT_CSS_W,
   LIST_THUMB_CSS_H,
   LIST_THUMB_CSS_W,
+  PORTRAIT_CACHE,
   isDogMediaHref,
 } from "./thumb.mjs";
-import { isPeopleMediaHref } from "./portrait.mjs";
 import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
@@ -512,22 +512,37 @@ export function layout({
 </html>`;
 }
 
-export function localMediaThumb(src, label, kind = "portrait") {
-  const href = listThumbHref(src);
-  if (href) {
-    return `<img class="${kind} thumb" src="${esc(href)}" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async">`;
-  }
-  return `<span class="initials thumb" aria-hidden="true">${esc(initials(label))}</span>`;
+function portraitSrc(href) {
+  return `${href}?p=${PORTRAIT_CACHE}`;
 }
 
-/** Full local still on person/dog detail. List thumbs stay 40×52. External URLs are dropped. */
-export function localMediaPortrait(src, label, { dog = false } = {}) {
-  const href = String(src || "").trim();
-  const ok = dog ? isDogMediaHref(href) : isPeopleMediaHref(href);
-  if (ok) {
-    return `<img class="detail-photo portrait" src="${esc(href)}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">`;
+/** One derived 10:13 still. List and person detail differ only by CSS size. */
+function localPortraitImg(src, label, { size = "list", kind = "portrait" } = {}) {
+  const href = listThumbHref(src);
+  if (!href) {
+    const cls = size === "detail" ? "initials detail-photo portrait" : "initials thumb";
+    return `<span class="${cls}" aria-hidden="true">${esc(initials(label))}</span>`;
   }
-  return `<span class="initials detail-photo portrait" aria-hidden="true">${esc(initials(label))}</span>`;
+  if (size === "detail") {
+    return `<img class="detail-photo portrait" src="${esc(portraitSrc(href))}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">`;
+  }
+  return `<img class="${kind} thumb" src="${esc(portraitSrc(href))}" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async">`;
+}
+
+export function localMediaThumb(src, label, kind = "portrait") {
+  return localPortraitImg(src, label, { size: "list", kind });
+}
+
+/** Person detail uses the same derived portrait as the list thumb. Dog snapshots keep the full still. */
+export function localMediaPortrait(src, label, { dog = false } = {}) {
+  if (dog) {
+    const href = String(src || "").trim();
+    if (isDogMediaHref(href)) {
+      return `<img class="detail-photo portrait" src="${esc(href)}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">`;
+    }
+    return `<span class="initials detail-photo portrait" aria-hidden="true">${esc(initials(label))}</span>`;
+  }
+  return localPortraitImg(src, label, { size: "detail", kind: "portrait" });
 }
 
 function thumb(src, label, kind = "portrait") {

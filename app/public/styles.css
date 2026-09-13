@@ -464,6 +464,7 @@ body.tui-home .home-stage {
   height: 250px;
   max-width: 192px;
   object-fit: cover;
+  object-position: center 18%;
 }
 .person-header .initials.detail-photo,
 .meta-pane .initials.detail-photo.portrait {
@@ -613,6 +614,7 @@ img.still.thumb {
   height: 52px;
   max-width: 40px;
   object-fit: cover;
+  object-position: center 18%;
   flex: 0 0 auto;
   background: var(--bg-sel);
   border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
@@ -627,7 +629,7 @@ img.still.thumb {
   font-weight: 700;
   border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
 }
-.portrait { width: 40px; height: 52px; object-fit: cover; }
+.portrait { width: 40px; height: 52px; object-fit: cover; object-position: center 18%; }
 
 .pager {
   margin: 0.75rem 0 1rem;
@@ -1612,6 +1614,8 @@ html[data-theme="glass"] .dash-stats {
     width: 160px;
     height: 208px;
     max-width: 160px;
+    object-fit: cover;
+    object-position: center 18%;
   }
   .tui-row .thumb,
   .tui-row img.still.thumb,
@@ -1620,6 +1624,7 @@ html[data-theme="glass"] .dash-stats {
     height: 52px;
     max-width: 40px;
     object-fit: cover;
+    object-position: center 18%;
     flex: 0 0 auto;
     margin: 0;
   }

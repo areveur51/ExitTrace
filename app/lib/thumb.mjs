@@ -7,17 +7,21 @@ import { PNG } from "pngjs";
 
 export const LIST_THUMB_CSS_W = 40;
 export const LIST_THUMB_CSS_H = 52;
-/** Person detail portrait. Same 10:13 ratio as list thumbs, large enough to read a face. */
-export const DETAIL_PORTRAIT_CSS_W = 192;
-export const DETAIL_PORTRAIT_CSS_H = 250;
+/** One 10:13 cover crop for list thumbs and person detail. CSS only changes size. */
+export const PORTRAIT_PX_W = 192;
+export const PORTRAIT_PX_H = 250;
+export const DETAIL_PORTRAIT_CSS_W = PORTRAIT_PX_W;
+export const DETAIL_PORTRAIT_CSS_H = PORTRAIT_PX_H;
+/** Cache-bust when the derived crop pipeline changes (immutable media URLs). */
+export const PORTRAIT_CACHE = "2";
 
 export function isDogMediaHref(raw) {
   const text = String(raw || "").trim();
   return text.startsWith("/media/dog-comms/") && !text.includes("..");
 }
-export const LIST_THUMB_PX_W = 80;
-export const LIST_THUMB_PX_H = 104;
-export const LIST_THUMB_QUALITY = 72;
+export const LIST_THUMB_PX_W = PORTRAIT_PX_W;
+export const LIST_THUMB_PX_H = PORTRAIT_PX_H;
+export const LIST_THUMB_QUALITY = 78;
 
 const PEOPLE = "/media/people/";
 const DOGS = "/media/dog-comms/";
@@ -40,7 +44,7 @@ function localLeaf(href, prefix) {
   return leaf;
 }
 
-/** Map a catalog still href to a local thumb href. External URLs are dropped. */
+/** Map a catalog still href to the shared derived portrait href. External URLs are dropped. */
 export function listThumbHref(src) {
   const text = String(src || "").trim();
   if (!text) return "";
@@ -95,6 +99,7 @@ function decodeStill(buf) {
   return null;
 }
 
+/** Cover-crop to 10:13. Head-biased: extra height is taken from the bottom so faces stay. */
 function coverResize(src, dw, dh) {
   const sw = src.width;
   const sh = src.height;
@@ -114,7 +119,8 @@ function coverResize(src, dw, dh) {
     cw = sw;
     ch = Math.max(1, Math.round(sw / dstAspect));
     sx = 0;
-    sy = Math.max(0, Math.round((sh - ch) / 2));
+    const extraH = Math.max(0, sh - ch);
+    sy = Math.max(0, Math.round(extraH * 0.18));
   }
   const out = Buffer.alloc(dw * dh * 4);
   for (let y = 0; y < dh; y++) {
@@ -150,16 +156,30 @@ function coverResize(src, dw, dh) {
   return { width: dw, height: dh, data: out };
 }
 
-export function renderListThumb(buf) {
+export function renderPortraitJpeg(buf) {
   const decoded = decodeStill(buf);
   if (!decoded) return null;
-  const resized = coverResize(decoded, LIST_THUMB_PX_W, LIST_THUMB_PX_H);
+  const resized = coverResize(decoded, PORTRAIT_PX_W, PORTRAIT_PX_H);
   if (!resized) return null;
   try {
     const encoded = jpeg.encode(resized, LIST_THUMB_QUALITY);
     return encoded?.data && encoded.data.length ? Buffer.from(encoded.data) : null;
   } catch {
     return null;
+  }
+}
+
+/** Alias of renderPortraitJpeg so list and detail stay on one crop. */
+export function renderListThumb(buf) {
+  return renderPortraitJpeg(buf);
+}
+
+function jpegMatchesPortraitSize(file) {
+  try {
+    const decoded = jpeg.decode(fs.readFileSync(file), { useTArray: true });
+    return decoded.width === PORTRAIT_PX_W && decoded.height === PORTRAIT_PX_H;
+  } catch {
+    return false;
   }
 }
 
@@ -185,11 +205,15 @@ export function ensureThumbFile(mediaDir, thumbRel) {
   if (!src) return null;
   if (fs.existsSync(dest) && fs.statSync(dest).isFile()) {
     const dstStat = fs.statSync(dest);
-    if (dstStat.size > 0 && dstStat.mtimeMs >= fs.statSync(src).mtimeMs) {
+    if (
+      dstStat.size > 0 &&
+      dstStat.mtimeMs >= fs.statSync(src).mtimeMs &&
+      jpegMatchesPortraitSize(dest)
+    ) {
       return dest;
     }
   }
-  const rendered = renderListThumb(fs.readFileSync(src));
+  const rendered = renderPortraitJpeg(fs.readFileSync(src));
   if (!rendered) return null;
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.${process.pid}.tmp`;

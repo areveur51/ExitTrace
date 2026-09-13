@@ -179,7 +179,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /api/people?category=` | Seeded person rows |
 | `GET /api/source-posts?category=` | Parked public posts |
 | `GET /api/dog-comms` | Stored official posts |
-| `GET /media/...` | Files on disk (full stills). List rows use `/media/thumbs/...` |
+| `GET /media/...` | Files on disk. People list and person detail share one derived 10:13 portrait under `/media/thumbs/people/`. Catalog stills stay under `/media/people/`. |
 
 ## Configuration
 
@@ -197,15 +197,15 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 app/server.mjs              HTTP + pages
 app/lib/store.mjs           Postgres or file fallback
 data/seed.json              portable import
-media/                      portraits, dog-comm stills, derived list thumbs
-app/lib/thumb.mjs           list-thumb href + local resize
+media/                      portraits, dog-comm stills, derived 10:13 display JPEGs
+app/lib/thumb.mjs           one cover-crop pipeline for list thumbs and person detail
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events
 scripts/migrate-unique-people.mjs  collapse duplicate live person rows
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/seed-rss-digest.mjs host-side official RSS digest (name leads, not cites)
 scripts/promote-source-post.mjs  promote one Unsorted post to a person row
 scripts/process-add-request.mjs  apply one queued add request (cites from caller)
-scripts/build-thumbs.mjs    derive 40×52 list thumbs from stored stills
+scripts/build-thumbs.mjs    derive the shared 10:13 portrait JPEG from stored stills
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
 docs/github-auto-deploy.md  lab → Render Postgres sync (Actions)
