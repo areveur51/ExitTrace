@@ -174,13 +174,47 @@ export function renderListThumb(buf) {
   return renderPortraitJpeg(buf);
 }
 
+const MAX_SRC_BYTES = 4 * 1024 * 1024;
+let rebuildBusy = false;
+
+function jpegSofSize(buf) {
+  if (!buf || buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 9 < buf.length) {
+    if (buf[i] !== 0xff) return null;
+    const marker = buf[i + 1];
+    if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+      return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+    }
+    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
+      i += 2;
+      continue;
+    }
+    const len = buf.readUInt16BE(i + 2);
+    if (len < 2) return null;
+    i += 2 + len;
+  }
+  return null;
+}
+
 function jpegMatchesPortraitSize(file) {
   try {
-    const decoded = jpeg.decode(fs.readFileSync(file), { useTArray: true });
-    return decoded.width === PORTRAIT_PX_W && decoded.height === PORTRAIT_PX_H;
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(65536);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+    const size = jpegSofSize(buf.subarray(0, n));
+    return !!(size && size.width === PORTRAIT_PX_W && size.height === PORTRAIT_PX_H);
   } catch {
     return false;
   }
+}
+
+function destIfUsable(dest) {
+  if (fs.existsSync(dest) && fs.statSync(dest).isFile() && fs.statSync(dest).size > 0) {
+    return dest;
+  }
+  return null;
 }
 
 function findSourceFile(mediaDir, thumbRel) {
@@ -195,31 +229,39 @@ function findSourceFile(mediaDir, thumbRel) {
   return null;
 }
 
-/** Build or reuse a derived thumb on disk. Returns the thumb path, or null. */
-export function ensureThumbFile(mediaDir, thumbRel) {
+/** Build or reuse a derived thumb on disk. Returns the thumb path, or null.
+ *  Request path never rebuilds in parallel and never decodes huge sources (avoids 502/OOM).
+ */
+export function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = {}) {
   if (!THUMB_REL.test(thumbRel)) return null;
   const root = path.resolve(mediaDir);
   const dest = path.resolve(root, thumbRel);
   if (dest === root || !dest.startsWith(root + path.sep)) return null;
   const src = findSourceFile(root, thumbRel);
-  if (!src) return null;
-  if (fs.existsSync(dest) && fs.statSync(dest).isFile()) {
-    const dstStat = fs.statSync(dest);
-    if (
-      dstStat.size > 0 &&
-      dstStat.mtimeMs >= fs.statSync(src).mtimeMs &&
-      jpegMatchesPortraitSize(dest)
-    ) {
-      return dest;
-    }
+  if (!src) return destIfUsable(dest);
+  const existing = destIfUsable(dest);
+  const srcStat = fs.statSync(src);
+  const fresh = existing && fs.statSync(existing).mtimeMs >= srcStat.mtimeMs;
+  if (existing && fresh && jpegMatchesPortraitSize(existing)) return existing;
+  if (existing && !upgrade) {
+    if (rebuildBusy || srcStat.size > MAX_SRC_BYTES) return existing;
   }
-  const rendered = renderPortraitJpeg(fs.readFileSync(src));
-  if (!rendered) return null;
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  const tmp = `${dest}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, rendered);
-  fs.renameSync(tmp, dest);
-  return dest;
+  if (!existing && srcStat.size > MAX_SRC_BYTES) return null;
+  if (rebuildBusy && !upgrade) return existing;
+  rebuildBusy = true;
+  try {
+    const rendered = renderPortraitJpeg(fs.readFileSync(src));
+    if (!rendered) return existing;
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    const tmp = `${dest}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, rendered);
+    fs.renameSync(tmp, dest);
+    return dest;
+  } catch {
+    return existing;
+  } finally {
+    rebuildBusy = false;
+  }
 }
 
 export function buildAllThumbs(mediaDir) {
@@ -231,7 +273,7 @@ export function buildAllThumbs(mediaDir) {
     for (const name of fs.readdirSync(dir)) {
       if (!EXTS.includes(path.extname(name).toLowerCase())) continue;
       const rel = `thumbs/${kind}/${stemOf(name)}.jpg`;
-      const dest = ensureThumbFile(root, rel);
+      const dest = ensureThumbFile(root, rel, { upgrade: true });
       if (dest) made.push(rel);
     }
   }
