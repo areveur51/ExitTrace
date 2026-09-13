@@ -5,11 +5,14 @@ import path from "path";
 import { test } from "node:test";
 import jpeg from "jpeg-js";
 import {
+  PORTRAIT_PX_H,
+  PORTRAIT_PX_W,
   ensureThumbFile,
   isDogMediaHref,
   isThumbHref,
   listThumbHref,
   renderListThumb,
+  renderPortraitJpeg,
   sourceRelCandidates,
 } from "../app/lib/thumb.mjs";
 
@@ -55,14 +58,16 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
   ]);
 });
 
-test("renderListThumb writes a cover-cropped 80x104 JPEG", () => {
+test("renderPortraitJpeg writes a cover-cropped 192x250 JPEG used by list and detail", () => {
   const src = solidJpeg({ width: 240, height: 180 });
-  const out = renderListThumb(src);
+  const out = renderPortraitJpeg(src);
   assert.ok(out && out.length > 0);
-  assert.ok(out.length < src.length);
   const decoded = jpeg.decode(out, { useTArray: true });
-  assert.equal(decoded.width, 80);
-  assert.equal(decoded.height, 104);
+  assert.equal(decoded.width, PORTRAIT_PX_W);
+  assert.equal(decoded.height, PORTRAIT_PX_H);
+  assert.equal(decoded.width / decoded.height, 192 / 250);
+  const alias = renderListThumb(src);
+  assert.deepEqual(alias, out);
 });
 
 test("ensureThumbFile derives from a stored still and refuses traversal", () => {

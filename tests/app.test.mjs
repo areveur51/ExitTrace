@@ -5,6 +5,7 @@ import path from "path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "url";
 import { spawn } from "node:child_process";
+import jpeg from "jpeg-js";
 import { DOG_PAGE_SIZE, PAGE_SIZE } from "../app/lib/paginate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -12,7 +13,7 @@ const PORT = 15220;
 let child;
 let seed;
 
-function get(pathname) {
+function getRaw(pathname) {
   return new Promise((resolve, reject) => {
     const req = http.get(
       { host: "127.0.0.1", port: PORT, path: pathname },
@@ -22,7 +23,7 @@ function get(pathname) {
         res.on("end", () => {
           resolve({
             status: res.statusCode,
-            body: Buffer.concat(chunks).toString("utf8"),
+            body: Buffer.concat(chunks),
             headers: res.headers,
           });
         });
@@ -30,6 +31,13 @@ function get(pathname) {
     );
     req.on("error", reject);
   });
+}
+
+function get(pathname) {
+  return getRaw(pathname).then((res) => ({
+    ...res,
+    body: res.body.toString("utf8"),
+  }));
 }
 
 async function waitForHealth() {
@@ -707,7 +715,7 @@ test("optional API page= uses the same window without inventing rows", async () 
   }
 });
 
-test("list thumbs are small local JPEGs; person detail uses the full still", async () => {
+test("list thumbs and person detail share the same derived 10:13 portrait JPEG", async () => {
   const row = newestFirst(
     seed.people.filter((r) => r.category === "firings" && r.photo),
     "event_date",
@@ -716,16 +724,16 @@ test("list thumbs are small local JPEGs; person detail uses the full still", asy
   const stem = path.basename(row.photo).replace(/\.[^.]+$/, "");
   const list = await get("/firings");
   const detail = await get(`/people/${row.id}`);
-  const thumb = await get(`/media/thumbs/people/${stem}.jpg`);
-  const original = await get(row.photo);
+  const thumb = await getRaw(`/media/thumbs/people/${stem}.jpg`);
+  const original = await getRaw(row.photo);
 
-  assert.match(list.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg"`));
+  assert.match(list.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg\\?p=2"`));
   assert.doesNotMatch(list.body, new RegExp(`src="/media/people/${stem}\\.`));
   assert.match(detail.body, /class="person-header"/);
   assert.match(detail.body, /class="detail-photo portrait"/);
-  assert.match(detail.body, new RegExp(`src="/media/people/${stem}\\.`));
+  assert.match(detail.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg\\?p=2"`));
   assert.doesNotMatch(detail.body, /class="portrait thumb"/);
-  assert.doesNotMatch(detail.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg"`));
+  assert.doesNotMatch(detail.body, new RegExp(`src="/media/people/${stem}\\.`));
 
   assert.equal(thumb.status, 200);
   assert.equal(original.status, 200);
@@ -736,6 +744,7 @@ test("list thumbs are small local JPEGs; person detail uses the full still", asy
   const thumbBytes = Number(thumb.headers["content-length"]);
   const originalBytes = Number(original.headers["content-length"]);
   assert.ok(thumbBytes > 0 && originalBytes > 0);
-  assert.ok(thumbBytes < originalBytes);
-  assert.ok(thumbBytes < 12_000);
+  const decoded = jpeg.decode(thumb.body, { useTArray: true });
+  assert.equal(decoded.width, 192);
+  assert.equal(decoded.height, 250);
 });

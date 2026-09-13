@@ -61,13 +61,13 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
 
   assert.match(person, /class="portrait thumb"/);
   assert.match(person, /width="40" height="52"/);
-  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg"/);
+  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=2"/);
   assert.match(person, /loading="lazy"/);
   assert.match(person, /decoding="async"/);
   assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg"/);
   assert.match(dogRow, /class="still thumb"/);
   assert.match(dogRow, /width="40" height="52"/);
-  assert.match(dogRow, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.match(dogRow, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=2"/);
   assert.match(dogRow, /loading="lazy"/);
   assert.match(dogRow, /decoding="async"/);
   assert.doesNotMatch(dogRow, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
@@ -78,15 +78,17 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
   assert.doesNotMatch(search, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
 });
 
-test("person detail uses the full local portrait; dog snapshots keep the full still", () => {
+test("person list and detail share the derived 10:13 portrait; dog snapshots keep the full still", () => {
+  const list = personRow(firing());
   const person = personDetail(firing());
   const dogPage = dogDetail(dog());
+  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=2"/);
   assert.match(person, /class="person-header"/);
   assert.match(person, /class="detail-photo portrait"/);
-  assert.match(person, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=2"/);
   assert.match(person, /width="192" height="250"/);
   assert.doesNotMatch(person, /class="portrait thumb"/);
-  assert.doesNotMatch(person, /src="\/media\/thumbs\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg"/);
   assert.doesNotMatch(person, /upload\.wikimedia\.org/);
   assert.match(dogPage, /class="detail-photo portrait"/);
   assert.match(dogPage, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);

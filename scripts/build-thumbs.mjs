@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Derive list thumbs from stored stills. The running app also builds
- * a missing thumb on first request. Does not fetch remote images.
+ * Derive the shared 10:13 portrait JPEG (list + person detail) from stored stills.
+ * The running app also builds a missing file on first request. Does not fetch remote images.
  */
 import path from "path";
 import { fileURLToPath } from "url";
