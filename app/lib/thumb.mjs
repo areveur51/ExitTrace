@@ -119,8 +119,8 @@ function coverResize(src, dw, dh) {
     cw = sw;
     ch = Math.max(1, Math.round(sw / dstAspect));
     sx = 0;
-    const leftover = Math.max(0, sh - ch);
-    sy = Math.max(0, Math.round(leftover * 0.18));
+    const extraH = Math.max(0, sh - ch);
+    sy = Math.max(0, Math.round(extraH * 0.18));
   }
   const out = Buffer.alloc(dw * dh * 4);
   for (let y = 0; y < dh; y++) {
