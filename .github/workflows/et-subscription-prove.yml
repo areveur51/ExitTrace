@@ -1,0 +1,60 @@
+name: et-subscription-prove
+
+# Path-only Phase 0 prove. No cutover. dump/restore stays.
+# Reads production secrets by name only.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-subscription-prove
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    name: create-subscription-prove
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      EXITTRACE_LOGICAL_CONNINFO: ${{ secrets.EXITTRACE_LOGICAL_CONNINFO }}
+    steps:
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: CREATE SUBSCRIPTION prove (path-only)
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          test -n "${EXITTRACE_LOGICAL_CONNINFO:-}"
+          SUB=exittrace_lab_sub
+          export PGOPTIONS='-c client_min_messages=warning'
+          # Idempotent cleanup of prior prove sub
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'EOSQL'
+          DO $$
+          BEGIN
+            IF EXISTS (SELECT 1 FROM pg_subscription WHERE subname = 'exittrace_lab_sub') THEN
+              EXECUTE 'ALTER SUBSCRIPTION exittrace_lab_sub DISABLE';
+              EXECUTE 'ALTER SUBSCRIPTION exittrace_lab_sub SET (slot_name = NONE)';
+              EXECUTE 'DROP SUBSCRIPTION exittrace_lab_sub';
+            END IF;
+          END $$;
+          EOSQL
+          # CREATE — copy_data=false (dump/restore remains live; no cutover)
+          # Use psql variable to avoid shell echo of conninfo in process list as much as practical
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -v conninfo="$EXITTRACE_LOGICAL_CONNINFO" <<'EOSQL'
+          CREATE SUBSCRIPTION exittrace_lab_sub
+            CONNECTION :'conninfo'
+            PUBLICATION exittrace_lab_pub
+            WITH (copy_data = false, create_slot = true, enabled = true);
+          EOSQL
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, subslotname, subpublications FROM pg_subscription WHERE subname = 'exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn FROM pg_stat_subscription WHERE subname = 'exittrace_lab_sub';"
+          echo "PROVE_OK sub=exittrace_lab_sub"
