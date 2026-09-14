@@ -1,0 +1,171 @@
+# Phase 0 CREATE SUBSCRIPTION prove (no cutover).
+# Do not set SYNC_MODE=logical. Dump/restore stays the live
+# lab-to-render-sync path. This job only proves that subscription
+# exittrace_lab_sub can be created on the existing Render Postgres.
+# No cutover.
+
+name: et-subscription-prove
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: none
+
+jobs:
+  prove:
+    name: create-subscription-prove
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      EXITTRACE_LOGICAL_CONNINFO: ${{ secrets.EXITTRACE_LOGICAL_CONNINFO }}
+    steps:
+      - name: Require production secrets
+        run: |
+          set -euo pipefail
+          set +x
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "GitHub environment 'production' secret DATABASE_URL is not set"
+            exit 1
+          fi
+          if [[ -z "${EXITTRACE_LOGICAL_CONNINFO:-}" ]]; then
+            echo "GitHub environment 'production' secret EXITTRACE_LOGICAL_CONNINFO is not set"
+            exit 1
+          fi
+
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-client
+
+      - name: Prove CREATE SUBSCRIPTION exittrace_lab_sub
+        run: |
+          set -euo pipefail
+          set +x
+
+          redact() {
+            sed -E \
+              -e 's#[A-Za-z0-9+._~:/?#\[\]@!$&'"'"'()*+,;=-]+://[^[:space:]]+#[redacted-url]#g' \
+              -e 's#\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b#[redacted]#g' \
+              -e 's/[Cc][Oo][Nn][Nn][Ee][Cc][Tt][Ii][Oo][Nn][[:space:]]*'\''[^'\'']*'\''/CONNECTION [redacted]/g' \
+              -e 's/[Pp]assword=[^[:space:]'\'']+/password=[redacted]/g'
+          }
+
+          ensure_ssl() {
+            local u="${1:-}"
+            if [[ "$u" == *sslmode=* ]]; then
+              printf '%s' "$u"
+            elif [[ "$u" == *\?* ]]; then
+              printf '%s&sslmode=require' "$u"
+            else
+              printf '%s?sslmode=require' "$u"
+            fi
+          }
+
+          sql_literal() {
+            local s="${1:-}"
+            s="${s//\'/\'\'}"
+            printf "'%s'" "$s"
+          }
+
+          target="$(ensure_ssl "${DATABASE_URL:-}")"
+          unset DATABASE_URL
+          export PGSSLMODE=require
+
+          conninfo="${EXITTRACE_LOGICAL_CONNINFO:-}"
+          unset EXITTRACE_LOGICAL_CONNINFO
+          conn_lit="$(sql_literal "$conninfo")"
+          unset conninfo
+
+          err="${RUNNER_TEMP}/psql.err"
+          out="${RUNNER_TEMP}/psql.out"
+
+          drop_sub_best_effort() {
+            local cleanup_err="${RUNNER_TEMP}/psql.cleanup.err"
+            : > "$cleanup_err"
+            {
+              printf '%s\n' "ALTER SUBSCRIPTION exittrace_lab_sub DISABLE;"
+              printf '%s\n' "ALTER SUBSCRIPTION exittrace_lab_sub SET (slot_name = NONE);"
+              printf '%s\n' "DROP SUBSCRIPTION IF EXISTS exittrace_lab_sub;"
+            } | psql --no-psqlrc --dbname="$target" -f - >>"$cleanup_err" 2>&1 || true
+            redact < "$cleanup_err" >&2 || true
+            rm -f -- "$cleanup_err"
+          }
+
+          fail_sql() {
+            echo "SQL failed; attempting best-effort DROP SUBSCRIPTION exittrace_lab_sub" >&2
+            drop_sub_best_effort
+            rm -f -- "$err" "$out"
+            exit 1
+          }
+
+          run_sql() {
+            local label="$1"
+            local sql="$2"
+            : > "$err"
+            : > "$out"
+            if ! printf '%s\n' "$sql" | psql --no-psqlrc --dbname="$target" \
+              -v ON_ERROR_STOP=1 -At -f - >"$out" 2>"$err"; then
+              echo "SQL failed: ${label}" >&2
+              redact < "$err" >&2 || true
+              return 1
+            fi
+            redact < "$err" >&2 || true
+            return 0
+          }
+
+          if ! run_sql "check existing subscription" \
+            "SELECT 1 FROM pg_catalog.pg_subscription WHERE subname = 'exittrace_lab_sub';"; then
+            fail_sql
+          fi
+
+          if [[ "$(cat "$out")" == "1" ]]; then
+            echo "subscription exittrace_lab_sub exists; DISABLE, SET slot_name NONE, DROP"
+            if ! run_sql "DISABLE subscription" \
+              "ALTER SUBSCRIPTION exittrace_lab_sub DISABLE;"; then
+              fail_sql
+            fi
+            if ! run_sql "SET slot_name NONE" \
+              "ALTER SUBSCRIPTION exittrace_lab_sub SET (slot_name = NONE);"; then
+              fail_sql
+            fi
+            if ! run_sql "DROP subscription" \
+              "DROP SUBSCRIPTION exittrace_lab_sub;"; then
+              fail_sql
+            fi
+          fi
+
+          if ! run_sql "CREATE SUBSCRIPTION" \
+            "CREATE SUBSCRIPTION exittrace_lab_sub CONNECTION ${conn_lit} PUBLICATION exittrace_lab_pub WITH (copy_data = false, create_slot = true, enabled = true);"; then
+            fail_sql
+          fi
+          unset conn_lit
+
+          # Path-only verify: named columns only. Do not read the connection string column.
+          if ! run_sql "verify pg_subscription" \
+            "SELECT subname, subenabled, subslotname, subpublications FROM pg_catalog.pg_subscription WHERE subname = 'exittrace_lab_sub';"; then
+            fail_sql
+          fi
+          if [[ ! -s "$out" ]]; then
+            echo "verify: exittrace_lab_sub not found in pg_subscription" >&2
+            fail_sql
+          fi
+          echo "pg_subscription:"
+          cat "$out"
+
+          if ! run_sql "verify pg_stat_subscription" \
+            "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_receipt_time FROM pg_catalog.pg_stat_subscription WHERE subname = 'exittrace_lab_sub';"; then
+            fail_sql
+          fi
+          echo "pg_stat_subscription:"
+          if [[ -s "$out" ]]; then
+            cat "$out"
+          else
+            echo "(no worker rows yet)"
+          fi
+
+          rm -f -- "$err" "$out"
+          echo "Phase 0 prove: subscription exittrace_lab_sub created. No cutover. Dump/restore stays."
