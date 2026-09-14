@@ -19,6 +19,8 @@ test("et-subscription-prove is dispatch-only Phase 0 prove (no cutover)", () => 
   assert.match(wf, /environment:\s*production/);
   assert.match(wf, /secrets\.DATABASE_URL/);
   assert.match(wf, /secrets\.EXITTRACE_LOGICAL_CONNINFO/);
+  assert.doesNotMatch(wf, /ET_LAB_PUBLISHER_CONNINFO/);
+  assert.doesNotMatch(wf, /5434/);
   assert.match(wf, /postgresql-client/);
   assert.match(wf, /CREATE SUBSCRIPTION exittrace_lab_sub/);
   assert.match(wf, /PUBLICATION exittrace_lab_pub/);
