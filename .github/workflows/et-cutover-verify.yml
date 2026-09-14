@@ -1,0 +1,40 @@
+name: et-cutover-verify
+
+# Path-only: confirm lab write reached Render via logical sub.
+# Does not create/drop subscriptions. No dump/restore.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-cutover-verify
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify-lab-write-on-render
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: SELECT cutover prove marker
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          export PGOPTIONS='-c client_min_messages=warning'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, subslotname, subpublications FROM pg_subscription WHERE subname = 'exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname = 'exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT k, v FROM et_meta WHERE k = 'cutover_prove_20260914';"
+          rows=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM et_meta WHERE k = 'cutover_prove_20260914';")
+          test "$rows" = "1"
+          echo "CUTOVER_VERIFY_OK"
