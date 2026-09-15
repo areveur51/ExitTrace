@@ -34,5 +34,7 @@ jobs:
           export PGOPTIONS='-c client_min_messages=warning'
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub DISABLE;"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub ENABLE;"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, pid, received_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
+          sleep 8
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled FROM pg_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
           echo "RECONNECT_OK"
