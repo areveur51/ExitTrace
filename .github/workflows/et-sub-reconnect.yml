@@ -1,0 +1,40 @@
+name: et-sub-reconnect
+
+# Path-only: bounce the logical subscriber apply worker.
+# Does not DROP the subscription or recreate the slot.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-sub-reconnect
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reconnect:
+    name: reconnect-logical-sub
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: DISABLE/ENABLE exittrace_lab_sub
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          export PGOPTIONS='-c client_min_messages=warning'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub DISABLE;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub ENABLE;"
+          sleep 8
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled FROM pg_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
+          echo "RECONNECT_OK"
