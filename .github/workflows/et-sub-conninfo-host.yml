@@ -1,0 +1,52 @@
+name: et-sub-conninfo-host
+
+# Path-only: extract host/port/dbname/user/sslmode from exittrace_lab_sub.subconninfo.
+# Never prints password or full conninfo. No DROP. No ENABLE/DISABLE.
+# leftover/:5434 untouched.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-sub-conninfo-host
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  conninfo-host:
+    name: print-subconninfo-host-parts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Install postgresql-client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+      - name: Print host/port/dbname/user/sslmode only
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "${DATABASE_URL:-}"
+          export PGOPTIONS='-c client_min_messages=warning'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled FROM pg_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'EOSQL'
+          SELECT
+            (regexp_match(subconninfo, 'host=([^\s]+)'))[1] AS host,
+            COALESCE(
+              (regexp_match(subconninfo, 'port=([^\s]+)'))[1],
+              substring(subconninfo from 'port=([0-9]+)')
+            ) AS port,
+            (regexp_match(subconninfo, 'dbname=([^\s]+)'))[1] AS dbname,
+            (regexp_match(subconninfo, 'user=([^\s]+)'))[1] AS "user",
+            (regexp_match(subconninfo, 'sslmode=([^\s]+)'))[1] AS sslmode
+          FROM pg_subscription
+          WHERE subname = 'exittrace_lab_sub';
+          EOSQL
+          echo "HOST_PORT_DONE"
