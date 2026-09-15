@@ -22,6 +22,7 @@ jobs:
     environment: production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      EXITTRACE_LOGICAL_CONNINFO: ${{ secrets.EXITTRACE_LOGICAL_CONNINFO }}
     steps:
       - name: Install postgresql-client and dnsutils
         run: |
@@ -42,6 +43,27 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled FROM pg_subscription WHERE subname='exittrace_lab_sub';"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_send_time, last_msg_receipt_time, latest_end_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT state, wait_event_type, wait_event, query FROM pg_stat_activity WHERE pid IN (SELECT pid FROM pg_stat_subscription WHERE subname='exittrace_lab_sub' AND pid IS NOT NULL);"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, (regexp_match(subconninfo, 'host=([^ ]+)'))[1] AS host, coalesce((regexp_match(subconninfo, 'port=([^ ]+)'))[1], '5432') AS port, (regexp_match(subconninfo, 'dbname=([^ ]+)'))[1] AS dbname, (regexp_match(subconninfo, 'user=([^ ]+)'))[1] AS username, (regexp_match(subconninfo, 'sslmode=([^ ]+)'))[1] AS sslmode FROM pg_subscription WHERE subname='exittrace_lab_sub';"
-          echo "HOST_PORT_DONE"
           echo "PROBE_DONE"
+      - name: Host port from named secret
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "${EXITTRACE_LOGICAL_CONNINFO:-}"
+          python3 <<'PY'
+          import os
+          import re
+
+          raw = os.environ["EXITTRACE_LOGICAL_CONNINFO"]
+
+          def field(key, default=""):
+              match = re.search(r"(?:^|\s)" + re.escape(key) + r"=([^\s]+)", raw)
+              return match.group(1) if match else default
+
+          host = field("host")
+          port = field("port", "5432")
+          dbname = field("dbname")
+          user = field("user")
+          sslmode = field("sslmode")
+          print(f"host={host} port={port} dbname={dbname} user={user} sslmode={sslmode}")
+          PY
+          echo "HOST_PORT_DONE"
