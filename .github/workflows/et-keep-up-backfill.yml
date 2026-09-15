@@ -60,6 +60,7 @@ jobs:
           # Bounce apply worker only. No DROP. No slot recreate.
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub DISABLE;"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub ENABLE;"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, pid, received_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname = 'exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname = 'exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled FROM pg_subscription WHERE subname = 'exittrace_lab_sub';"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT k FROM et_meta WHERE k LIKE 'keep_up.%' ORDER BY 1;"
           echo "BACKFILL_OK"
