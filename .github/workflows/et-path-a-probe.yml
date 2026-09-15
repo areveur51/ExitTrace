@@ -1,7 +1,7 @@
 name: et-path-a-probe
 
 # Path-only: DNS A + TCP:5432 + subscription diagnose.
-# No credentials on the TCP check. No DROP. leftover/:5434 untouched.
+# No credentials on the TCP check. No DROP. Alternate host ports are not touched.
 # Does not print DATABASE_URL or conninfo.
 
 on:
