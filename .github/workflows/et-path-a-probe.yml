@@ -1,0 +1,45 @@
+name: et-path-a-probe
+
+# Path-only: DNS A + TCP:5432 + subscription diagnose.
+# No credentials on the TCP check. No DROP. leftover/:5434 untouched.
+# Does not print DATABASE_URL or conninfo.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-path-a-probe
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: path-a-probe-and-sub-diagnose
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Install postgresql-client and dnsutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client dnsutils
+      - name: DNS A and TCP 5432 (no credentials)
+        run: |
+          set -euo pipefail
+          dig +short exittrace-pg.areveur.com A
+          timeout 8 bash -c 'echo >/dev/tcp/exittrace-pg.areveur.com/5432' && echo TCP_5432_OK || echo TCP_5432_FAIL
+      - name: Diagnose exittrace_lab_sub
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "${DATABASE_URL:-}"
+          export PGOPTIONS='-c client_min_messages=warning'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled FROM pg_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_send_time, last_msg_receipt_time, latest_end_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT state, wait_event_type, wait_event, query FROM pg_stat_activity WHERE pid IN (SELECT pid FROM pg_stat_subscription WHERE subname='exittrace_lab_sub' AND pid IS NOT NULL);"
+          echo "PROBE_DONE"
