@@ -486,6 +486,60 @@ export async function importSeed(p, seed) {
   };
 }
 
+/** Read et_meta rows by key. Missing table/keys → {}. Never throws. */
+export async function getEtMeta(keys) {
+  const p = await getPool();
+  if (!p) return {};
+  const list = (Array.isArray(keys) ? keys : [keys]).map(String).filter(Boolean);
+  if (!list.length) return {};
+  try {
+    const res = await p.query("SELECT k, v FROM et_meta WHERE k = ANY($1::text[])", [list]);
+    const out = {};
+    for (const row of res.rows) out[row.k] = row.v;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Same upsert as seed import: INSERT … ON CONFLICT (k) DO UPDATE SET v. */
+export async function upsertEtMeta(k, v) {
+  const p = await getPool();
+  if (!p) {
+    throw new Error("et_meta upserts need Postgres (DATABASE_URL)");
+  }
+  await p.query(
+    `INSERT INTO et_meta (k, v) VALUES ($1, $2::jsonb)
+     ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v`,
+    [String(k), JSON.stringify(v)],
+  );
+}
+
+/**
+ * Live subscriber apply lag on this database, when a logical sub exists.
+ * Public health only gets the number — no sub name, host, or slot.
+ */
+export async function readLogicalLagSeconds() {
+  const p = await getPool();
+  if (!p) return null;
+  try {
+    const res = await p.query(
+      `SELECT EXTRACT(EPOCH FROM (now() - COALESCE(last_msg_receipt_time, latest_end_time)))::bigint AS lag_seconds
+         FROM pg_stat_subscription
+        WHERE COALESCE(last_msg_receipt_time, latest_end_time) IS NOT NULL
+        ORDER BY COALESCE(last_msg_receipt_time, latest_end_time) DESC
+        LIMIT 1`,
+    );
+    const n = res.rows[0]?.lag_seconds;
+    if (n === null || n === undefined) return null;
+    const num = Number(n);
+    if (!Number.isFinite(num)) return null;
+    return Math.max(0, Math.trunc(num));
+  } catch {
+    return null;
+  }
+}
+
 function asCategories(category) {
   if (!category) return [];
   return (Array.isArray(category) ? category : [category])

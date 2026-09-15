@@ -116,6 +116,24 @@ test("health is 200 on file backend", async () => {
   assert.equal(json.people, seed.people.length);
   assert.equal(json.dog_comms, seed.dog_comms.length);
   assert.equal(json.operations, (seed.operations || []).length);
+  assert.equal(json.keep_up.timezone, "America/New_York");
+  assert.equal(json.keep_up.logical.stream_started, null);
+  assert.equal(json.keep_up.logical.last_verify, null);
+  assert.equal(json.keep_up.logical.lag_seconds, null);
+  assert.equal(json.keep_up.media_delta.last_success, null);
+  assert.equal(json.keep_up.media_delta.last_with_files, null);
+  assert.equal(json.keep_up.daily_ingest.last_pass, null);
+  assert.equal(json.keep_up.daily_pack.last_pass, null);
+  assert.equal(json.keep_up.dump_restore.last_success, null);
+  assert.equal(json.keep_up.dump_restore.mode, null);
+});
+
+test("health HTML includes keep_up", async () => {
+  const res = await get("/health");
+  assert.equal(res.status, 200);
+  assert.match(res.body, /keep_up/);
+  assert.match(res.body, /logical\.stream_started/);
+  assert.match(res.body, /America\/New_York/);
 });
 
 test("html pages render", async () => {

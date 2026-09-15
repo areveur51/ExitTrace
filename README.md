@@ -59,7 +59,8 @@ Create a database named `exittrace`, then:
 # placeholder — use your own user, password, and host
 export DATABASE_URL=postgres://USER:PASS@127.0.0.1:5433/exittrace
 psql "$DATABASE_URL" -f scripts/bootstrap-db.sql
-node scripts/import-seed.mjs
+node scripts/stamp-keep-up.mjs   upsert one keep_up et_meta key (Postgres)
+scripts/import-seed.mjs
 npm start
 ```
 
@@ -164,8 +165,8 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 
 | | |
 |--|--|
-| `GET /health` | HTML health page |
-| `GET /api/health` | `{ ok, ready, backend, people, dog_comms, operations, source_posts }` |
+| `GET /health` | HTML health page (counts plus public `keep_up` stamps) |
+| `GET /api/health` | `{ ok, ready, backend, people, dog_comms, operations, source_posts, keep_up }` |
 | `GET /search?q=` | Local catalog search (people keep person cards; operations keep operation cards; posted hits group under Unsorted) |
 | `GET /people/:id` | One person row |
 | `GET /operations/:id` | One operation row |
@@ -195,11 +196,13 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 
 ```
 app/server.mjs              HTTP + pages
+app/lib/keep-up.mjs         public keep_up stamps (et_meta)
 app/lib/store.mjs           Postgres or file fallback
 data/seed.json              portable import
 media/                      portraits, dog-comm stills, derived 10:13 display JPEGs
 app/lib/thumb.mjs           one cover-crop pipeline for list thumbs and person detail
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events
+scripts/stamp-keep-up.mjs   upsert one keep_up et_meta key (Postgres)
 scripts/migrate-unique-people.mjs  collapse duplicate live person rows
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/seed-rss-digest.mjs host-side official RSS digest (name leads, not cites)

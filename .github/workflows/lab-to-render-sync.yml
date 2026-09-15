@@ -209,6 +209,16 @@ jobs:
             exit 1
           fi
           cat "${RUNNER_TEMP}/restore.counts"
+          if ! psql --no-psqlrc --dbname="$target" -v ON_ERROR_STOP=1 -c \
+            "INSERT INTO et_meta (k, v) VALUES
+               ('keep_up.dump_restore.last_success', jsonb_build_object('at', now())),
+               ('keep_up.dump_restore.mode', jsonb_build_object('mode', 'cold_fallback'))
+             ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v;" \
+            2>"$err"; then
+            redact < "$err" >&2 || true
+            rm -f -- "$work" "$err"
+            exit 1
+          fi
           rm -f -- "$work" "$err" "${RUNNER_TEMP}/restore.counts"
 
   logical:

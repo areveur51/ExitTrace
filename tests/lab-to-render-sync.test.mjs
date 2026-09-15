@@ -51,6 +51,9 @@ test("lab-to-render-sync workflow matches the locked contract", () => {
   assert.match(wf, /--clean/);
   assert.match(wf, /--if-exists/);
   assert.match(wf, /sslmode=require/);
+  assert.match(wf, /keep_up\.dump_restore\.last_success/);
+  assert.match(wf, /keep_up\.dump_restore\.mode/);
+  assert.match(wf, /cold_fallback/);
   assert.doesNotMatch(wf, /RENDER_DATABASE_URL/);
   assertNoPrivateHost(wf, "workflow");
 });
@@ -73,6 +76,10 @@ test("docs name production DATABASE_URL, generic runner labels, and dump env pla
   assert.match(doc, /dump\/restore/i);
   assert.match(doc, /logical replica is optional/i);
   assert.match(doc, /not configured on this public workflow/);
+  assert.match(doc, /keep_up/);
+  assert.match(doc, /et_meta/);
+  assert.match(doc, /America\/New_York/);
+  assert.match(doc, /scripts\/stamp-keep-up\.mjs/);
   assert.doesNotMatch(doc, /RENDER_DATABASE_URL/);
   assertNoPrivateHost(doc, "docs");
 });

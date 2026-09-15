@@ -40,6 +40,7 @@ import {
   searchCatalog,
   writeFileStore,
 } from "./lib/store.mjs";
+import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
 import {
   addBody,
   identityFilterNav,
@@ -334,6 +335,12 @@ function serveMedia(res, reqPath, req) {
 
 async function healthPayload() {
   const c = await counts();
+  let keep_up = emptyKeepUp();
+  try {
+    keep_up = await readKeepUp();
+  } catch {
+    keep_up = emptyKeepUp();
+  }
   return {
     ok: true,
     ready: true,
@@ -344,6 +351,7 @@ async function healthPayload() {
     operations: c.operations,
     source_posts: c.source_posts,
     byCategory: c.byCategory,
+    keep_up,
   };
 }
 
@@ -388,7 +396,7 @@ async function handle(req, res) {
         heading: "Health",
         query: "health",
         countLabel: "ready",
-        lede: "Process is up. Counts come from the local store.",
+        lede: "Process is up. Counts come from the local store. keep_up is last successful keep-up stamps (null until writers fill).",
         body: healthBody(payload),
       }),
     );

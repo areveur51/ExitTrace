@@ -985,6 +985,14 @@ pre {
   border: 1px solid var(--rule);
 }
 .health { font-size: 0.85rem; }
+.keep-up-h {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.keep-up { margin-bottom: 1rem; }
 
 .add-modes {
   display: flex;
