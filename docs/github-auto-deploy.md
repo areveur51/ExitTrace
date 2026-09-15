@@ -32,3 +32,30 @@ Dump job has no Render URL. If the dump helper path is unset or not executable, 
 ## Optional logical replica
 
 `SYNC_MODE=logical` is a gated no-op on this public workflow: it logs that a logical replica is optional and not configured here, then skips dump/restore. Do not put a replica URL in Actions. Private-fleet wiring stays outside this repository.
+
+## Keep-up stamps (`et_meta`)
+
+`GET /api/health` (and `/health`) expose a public-safe `keep_up` object. Stamps are **null** until a writer upserts `et_meta`. Process health stays HTTP 200 when a stamp is missing or stale. Do not store secrets, hostnames, IPs, CIDRs, or database instance ids in `v`.
+
+Reuse the existing upsert:
+
+```sql
+INSERT INTO et_meta (k, v) VALUES ('keep_up.daily_ingest.last_pass', jsonb_build_object('at', now()))
+ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v;
+```
+
+Or: `node scripts/stamp-keep-up.mjs --key keep_up.daily_ingest.last_pass` (needs `DATABASE_URL`).
+
+| Key | Public field | Writer |
+|--|--|--|
+| `keep_up.logical.stream_started` | `keep_up.logical.stream_started` | Lab, when the logical stream starts. Replicates with `et_meta`. |
+| `keep_up.logical.last_verify` | `keep_up.logical.last_verify` | Actions `et-cutover-verify` on PASS (Render `et_meta`). |
+| `keep_up.logical.lag_seconds` | `keep_up.logical.lag_seconds` | Optional stored fallback. Health prefers live `pg_stat_subscription` lag when present. |
+| `keep_up.media_delta.last_success` | `keep_up.media_delta.last_success` | Lab media delta on success. |
+| `keep_up.media_delta.last_with_files` | `keep_up.media_delta.last_with_files` | Lab media delta when files moved. |
+| `keep_up.daily_ingest.last_pass` | `keep_up.daily_ingest.last_pass` | Lab daily ingest on PASS. |
+| `keep_up.daily_pack.last_pass` | `keep_up.daily_pack.last_pass` | Lab daily pack on PASS. |
+| `keep_up.dump_restore.last_success` | `keep_up.dump_restore.last_success` | Actions restore job on success (Render `et_meta`). |
+| `keep_up.dump_restore.mode` | `keep_up.dump_restore.mode` | `cold_fallback` or `disabled`. Restore stamps `cold_fallback`. |
+
+Timestamp `v` is `{ "at": "<ISO>" }`. Health labels times in `America/New_York` (ISO offset + `timezone`). `dump_restore.mode` is `{ "mode": "cold_fallback" }` or `{ "mode": "disabled" }`. The health process does not read `SYNC_MODE`.

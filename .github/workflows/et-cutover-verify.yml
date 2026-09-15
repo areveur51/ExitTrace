@@ -37,4 +37,6 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT k, v FROM et_meta WHERE k = 'cutover_prove_20260914';"
           rows=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM et_meta WHERE k = 'cutover_prove_20260914';")
           test "$rows" = "1"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+            "INSERT INTO et_meta (k, v) VALUES ('keep_up.logical.last_verify', jsonb_build_object('at', now())) ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v;"
           echo "CUTOVER_VERIFY_OK"

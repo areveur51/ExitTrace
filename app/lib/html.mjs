@@ -1100,10 +1100,38 @@ export function downloadsBody() {
     )}`;
 }
 
+function keepUpDash(v) {
+  if (v === null || v === undefined || v === "") return "—";
+  return String(v);
+}
+
+function keepUpFacts(keep) {
+  if (!keep || typeof keep !== "object") return "";
+  const rows = [
+    ["timezone", keep.timezone || "America/New_York"],
+    ["logical.stream_started", keepUpDash(keep.logical?.stream_started)],
+    ["logical.last_verify", keepUpDash(keep.logical?.last_verify)],
+    ["logical.lag_seconds", keepUpDash(keep.logical?.lag_seconds)],
+    ["media_delta.last_success", keepUpDash(keep.media_delta?.last_success)],
+    ["media_delta.last_with_files", keepUpDash(keep.media_delta?.last_with_files)],
+    ["daily_ingest.last_pass", keepUpDash(keep.daily_ingest?.last_pass)],
+    ["daily_pack.last_pass", keepUpDash(keep.daily_pack?.last_pass)],
+    ["dump_restore.last_success", keepUpDash(keep.dump_restore?.last_success)],
+    ["dump_restore.mode", keepUpDash(keep.dump_restore?.mode)],
+  ];
+  return `<h2 class="keep-up-h">keep_up</h2>
+    <dl class="facts keep-up">${rows
+      .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
+      .join("")}</dl>`;
+}
+
 export function healthBody(payload) {
-  return boxFrame("Health", `<pre class="health">${esc(JSON.stringify(payload, null, 2))}</pre>`, {
-    active: true,
-  });
+  const keepHtml = keepUpFacts(payload?.keep_up);
+  return boxFrame(
+    "Health",
+    `${keepHtml}<pre class="health">${esc(JSON.stringify(payload, null, 2))}</pre>`,
+    { active: true },
+  );
 }
 
 function dashCount(n) {
