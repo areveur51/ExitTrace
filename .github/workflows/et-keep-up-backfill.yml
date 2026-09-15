@@ -1,0 +1,65 @@
+name: et-keep-up-backfill
+
+# Path-only: stamp public keep_up et_meta keys, then bounce the logical
+# subscriber apply worker (DISABLE/ENABLE). Does not DROP the subscription
+# and does not recreate the slot.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-keep-up-backfill
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: keep-up-backfill-and-reconnect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Upsert keep_up et_meta and reconnect logical sub
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          export PGOPTIONS='-c client_min_messages=warning'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'EOSQL'
+          INSERT INTO et_meta (k, v) VALUES
+            ('keep_up.logical.stream_started', '{"at": "2026-09-14T18:05:39-04:00"}'::jsonb),
+            ('keep_up.logical.last_verify', '{"at": "2026-09-14T18:13:39-04:00"}'::jsonb),
+            ('keep_up.media_delta.last_success', '{"at": "2026-09-15T00:25:09-04:00"}'::jsonb),
+            ('keep_up.media_delta.last_with_files', '{"at": "2026-09-14T18:25:01-04:00"}'::jsonb),
+            ('keep_up.daily_ingest.last_pass', '{"at": "2026-09-14T08:19:01-04:00"}'::jsonb),
+            ('keep_up.daily_pack.last_pass', '{"at": "2026-09-14T09:07:54-04:00"}'::jsonb),
+            ('keep_up.dump_restore.last_success', '{"at": "2026-09-14T17:13:12-04:00"}'::jsonb),
+            ('keep_up.dump_restore.mode', '{"mode": "disabled"}'::jsonb)
+          ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v;
+          SELECT k, v FROM et_meta
+          WHERE k IN (
+            'keep_up.logical.stream_started',
+            'keep_up.logical.last_verify',
+            'keep_up.media_delta.last_success',
+            'keep_up.media_delta.last_with_files',
+            'keep_up.daily_ingest.last_pass',
+            'keep_up.daily_pack.last_pass',
+            'keep_up.dump_restore.last_success',
+            'keep_up.dump_restore.mode'
+          )
+          ORDER BY 1;
+          EOSQL
+          # Bounce apply worker only. No DROP. No slot recreate.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub DISABLE;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub ENABLE;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, pid, received_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname = 'exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT k FROM et_meta WHERE k LIKE 'keep_up.%' ORDER BY 1;"
+          echo "BACKFILL_OK"
