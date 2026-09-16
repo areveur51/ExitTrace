@@ -31,6 +31,8 @@ import {
   PORTRAIT_CACHE,
   isDogMediaHref,
 } from "./thumb.mjs";
+import { isPeopleMediaHref } from "./portrait.mjs";
+import { normalizeScreenshotHref } from "./screenshot.mjs";
 import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
@@ -310,6 +312,14 @@ function chromeWidgets() {
         { active: true, extraClass: "modal-box" },
       )}
     </div>
+  </div>
+  <div id="tui-lightbox" class="tui-lightbox" hidden>
+    <div class="tui-lightbox-scrim" data-close-lightbox></div>
+    <figure class="tui-lightbox-frame" role="dialog" aria-modal="true" aria-labelledby="lightbox-title">
+      <img id="lightbox-img" alt="">
+      <figcaption id="lightbox-title" class="credit"></figcaption>
+      <button type="button" class="keychip" data-close-lightbox><span class="br">[</span>Esc<span class="br">]</span> Back</button>
+    </figure>
   </div>`;
 }
 
@@ -534,6 +544,40 @@ export function localMediaThumb(src, label, kind = "portrait") {
 }
 
 /** Person detail uses the same derived portrait as the list thumb. Dog snapshots keep the full still. */
+function lightboxButton(src, inner, { alt = "", credit = "" } = {}) {
+  const href = String(src || "").trim();
+  if (!href || !String(inner || "").includes("<img")) return inner;
+  return `<button type="button" class="lightbox-open" data-lightbox="${esc(href)}" data-lightbox-alt="${esc(alt)}" data-lightbox-credit="${esc(credit)}">${inner}</button>`;
+}
+
+function screenshotFigure(src, { alt = "", credit = "" } = {}) {
+  const href = normalizeScreenshotHref(src);
+  if (!href) return "";
+  const img = `<img class="detail-photo screenshot" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
+  const cap = credit ? `<p class="credit screenshot-credit">${esc(credit)}</p>` : "";
+  return `<figure class="detail-screenshot">${lightboxButton(href, img, { alt, credit })}${cap}</figure>`;
+}
+
+function detailMedia({
+  portraitHtml,
+  portraitSrc = "",
+  portraitAlt = "",
+  portraitCredit = "",
+  screenshot = "",
+  screenshotAlt = "",
+  screenshotCredit = "",
+} = {}) {
+  const portrait = lightboxButton(portraitSrc, portraitHtml, {
+    alt: portraitAlt,
+    credit: portraitCredit,
+  });
+  const shot = screenshotFigure(screenshot, {
+    alt: screenshotAlt,
+    credit: screenshotCredit,
+  });
+  return `<div class="detail-media">${portrait}${shot}</div>`;
+}
+
 export function localMediaPortrait(src, label, { dog = false } = {}) {
   if (dog) {
     const href = String(src || "").trim();
@@ -817,7 +861,15 @@ export function personHeader(row, extras = {}) {
     ? `<p class="meta-line">Origin · ${esc(row.country_of_origin)}</p>`
     : "";
   return `<header class="person-header">
-    ${localMediaPortrait(row.photo, row.name)}
+    ${detailMedia({
+      portraitHtml: localMediaPortrait(row.photo, row.name),
+      portraitSrc: isPeopleMediaHref(row.photo) ? row.photo : "",
+      portraitAlt: row.name,
+      portraitCredit: row.photo_credit,
+      screenshot: row.screenshot,
+      screenshotAlt: `X-post screenshot of ${row.name}`,
+      screenshotCredit: row.screenshot_credit,
+    })}
     <div class="detail-copy">
       <h2 class="detail-title">${esc(row.name || "—")}</h2>
       <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
@@ -983,7 +1035,11 @@ export function operationDetail(row) {
     ${boxFrame(
       "Operation",
       `<div class="meta-pane">
-      <span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>
+      ${detailMedia({
+        portraitHtml: `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>`,
+        screenshot: row.screenshot,
+        screenshotAlt: `X-post screenshot of ${row.name || "operation"}`,
+      })}
       <div class="detail-copy">
         <h2 class="detail-title">${esc(row.name || "—")}</h2>
         <p class="meta-line">Event date · <time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time></p>
@@ -1013,7 +1069,15 @@ export function dogDetail(row) {
     ${boxFrame(
       "Metadata",
       `<div class="meta-pane">
-      ${photo}
+      ${detailMedia({
+        portraitHtml: photo,
+        portraitSrc: isDogMediaHref(row.still) ? row.still : "",
+        portraitAlt: `Stored still for ${row.handle}`,
+        portraitCredit: row.still_credit,
+        screenshot: row.screenshot,
+        screenshotAlt: `X-post screenshot of ${row.handle}`,
+        screenshotCredit: row.screenshot_credit,
+      })}
       <div class="detail-copy">
         <h2 class="detail-title">${esc(row.handle)}</h2>
         <p class="rating">★ stored snapshot</p>

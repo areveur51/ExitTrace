@@ -14,6 +14,7 @@ import {
   personSlug,
 } from "./promote.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
+import { normalizeScreenshotHref } from "./screenshot.mjs";
 
 export const OPERATION_TAG_IDS = GROUP_OPS_KEEP_IDS;
 
@@ -181,6 +182,7 @@ export function normalizeOperation(row = {}) {
     arrest_count,
     tags: normalizeOperationTags(row.tags || row.category),
     sources: asSources(row.sources),
+    screenshot: normalizeScreenshotHref(row.screenshot, "operations"),
   };
 }
 
@@ -221,6 +223,7 @@ export function mergeOperationAnnotate(gold, prior) {
     announced_date: a.announced_date || b.announced_date,
     tags,
     sources: cites.sources,
+    screenshot: a.screenshot || b.screenshot || "",
   };
 }
 

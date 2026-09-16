@@ -437,6 +437,8 @@ export function mergePersonAnnotate(gold, prior) {
     ...keep,
     photo: keep.photo || extra.photo || "",
     photo_credit: keep.photo_credit || extra.photo_credit || "",
+    screenshot: keep.screenshot || extra.screenshot || "",
+    screenshot_credit: keep.screenshot_credit || extra.screenshot_credit || "",
     net_worth_usd: keep.net_worth_usd ?? extra.net_worth_usd ?? null,
     net_worth_note: keep.net_worth_note || extra.net_worth_note || "",
     net_worth_source: keep.net_worth_source || extra.net_worth_source || "",
