@@ -1,6 +1,13 @@
 // Local UI only. No third-party embed scripts. No live X, Wikimedia, or news fetches.
 document.addEventListener("DOMContentLoaded", () => {
-  for (const img of document.querySelectorAll("img.portrait, img.still, img.thumb, img.detail-photo")) {
+  for (const img of document.querySelectorAll("img.screenshot")) {
+    img.addEventListener("error", () => {
+      const fig = img.closest(".detail-screenshot");
+      if (fig) fig.remove();
+      else img.remove();
+    });
+  }
+  for (const img of document.querySelectorAll("img.portrait, img.still, img.thumb, img.detail-photo:not(.screenshot)")) {
     img.addEventListener("error", () => {
       const span = document.createElement("span");
       span.className = img.className.includes("detail-photo")
@@ -207,6 +214,34 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener("click", closeModal);
   });
 
+  const lightbox = document.getElementById("tui-lightbox");
+  const lightboxImg = document.getElementById("lightbox-img");
+  const lightboxTitle = document.getElementById("lightbox-title");
+
+  function closeLightbox() {
+    if (!lightbox) return;
+    lightbox.hidden = true;
+    if (lightboxImg) {
+      lightboxImg.removeAttribute("src");
+      lightboxImg.alt = "";
+    }
+    if (lightboxTitle) lightboxTitle.textContent = "";
+  }
+
+  function openLightbox({ src, alt, credit }) {
+    if (!lightbox || !lightboxImg || !src) return;
+    lightboxImg.src = src;
+    lightboxImg.alt = alt || "";
+    if (lightboxTitle) lightboxTitle.textContent = credit || alt || "";
+    lightbox.hidden = false;
+    lightbox.querySelector("[data-close-lightbox]")?.focus();
+    showToast("image opened");
+  }
+
+  lightbox?.querySelectorAll("[data-close-lightbox]").forEach((el) => {
+    el.addEventListener("click", closeLightbox);
+  });
+
   function previewSource(src) {
     const label = src.getAttribute("data-label") || src.textContent;
     const title = src.getAttribute("data-title") || "";
@@ -250,6 +285,17 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         e.stopPropagation();
         previewSnapshot();
+        return;
+      }
+      const shot = e.target.closest?.(".lightbox-open");
+      if (shot) {
+        e.preventDefault();
+        e.stopPropagation();
+        openLightbox({
+          src: shot.getAttribute("data-lightbox") || "",
+          alt: shot.getAttribute("data-lightbox-alt") || "",
+          credit: shot.getAttribute("data-lightbox-credit") || "",
+        });
       }
     },
     true,
@@ -307,6 +353,14 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("keydown", (e) => {
     if (typingInField(document.activeElement)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (lightbox && !lightbox.hidden) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeLightbox();
+      }
+      return;
+    }
 
     if (!modal?.hidden) {
       if (e.key === "Escape") {

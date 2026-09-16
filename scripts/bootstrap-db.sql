@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS people (
   birth_date DATE,
   photo TEXT,
   photo_credit TEXT,
+  screenshot TEXT,
+  screenshot_credit TEXT,
   net_worth_usd BIGINT,
   net_worth_note TEXT,
   net_worth_source TEXT,
@@ -35,6 +37,9 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS country_of_origin TEXT;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Person-level occupation / service years. Not event-tag attrs. Empty stays empty.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS career JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Optional local X-post screenshot. Empty stays empty. Does not replace photo.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS screenshot TEXT;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 
 CREATE TABLE IF NOT EXISTS person_events (
   person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
@@ -84,11 +89,17 @@ CREATE TABLE IF NOT EXISTS dog_comms (
   text TEXT NOT NULL,
   still TEXT,
   still_credit TEXT,
+  screenshot TEXT,
+  screenshot_credit TEXT,
   source_url TEXT NOT NULL,
   snapshot JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE INDEX IF NOT EXISTS dog_comms_posted_at_idx ON dog_comms (posted_at DESC);
+
+-- Optional local X-post screenshot. Empty stays empty. Does not replace still.
+ALTER TABLE dog_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
+ALTER TABLE dog_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 
 -- Parked public posts (not identified people). Gold people stay in `people`.
 CREATE TABLE IF NOT EXISTS source_posts (
@@ -135,11 +146,15 @@ CREATE TABLE IF NOT EXISTS operations (
   victim_count INTEGER,
   arrest_count INTEGER,
   tags JSONB NOT NULL DEFAULT '[]'::jsonb,
-  sources JSONB NOT NULL DEFAULT '[]'::jsonb
+  sources JSONB NOT NULL DEFAULT '[]'::jsonb,
+  screenshot TEXT
 );
 
 CREATE INDEX IF NOT EXISTS operations_event_date_idx ON operations (event_date DESC);
 CREATE INDEX IF NOT EXISTS operations_tags_idx ON operations USING GIN (tags);
+
+-- Optional local X-post screenshot. Empty stays empty. Operations have no still/credit pair.
+ALTER TABLE operations ADD COLUMN IF NOT EXISTS screenshot TEXT;
 
 -- Distinct from unique-person KEEP. No child-name column.
 

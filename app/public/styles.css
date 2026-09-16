@@ -455,6 +455,30 @@ body.tui-home .home-stage {
   gap: 1rem;
   align-items: flex-start;
 }
+.detail-media {
+  display: flex;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+.lightbox-open {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.detail-screenshot {
+  margin: 0;
+  flex: 0 0 auto;
+}
+.detail-photo.screenshot {
+  width: auto;
+  height: 250px;
+  max-width: min(360px, 46vw);
+  object-fit: contain;
+  object-position: top center;
+}
 .person-header .detail-photo.portrait,
 .person-header .initials.detail-photo,
 .meta-pane .detail-photo.portrait,
@@ -887,6 +911,43 @@ img.still.thumb {
   position: relative;
   z-index: 1;
   width: min(32rem, 100%);
+}
+.tui-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.tui-lightbox[hidden] { display: none; }
+.tui-lightbox-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--void);
+  opacity: 0.92;
+}
+.tui-lightbox-frame {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: min(96vw, 72rem);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+}
+.tui-lightbox-frame img {
+  display: block;
+  max-width: min(96vw, 72rem);
+  max-height: 80vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  background: var(--bg-sel);
+  border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
 }
 .modal-keys {
   display: flex;
@@ -1624,6 +1685,12 @@ html[data-theme="glass"] .dash-stats {
     max-width: 160px;
     object-fit: cover;
     object-position: center 18%;
+  }
+  .detail-photo.screenshot {
+    width: auto;
+    height: 208px;
+    max-width: min(280px, 86vw);
+    object-fit: contain;
   }
   .tui-row .thumb,
   .tui-row img.still.thumb,

@@ -20,6 +20,7 @@ import {
   validatePromoteInput,
 } from "./promote.mjs";
 import { isPeopleMediaHref, resolvePortrait } from "./portrait.mjs";
+import { normalizeScreenshotCredit, normalizeScreenshotHref } from "./screenshot.mjs";
 import { hasRecordedNetWorth, resolveNetWorth } from "./net-worth.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import { ageFilterActive, matchesAgeFilter, stampEventAge } from "./age.mjs";
@@ -90,6 +91,8 @@ function normalizePerson(row) {
     country_of_origin: String(row.country_of_origin || "").trim(),
     photo: row.photo || "",
     photo_credit: row.photo_credit || "",
+    screenshot: normalizeScreenshotHref(row.screenshot, "people"),
+    screenshot_credit: normalizeScreenshotCredit(row.screenshot_credit),
     net_worth_usd:
       row.net_worth_usd === null || row.net_worth_usd === undefined
         ? null
@@ -113,6 +116,8 @@ function normalizeDog(row) {
     text: row.text,
     still: row.still || "",
     still_credit: row.still_credit || "",
+    screenshot: normalizeScreenshotHref(row.screenshot, "dog-comms"),
+    screenshot_credit: normalizeScreenshotCredit(row.screenshot_credit),
     source_url: row.source_url,
     snapshot: row.snapshot && typeof row.snapshot === "object" ? row.snapshot : {},
   };
@@ -342,7 +347,18 @@ export function mergeGoldDogs(seedDogs, priorDogs) {
     if (url && goldUrls.has(url)) return false;
     return true;
   });
-  return [...(seedDogs || []).map(normalizeDog), ...extras.map(normalizeDog)];
+  const priorById = new Map((priorDogs || []).map((row) => [row.id, normalizeDog(row)]));
+  const gold = (seedDogs || []).map((row) => {
+    const next = normalizeDog(row);
+    const prior = priorById.get(next.id);
+    if (!prior) return next;
+    return {
+      ...next,
+      screenshot: next.screenshot || prior.screenshot || "",
+      screenshot_credit: next.screenshot_credit || prior.screenshot_credit || "",
+    };
+  });
+  return [...gold, ...extras.map(normalizeDog)];
 }
 
 export function hydrateFileMemory(dataDir, seed) {
@@ -386,10 +402,10 @@ export async function importSeed(p, seed) {
       await client.query(
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, country_of_origin,
-           photo, photo_credit, net_worth_usd, net_worth_note, net_worth_source, sources,
-           summary, events, tags, career
+           photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
+           net_worth_source, sources, summary, events, tags, career
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb,$18::jsonb
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -401,6 +417,8 @@ export async function importSeed(p, seed) {
            country_of_origin = COALESCE(NULLIF(people.country_of_origin, ''), EXCLUDED.country_of_origin),
            photo = EXCLUDED.photo,
            photo_credit = EXCLUDED.photo_credit,
+           screenshot = COALESCE(NULLIF(people.screenshot, ''), EXCLUDED.screenshot),
+           screenshot_credit = COALESCE(NULLIF(people.screenshot_credit, ''), EXCLUDED.screenshot_credit),
            net_worth_usd = EXCLUDED.net_worth_usd,
            net_worth_note = EXCLUDED.net_worth_note,
            net_worth_source = EXCLUDED.net_worth_source,
@@ -413,12 +431,14 @@ export async function importSeed(p, seed) {
       );
       await syncPersonEvents(client, row);
     }
-    for (const row of seed.dog_comms) {
+    for (const raw of seed.dog_comms) {
+      const row = normalizeDog(raw);
       await client.query(
         `INSERT INTO dog_comms (
-           id, posted_at, handle, account_name, text, still, still_credit, source_url, snapshot
+           id, posted_at, handle, account_name, text, still, still_credit,
+           screenshot, screenshot_credit, source_url, snapshot
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            posted_at = EXCLUDED.posted_at,
@@ -427,6 +447,8 @@ export async function importSeed(p, seed) {
            text = EXCLUDED.text,
            still = EXCLUDED.still,
            still_credit = EXCLUDED.still_credit,
+           screenshot = COALESCE(NULLIF(dog_comms.screenshot, ''), EXCLUDED.screenshot),
+           screenshot_credit = COALESCE(NULLIF(dog_comms.screenshot_credit, ''), EXCLUDED.screenshot_credit),
            source_url = EXCLUDED.source_url,
            snapshot = EXCLUDED.snapshot`,
         [
@@ -437,6 +459,8 @@ export async function importSeed(p, seed) {
           row.text,
           row.still,
           row.still_credit,
+          row.screenshot,
+          row.screenshot_credit,
           row.source_url,
           JSON.stringify(row.snapshot || {}),
         ],
@@ -450,9 +474,9 @@ export async function importSeed(p, seed) {
       await client.query(
         `INSERT INTO operations (
            id, name, event_date, announced_date, agencies, summary,
-           victim_count, arrest_count, tags, sources
+           victim_count, arrest_count, tags, sources, screenshot
          ) VALUES (
-           $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb
+           $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb,$11
          )
          ON CONFLICT (id) DO UPDATE SET
            name = EXCLUDED.name,
@@ -463,7 +487,8 @@ export async function importSeed(p, seed) {
            victim_count = COALESCE(operations.victim_count, EXCLUDED.victim_count),
            arrest_count = COALESCE(operations.arrest_count, EXCLUDED.arrest_count),
            tags = EXCLUDED.tags,
-           sources = EXCLUDED.sources`,
+           sources = EXCLUDED.sources,
+           screenshot = COALESCE(NULLIF(operations.screenshot, ''), EXCLUDED.screenshot)`,
         operationValues(row),
       );
     }
@@ -615,6 +640,7 @@ function operationValues(row) {
     op.arrest_count,
     JSON.stringify(op.tags || []),
     JSON.stringify(op.sources || []),
+    op.screenshot || "",
   ];
 }
 
@@ -990,9 +1016,9 @@ export async function insertOperation(row) {
   await p.query(
     `INSERT INTO operations (
        id, name, event_date, announced_date, agencies, summary,
-       victim_count, arrest_count, tags, sources
+       victim_count, arrest_count, tags, sources, screenshot
      ) VALUES (
-       $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb
+       $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb,$11
      )`,
     operationValues(op),
   );
@@ -1013,9 +1039,9 @@ export async function saveOperation(row) {
   await p.query(
     `INSERT INTO operations (
        id, name, event_date, announced_date, agencies, summary,
-       victim_count, arrest_count, tags, sources
+       victim_count, arrest_count, tags, sources, screenshot
      ) VALUES (
-       $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb
+       $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb,$11
      )
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
@@ -1026,7 +1052,8 @@ export async function saveOperation(row) {
        victim_count = EXCLUDED.victim_count,
        arrest_count = EXCLUDED.arrest_count,
        tags = EXCLUDED.tags,
-       sources = EXCLUDED.sources`,
+       sources = EXCLUDED.sources,
+       screenshot = COALESCE(NULLIF(operations.screenshot, ''), EXCLUDED.screenshot)`,
     operationValues(op),
   );
   return op;
@@ -1185,6 +1212,8 @@ function personValues(row) {
     person.country_of_origin || "",
     person.photo,
     person.photo_credit,
+    person.screenshot,
+    person.screenshot_credit,
     person.net_worth_usd,
     person.net_worth_note,
     person.net_worth_source,
@@ -1247,10 +1276,10 @@ export async function insertPerson(row) {
   await p.query(
     `INSERT INTO people (
        id, category, name, role, event_date, death_date, birth_date, country_of_origin,
-       photo, photo_credit, net_worth_usd, net_worth_note, net_worth_source, sources,
-       summary, events, tags, career
+       photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
+       net_worth_source, sources, summary, events, tags, career
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb,$18::jsonb
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb
      )`,
     personValues(person),
   );
@@ -1279,9 +1308,10 @@ export async function savePerson(row) {
     `UPDATE people SET
        category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
        birth_date = $7, country_of_origin = $8, photo = $9, photo_credit = $10,
-       net_worth_usd = $11, net_worth_note = $12, net_worth_source = $13,
-       sources = $14::jsonb, summary = $15, events = $16::jsonb, tags = $17::jsonb,
-       career = $18::jsonb
+       screenshot = $11, screenshot_credit = $12,
+       net_worth_usd = $13, net_worth_note = $14, net_worth_source = $15,
+       sources = $16::jsonb, summary = $17, events = $18::jsonb, tags = $19::jsonb,
+       career = $20::jsonb
      WHERE id = $1`,
     personValues(person),
   );
@@ -1714,9 +1744,10 @@ export async function insertDogComm(row) {
   }
   await p.query(
     `INSERT INTO dog_comms (
-       id, posted_at, handle, account_name, text, still, still_credit, source_url, snapshot
+       id, posted_at, handle, account_name, text, still, still_credit,
+       screenshot, screenshot_credit, source_url, snapshot
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb
      )`,
     [
       dog.id,
@@ -1726,6 +1757,8 @@ export async function insertDogComm(row) {
       dog.text,
       dog.still,
       dog.still_credit,
+      dog.screenshot,
+      dog.screenshot_credit,
       dog.source_url,
       JSON.stringify(dog.snapshot || {}),
     ],
