@@ -1,0 +1,84 @@
+name: et-gap-backfill-dog3
+
+# One-shot Admiral SIGN 2026-09-16 ~4:53pm ET: upsert 3 gap dog_comms onto Render.
+# Does NOT DROP/recreate subscription. Does NOT enable dump dual. No media wipe.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-gap-backfill-dog3
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: upsert-3-dog-comms
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Prove gap still missing then apply scripts/gap-backfill-dog3.sql
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          test -f scripts/gap-backfill-dog3.sql
+          export PGOPTIONS='-c client_min_messages=warning'
+          echo "=== RENDER BEFORE ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT 'people='||count(*) FROM people;
+            SELECT 'person_events='||count(*) FROM person_events;
+            SELECT 'dog_comms='||count(*) FROM dog_comms;
+            SELECT 'operations='||count(*) FROM operations;
+            SELECT 'source_posts='||count(*) FROM source_posts;
+            SELECT 'add_requests='||count(*) FROM add_requests;
+            SELECT 'et_meta='||count(*) FROM et_meta;
+            SELECT 'corona_exists='||EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='corona_comms');
+            SELECT 'tables='||string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';
+          "
+          before=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM dog_comms;")
+          echo "dog_comms_before=$before"
+          gap0=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM dog_comms WHERE id = ANY(ARRAY[
+            'usmarshalshq-2026-09-16-1447e16c',
+            'barackobama-2026-09-16-40368106',
+            'nypost-2026-09-16-0a93d64a'
+          ]);")
+          echo "gap_present_before=$gap0"
+          test "$before" = "50"
+          test "$gap0" = "0"
+          echo "GAP_STILL_MISSING_OK"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, subslotname FROM pg_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/gap-backfill-dog3.sql
+          echo "=== RENDER AFTER ==="
+          after=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM dog_comms;")
+          echo "dog_comms_after=$after"
+          gap=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM dog_comms WHERE id = ANY(ARRAY[
+            'usmarshalshq-2026-09-16-1447e16c',
+            'barackobama-2026-09-16-40368106',
+            'nypost-2026-09-16-0a93d64a'
+          ]);")
+          echo "gap_present=$gap"
+          test "$after" = "53"
+          test "$gap" = "3"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT 'people='||count(*) FROM people;
+            SELECT 'person_events='||count(*) FROM person_events;
+            SELECT 'dog_comms='||count(*) FROM dog_comms;
+            SELECT 'operations='||count(*) FROM operations;
+            SELECT 'source_posts='||count(*) FROM source_posts;
+            SELECT 'add_requests='||count(*) FROM add_requests;
+            SELECT 'et_meta='||count(*) FROM et_meta;
+          "
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, subslotname FROM pg_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
+          echo "GAP_BACKFILL_OK"
