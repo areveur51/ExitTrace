@@ -22,6 +22,7 @@ const SOCIAL_HOSTS = new Set([
 export const OFFICIAL_GOV_HANDLES = new Set(
   [
     "potus",
+    "barackobama",  // prior-POTUS personal accounts count for dog-comms (Admiral SIGN 2026-09-16)
     "vp",
     "flotus",
     "whitehouse",
