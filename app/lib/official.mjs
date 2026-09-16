@@ -23,6 +23,7 @@ export const OFFICIAL_GOV_HANDLES = new Set(
   [
     "potus",
     "barackobama",  // prior-POTUS personal accounts count for dog-comms (Admiral SIGN 2026-09-16)
+    "nypost",  // official news-org X accounts count for dog-comms (Admiral SIGN 2026-09-16)
     "vp",
     "flotus",
     "whitehouse",
@@ -102,6 +103,7 @@ export const OFFICIAL_GOV_HANDLES = new Set(
 export const OFFICIAL_NEWS_HANDLES = new Set(
   [
     "nytimes",
+    "nypost",
     "washingtonpost",
     "wsj",
     "reuters",
