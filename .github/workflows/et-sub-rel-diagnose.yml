@@ -1,0 +1,73 @@
+name: et-sub-rel-diagnose
+
+# Path-only: subscription_rel + apply error stats for dog_comms gap RCA.
+# No DROP. No media wipe. No leftover touch.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-sub-rel-diagnose
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: sub-rel-and-apply-errors
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Diagnose subscription apply path
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          export PGOPTIONS='-c client_min_messages=warning'
+          echo "=== pg_subscription ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, subslotname, subpublications, subbinary, substream, subtwophasestate, subdisableonerr, subpasswordrequired, subrunasowner FROM pg_subscription WHERE subname='exittrace_lab_sub';" 2>&1 || \
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, subslotname, subpublications FROM pg_subscription WHERE subname='exittrace_lab_sub';"
+          echo "=== pg_subscription_rel ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            SELECT sr.srsubid, c.relname, sr.srsubstate,
+              CASE sr.srsubstate
+                WHEN 'i' THEN 'initialize'
+                WHEN 'd' THEN 'data-copy'
+                WHEN 'f' THEN 'finished-copy'
+                WHEN 's' THEN 'synchronized'
+                WHEN 'r' THEN 'ready'
+                ELSE sr.srsubstate::text
+              END AS state_name,
+              sr.srsublsn
+            FROM pg_subscription_rel sr
+            JOIN pg_class c ON c.oid = sr.srrelid
+            JOIN pg_subscription s ON s.oid = sr.srsubid
+            WHERE s.subname='exittrace_lab_sub'
+            ORDER BY c.relname;
+          "
+          echo "=== pg_stat_subscription ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT * FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
+          echo "=== pg_stat_subscription_stats (if any) ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT * FROM pg_stat_subscription_stats WHERE subname='exittrace_lab_sub';" 2>&1 || echo "no pg_stat_subscription_stats"
+          echo "=== dog_comms count + enews ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT 'dog_comms='||count(*) FROM dog_comms;
+            SELECT 'enews='||count(*) FROM dog_comms WHERE id='enews-2026-09-16-a242c9e0';
+            SELECT 'lab_vs_render_note=counts_only';
+          "
+          echo "=== replica identity on subscriber ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            SELECT c.relname, c.relreplident,
+              CASE c.relreplident WHEN 'd' THEN 'default' WHEN 'n' THEN 'nothing' WHEN 'f' THEN 'full' WHEN 'i' THEN 'index' END AS ri
+            FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname='public' AND c.relname='dog_comms';
+          "
+          echo "SUB_REL_DIAGNOSE_OK"
