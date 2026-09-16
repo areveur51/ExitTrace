@@ -48,21 +48,8 @@ jobs:
           ar_before=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests;")
           echo "source_posts_before=$sp_before"
           echo "add_requests_before=$ar_before"
-          gap_sp0=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM source_posts WHERE id = ANY(ARRAY[
-            'sp-d1712ebcdee4f56d',
-  'sp-d8bd5e52ce9e5732',
-  'sp-fa0a7465d19587ac'
-          ]);")
-          gap_ar0=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests WHERE id = ANY(ARRAY[
-            'ar-24b440e20e7da8d4',
-  'ar-47bd953528d78077',
-  'ar-8e937988808efc94',
-  'ar-9c5b5aa339517034',
-  'ar-a6e44323aeec444b',
-  'ar-aac3cdca3600f9dd',
-  'ar-f97d1a49a6b8f1be',
-  'ar-fb32e51e2e328462'
-          ]);")
+          gap_sp0=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM source_posts WHERE id = ANY(ARRAY['sp-d1712ebcdee4f56d','sp-d8bd5e52ce9e5732','sp-fa0a7465d19587ac']);")
+          gap_ar0=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests WHERE id = ANY(ARRAY['ar-24b440e20e7da8d4','ar-47bd953528d78077','ar-8e937988808efc94','ar-9c5b5aa339517034','ar-a6e44323aeec444b','ar-aac3cdca3600f9dd','ar-f97d1a49a6b8f1be','ar-fb32e51e2e328462']);")
           echo "gap_source_posts_before=$gap_sp0"
           echo "gap_add_requests_before=$gap_ar0"
           test "$sp_before" = "2273"
@@ -77,21 +64,8 @@ jobs:
           ar_after=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests;")
           echo "source_posts_after=$sp_after"
           echo "add_requests_after=$ar_after"
-          gap_sp=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM source_posts WHERE id = ANY(ARRAY[
-            'sp-d1712ebcdee4f56d',
-  'sp-d8bd5e52ce9e5732',
-  'sp-fa0a7465d19587ac'
-          ]);")
-          gap_ar=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests WHERE id = ANY(ARRAY[
-            'ar-24b440e20e7da8d4',
-  'ar-47bd953528d78077',
-  'ar-8e937988808efc94',
-  'ar-9c5b5aa339517034',
-  'ar-a6e44323aeec444b',
-  'ar-aac3cdca3600f9dd',
-  'ar-f97d1a49a6b8f1be',
-  'ar-fb32e51e2e328462'
-          ]);")
+          gap_sp=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM source_posts WHERE id = ANY(ARRAY['sp-d1712ebcdee4f56d','sp-d8bd5e52ce9e5732','sp-fa0a7465d19587ac']);")
+          gap_ar=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests WHERE id = ANY(ARRAY['ar-24b440e20e7da8d4','ar-47bd953528d78077','ar-8e937988808efc94','ar-9c5b5aa339517034','ar-a6e44323aeec444b','ar-aac3cdca3600f9dd','ar-f97d1a49a6b8f1be','ar-fb32e51e2e328462']);")
           echo "gap_source_posts=$gap_sp"
           echo "gap_add_requests=$gap_ar"
           test "$sp_after" = "2276"
