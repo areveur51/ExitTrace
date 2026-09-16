@@ -1,0 +1,110 @@
+name: et-gap-backfill-sp3-ar8
+
+# One-shot Admiral SIGN 2026-09-16 ~5:21pm ET: upsert 3 source_posts + 8 add_requests onto Render.
+# Does NOT DROP/recreate subscription. Does NOT enable dump dual. No media wipe.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-gap-backfill-sp3-ar8
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: upsert-sp3-ar8
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Prove gap still missing then apply scripts/gap-backfill-sp3-ar8.sql
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          test -f scripts/gap-backfill-sp3-ar8.sql
+          export PGOPTIONS='-c client_min_messages=warning'
+          echo "=== RENDER BEFORE ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT 'people='||count(*) FROM people;
+            SELECT 'person_events='||count(*) FROM person_events;
+            SELECT 'dog_comms='||count(*) FROM dog_comms;
+            SELECT 'operations='||count(*) FROM operations;
+            SELECT 'source_posts='||count(*) FROM source_posts;
+            SELECT 'add_requests='||count(*) FROM add_requests;
+            SELECT 'et_meta='||count(*) FROM et_meta;
+          "
+          sp_before=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM source_posts;")
+          ar_before=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests;")
+          echo "source_posts_before=$sp_before"
+          echo "add_requests_before=$ar_before"
+          gap_sp0=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM source_posts WHERE id = ANY(ARRAY[
+            'sp-d1712ebcdee4f56d',
+  'sp-d8bd5e52ce9e5732',
+  'sp-fa0a7465d19587ac'
+          ]);")
+          gap_ar0=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests WHERE id = ANY(ARRAY[
+            'ar-24b440e20e7da8d4',
+  'ar-47bd953528d78077',
+  'ar-8e937988808efc94',
+  'ar-9c5b5aa339517034',
+  'ar-a6e44323aeec444b',
+  'ar-aac3cdca3600f9dd',
+  'ar-f97d1a49a6b8f1be',
+  'ar-fb32e51e2e328462'
+          ]);")
+          echo "gap_source_posts_before=$gap_sp0"
+          echo "gap_add_requests_before=$gap_ar0"
+          test "$sp_before" = "2273"
+          test "$ar_before" = "1210"
+          test "$gap_sp0" = "0"
+          test "$gap_ar0" = "0"
+          echo "GAP_STILL_MISSING_OK"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled, subslotname FROM pg_subscription WHERE subname='exittrace_lab_sub';"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/gap-backfill-sp3-ar8.sql
+          echo "=== RENDER AFTER ==="
+          sp_after=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM source_posts;")
+          ar_after=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests;")
+          echo "source_posts_after=$sp_after"
+          echo "add_requests_after=$ar_after"
+          gap_sp=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM source_posts WHERE id = ANY(ARRAY[
+            'sp-d1712ebcdee4f56d',
+  'sp-d8bd5e52ce9e5732',
+  'sp-fa0a7465d19587ac'
+          ]);")
+          gap_ar=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM add_requests WHERE id = ANY(ARRAY[
+            'ar-24b440e20e7da8d4',
+  'ar-47bd953528d78077',
+  'ar-8e937988808efc94',
+  'ar-9c5b5aa339517034',
+  'ar-a6e44323aeec444b',
+  'ar-aac3cdca3600f9dd',
+  'ar-f97d1a49a6b8f1be',
+  'ar-fb32e51e2e328462'
+          ]);")
+          echo "gap_source_posts=$gap_sp"
+          echo "gap_add_requests=$gap_ar"
+          test "$sp_after" = "2276"
+          test "$ar_after" = "1218"
+          test "$gap_sp" = "3"
+          test "$gap_ar" = "8"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT 'people='||count(*) FROM people;
+            SELECT 'person_events='||count(*) FROM person_events;
+            SELECT 'dog_comms='||count(*) FROM dog_comms;
+            SELECT 'operations='||count(*) FROM operations;
+            SELECT 'source_posts='||count(*) FROM source_posts;
+            SELECT 'add_requests='||count(*) FROM add_requests;
+            SELECT 'et_meta='||count(*) FROM et_meta;
+          "
+          echo "GAP_BACKFILL_OK"
