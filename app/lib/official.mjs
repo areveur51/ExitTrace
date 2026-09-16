@@ -48,6 +48,7 @@ export const OFFICIAL_GOV_HANDLES = new Set(
     "nsa",
     "odnigov",
     "thejusticedept",
+    "usao_sdfl",
     "atfhq",
     "dea",
     "ustreasury",
