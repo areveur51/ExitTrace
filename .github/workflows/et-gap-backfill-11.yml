@@ -1,0 +1,48 @@
+name: et-gap-backfill-11
+
+# One-shot Admiral SIGN 2026-09-16: upsert 11 gap people + person_events onto Render.
+# Does NOT DROP/recreate subscription. Does NOT enable dump dual.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: et-gap-backfill-11
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: upsert-11-gap-rows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Apply scripts/gap-backfill-11.sql
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          test -f scripts/gap-backfill-11.sql
+          export PGOPTIONS='-c client_min_messages=warning'
+          before=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM people;")
+          echo "people_before=$before"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/gap-backfill-11.sql
+          after=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM people;")
+          echo "people_after=$after"
+          gap=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM people WHERE id = ANY(ARRAY[
+            'nazira-haji-zada','eliana-moreno','george-marciniw','angel-eduardo-castro','fan-yang','jing-tian',
+            'oemis-romagoza-durruthy','yaidel-delgado-suarez','alex-nain-saab-moran','kirill-khrameev','yuri-khrameev'
+          ]);")
+          echo "gap_present=$gap"
+          test "$gap" = "11"
+          echo "GAP_BACKFILL_OK"
