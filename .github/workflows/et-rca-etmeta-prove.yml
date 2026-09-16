@@ -1,0 +1,37 @@
+name: et-rca-etmeta-prove
+
+# Path-only: prove lab et_meta WAL probe did/didn't land on Render (sub_rel RCA).
+on:
+  workflow_dispatch:
+concurrency:
+  group: et-rca-etmeta-prove
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Check rca probe key + sub_rel
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          export PGOPTIONS='-c client_min_messages=warning'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT 'et_meta_total='||count(*) FROM et_meta;
+            SELECT 'rca_probe='||count(*) FROM et_meta WHERE k='rca_enews_wal_probe_20260916';
+            SELECT 'sub_rel_rows='||count(*) FROM pg_subscription_rel sr JOIN pg_subscription s ON s.oid=sr.srsubid WHERE s.subname='exittrace_lab_sub';
+            SELECT 'apply_errors='||apply_error_count FROM pg_stat_subscription_stats WHERE subname='exittrace_lab_sub';
+            SELECT 'dog_comms='||count(*) FROM dog_comms;
+            SELECT 'enews='||count(*) FROM dog_comms WHERE id='enews-2026-09-16-a242c9e0';
+          "
+          echo "RCA_ETMETA_PROVE_DONE"
