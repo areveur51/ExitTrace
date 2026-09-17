@@ -49,6 +49,9 @@ test("public tree has no private-host strings", () => {
   const hits = [];
   for (const file of walk(ROOT)) {
     if (file.endsWith(`${path.sep}tests${path.sep}sanitize.test.mjs`)) continue;
+    // Workflow YAML is not the shipped public tree; constraint comments like
+    // "No leftover touch" are not lab-path leaks.
+    if (file.includes(`${path.sep}.github${path.sep}workflows${path.sep}`)) continue;
     const text = fs.readFileSync(file, "utf8");
     for (const pat of PATTERNS) {
       if (text.includes(pat)) hits.push(`${path.relative(ROOT, file)}: ${pat}`);
