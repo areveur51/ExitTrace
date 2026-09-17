@@ -469,8 +469,11 @@ body.tui-home .home-stage {
   display: block;
   column-count: 1;
   column-gap: 0.65rem;
+  flex: 1 1 auto;
+  align-self: stretch;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 .detail-tile {
   break-inside: avoid;
@@ -1039,12 +1042,16 @@ img.still.thumb {
   display: contents;
 }
 .meta-pane--stack .detail-media {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   flex-wrap: unset;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 .meta-pane--stack .detail-media--masonry {
+  flex: 1 1 auto;
   flex-wrap: unset;
+  width: 100%;
 }
 .meta-pane--stack .detail-tile--meta .detail-copy {
   flex: 1 1 auto;

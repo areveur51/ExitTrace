@@ -140,6 +140,8 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
   assert.match(css, /column-count:\s*1/);
   assert.match(css, /column-count:\s*2/);
   assert.match(css, /column-count:\s*3/);
+  assert.match(css, /\.detail-media--masonry \{[^}]*flex:\s*1 1 auto/);
+  assert.match(css, /\.meta-pane--stack \.detail-media--masonry \{[^}]*width:\s*100%/);
   assert.doesNotMatch(css, /minmax\(340px, 1fr\)/);
   assert.doesNotMatch(css, /minmax\(420px, 1fr\)/);
   assert.doesNotMatch(css, /detail-media--tiles-3/);
