@@ -461,27 +461,37 @@ body.tui-home .home-stage {
   flex: 0 0 auto;
   align-items: flex-start;
 }
-/* Anduril-like masonry grid: portrait + X screenshot + other post media.
-   Breakpoints (SIGNED ~4:55pm ET Riker):
-   - <720: 1 col, tile min-height 280px
-   - 720–1099: 2 col, minmax(340px, 1fr)
-   - ≥1100: 2 col, minmax(420px, 1fr)
-   - ≥1400 + ≥3 tiles: 3 col
-   Primary X screenshot may span 2 cols; object-fit cover; HD lightbox unchanged. */
+/* Dense column masonry: media + text/meta tiles in one flow.
+   Breakpoints: <720 1 col; ≥720 2 col; ≥1100 3 col.
+   Columns pack top-to-bottom so tiles fill gaps (no empty grid cells).
+   Media tiles open HD lightbox; text/meta tiles do not. */
 .detail-media--masonry {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.65rem;
+  display: block;
+  column-count: 1;
+  column-gap: 0.65rem;
+  flex: 1 1 auto;
+  align-self: stretch;
   width: 100%;
   max-width: 100%;
-}
-.detail-tile {
-  margin: 0;
-  width: 100%;
   min-width: 0;
 }
-.detail-media--masonry .detail-tile {
+.detail-tile {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+  display: inline-block;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 0.65rem;
+  vertical-align: top;
+}
+.detail-media--masonry .detail-tile--portrait,
+.detail-media--masonry .detail-tile--screenshot,
+.detail-media--masonry .detail-tile--still {
   min-height: 280px;
+}
+.detail-media--masonry .detail-tile--meta {
+  min-height: 0;
 }
 .detail-tile .lightbox-open,
 .detail-tile img,
@@ -492,8 +502,8 @@ body.tui-home .home-stage {
   height: auto;
   min-height: inherit;
 }
-.detail-tile--portrait .detail-photo.portrait,
-.detail-tile--portrait .initials.detail-photo {
+.detail-media--masonry .detail-tile--portrait .detail-photo.portrait,
+.detail-media--masonry .detail-tile--portrait .initials.detail-photo {
   width: 100%;
   max-width: 100%;
   height: auto;
@@ -502,8 +512,8 @@ body.tui-home .home-stage {
   object-fit: cover;
   object-position: center 18%;
 }
-.detail-tile--screenshot .detail-photo.screenshot,
-.detail-tile--still .detail-photo.still {
+.detail-media--masonry .detail-tile--screenshot .detail-photo.screenshot,
+.detail-media--masonry .detail-tile--still .detail-photo.still {
   width: 100%;
   height: auto;
   min-height: 280px;
@@ -1021,26 +1031,29 @@ img.still.thumb {
   gap: 1rem;
   align-items: flex-start;
 }
-/* Detail shell: stack media above meta on all widths so widescreen
-   does not leave an empty left gutter beside the text column.
+/* Detail shell: one interleaved masonry (media + text/meta tiles).
    Shared by dog / people (incl. corona) / operations. */
 .meta-pane--stack {
   flex-direction: column;
   align-items: stretch;
 }
-/* person-header carries media+meta; lift children into the stack. */
+/* person-header wraps the shared masonry; lift it into the pane. */
 .meta-pane--stack > .person-header {
   display: contents;
 }
 .meta-pane--stack .detail-media {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  flex-wrap: unset;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 .meta-pane--stack .detail-media--masonry {
+  flex: 1 1 auto;
   flex-wrap: unset;
+  width: 100%;
 }
-.meta-pane--stack .detail-copy {
+.meta-pane--stack .detail-tile--meta .detail-copy {
   flex: 1 1 auto;
   width: 100%;
   max-width: 100%;
@@ -1670,16 +1683,16 @@ html[data-theme="glass"] .detail-photo {
   border-color: rgba(255, 255, 255, 0.22);
   box-shadow: none;
 }
-/* Detail shell deepen: translucent frost so city wireframe stays visible.
-   No trademark marks — schematic ticks/L-corners only. */
+/* Detail shell deepen: glass-transparent frost, light blur so the city
+   skyline stays readable through tiles and panels. Schematic ticks only. */
 html[data-theme="glass"] .detail .box-pane {
-  background: rgba(6, 8, 12, 0.34);
-  border-color: rgba(255, 176, 0, 0.24);
-  -webkit-backdrop-filter: blur(10px) saturate(1.08);
-  backdrop-filter: blur(10px) saturate(1.08);
+  background: rgba(6, 8, 12, 0.08);
+  border-color: rgba(255, 176, 0, 0.16);
+  -webkit-backdrop-filter: blur(2px) saturate(1.02);
+  backdrop-filter: blur(2px) saturate(1.02);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 12px 36px rgba(0, 0, 0, 0.4);
+    0 6px 18px rgba(0, 0, 0, 0.12);
 }
 html[data-theme="glass"] .detail .meta-pane--stack {
   position: relative;
@@ -1712,12 +1725,18 @@ html[data-theme="glass"] .detail .event-timeline {
   position: relative;
   z-index: 1;
 }
-html[data-theme="glass"] .detail .detail-copy {
-  background: rgba(255, 255, 255, 0.028);
+html[data-theme="glass"] .detail .detail-tile {
+  background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 0.75rem 0.9rem;
-  -webkit-backdrop-filter: blur(6px) saturate(1.04);
-  backdrop-filter: blur(6px) saturate(1.04);
+  -webkit-backdrop-filter: blur(1.5px) saturate(1.02);
+  backdrop-filter: blur(1.5px) saturate(1.02);
+}
+html[data-theme="glass"] .detail .detail-copy {
+  background: transparent;
+  border: 0;
+  padding: 0.7rem 0.8rem;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 html[data-theme="glass"] .detail .detail-photo {
   border-color: rgba(255, 176, 0, 0.38);
@@ -1784,33 +1803,26 @@ html[data-theme="glass"] .dash-stats {
   - desktop >=1280: HUD frames spread; denser lists; full width (not a stranded phone mock).
 */
 
-/* Larger masonry grid (Riker SIGNED ~4:55pm ET) — shared by all detail pages. */
+/* Dense masonry columns — shared by all detail pages. */
 @media (min-width: 720px) {
   .detail-media--masonry {
-    grid-template-columns: repeat(2, minmax(340px, 1fr));
+    column-count: 2;
   }
-  .detail-media--masonry .detail-tile {
+  .detail-media--masonry .detail-tile--portrait,
+  .detail-media--masonry .detail-tile--screenshot,
+  .detail-media--masonry .detail-tile--still {
     min-height: 0;
   }
-  .detail-tile--portrait .detail-photo.portrait,
-  .detail-tile--portrait .initials.detail-photo,
-  .detail-tile--screenshot .detail-photo.screenshot,
-  .detail-tile--still .detail-photo.still {
+  .detail-media--masonry .detail-tile--portrait .detail-photo.portrait,
+  .detail-media--masonry .detail-tile--portrait .initials.detail-photo,
+  .detail-media--masonry .detail-tile--screenshot .detail-photo.screenshot,
+  .detail-media--masonry .detail-tile--still .detail-photo.still {
     min-height: 0;
-  }
-  /* Primary X screenshot may span 2 cols when the grid is multi-column. */
-  .detail-media--masonry .detail-tile--screenshot {
-    grid-column: span 2;
   }
 }
 @media (min-width: 1100px) {
   .detail-media--masonry {
-    grid-template-columns: repeat(2, minmax(420px, 1fr));
-  }
-}
-@media (min-width: 1400px) {
-  .detail-media--masonry.detail-media--tiles-3 {
-    grid-template-columns: repeat(3, minmax(420px, 1fr));
+    column-count: 3;
   }
 }
 
@@ -1840,11 +1852,26 @@ html[data-theme="glass"] .dash-stats {
     object-fit: cover;
     object-position: center 18%;
   }
+  .detail-media--masonry .detail-tile--portrait .detail-photo.portrait,
+  .detail-media--masonry .detail-tile--portrait .initials.detail-photo {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 280px;
+  }
   .detail-photo.screenshot {
     width: auto;
     height: 208px;
     max-width: min(280px, 86vw);
     object-fit: contain;
+  }
+  .detail-media--masonry .detail-tile--screenshot .detail-photo.screenshot,
+  .detail-media--masonry .detail-tile--still .detail-photo.still {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 280px;
+    object-fit: cover;
   }
   .tui-row .thumb,
   .tui-row img.still.thumb,

@@ -601,7 +601,37 @@ function screenshotTile(src, { alt = "", credit = "" } = {}) {
   });
 }
 
-/** Shared masonry: portrait + X screenshot + other post media (people / ops / dog). */
+/** Text/meta tile — never opens the HD lightbox. */
+function detailMetaTile(kind, inner) {
+  const html = String(inner || "").trim();
+  if (!html) return "";
+  const mod = kind ? ` detail-tile--${esc(kind)}` : "";
+  return `<section class="detail-tile detail-tile--meta${mod}">
+    <div class="detail-copy">${html}</div>
+  </section>`;
+}
+
+function splitJoinedTiles(html) {
+  const raw = String(html || "").trim();
+  if (!raw) return [];
+  const parts = raw.match(/<(?:section|figure) class="detail-tile[\s\S]*?<\/(?:section|figure)>/g);
+  return parts && parts.length ? parts : [raw];
+}
+
+/** Media then meta, then next media, then next meta — one dense masonry flow. */
+function interleaveDetailTiles(mediaTiles, metaTiles) {
+  const media = (mediaTiles || []).filter(Boolean);
+  const meta = (metaTiles || []).filter(Boolean);
+  const out = [];
+  const n = Math.max(media.length, meta.length);
+  for (let i = 0; i < n; i += 1) {
+    if (i < media.length) out.push(media[i]);
+    if (i < meta.length) out.push(meta[i]);
+  }
+  return out;
+}
+
+/** Shared masonry: media + text/meta tiles in one dense column pack (dog / people / ops). */
 function detailMediaStrip({
   portraitHtml,
   portraitSrc = "",
@@ -611,10 +641,12 @@ function detailMediaStrip({
   screenshotAlt = "",
   screenshotCredit = "",
   extraMedia = [],
+  metaHtml = "",
+  metaTiles = [],
 } = {}) {
-  const tiles = [];
+  const media = [];
   if (portraitHtml) {
-    tiles.push(
+    media.push(
       detailMediaTile({
         kind: "portrait",
         src: portraitSrc,
@@ -628,14 +660,14 @@ function detailMediaStrip({
     alt: screenshotAlt,
     credit: screenshotCredit,
   });
-  if (shot) tiles.push(shot);
+  if (shot) media.push(shot);
   for (const item of extraMedia || []) {
     const href = String(item?.src || item || "").trim();
     if (!href) continue;
     const alt = item?.alt || "Post media";
     const credit = creditWithoutUrls(item?.credit || "");
     const img = `<img class="detail-photo still" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
-    tiles.push(
+    media.push(
       detailMediaTile({
         kind: "still",
         src: href,
@@ -645,34 +677,45 @@ function detailMediaStrip({
       }),
     );
   }
-  const mods = ["detail-media", "detail-media--masonry"];
-  if (tiles.length >= 3) mods.push("detail-media--tiles-3");
-  return `<div class="${mods.join(" ")}" data-tiles="${tiles.length}">${tiles.join("")}</div>`;
+  const meta = (metaTiles || []).filter(Boolean);
+  if (!meta.length && metaHtml) meta.push(...splitJoinedTiles(metaHtml));
+  const tiles = interleaveDetailTiles(media, meta);
+  return `<div class="detail-media detail-media--masonry" data-tiles="${tiles.length}">${tiles.join("")}</div>`;
 }
 
-/** Shared detail-copy: title + optional rating + TUI meta lines + optional body. */
+/** Shared text/meta tiles: title, each TUI line, optional body — no lightbox.
+    One card per line so CSS columns pack like a timeline (no vacant gaps). */
 function detailMetaBlock({
   title,
   ratingHtml = "",
   lines = [],
   bodyTitle = "",
   bodyHtml = "",
+  extraTiles = [],
 } = {}) {
-  const body =
-    bodyTitle || bodyHtml
-      ? `<hr class="hr">${
-          bodyTitle ? `<h3 class="pane-h">${esc(bodyTitle)}</h3>` : ""
-        }${bodyHtml}`
-      : "";
-  return `<div class="detail-copy">
-    <h2 class="detail-title">${esc(title || "—")}</h2>
-    ${ratingHtml}
-    ${(lines || []).filter(Boolean).join("")}
-    ${body}
-  </div>`;
+  const tiles = [];
+  tiles.push(
+    detailMetaTile(
+      "title",
+      `<h2 class="detail-title">${esc(title || "—")}</h2>${ratingHtml}`,
+    ),
+  );
+  for (const line of (lines || []).filter(Boolean)) {
+    tiles.push(detailMetaTile("line", line));
+  }
+  if (bodyTitle || bodyHtml) {
+    tiles.push(
+      detailMetaTile(
+        "body",
+        `${bodyTitle ? `<h3 class="pane-h">${esc(bodyTitle)}</h3>` : ""}${bodyHtml}`,
+      ),
+    );
+  }
+  tiles.push(...(extraTiles || []).filter(Boolean));
+  return tiles.join("");
 }
 
-/** Shared detail shell: frost box + stacked media + meta (+ optional trailing HTML). */
+/** Shared detail shell: frost box + one interleaved masonry (+ optional trailing HTML). */
 function detailShell({
   title,
   mediaHtml = "",
@@ -959,11 +1002,11 @@ export function personHeader(row, extras = {}) {
       screenshot: row.screenshot,
       screenshotAlt: `X-post screenshot of ${row.name}`,
       screenshotCredit: row.screenshot_credit,
-    })}
-    ${detailMetaBlock({
-      title: row.name || "—",
-      ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
-      lines: [birth, origin, personTagChips(row), grokipediaBlock(row, extras)],
+      metaHtml: detailMetaBlock({
+        title: row.name || "—",
+        ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
+        lines: [birth, origin, personTagChips(row), grokipediaBlock(row, extras)],
+      }),
     })}
   </header>`;
 }
@@ -1121,9 +1164,9 @@ export function operationDetail(row) {
       ? `<p class="meta-line">Announced · <time datetime="${esc(row.announced_date)}">${esc(formatDate(row.announced_date))}</time></p>`
       : "";
   const sources = row.sources || [];
-  const sourcesHtml = sources.length
-    ? `<hr class="hr"><h3 class="pane-h">Sources</h3>${citeList(sources)}`
-    : "";
+  const sourceTiles = sources.length
+    ? [detailMetaTile("sources", `<h3 class="pane-h">Sources</h3>${citeList(sources)}`)]
+    : [];
   return `<article class="detail operation-detail" data-operation-id="${esc(row.id)}">
     ${detailShell({
       title: "Operation",
@@ -1131,21 +1174,21 @@ export function operationDetail(row) {
         portraitHtml: `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>`,
         screenshot: row.screenshot,
         screenshotAlt: `X-post screenshot of ${row.name || "operation"}`,
+        metaHtml: detailMetaBlock({
+          title: row.name || "—",
+          lines: [
+            `<p class="meta-line">Event date · <time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time></p>`,
+            announced,
+            `<p class="meta-line">Agencies · ${esc(agencies)}</p>`,
+            `<p class="meta-line">Tags · ${esc(tagLine)}</p>`,
+            `<p class="meta-line">Victims · ${esc(countCell(row.victim_count))}</p>`,
+            `<p class="meta-line">Arrests · ${esc(countCell(row.arrest_count))}</p>`,
+          ],
+          bodyTitle: "Summary",
+          bodyHtml: `<p class="synopsis">${esc(row.summary || "—")}</p>`,
+          extraTiles: sourceTiles,
+        }),
       }),
-      metaHtml: detailMetaBlock({
-        title: row.name || "—",
-        lines: [
-          `<p class="meta-line">Event date · <time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time></p>`,
-          announced,
-          `<p class="meta-line">Agencies · ${esc(agencies)}</p>`,
-          `<p class="meta-line">Tags · ${esc(tagLine)}</p>`,
-          `<p class="meta-line">Victims · ${esc(countCell(row.victim_count))}</p>`,
-          `<p class="meta-line">Arrests · ${esc(countCell(row.arrest_count))}</p>`,
-        ],
-        bodyTitle: "Summary",
-        bodyHtml: `<p class="synopsis">${esc(row.summary || "—")}</p>`,
-      }),
-      afterHtml: sourcesHtml,
       active: true,
       extraClass: "meta-box",
     })}
@@ -1175,16 +1218,16 @@ export function dogDetail(row) {
         screenshotAlt: `X-post screenshot of ${row.handle}`,
         screenshotCredit: row.screenshot_credit,
         extraMedia: extras,
-      }),
-      metaHtml: detailMetaBlock({
-        title: row.handle || "—",
-        lines: [
-          `<p class="meta-line">Handle · ${esc(row.handle || "—")}</p>`,
-          `<p class="meta-line">Account · ${esc(row.account_name || "—")}</p>`,
-          `<p class="meta-line">Posted · <time datetime="${esc(row.posted_at || "")}">${esc(formatDate(row.posted_at))}</time></p>`,
-          `<p class="meta-line post-text">Body · ${esc(row.text || "—")}</p>`,
-          sourceLine,
-        ],
+        metaHtml: detailMetaBlock({
+          title: row.handle || "—",
+          lines: [
+            `<p class="meta-line">Handle · ${esc(row.handle || "—")}</p>`,
+            `<p class="meta-line">Account · ${esc(row.account_name || "—")}</p>`,
+            `<p class="meta-line">Posted · <time datetime="${esc(row.posted_at || "")}">${esc(formatDate(row.posted_at))}</time></p>`,
+            `<p class="meta-line post-text">Body · ${esc(row.text || "—")}</p>`,
+            sourceLine,
+          ],
+        }),
       }),
       active: true,
       extraClass: "meta-box",
