@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dogDetail, dogExtraStills, operationDetail, personDetail } from "../app/lib/html.mjs";
+import { formatXDateTime } from "../app/lib/categories.mjs";
+import {
+  citeBlock,
+  citeFromRow,
+  dogDetail,
+  dogExtraStills,
+  operationDetail,
+  personDetail,
+  sourcePostDetail,
+} from "../app/lib/html.mjs";
 
 function dog(overrides = {}) {
   return {
@@ -62,6 +71,45 @@ function tileByKind(html, kind) {
   return html.match(re) || [];
 }
 
+test("formatXDateTime is X-native clock · date; date-only does not invent a time", () => {
+  assert.equal(formatXDateTime("2026-08-26T18:39:00Z"), "6:39 PM · Aug 26, 2026");
+  assert.equal(formatXDateTime("6:39 PM · Aug 26, 2026"), "6:39 PM · Aug 26, 2026");
+  assert.equal(formatXDateTime("2026-01-15"), "Jan 15, 2026");
+  assert.equal(formatXDateTime(""), "—");
+});
+
+test("citeBlock is the shared CITE markup; citeFromRow maps dog and source-post fields", () => {
+  const html = citeBlock({
+    handle: "EzraACohen",
+    accountName: "Ezra Cohen",
+    postedAt: "2026-08-26T18:39:00Z",
+    body: "Line one.\nLine two.",
+  });
+  assert.match(html, /class="cite-block"/);
+  assert.match(html, /class="handle">@EzraACohen</);
+  assert.match(html, /class="acct">Ezra Cohen</);
+  assert.match(html, /<time datetime="2026-08-26T18:39:00Z">6:39 PM · Aug 26, 2026<\/time>/);
+  assert.match(html, /class="post-text">Line one\.\nLine two\.</);
+  assert.doesNotMatch(html, /Handle ·|Account ·|Posted ·|Body ·|Source ·|Citation:/);
+
+  assert.equal(citeFromRow({ name: "James Comey", category: "firings" }), "");
+  assert.equal(citeFromRow({ summary: "Federal operation." }), "");
+  const fromDog = citeFromRow(dog());
+  const fromPost = citeFromRow({
+    poster_handle: "@EzraACohen",
+    poster_name: "Ezra Cohen",
+    posted_at: "2026-01-15",
+    text: "Multi-still dog post.",
+  });
+  assert.equal(fromDog, citeBlock({
+    handle: "@EzraACohen",
+    accountName: "Ezra Cohen",
+    postedAt: "2026-01-15",
+    body: "Multi-still dog post.",
+  }));
+  assert.equal(fromPost, fromDog);
+});
+
 test("dogExtraStills skips primary and keeps local dog media only", () => {
   assert.deepEqual(dogExtraStills(dog()), [
     "/media/dog-comms/ezraacohen-dow-2026-2.jpg",
@@ -85,29 +133,35 @@ test("dogExtraStills skips primary and keeps local dog media only", () => {
   );
 });
 
-test("dog detail masonry: interleaved media + meta; lightbox on media only; X URL only under Source", () => {
+test("dog detail masonry: one CITE tile + Source; lightbox on media only; X URL only under Source", () => {
   const html = dogDetail(dog());
   assert.match(html, /detail-media--masonry/);
   assert.doesNotMatch(html, /detail-media--tiles-3/);
-  // 5 media + title + handle/account/posted + ONE body + Source
-  assert.match(html, /data-tiles="11"/);
+  // 5 media + ONE cite + Source
+  assert.match(html, /data-tiles="7"/);
   assert.match(html, /detail-tile--portrait/);
   assert.match(html, /detail-tile--screenshot/);
   assert.match(html, /detail-tile--meta/);
-  assert.match(html, /detail-tile--title/);
-  assert.equal(tileByKind(html, "handle").length, 1);
-  assert.equal(tileByKind(html, "account").length, 1);
-  assert.equal(tileByKind(html, "posted").length, 1);
-  assert.equal(tileByKind(html, "body").length, 1);
+  assert.equal(tileByKind(html, "cite").length, 1);
   assert.equal(tileByKind(html, "source").length, 1);
+  assert.equal(tileByKind(html, "title").length, 0);
+  assert.equal(tileByKind(html, "handle").length, 0);
+  assert.equal(tileByKind(html, "account").length, 0);
+  assert.equal(tileByKind(html, "posted").length, 0);
+  assert.equal(tileByKind(html, "body").length, 0);
   assert.equal((html.match(/detail-tile--line/g) || []).length, 0);
   assert.equal((html.match(/detail-tile--still/g) || []).length, 3);
   const inner = masonryInner(html);
   assert.match(inner, /detail-tile--portrait/);
   assert.match(inner, /detail-tile--meta/);
-  assert.match(inner, /Handle ·/);
-  assert.match(inner, /Account ·/);
-  assert.match(inner, /Body ·/);
+  const citeTile = tileByKind(html, "cite")[0];
+  assert.match(citeTile, /class="cite-block"/);
+  assert.match(citeTile, /class="handle">@EzraACohen</);
+  assert.match(citeTile, /class="acct">Ezra Cohen</);
+  assert.match(citeTile, /<time datetime="2026-01-15">Jan 15, 2026<\/time>/);
+  assert.match(citeTile, /class="post-text">Multi-still dog post\.</);
+  assert.doesNotMatch(citeTile, /Source ·|https:\/\/x\.com/);
+  assert.doesNotMatch(html, /Handle ·|Account ·|Posted ·|Body ·/);
   // Interleave: first media, then first meta, then screenshot
   assert.match(inner, /detail-tile--portrait[\s\S]*detail-tile--meta[\s\S]*detail-tile--screenshot/);
   assert.doesNotMatch(html, /detail-media--masonry[\s\S]*<\/div>\s*<div class="detail-copy"/);
@@ -121,8 +175,7 @@ test("dog detail masonry: interleaved media + meta; lightbox on media only; X UR
   }
   const sourceTile = tileByKind(html, "source")[0];
   assert.match(sourceTile, /Source · <a class="source-link" href="https:\/\/x\.com\/EzraACohen\/status\/2092784717917462982"/);
-  assert.doesNotMatch(sourceTile, /Body ·/);
-  assert.doesNotMatch(tileByKind(html, "body")[0], /Source ·/);
+  assert.doesNotMatch(sourceTile, /cite-block|Multi-still dog post/);
   // No X URL / capture cite clutter outside Source (screenshot credit stripped).
   const withoutSource = html.replace(
     /<p class="meta-line">Source ·[\s\S]*?<\/p>/,
@@ -132,32 +185,34 @@ test("dog detail masonry: interleaved media + meta; lightbox on media only; X UR
   assert.doesNotMatch(html, /screenshot-credit/);
   assert.doesNotMatch(html, /Batcave/i);
   assert.doesNotMatch(html, /Sources · \d+ available/);
+  assert.doesNotMatch(html, /dog-snapshot|Citation:/);
 });
 
-test("dog body is one glass tile even when the post has several TUI lines; Source stays separate", () => {
+test("dog CITE is one glass tile even when the post has several TUI lines; Source stays separate", () => {
   const html = dogDetail(
     dog({
       text: "First TUI line of the post.\nSecond TUI line of the post.\nThird line.",
     }),
   );
-  const bodies = tileByKind(html, "body");
+  const cites = tileByKind(html, "cite");
   const sources = tileByKind(html, "source");
-  assert.equal(bodies.length, 1);
+  assert.equal(cites.length, 1);
   assert.equal(sources.length, 1);
-  assert.match(bodies[0], /First TUI line of the post/);
-  assert.match(bodies[0], /Second TUI line of the post/);
-  assert.match(bodies[0], /Third line/);
-  assert.doesNotMatch(bodies[0], /Source ·/);
-  assert.doesNotMatch(bodies[0], /lightbox-open|data-lightbox="/);
+  assert.match(cites[0], /First TUI line of the post/);
+  assert.match(cites[0], /Second TUI line of the post/);
+  assert.match(cites[0], /Third line/);
+  assert.doesNotMatch(cites[0], /Source ·/);
+  assert.doesNotMatch(cites[0], /lightbox-open|data-lightbox="/);
   assert.match(sources[0], /Source ·/);
   assert.doesNotMatch(sources[0], /First TUI line of the post/);
   assert.doesNotMatch(sources[0], /lightbox-open|data-lightbox="/);
-  assert.equal(tileByKind(html, "handle").length, 1);
-  assert.equal(tileByKind(html, "account").length, 1);
-  assert.equal(tileByKind(html, "posted").length, 1);
+  assert.equal(tileByKind(html, "handle").length, 0);
+  assert.equal(tileByKind(html, "account").length, 0);
+  assert.equal(tileByKind(html, "posted").length, 0);
+  assert.equal(tileByKind(html, "body").length, 0);
 });
 
-test("people / ops / corona reuse interleaved masonry detailMediaStrip + detailMetaBlock", () => {
+test("people / ops / corona reuse interleaved masonry; cite tile only when cite fields apply", () => {
   const person = personDetail({
     id: "james-comey",
     category: "firings",
@@ -177,6 +232,7 @@ test("people / ops / corona reuse interleaved masonry detailMediaStrip + detailM
   assert.match(person, /detail-tile--meta/);
   assert.match(masonryInner(person), /detail-tile--meta[\s\S]*James Comey/);
   assert.match(person, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
+  assert.equal(tileByKind(person, "cite").length, 0);
   for (const tile of metaTiles(person)) {
     assert.doesNotMatch(tile, /lightbox-open/);
     assert.doesNotMatch(tile, /data-lightbox="/);
@@ -194,7 +250,26 @@ test("people / ops / corona reuse interleaved masonry detailMediaStrip + detailM
   });
   assert.match(corona, /detail-media--masonry/);
   assert.match(corona, /detail-tile--meta/);
+  assert.equal(tileByKind(corona, "cite").length, 0);
   assert.doesNotMatch(corona, /Batcave/i);
+
+  const coronaCite = personDetail({
+    id: "casey-vale",
+    category: "corona_comms",
+    name: "Casey Vale",
+    event_date: "2024-07-20",
+    photo: "/media/people/james-comey.jpg",
+    handle: "@CaseyVale",
+    account_name: "Casey Vale",
+    posted_at: "2024-07-20T15:04:00Z",
+    text: "Official corona note.",
+    sources: [],
+    events: [],
+  });
+  assert.equal(tileByKind(coronaCite, "cite").length, 1);
+  assert.match(tileByKind(coronaCite, "cite")[0], /class="cite-block"/);
+  assert.match(tileByKind(coronaCite, "cite")[0], /3:04 PM · Jul 20, 2024/);
+  assert.match(tileByKind(coronaCite, "cite")[0], /Official corona note/);
 
   const op = operationDetail({
     id: "operation-restore-justice",
@@ -211,6 +286,7 @@ test("people / ops / corona reuse interleaved masonry detailMediaStrip + detailM
   assert.match(op, /detail-tile--meta/);
   assert.match(op, /detail-tile--body/);
   assert.match(op, /detail-tile--sources/);
+  assert.equal(tileByKind(op, "cite").length, 0);
   assert.equal(tileByKind(op, "body").length, 1);
   assert.equal(tileByKind(op, "sources").length, 1);
   assert.doesNotMatch(tileByKind(op, "body")[0], /pane-h">Sources</);
@@ -226,13 +302,27 @@ test("people / ops / corona reuse interleaved masonry detailMediaStrip + detailM
   }
   assert.doesNotMatch(op, /sources-pane/);
   assert.doesNotMatch(op, /Batcave/i);
+
+  const post = sourcePostDetail({
+    id: "sp-arrest",
+    category: "arrests",
+    poster_handle: "@example_desk",
+    poster_name: "Example Desk",
+    posted_at: "2024-03-01",
+    text: "Police said a public official was arrested this morning.",
+    source_url: "https://example.com/n/arrest-1",
+  });
+  assert.match(post, /class="cite-block"/);
+  assert.match(post, /class="handle">@example_desk</);
+  assert.match(post, /class="acct">Example Desk</);
+  assert.doesNotMatch(post, /Poster ·|Posted ·|Synopsis/);
 });
 
-test("dense masonry counts media + meta tiles; no screenshot span / tiles-3 class", () => {
+test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 class", () => {
   const multi = dogDetail(dog());
   assert.doesNotMatch(multi, /detail-media--tiles-3/);
   assert.match(multi, /detail-tile--screenshot/);
-  assert.match(multi, /data-tiles="11"/);
+  assert.match(multi, /data-tiles="7"/);
 
   const two = dogDetail(
     dog({
@@ -240,12 +330,12 @@ test("dense masonry counts media + meta tiles; no screenshot span / tiles-3 clas
       screenshot: "/media/screenshots/dog-comms/ezraacohen-dow-2026.png",
     }),
   );
-  // portrait + screenshot + title + handle/account/posted + body + Source
+  // portrait + screenshot + cite + Source
   assert.doesNotMatch(two, /detail-media--tiles-3/);
-  assert.match(two, /data-tiles="8"/);
+  assert.match(two, /data-tiles="4"/);
   assert.match(two, /detail-tile--screenshot/);
   assert.match(two, /detail-tile--meta/);
-  assert.equal(tileByKind(two, "body").length, 1);
+  assert.equal(tileByKind(two, "cite").length, 1);
   assert.equal(tileByKind(two, "source").length, 1);
   assert.equal((two.match(/detail-tile--line/g) || []).length, 0);
 });

@@ -137,9 +137,10 @@ test("empty subject and event_date render as em dash; poster is not the subject"
   assert.doesNotMatch(list, /<div class="tui-title">@example_desk/);
   assert.match(detail, /Event date · —/);
   assert.match(detail, /<h2 class="detail-title">—<\/h2>/);
-  assert.match(detail, /Posted ·/);
-  assert.match(detail, /Poster · @example_desk/);
-  assert.match(detail, /Example Desk/);
+  assert.match(detail, /class="cite-block"/);
+  assert.match(detail, /class="handle">@example_desk</);
+  assert.match(detail, /class="acct">Example Desk</);
+  assert.match(detail, /Police said a public official was arrested this morning/);
   assert.match(detail, /https:\/\/example\.com\/n\/arrest-1/);
 });
 

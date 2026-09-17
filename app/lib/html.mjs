@@ -2,6 +2,7 @@ import {
   categoryById,
   categoryByPath,
   formatDate,
+  formatXDateTime,
   formatUsd,
   initials,
   isDeathCategory,
@@ -692,13 +693,14 @@ function detailSectionTile(line, fallbackKind = "line") {
   return detailMetaTile(line.kind || fallbackKind, html);
 }
 
-/** Shared text/meta tiles: title, other section types, ONE body tile, Source — no lightbox.
-    Body is a single glass tile (never one card per TUI/newline of the post).
-    Source and other meta section types are their own tiles. Masonry pack is unchanged. */
+/** Shared text/meta tiles: optional title, ONE cite tile, other lines, ONE body, Source.
+    Cite is handle + account + posted (X format) + body in a single glass tile.
+    Source stays its own tile. Masonry pack is unchanged. */
 function detailMetaBlock({
   title,
   ratingHtml = "",
   lines = [],
+  citeHtml = "",
   bodyTitle = "",
   bodyHtml = "",
   sourceKind = "source",
@@ -706,12 +708,16 @@ function detailMetaBlock({
   extraTiles = [],
 } = {}) {
   const tiles = [];
-  tiles.push(
-    detailMetaTile(
-      "title",
-      `<h2 class="detail-title">${esc(title || "—")}</h2>${ratingHtml}`,
-    ),
-  );
+  if (title != null || ratingHtml) {
+    tiles.push(
+      detailMetaTile(
+        "title",
+        `<h2 class="detail-title">${esc(title || "—")}</h2>${ratingHtml}`,
+      ),
+    );
+  }
+  // ONE cite tile — do not split handle / account / posted / body into TUI line tiles.
+  if (citeHtml) tiles.push(detailMetaTile("cite", citeHtml));
   for (const line of (lines || []).filter(Boolean)) {
     tiles.push(detailSectionTile(line));
   }
@@ -808,6 +814,46 @@ function posterLabel(handle) {
   const raw = String(handle || "").trim();
   if (!raw) return "—";
   return raw.startsWith("@") ? raw : `@${raw}`;
+}
+
+/** Shared CITE block: handle + account + posted (X format) + body. No Source URL. */
+export function citeBlock({
+  handle = "",
+  accountName = "",
+  postedAt = "",
+  body = "",
+} = {}) {
+  const posted = String(postedAt || "").trim();
+  return `<div class="cite-block">
+    <header class="cite-head">
+      <span class="handle">${esc(posterLabel(handle))}</span>
+      <span class="acct">${esc(String(accountName || "").trim() || "—")}</span>
+      <time datetime="${esc(posted)}">${esc(formatXDateTime(posted))}</time>
+    </header>
+    <p class="post-text">${esc(body || "—")}</p>
+  </div>`;
+}
+
+/** Map dog / source-post / matching people-ops-corona fields onto the shared cite. */
+export function citeFromRow(row = {}) {
+  const snap = row.snapshot && typeof row.snapshot === "object" ? row.snapshot : {};
+  const handle = String(row.handle || row.poster_handle || snap.handle || "").trim();
+  const accountName = String(
+    row.account_name || row.poster_name || snap.account_name || "",
+  ).trim();
+  const postedAt = String(row.posted_at || snap.posted_at || "").trim();
+  const body =
+    row.text != null && String(row.text) !== ""
+      ? String(row.text)
+      : String(snap.text || "");
+  if (!handle && !accountName && !postedAt && !body) return "";
+  return citeBlock({ handle, accountName, postedAt, body });
+}
+
+export function detailSourceLine(url, { label = "Source" } = {}) {
+  const href = String(url || "").trim();
+  if (!href) return `<p class="meta-line">${esc(label)} · —</p>`;
+  return `<p class="meta-line">${esc(label)} · <a class="source-link" href="${esc(href)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="" data-date="">${esc(href)}</a></p>`;
 }
 
 export function sourcePostRow(row, { selected } = {}) {
@@ -1020,6 +1066,7 @@ export function personHeader(row, extras = {}) {
         title: row.name || "—",
         ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
         lines: [birth, origin, personTagChips(row), grokipediaBlock(row, extras)],
+        citeHtml: citeFromRow(row),
       }),
     })}
   </header>`;
@@ -1139,8 +1186,6 @@ export function sourcePostDetail(row) {
   const cat = categoryById(row.category);
   const kind = cat ? cat.title : row.category;
   const sources = sourceUrlItems(row);
-  const poster = posterLabel(row.poster_handle);
-  const posterName = row.poster_name ? ` (${row.poster_name})` : "";
   return `<article class="detail">
     ${boxFrame(
       "Metadata",
@@ -1150,11 +1195,8 @@ export function sourcePostDetail(row) {
         <h2 class="detail-title">—</h2>
         <p class="rating">★ ${esc(formatUsd(null))} <span class="muted">Net worth (published estimate)</span></p>
         <p class="meta-line">Event date · —</p>
-        <p class="meta-line">Posted · <time datetime="${esc(row.posted_at || "")}">${esc(formatDate(row.posted_at))}</time> · ${esc(kind)}</p>
-        <p class="meta-line">Poster · ${esc(poster)}${esc(posterName)}</p>
-        <hr class="hr">
-        <h3 class="pane-h">Synopsis</h3>
-        <p class="synopsis post-text">${esc(row.text || "—")}</p>
+        <p class="meta-line">Kind · ${esc(kind)}</p>
+        ${citeFromRow(row)}
       </div>
     </div>`,
       { extraClass: "meta-box" },
@@ -1198,6 +1240,7 @@ export function operationDetail(row) {
             `<p class="meta-line">Victims · ${esc(countCell(row.victim_count))}</p>`,
             `<p class="meta-line">Arrests · ${esc(countCell(row.arrest_count))}</p>`,
           ],
+          citeHtml: citeFromRow(row),
           bodyTitle: "Summary",
           bodyHtml: `<p class="synopsis">${esc(row.summary || "—")}</p>`,
           sourceKind: "sources",
@@ -1212,10 +1255,7 @@ export function operationDetail(row) {
 
 export function dogDetail(row) {
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, { dog: true });
-  // Source tile: X URL only — no capture notes / other cite clutter. Separate from body.
-  const sourceHtml = row.source_url
-    ? `<p class="meta-line">Source · <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Source" data-title="" data-date="">${esc(row.source_url)}</a></p>`
-    : `<p class="meta-line">Source · —</p>`;
+  // Source tile: X URL only — no capture notes / other cite clutter. Separate from cite.
   const extras = dogExtraStills(row).map((src) => ({
     src,
     alt: `Post media for ${row.handle}`,
@@ -1234,14 +1274,8 @@ export function dogDetail(row) {
         screenshotCredit: row.screenshot_credit,
         extraMedia: extras,
         metaHtml: detailMetaBlock({
-          title: row.handle || "—",
-          lines: [
-            { kind: "handle", html: `<p class="meta-line">Handle · ${esc(row.handle || "—")}</p>` },
-            { kind: "account", html: `<p class="meta-line">Account · ${esc(row.account_name || "—")}</p>` },
-            { kind: "posted", html: `<p class="meta-line">Posted · <time datetime="${esc(row.posted_at || "")}">${esc(formatDate(row.posted_at))}</time></p>` },
-          ],
-          bodyHtml: `<p class="meta-line post-text">Body · ${esc(row.text || "—")}</p>`,
-          sourceHtml,
+          citeHtml: citeFromRow(row),
+          sourceHtml: detailSourceLine(row.source_url),
         }),
       }),
       active: true,
