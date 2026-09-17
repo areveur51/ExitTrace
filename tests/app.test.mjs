@@ -321,6 +321,9 @@ test("dog-comms page paginates stored rows and opens TUI meta detail", async () 
   assert.match(detail.body, /Posted ·/);
   assert.match(detail.body, /Body ·/);
   assert.match(detail.body, /Source ·/);
+  assert.match(detail.body, /detail-tile--body/);
+  assert.match(detail.body, /detail-tile--source/);
+  assert.match(detail.body, /detail-tile--handle/);
   assert.doesNotMatch(detail.body, /Sources · \d+ available/);
   assert.doesNotMatch(detail.body, /sources-pane/);
   assert.match(detail.body, /meta-pane--stack/);

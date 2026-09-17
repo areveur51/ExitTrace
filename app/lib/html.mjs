@@ -683,14 +683,26 @@ function detailMediaStrip({
   return `<div class="detail-media detail-media--masonry" data-tiles="${tiles.length}">${tiles.join("")}</div>`;
 }
 
-/** Shared text/meta tiles: title, each TUI line, optional body — no lightbox.
-    One card per line so CSS columns pack like a timeline (no vacant gaps). */
+/** One meta tile. `line` may be HTML or `{ kind, html }` for a section type. */
+function detailSectionTile(line, fallbackKind = "line") {
+  if (!line) return "";
+  if (typeof line === "string") return detailMetaTile(fallbackKind, line);
+  const html = String(line.html || line.inner || "").trim();
+  if (!html) return "";
+  return detailMetaTile(line.kind || fallbackKind, html);
+}
+
+/** Shared text/meta tiles: title, other section types, ONE body tile, Source — no lightbox.
+    Body is a single glass tile (never one card per TUI/newline of the post).
+    Source and other meta section types are their own tiles. Masonry pack is unchanged. */
 function detailMetaBlock({
   title,
   ratingHtml = "",
   lines = [],
   bodyTitle = "",
   bodyHtml = "",
+  sourceKind = "source",
+  sourceHtml = "",
   extraTiles = [],
 } = {}) {
   const tiles = [];
@@ -701,8 +713,9 @@ function detailMetaBlock({
     ),
   );
   for (const line of (lines || []).filter(Boolean)) {
-    tiles.push(detailMetaTile("line", line));
+    tiles.push(detailSectionTile(line));
   }
+  // ONE body tile — do not split bodyHtml by TUI lines or newlines.
   if (bodyTitle || bodyHtml) {
     tiles.push(
       detailMetaTile(
@@ -711,6 +724,7 @@ function detailMetaBlock({
       ),
     );
   }
+  if (sourceHtml) tiles.push(detailMetaTile(sourceKind || "source", sourceHtml));
   tiles.push(...(extraTiles || []).filter(Boolean));
   return tiles.join("");
 }
@@ -1164,9 +1178,9 @@ export function operationDetail(row) {
       ? `<p class="meta-line">Announced · <time datetime="${esc(row.announced_date)}">${esc(formatDate(row.announced_date))}</time></p>`
       : "";
   const sources = row.sources || [];
-  const sourceTiles = sources.length
-    ? [detailMetaTile("sources", `<h3 class="pane-h">Sources</h3>${citeList(sources)}`)]
-    : [];
+  const sourceHtml = sources.length
+    ? `<h3 class="pane-h">Sources</h3>${citeList(sources)}`
+    : "";
   return `<article class="detail operation-detail" data-operation-id="${esc(row.id)}">
     ${detailShell({
       title: "Operation",
@@ -1186,7 +1200,8 @@ export function operationDetail(row) {
           ],
           bodyTitle: "Summary",
           bodyHtml: `<p class="synopsis">${esc(row.summary || "—")}</p>`,
-          extraTiles: sourceTiles,
+          sourceKind: "sources",
+          sourceHtml,
         }),
       }),
       active: true,
@@ -1197,8 +1212,8 @@ export function operationDetail(row) {
 
 export function dogDetail(row) {
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, { dog: true });
-  // Source line: X URL only — no capture notes / other cite clutter.
-  const sourceLine = row.source_url
+  // Source tile: X URL only — no capture notes / other cite clutter. Separate from body.
+  const sourceHtml = row.source_url
     ? `<p class="meta-line">Source · <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Source" data-title="" data-date="">${esc(row.source_url)}</a></p>`
     : `<p class="meta-line">Source · —</p>`;
   const extras = dogExtraStills(row).map((src) => ({
@@ -1221,12 +1236,12 @@ export function dogDetail(row) {
         metaHtml: detailMetaBlock({
           title: row.handle || "—",
           lines: [
-            `<p class="meta-line">Handle · ${esc(row.handle || "—")}</p>`,
-            `<p class="meta-line">Account · ${esc(row.account_name || "—")}</p>`,
-            `<p class="meta-line">Posted · <time datetime="${esc(row.posted_at || "")}">${esc(formatDate(row.posted_at))}</time></p>`,
-            `<p class="meta-line post-text">Body · ${esc(row.text || "—")}</p>`,
-            sourceLine,
+            { kind: "handle", html: `<p class="meta-line">Handle · ${esc(row.handle || "—")}</p>` },
+            { kind: "account", html: `<p class="meta-line">Account · ${esc(row.account_name || "—")}</p>` },
+            { kind: "posted", html: `<p class="meta-line">Posted · <time datetime="${esc(row.posted_at || "")}">${esc(formatDate(row.posted_at))}</time></p>` },
           ],
+          bodyHtml: `<p class="meta-line post-text">Body · ${esc(row.text || "—")}</p>`,
+          sourceHtml,
         }),
       }),
       active: true,
