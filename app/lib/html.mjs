@@ -601,6 +601,22 @@ function detailMetaBlock({
   </div>`;
 }
 
+/** Shared detail shell: frost box + stacked media + meta (+ optional trailing HTML). */
+function detailShell({
+  title,
+  mediaHtml = "",
+  metaHtml = "",
+  afterHtml = "",
+  active = true,
+  extraClass = "meta-box",
+} = {}) {
+  return boxFrame(
+    title,
+    `<div class="meta-pane meta-pane--stack">${mediaHtml}${metaHtml}${afterHtml}</div>`,
+    { active, extraClass },
+  );
+}
+
 export function localMediaPortrait(src, label, { dog = false } = {}) {
   if (dog) {
     const href = String(src || "").trim();
@@ -964,11 +980,13 @@ function personTagChips(row) {
 export function personDetail(row) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   return `<article class="detail person-detail">
-    ${boxFrame(
-      "Identity",
-      `${personHeader(filled, { filled: keys, cite })}${careerHistory(filled)}${eventTimeline(filled)}`,
-      { active: true, extraClass: "person-pane" },
-    )}
+    ${detailShell({
+      title: "Identity",
+      mediaHtml: personHeader(filled, { filled: keys, cite }),
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled)}`,
+      active: true,
+      extraClass: "person-pane",
+    })}
   </article>`;
 }
 
@@ -1031,16 +1049,19 @@ export function operationDetail(row) {
     row.announced_date && row.announced_date !== row.event_date
       ? `<p class="meta-line">Announced · <time datetime="${esc(row.announced_date)}">${esc(formatDate(row.announced_date))}</time></p>`
       : "";
+  const sources = row.sources || [];
+  const sourcesHtml = sources.length
+    ? `<hr class="hr"><h3 class="pane-h">Sources</h3>${citeList(sources)}`
+    : "";
   return `<article class="detail operation-detail" data-operation-id="${esc(row.id)}">
-    ${boxFrame(
-      "Operation",
-      `<div class="meta-pane">
-      ${detailMediaStrip({
+    ${detailShell({
+      title: "Operation",
+      mediaHtml: detailMediaStrip({
         portraitHtml: `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>`,
         screenshot: row.screenshot,
         screenshotAlt: `X-post screenshot of ${row.name || "operation"}`,
-      })}
-      ${detailMetaBlock({
+      }),
+      metaHtml: detailMetaBlock({
         title: row.name || "—",
         lines: [
           `<p class="meta-line">Event date · <time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time></p>`,
@@ -1052,15 +1073,11 @@ export function operationDetail(row) {
         ],
         bodyTitle: "Summary",
         bodyHtml: `<p class="synopsis">${esc(row.summary || "—")}</p>`,
-      })}
-    </div>`,
-      { extraClass: "meta-box" },
-    )}
-    ${boxFrame(
-      `● Sources · ${(row.sources || []).length} available · 1/${(row.sources || []).length || 0}`,
-      citeList(row.sources || []),
-      { active: true, extraClass: "sources-pane" },
-    )}
+      }),
+      afterHtml: sourcesHtml,
+      active: true,
+      extraClass: "meta-box",
+    })}
   </article>`;
 }
 
@@ -1070,10 +1087,9 @@ export function dogDetail(row) {
     ? `<p class="meta-line">Source · <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Citation" data-title="${esc(row.text || "Official post")}" data-date="${esc(row.posted_at || "")}">${esc(row.source_url)}</a></p>`
     : `<p class="meta-line">Source · —</p>`;
   return `<article class="detail dog-detail">
-    ${boxFrame(
-      "Metadata",
-      `<div class="meta-pane meta-pane--stack">
-      ${detailMediaStrip({
+    ${detailShell({
+      title: "Metadata",
+      mediaHtml: detailMediaStrip({
         portraitHtml: photo,
         portraitSrc: isDogMediaHref(row.still) ? row.still : "",
         portraitAlt: `Stored still for ${row.handle}`,
@@ -1081,8 +1097,8 @@ export function dogDetail(row) {
         screenshot: row.screenshot,
         screenshotAlt: `X-post screenshot of ${row.handle}`,
         screenshotCredit: row.screenshot_credit,
-      })}
-      ${detailMetaBlock({
+      }),
+      metaHtml: detailMetaBlock({
         title: row.handle || "—",
         lines: [
           `<p class="meta-line">Handle · ${esc(row.handle || "—")}</p>`,
@@ -1091,10 +1107,10 @@ export function dogDetail(row) {
           `<p class="meta-line post-text">Body · ${esc(row.text || "—")}</p>`,
           sourceLine,
         ],
-      })}
-    </div>`,
-      { active: true, extraClass: "meta-box" },
-    )}
+      }),
+      active: true,
+      extraClass: "meta-box",
+    })}
   </article>`;
 }
 

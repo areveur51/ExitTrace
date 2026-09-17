@@ -1,8 +1,8 @@
 :root,
 html[data-theme="glass"] {
-  /* Glass (only theme): black void, white wireframe type, gold schematic ticks
-     and L-corners, frost panels. Red is alert/fail only. Catalog labels stay
-     ExitTrace copy. */
+  /* Glass (only theme): black void, city-wireframe still, white wireframe type,
+     gold schematic ticks and L-corners, frost panels (detail shell deepens).
+     Red is alert/fail only. No trademark logos. Catalog labels stay ExitTrace. */
   --bg: #000000;
   --void: #000000;
   --bg-2: #07080c;
@@ -971,11 +971,16 @@ img.still.thumb {
   gap: 1rem;
   align-items: flex-start;
 }
-/* Dog-comm detail: stack media above meta on all widths so widescreen
-   does not leave an empty left gutter beside the text column. */
+/* Detail shell: stack media above meta on all widths so widescreen
+   does not leave an empty left gutter beside the text column.
+   Shared by dog / people (incl. corona) / operations. */
 .meta-pane--stack {
   flex-direction: column;
   align-items: stretch;
+}
+/* person-header carries media+meta; lift children into the stack. */
+.meta-pane--stack > .person-header {
+  display: contents;
 }
 .meta-pane--stack .detail-media {
   flex: 0 0 auto;
@@ -1611,6 +1616,63 @@ html[data-theme="glass"] .identity-filter-select:focus {
 html[data-theme="glass"] .detail-photo {
   border-color: rgba(255, 255, 255, 0.22);
   box-shadow: none;
+}
+/* Detail shell deepen: void frost panels + gold schematic over city wireframe.
+   No trademark marks — schematic ticks/L-corners only. */
+html[data-theme="glass"] .detail .box-pane {
+  background: rgba(6, 8, 12, 0.58);
+  border-color: rgba(255, 176, 0, 0.24);
+  -webkit-backdrop-filter: blur(18px) saturate(1.16);
+  backdrop-filter: blur(18px) saturate(1.16);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 12px 36px rgba(0, 0, 0, 0.55);
+}
+html[data-theme="glass"] .detail .meta-pane--stack {
+  position: relative;
+  gap: 0.85rem;
+}
+html[data-theme="glass"] .detail .meta-pane--stack::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0.15rem;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--amber), var(--amber)),
+    linear-gradient(var(--amber), var(--amber)),
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)),
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55));
+  background-size: 11px 1px, 1px 11px, 11px 1px, 1px 11px;
+  background-position:
+    top 0 left 0,
+    top 0 left 0,
+    bottom 0 right 0,
+    bottom 0 right 0;
+  background-repeat: no-repeat;
+  opacity: 0.8;
+}
+html[data-theme="glass"] .detail .detail-media,
+html[data-theme="glass"] .detail .detail-copy,
+html[data-theme="glass"] .detail .career-history,
+html[data-theme="glass"] .detail .event-timeline {
+  position: relative;
+  z-index: 1;
+}
+html[data-theme="glass"] .detail .detail-copy {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.75rem 0.9rem;
+  -webkit-backdrop-filter: blur(10px) saturate(1.08);
+  backdrop-filter: blur(10px) saturate(1.08);
+}
+html[data-theme="glass"] .detail .detail-photo {
+  border-color: rgba(255, 176, 0, 0.38);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+html[data-theme="glass"] .detail .pane-h {
+  color: var(--amber);
+  letter-spacing: 0.06em;
 }
 html[data-theme="glass"] .dash-count {
   color: var(--label);

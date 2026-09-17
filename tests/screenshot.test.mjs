@@ -243,6 +243,9 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   assert.match(opHtml, /class="initials detail-photo"/);
   assert.match(opHtml, /src="\/media\/screenshots\/operations\/restore\.jpg"/);
   assert.match(opHtml, /data-lightbox="\/media\/screenshots\/operations\/restore\.jpg"/);
+  assert.match(opHtml, /meta-pane--stack/);
+  assert.doesNotMatch(opHtml, /sources-pane/);
+  assert.match(coronaHtml, /meta-pane--stack/);
 
   const missing = personDetail(person());
   assert.match(missing, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=2"/);

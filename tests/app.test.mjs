@@ -341,6 +341,31 @@ test("dog-comms page paginates stored rows and opens TUI meta detail", async () 
   assert.match(detail.body, /class="tui-n">detail</);
 });
 
+test("people and operations detail reuse detailShell stack; no Sources · N chrome", async () => {
+  const person = newestFirst(seed.people.filter((r) => r.category === "firings"), "event_date")[0];
+  assert.ok(person?.id);
+  const personPage = await get(`/people/${person.id}`);
+  assert.equal(personPage.status, 200);
+  assert.match(personPage.body, /meta-pane--stack/);
+  assert.match(personPage.body, /class="person-header"/);
+  assert.doesNotMatch(personPage.body, /Sources · \d+ available/);
+  assert.doesNotMatch(personPage.body, /sources-pane/);
+
+  const ops = seed.operations || [];
+  if (ops.length) {
+    const op = ops[0];
+    const opPage = await get(`/operations/${op.id}`);
+    assert.equal(opPage.status, 200);
+    assert.match(opPage.body, /meta-pane--stack/);
+    assert.doesNotMatch(opPage.body, /Sources · \d+ available/);
+    assert.doesNotMatch(opPage.body, /sources-pane/);
+    if ((op.sources || []).length) {
+      assert.match(opPage.body, /pane-h">Sources</);
+      assert.match(opPage.body, /cite-list/);
+    }
+  }
+});
+
 test("home is TUI chrome with local search and tap-friendly catalog keys", async () => {
   const res = await get("/");
   assert.equal(res.status, 200);
