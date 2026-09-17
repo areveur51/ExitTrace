@@ -335,6 +335,38 @@ export function formatDate(iso) {
   }).format(d);
 }
 
+/** X-native posted datetime: `6:39 PM · Aug 26, 2026`. Date-only stays `MMM D, YYYY` (no invented clock). */
+export function formatXDateTime(raw) {
+  if (raw == null || raw === "") return "—";
+  const s = String(raw).trim();
+  if (/\b\d{1,2}:\d{2}\s*(?:AM|PM)\b/i.test(s) && /·/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return formatDate(s);
+
+  const normalized = s.includes("T") ? s : s.replace(" ", "T");
+  const iso = /Z$|[+-]\d{2}:\d{2}$/.test(normalized) ? normalized : `${normalized}Z`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    const day = s.slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) ? formatDate(day) : s;
+  }
+  const clock = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+  }).formatToParts(d);
+  const hour = clock.find((p) => p.type === "hour")?.value;
+  const minute = clock.find((p) => p.type === "minute")?.value;
+  const period = String(clock.find((p) => p.type === "dayPeriod")?.value || "").toUpperCase();
+  const date = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(d);
+  return `${hour}:${minute} ${period} · ${date}`;
+}
+
 export function initials(name) {
   return String(name || "")
     .split(/\s+/)

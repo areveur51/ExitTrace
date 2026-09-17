@@ -1103,6 +1103,15 @@ img.still.thumb {
   color: var(--cyan);
 }
 
+.cite-block { margin: 0; }
+.cite-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  margin: 0 0 0.45rem;
+}
+.cite-head time { color: var(--muted); font-size: 0.85rem; }
 .handle { font-weight: 700; }
 .acct, .credit, .cite { color: var(--muted); font-size: 0.85rem; }
 .post-text { white-space: pre-wrap; }
