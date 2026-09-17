@@ -461,20 +461,27 @@ body.tui-home .home-stage {
   flex: 0 0 auto;
   align-items: flex-start;
 }
-/* Anduril-like masonry: portrait + X screenshot + other post media tiles. */
+/* Anduril-like masonry grid: portrait + X screenshot + other post media.
+   Breakpoints (SIGNED ~4:55pm ET Riker):
+   - <720: 1 col, tile min-height 280px
+   - 720–1099: 2 col, minmax(340px, 1fr)
+   - ≥1100: 2 col, minmax(420px, 1fr)
+   - ≥1400 + ≥3 tiles: 3 col
+   Primary X screenshot may span 2 cols; object-fit cover; HD lightbox unchanged. */
 .detail-media--masonry {
-  display: block;
-  column-count: 2;
-  column-gap: 0.65rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
   width: 100%;
   max-width: 100%;
 }
 .detail-tile {
-  break-inside: avoid;
-  -webkit-column-break-inside: avoid;
-  page-break-inside: avoid;
-  margin: 0 0 0.65rem;
+  margin: 0;
   width: 100%;
+  min-width: 0;
+}
+.detail-media--masonry .detail-tile {
+  min-height: 280px;
 }
 .detail-tile .lightbox-open,
 .detail-tile img,
@@ -483,12 +490,14 @@ body.tui-home .home-stage {
   width: 100%;
   max-width: 100%;
   height: auto;
+  min-height: inherit;
 }
 .detail-tile--portrait .detail-photo.portrait,
 .detail-tile--portrait .initials.detail-photo {
   width: 100%;
   max-width: 100%;
   height: auto;
+  min-height: 280px;
   aspect-ratio: 192 / 250;
   object-fit: cover;
   object-position: center 18%;
@@ -497,6 +506,7 @@ body.tui-home .home-stage {
 .detail-tile--still .detail-photo.still {
   width: 100%;
   height: auto;
+  min-height: 280px;
   max-height: none;
   object-fit: cover;
   object-position: top center;
@@ -1774,11 +1784,34 @@ html[data-theme="glass"] .dash-stats {
   - desktop >=1280: HUD frames spread; denser lists; full width (not a stranded phone mock).
 */
 
-@media (min-width: 721px) {
-  .detail-media--masonry { column-count: 3; }
+/* Larger masonry grid (Riker SIGNED ~4:55pm ET) — shared by all detail pages. */
+@media (min-width: 720px) {
+  .detail-media--masonry {
+    grid-template-columns: repeat(2, minmax(340px, 1fr));
+  }
+  .detail-media--masonry .detail-tile {
+    min-height: 0;
+  }
+  .detail-tile--portrait .detail-photo.portrait,
+  .detail-tile--portrait .initials.detail-photo,
+  .detail-tile--screenshot .detail-photo.screenshot,
+  .detail-tile--still .detail-photo.still {
+    min-height: 0;
+  }
+  /* Primary X screenshot may span 2 cols when the grid is multi-column. */
+  .detail-media--masonry .detail-tile--screenshot {
+    grid-column: span 2;
+  }
 }
 @media (min-width: 1100px) {
-  .detail-media--masonry { column-count: 4; }
+  .detail-media--masonry {
+    grid-template-columns: repeat(2, minmax(420px, 1fr));
+  }
+}
+@media (min-width: 1400px) {
+  .detail-media--masonry.detail-media--tiles-3 {
+    grid-template-columns: repeat(3, minmax(420px, 1fr));
+  }
 }
 
 @media (max-width: 720px) {

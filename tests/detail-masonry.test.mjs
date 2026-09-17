@@ -53,6 +53,8 @@ test("dogExtraStills skips primary and keeps local dog media only", () => {
 test("dog detail masonry: portrait + screenshot + extra stills; shared lightbox; X URL only under Source", () => {
   const html = dogDetail(dog());
   assert.match(html, /detail-media--masonry/);
+  assert.match(html, /detail-media--tiles-3/);
+  assert.match(html, /data-tiles="5"/);
   assert.match(html, /detail-tile--portrait/);
   assert.match(html, /detail-tile--screenshot/);
   assert.equal((html.match(/detail-tile--still/g) || []).length, 3);
@@ -116,4 +118,21 @@ test("people / ops / corona reuse masonry detailMediaStrip", () => {
   assert.match(op, /detail-media--masonry/);
   assert.match(op, /detail-tile--screenshot/);
   assert.doesNotMatch(op, /Batcave/i);
+});
+
+test("larger masonry: tiles-3 class only when ≥3 tiles; screenshot tile present for span", () => {
+  const multi = dogDetail(dog());
+  assert.match(multi, /detail-media--tiles-3/);
+  assert.match(multi, /detail-tile--screenshot/);
+
+  const two = dogDetail(
+    dog({
+      snapshot: { stills: ["/media/dog-comms/ezraacohen-dow-2026.jpg"] },
+      screenshot: "/media/screenshots/dog-comms/ezraacohen-dow-2026.png",
+    }),
+  );
+  // portrait + screenshot = 2 tiles → no tiles-3 (3-col only ≥1400 when ≥3)
+  assert.doesNotMatch(two, /detail-media--tiles-3/);
+  assert.match(two, /data-tiles="2"/);
+  assert.match(two, /detail-tile--screenshot/);
 });
