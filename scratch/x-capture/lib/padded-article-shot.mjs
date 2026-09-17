@@ -495,10 +495,19 @@ export async function findStatusArticle(page, statusUrl) {
   return best;
 }
 
+/** Strict live X/Twitter status permalink — reject absolute off-site fail-closed. */
+export const STATUS_PERMALINK_ALLOWLIST =
+  /^https:\/\/(x|twitter)\.com\/[^/?#]+\/status\/\d+\/?$/i;
+
+export function isAllowlistedStatusPermalink(url) {
+  return STATUS_PERMALINK_ALLOWLIST.test(String(url || ""));
+}
+
 /** Prefer a different /status/ID inside the article (RT/quote → original detail). */
 export async function embeddedOriginalStatusUrl(article, statusUrl) {
   const sid = statusIdFromUrl(statusUrl);
   const href = await article.evaluate((art, selfId) => {
+    const allow = /^https:\/\/(x|twitter)\.com\/[^/?#]+\/status\/\d+\/?$/i;
     const seen = new Set();
     const out = [];
     for (const a of art.querySelectorAll('a[href*="/status/"]')) {
@@ -510,13 +519,15 @@ export async function embeddedOriginalStatusUrl(article, statusUrl) {
       if (selfId && id === selfId) continue;
       if (seen.has(id)) continue;
       seen.add(id);
-      const abs = raw.startsWith("http") ? raw.split("?")[0] : `https://x.com${raw.split("?")[0]}`;
-      // Prefer plain status permalinks
-      if (/\/status\/\d+\/?$/.test(abs)) out.unshift(abs);
-      else out.push(abs);
+      const abs = (raw.startsWith("http") ? raw : `https://x.com${raw}`).split("?")[0].split("#")[0];
+      // Allowlist only; absolute off-site status links never qualify
+      if (!allow.test(abs)) continue;
+      out.unshift(abs);
     }
     return out[0] || null;
   }, sid);
+  // Re-allowlist in Node (evaluate boundary) — fail-closed
+  if (!href || !isAllowlistedStatusPermalink(href)) return null;
   return href;
 }
 
@@ -544,6 +555,20 @@ export async function ensureFullTimestampArticle(page, article, statusUrl, { for
       timestamp: ts,
       navigated: false,
       url: statusUrl,
+    };
+  }
+
+  // Re-allowlist before navigation — absolute off-site status links fail-closed
+  if (!isAllowlistedStatusPermalink(alt)) {
+    return {
+      ok: false,
+      reason: "embedded_status_url_not_allowlisted",
+      article,
+      expand,
+      timestamp: ts,
+      navigated: false,
+      url: statusUrl,
+      rejectedUrl: alt,
     };
   }
 
