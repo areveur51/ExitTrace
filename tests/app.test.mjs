@@ -324,6 +324,10 @@ test("dog-comms page paginates stored rows and opens TUI meta detail", async () 
   assert.doesNotMatch(detail.body, /Sources · \d+ available/);
   assert.doesNotMatch(detail.body, /sources-pane/);
   assert.match(detail.body, /meta-pane--stack/);
+  assert.match(detail.body, /detail-media--masonry/);
+  assert.match(detail.body, /detail-tile--portrait/);
+  assert.doesNotMatch(detail.body, /Batcave/i);
+  assert.doesNotMatch(detail.body, /theme-switch|Theme ·|data-theme-set=/);
   assert.match(detail.body, /class="source-link"/);
   assert.match(detail.body, new RegExp(row.handle.replace("@", "@")));
   if (row.source_url) {
@@ -347,7 +351,9 @@ test("people and operations detail reuse detailShell stack; no Sources · N chro
   const personPage = await get(`/people/${person.id}`);
   assert.equal(personPage.status, 200);
   assert.match(personPage.body, /meta-pane--stack/);
+  assert.match(personPage.body, /detail-media--masonry/);
   assert.match(personPage.body, /class="person-header"/);
+  assert.doesNotMatch(personPage.body, /Batcave/i);
   assert.doesNotMatch(personPage.body, /Sources · \d+ available/);
   assert.doesNotMatch(personPage.body, /sources-pane/);
 
@@ -357,6 +363,8 @@ test("people and operations detail reuse detailShell stack; no Sources · N chro
     const opPage = await get(`/operations/${op.id}`);
     assert.equal(opPage.status, 200);
     assert.match(opPage.body, /meta-pane--stack/);
+    assert.match(opPage.body, /detail-media--masonry/);
+    assert.doesNotMatch(opPage.body, /Batcave/i);
     assert.doesNotMatch(opPage.body, /Sources · \d+ available/);
     assert.doesNotMatch(opPage.body, /sources-pane/);
     if ((op.sources || []).length) {
