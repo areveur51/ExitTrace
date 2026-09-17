@@ -1683,16 +1683,16 @@ html[data-theme="glass"] .detail-photo {
   border-color: rgba(255, 255, 255, 0.22);
   box-shadow: none;
 }
-/* Detail shell deepen: glassier frost so city wireframe stays clearly visible.
-   Lighter than the prior deepen pass. Schematic ticks/L-corners only. */
+/* Detail shell deepen: glass-transparent frost, light blur so the city
+   skyline stays readable through tiles and panels. Schematic ticks only. */
 html[data-theme="glass"] .detail .box-pane {
-  background: rgba(6, 8, 12, 0.16);
-  border-color: rgba(255, 176, 0, 0.2);
-  -webkit-backdrop-filter: blur(4px) saturate(1.04);
-  backdrop-filter: blur(4px) saturate(1.04);
+  background: rgba(6, 8, 12, 0.08);
+  border-color: rgba(255, 176, 0, 0.16);
+  -webkit-backdrop-filter: blur(2px) saturate(1.02);
+  backdrop-filter: blur(2px) saturate(1.02);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 8px 24px rgba(0, 0, 0, 0.18);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 6px 18px rgba(0, 0, 0, 0.12);
 }
 html[data-theme="glass"] .detail .meta-pane--stack {
   position: relative;
@@ -1725,12 +1725,18 @@ html[data-theme="glass"] .detail .event-timeline {
   position: relative;
   z-index: 1;
 }
+html[data-theme="glass"] .detail .detail-tile {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(1.5px) saturate(1.02);
+  backdrop-filter: blur(1.5px) saturate(1.02);
+}
 html[data-theme="glass"] .detail .detail-copy {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  padding: 0.75rem 0.9rem;
-  -webkit-backdrop-filter: blur(2.5px) saturate(1.02);
-  backdrop-filter: blur(2.5px) saturate(1.02);
+  background: transparent;
+  border: 0;
+  padding: 0.7rem 0.8rem;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 html[data-theme="glass"] .detail .detail-photo {
   border-color: rgba(255, 176, 0, 0.38);

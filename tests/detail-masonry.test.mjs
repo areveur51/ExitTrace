@@ -81,11 +81,13 @@ test("dog detail masonry: interleaved media + meta; lightbox on media only; X UR
   const html = dogDetail(dog());
   assert.match(html, /detail-media--masonry/);
   assert.doesNotMatch(html, /detail-media--tiles-3/);
-  // 5 media (portrait + screenshot + 3 stills) + 1 meta identity tile
-  assert.match(html, /data-tiles="6"/);
+  // 5 media + title + 5 TUI line tiles (handle/account/posted/body/source)
+  assert.match(html, /data-tiles="11"/);
   assert.match(html, /detail-tile--portrait/);
   assert.match(html, /detail-tile--screenshot/);
   assert.match(html, /detail-tile--meta/);
+  assert.match(html, /detail-tile--title/);
+  assert.equal((html.match(/detail-tile--line/g) || []).length, 5);
   assert.equal((html.match(/detail-tile--still/g) || []).length, 3);
   const inner = masonryInner(html);
   assert.match(inner, /detail-tile--portrait/);
@@ -187,7 +189,7 @@ test("dense masonry counts media + meta tiles; no screenshot span / tiles-3 clas
   const multi = dogDetail(dog());
   assert.doesNotMatch(multi, /detail-media--tiles-3/);
   assert.match(multi, /detail-tile--screenshot/);
-  assert.match(multi, /data-tiles="6"/);
+  assert.match(multi, /data-tiles="11"/);
 
   const two = dogDetail(
     dog({
@@ -195,9 +197,10 @@ test("dense masonry counts media + meta tiles; no screenshot span / tiles-3 clas
       screenshot: "/media/screenshots/dog-comms/ezraacohen-dow-2026.png",
     }),
   );
-  // portrait + screenshot + identity meta = 3 tiles
+  // portrait + screenshot + title + 5 line tiles
   assert.doesNotMatch(two, /detail-media--tiles-3/);
-  assert.match(two, /data-tiles="3"/);
+  assert.match(two, /data-tiles="8"/);
   assert.match(two, /detail-tile--screenshot/);
   assert.match(two, /detail-tile--meta/);
+  assert.equal((two.match(/detail-tile--line/g) || []).length, 5);
 });

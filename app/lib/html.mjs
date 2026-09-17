@@ -683,7 +683,8 @@ function detailMediaStrip({
   return `<div class="detail-media detail-media--masonry" data-tiles="${tiles.length}">${tiles.join("")}</div>`;
 }
 
-/** Shared text/meta tiles: title + rating + TUI lines, optional body — no lightbox. */
+/** Shared text/meta tiles: title, each TUI line, optional body — no lightbox.
+    One card per line so CSS columns pack like a timeline (no vacant gaps). */
 function detailMetaBlock({
   title,
   ratingHtml = "",
@@ -695,12 +696,13 @@ function detailMetaBlock({
   const tiles = [];
   tiles.push(
     detailMetaTile(
-      "identity",
-      `<h2 class="detail-title">${esc(title || "—")}</h2>
-    ${ratingHtml}
-    ${(lines || []).filter(Boolean).join("")}`,
+      "title",
+      `<h2 class="detail-title">${esc(title || "—")}</h2>${ratingHtml}`,
     ),
   );
+  for (const line of (lines || []).filter(Boolean)) {
+    tiles.push(detailMetaTile("line", line));
+  }
   if (bodyTitle || bodyHtml) {
     tiles.push(
       detailMetaTile(
