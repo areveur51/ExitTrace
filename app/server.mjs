@@ -842,7 +842,7 @@ async function handle(req, res) {
         heading: row.handle,
         query: row.handle,
         crumbLabel: row.handle,
-        countLabel: "snapshot",
+        countLabel: "detail",
         body: dogDetail(row),
       }),
     );

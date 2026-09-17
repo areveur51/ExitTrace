@@ -297,7 +297,7 @@ test("every category list page ships a pager", async () => {
   }
 });
 
-test("dog-comms page paginates stored rows and opens local snapshots on detail", async () => {
+test("dog-comms page paginates stored rows and opens TUI meta detail", async () => {
   const dogs = newestFirst(seed.dog_comms, "posted_at");
   const res = await get("/dog-comms");
   assert.equal(res.status, 200);
@@ -306,17 +306,37 @@ test("dog-comms page paginates stored rows and opens local snapshots on detail",
   assert.match(res.body, new RegExp(dogs[0].handle.replace("@", "@")));
   assert.match(res.body, new RegExp(`/dog-comms/${dogs[0].id}`));
   assert.doesNotMatch(res.body, /widgets\.js/);
-  if (dogs.length <= DOG_PAGE_SIZE) {
-    assert.match(res.body, /Page 1 of 1/);
-    assert.equal(countClass(res.body, "dog-card"), dogs.length);
-  }
+  assert.match(res.body, /Page 1 of \d+/);
+  assert.ok(countClass(res.body, "dog-card") > 0);
+  assert.ok(countClass(res.body, "dog-card") <= DOG_PAGE_SIZE);
   assert.doesNotMatch(res.body, /data-page-size-set=/);
   assert.doesNotMatch(res.body, /class="age-filter"/);
-  const detail = await get(`/dog-comms/${dogs[0].id}`);
+  const row = dogs[0];
+  const detail = await get(`/dog-comms/${row.id}`);
   assert.equal(detail.status, 200);
-  assert.match(detail.body, /Citation:/);
-  assert.match(detail.body, /stored snapshot/);
+  assert.match(detail.body, /<article class="detail">/);
+  assert.match(detail.body, /box-title">Metadata/);
+  assert.match(detail.body, /Handle ·/);
+  assert.match(detail.body, /Account ·/);
+  assert.match(detail.body, /Posted ·/);
+  assert.match(detail.body, /Body ·/);
+  assert.match(detail.body, /Source ·/);
+  assert.match(detail.body, /Sources · \d+ available/);
+  assert.match(detail.body, /class="source-link"/);
+  assert.match(detail.body, new RegExp(row.handle.replace("@", "@")));
+  if (row.source_url) {
+    assert.match(
+      detail.body,
+      new RegExp(row.source_url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
+  }
+  assert.match(detail.body, /class="detail-photo portrait"/);
+  assert.doesNotMatch(
+    detail.body,
+    /snapshot-pane|dog-snapshot|View snapshot|stored snapshot|Citation:/,
+  );
   assert.doesNotMatch(detail.body, /widgets\.js/);
+  assert.match(detail.body, /class="tui-n">detail</);
 });
 
 test("home is TUI chrome with local search and tap-friendly catalog keys", async () => {
@@ -598,7 +618,7 @@ test("search stays local and does not invent rows", async () => {
   assert.doesNotMatch(empty.body, /href="\/people\//);
 });
 
-test("dog-comm list and search cards use still.thumb, not the large snapshot still", async () => {
+test("dog-comm list and search cards use still.thumb; detail keeps full still only", async () => {
   const dogs = newestFirst(seed.dog_comms, "posted_at");
   const list = await get("/dog-comms");
   const search = await get(`/search?q=${encodeURIComponent(dogs[0].handle.replace("@", ""))}`);
@@ -620,8 +640,8 @@ test("dog-comm list and search cards use still.thumb, not the large snapshot sti
   assert.equal(detail.status, 200);
   assert.match(detail.body, /class="detail-photo portrait"/);
   assert.match(detail.body, /width="192" height="250"/);
-  assert.match(detail.body, /class="still"/);
-  assert.match(detail.body, /width="320" height="200"/);
+  assert.doesNotMatch(detail.body, /width="320" height="200"/);
+  assert.doesNotMatch(detail.body, /dog-snapshot|snapshot-pane|View snapshot/);
 });
 
 test("death lists and people search show one death date without a died suffix", async () => {

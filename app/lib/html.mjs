@@ -266,7 +266,7 @@ export function keymapFooter(activePath) {
     .join("");
   return `<footer class="keymap" aria-label="Catalog">
     <div class="keymap-keys">${chips}</div>
-    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm snapshots are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -543,7 +543,7 @@ export function localMediaThumb(src, label, kind = "portrait") {
   return localPortraitImg(src, label, { size: "list", kind });
 }
 
-/** Person detail uses the same derived portrait as the list thumb. Dog snapshots keep the full still. */
+/** Person detail uses the same derived portrait as the list thumb. Dog stills keep the full local still. */
 function lightboxButton(src, inner, { alt = "", credit = "" } = {}) {
   const href = String(src || "").trim();
   if (!href || !String(inner || "").includes("<img")) return inner;
@@ -558,7 +558,8 @@ function screenshotFigure(src, { alt = "", credit = "" } = {}) {
   return `<figure class="detail-screenshot">${lightboxButton(href, img, { alt, credit })}${cap}</figure>`;
 }
 
-function detailMedia({
+/** Shared still/portrait + optional screenshot strip (people / ops / dog). */
+function detailMediaStrip({
   portraitHtml,
   portraitSrc = "",
   portraitAlt = "",
@@ -576,6 +577,28 @@ function detailMedia({
     credit: screenshotCredit,
   });
   return `<div class="detail-media">${portrait}${shot}</div>`;
+}
+
+/** Shared detail-copy: title + optional rating + TUI meta lines + optional body. */
+function detailMetaBlock({
+  title,
+  ratingHtml = "",
+  lines = [],
+  bodyTitle = "",
+  bodyHtml = "",
+} = {}) {
+  const body =
+    bodyTitle || bodyHtml
+      ? `<hr class="hr">${
+          bodyTitle ? `<h3 class="pane-h">${esc(bodyTitle)}</h3>` : ""
+        }${bodyHtml}`
+      : "";
+  return `<div class="detail-copy">
+    <h2 class="detail-title">${esc(title || "—")}</h2>
+    ${ratingHtml}
+    ${(lines || []).filter(Boolean).join("")}
+    ${body}
+  </div>`;
 }
 
 export function localMediaPortrait(src, label, { dog = false } = {}) {
@@ -809,28 +832,20 @@ export function listSection(listHtml, pagerHtml, headHtml = "") {
   return `${headHtml}${pagerHtml}${listHtml}${pagerHtml}`;
 }
 
-export function dogCard(row) {
-  const still = row.still
-    ? `<img class="still" src="${esc(row.still)}" alt="Stored still for ${esc(row.handle)}" width="320" height="200" decoding="async">`
-    : "";
-  const credit = row.still_credit
-    ? `<p class="credit">${esc(row.still_credit)}</p>`
-    : "";
-  return `<article class="dog-snapshot" data-snapshot-id="${esc(row.id)}">
-    <header>
-      <span class="handle">${esc(row.handle)}</span>
-      <span class="acct">${esc(row.account_name)}</span>
-      <time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time>
-    </header>
-    <p class="post-text">${esc(row.text)}</p>
-    ${still}
-    ${credit}
-    <p class="cite">Citation: <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Citation" data-title="Stored snapshot citation" data-date="${esc(row.posted_at)}">${esc(row.source_url)}</a></p>
-  </article>`;
-}
-
 export function dogRow(row) {
   return dogListRow(row, {});
+}
+
+function dogSources(row) {
+  if (!row?.source_url) return [];
+  return [
+    {
+      publisher: row.handle || "Citation",
+      title: row.text || "Official post",
+      url: row.source_url,
+      date: row.posted_at || "",
+    },
+  ];
 }
 
 export function homeBody({ version }) {
@@ -861,7 +876,7 @@ export function personHeader(row, extras = {}) {
     ? `<p class="meta-line">Origin · ${esc(row.country_of_origin)}</p>`
     : "";
   return `<header class="person-header">
-    ${detailMedia({
+    ${detailMediaStrip({
       portraitHtml: localMediaPortrait(row.photo, row.name),
       portraitSrc: isPeopleMediaHref(row.photo) ? row.photo : "",
       portraitAlt: row.name,
@@ -870,14 +885,11 @@ export function personHeader(row, extras = {}) {
       screenshotAlt: `X-post screenshot of ${row.name}`,
       screenshotCredit: row.screenshot_credit,
     })}
-    <div class="detail-copy">
-      <h2 class="detail-title">${esc(row.name || "—")}</h2>
-      <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
-      ${birth}
-      ${origin}
-      ${personTagChips(row)}
-      ${grokipediaBlock(row, extras)}
-    </div>
+    ${detailMetaBlock({
+      title: row.name || "—",
+      ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
+      lines: [birth, origin, personTagChips(row), grokipediaBlock(row, extras)],
+    })}
   </header>`;
 }
 
@@ -1035,23 +1047,24 @@ export function operationDetail(row) {
     ${boxFrame(
       "Operation",
       `<div class="meta-pane">
-      ${detailMedia({
+      ${detailMediaStrip({
         portraitHtml: `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>`,
         screenshot: row.screenshot,
         screenshotAlt: `X-post screenshot of ${row.name || "operation"}`,
       })}
-      <div class="detail-copy">
-        <h2 class="detail-title">${esc(row.name || "—")}</h2>
-        <p class="meta-line">Event date · <time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time></p>
-        ${announced}
-        <p class="meta-line">Agencies · ${esc(agencies)}</p>
-        <p class="meta-line">Tags · ${esc(tagLine)}</p>
-        <p class="meta-line">Victims · ${esc(countCell(row.victim_count))}</p>
-        <p class="meta-line">Arrests · ${esc(countCell(row.arrest_count))}</p>
-        <hr class="hr">
-        <h3 class="pane-h">Summary</h3>
-        <p class="synopsis">${esc(row.summary || "—")}</p>
-      </div>
+      ${detailMetaBlock({
+        title: row.name || "—",
+        lines: [
+          `<p class="meta-line">Event date · <time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time></p>`,
+          announced,
+          `<p class="meta-line">Agencies · ${esc(agencies)}</p>`,
+          `<p class="meta-line">Tags · ${esc(tagLine)}</p>`,
+          `<p class="meta-line">Victims · ${esc(countCell(row.victim_count))}</p>`,
+          `<p class="meta-line">Arrests · ${esc(countCell(row.arrest_count))}</p>`,
+        ],
+        bodyTitle: "Summary",
+        bodyHtml: `<p class="synopsis">${esc(row.summary || "—")}</p>`,
+      })}
     </div>`,
       { extraClass: "meta-box" },
     )}
@@ -1065,11 +1078,15 @@ export function operationDetail(row) {
 
 export function dogDetail(row) {
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, { dog: true });
+  const sources = dogSources(row);
+  const sourceLine = row.source_url
+    ? `<p class="meta-line">Source · <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Citation" data-title="${esc(row.text || "Official post")}" data-date="${esc(row.posted_at || "")}">${esc(row.source_url)}</a></p>`
+    : `<p class="meta-line">Source · —</p>`;
   return `<article class="detail">
     ${boxFrame(
       "Metadata",
       `<div class="meta-pane">
-      ${detailMedia({
+      ${detailMediaStrip({
         portraitHtml: photo,
         portraitSrc: isDogMediaHref(row.still) ? row.still : "",
         portraitAlt: `Stored still for ${row.handle}`,
@@ -1078,23 +1095,23 @@ export function dogDetail(row) {
         screenshotAlt: `X-post screenshot of ${row.handle}`,
         screenshotCredit: row.screenshot_credit,
       })}
-      <div class="detail-copy">
-        <h2 class="detail-title">${esc(row.handle)}</h2>
-        <p class="rating">★ stored snapshot</p>
-        <p class="meta-line"><time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · ${esc(row.account_name)} · Dog comms</p>
-        <hr class="hr">
-        <h3 class="pane-h">Synopsis</h3>
-        <p class="synopsis post-text">${esc(row.text)}</p>
-      </div>
+      ${detailMetaBlock({
+        title: row.handle || "—",
+        lines: [
+          `<p class="meta-line">Handle · ${esc(row.handle || "—")}</p>`,
+          `<p class="meta-line">Account · ${esc(row.account_name || "—")}</p>`,
+          `<p class="meta-line">Posted · <time datetime="${esc(row.posted_at || "")}">${esc(formatDate(row.posted_at))}</time></p>`,
+          `<p class="meta-line post-text">Body · ${esc(row.text || "—")}</p>`,
+          sourceLine,
+        ],
+      })}
     </div>`,
       { extraClass: "meta-box" },
     )}
     ${boxFrame(
-      "● Snapshot · 1 available · 1/1",
-      `<p class="hint">Tap opens this stored card. Nothing is fetched from X at view time.</p>
-      <button type="button" class="keychip snapshot-open" data-snapshot-open><span class="br">[</span>v<span class="br">]</span> View snapshot</button>
-      <div class="snapshot-store" hidden>${dogCard(row)}</div>`,
-      { active: true, extraClass: "sources-pane snapshot-pane" },
+      `● Sources · ${sources.length} available · 1/${sources.length || 0}`,
+      citeList(sources),
+      { active: true, extraClass: "sources-pane" },
     )}
   </article>`;
 }

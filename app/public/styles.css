@@ -1016,12 +1016,6 @@ img.still.thumb {
   color: var(--cyan);
 }
 
-.dog-snapshot {
-  border: 1px solid var(--rule);
-  padding: 0.75rem;
-  background: var(--bg);
-}
-.dog-snapshot header { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin-bottom: 0.45rem; }
 .handle { font-weight: 700; }
 .acct, .credit, .cite { color: var(--muted); font-size: 0.85rem; }
 .post-text { white-space: pre-wrap; }
@@ -1505,7 +1499,6 @@ html[data-theme="glass"] .box-pane,
 html[data-theme="glass"] .keymap,
 html[data-theme="glass"] .tui-search-label,
 html[data-theme="glass"] .tui-search input,
-html[data-theme="glass"] .dog-snapshot,
 html[data-theme="glass"] .dash-stat,
 html[data-theme="glass"] .keychip,
 html[data-theme="glass"] .page-size-btn,

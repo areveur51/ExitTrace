@@ -192,17 +192,13 @@ document.addEventListener("DOMContentLoaded", () => {
     modalBody.innerHTML = bodyHtml;
     modalHref = href || "";
     modalMode = mode || "link";
-    modalOk.hidden = !modalHref && mode !== "snapshot";
+    modalOk.hidden = !modalHref;
     modal.hidden = false;
     modalOk.focus();
     if (toast) showToast(toast);
   }
 
   function confirmModal() {
-    if (modalMode === "snapshot") {
-      closeModal();
-      return;
-    }
     if (modalHref) {
       window.open(modalHref, "_blank", "noopener,noreferrer");
     }
@@ -260,15 +256,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function previewSnapshot() {
-    const store = document.querySelector(".snapshot-store");
-    openModal({
-      title: "Stored snapshot",
-      mode: "snapshot",
-      toast: "snapshot opened",
-      bodyHtml: store ? store.innerHTML : "<p>No stored snapshot.</p>",
-    });
-  }
 
   document.addEventListener(
     "click",
@@ -278,13 +265,6 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         e.stopPropagation();
         previewSource(src);
-        return;
-      }
-      const snap = e.target.closest?.("[data-snapshot-open]");
-      if (snap) {
-        e.preventDefault();
-        e.stopPropagation();
-        previewSnapshot();
         return;
       }
       const shot = e.target.closest?.(".lightbox-open");
@@ -304,12 +284,6 @@ document.addEventListener("DOMContentLoaded", () => {
     a.addEventListener("click", (e) => {
       e.preventDefault();
       previewSource(a);
-    });
-  }
-  for (const btn of document.querySelectorAll("[data-snapshot-open]")) {
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      previewSnapshot();
     });
   }
 
@@ -390,14 +364,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (sel && sel.href) {
         e.preventDefault();
         window.location.href = sel.href;
-      }
-      return;
-    }
-    if (key === "v") {
-      const btn = document.querySelector("[data-snapshot-open]");
-      if (btn) {
-        e.preventDefault();
-        btn.click();
       }
       return;
     }
