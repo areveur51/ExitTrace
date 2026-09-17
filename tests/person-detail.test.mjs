@@ -144,6 +144,7 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   const html = personDetail(person);
   assert.equal(paneCount(html), 1);
   assert.match(html, /class="person-header"/);
+  assert.match(html, /meta-pane--stack/);
   assert.doesNotMatch(html, /class="grokipedia-text"|Open Grokipedia/);
   assert.match(html, /class="event-timeline"/);
   assert.equal((html.match(/class="event-tag-row"/g) || []).length, 2);
