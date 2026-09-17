@@ -54,6 +54,14 @@ function metaTiles(html) {
   return html.match(/<section class="detail-tile detail-tile--meta[\s\S]*?<\/section>/g) || [];
 }
 
+function tileByKind(html, kind) {
+  const re = new RegExp(
+    `<section class="detail-tile detail-tile--meta detail-tile--${kind}"[\\s\\S]*?</section>`,
+    "g",
+  );
+  return html.match(re) || [];
+}
+
 test("dogExtraStills skips primary and keeps local dog media only", () => {
   assert.deepEqual(dogExtraStills(dog()), [
     "/media/dog-comms/ezraacohen-dow-2026-2.jpg",
@@ -81,13 +89,18 @@ test("dog detail masonry: interleaved media + meta; lightbox on media only; X UR
   const html = dogDetail(dog());
   assert.match(html, /detail-media--masonry/);
   assert.doesNotMatch(html, /detail-media--tiles-3/);
-  // 5 media + title + 5 TUI line tiles (handle/account/posted/body/source)
+  // 5 media + title + handle/account/posted + ONE body + Source
   assert.match(html, /data-tiles="11"/);
   assert.match(html, /detail-tile--portrait/);
   assert.match(html, /detail-tile--screenshot/);
   assert.match(html, /detail-tile--meta/);
   assert.match(html, /detail-tile--title/);
-  assert.equal((html.match(/detail-tile--line/g) || []).length, 5);
+  assert.equal(tileByKind(html, "handle").length, 1);
+  assert.equal(tileByKind(html, "account").length, 1);
+  assert.equal(tileByKind(html, "posted").length, 1);
+  assert.equal(tileByKind(html, "body").length, 1);
+  assert.equal(tileByKind(html, "source").length, 1);
+  assert.equal((html.match(/detail-tile--line/g) || []).length, 0);
   assert.equal((html.match(/detail-tile--still/g) || []).length, 3);
   const inner = masonryInner(html);
   assert.match(inner, /detail-tile--portrait/);
@@ -106,7 +119,10 @@ test("dog detail masonry: interleaved media + meta; lightbox on media only; X UR
     assert.doesNotMatch(tile, /lightbox-open/);
     assert.doesNotMatch(tile, /data-lightbox="/);
   }
-  assert.match(html, /Source · <a class="source-link" href="https:\/\/x\.com\/EzraACohen\/status\/2092784717917462982"/);
+  const sourceTile = tileByKind(html, "source")[0];
+  assert.match(sourceTile, /Source · <a class="source-link" href="https:\/\/x\.com\/EzraACohen\/status\/2092784717917462982"/);
+  assert.doesNotMatch(sourceTile, /Body ·/);
+  assert.doesNotMatch(tileByKind(html, "body")[0], /Source ·/);
   // No X URL / capture cite clutter outside Source (screenshot credit stripped).
   const withoutSource = html.replace(
     /<p class="meta-line">Source ·[\s\S]*?<\/p>/,
@@ -116,6 +132,29 @@ test("dog detail masonry: interleaved media + meta; lightbox on media only; X UR
   assert.doesNotMatch(html, /screenshot-credit/);
   assert.doesNotMatch(html, /Batcave/i);
   assert.doesNotMatch(html, /Sources · \d+ available/);
+});
+
+test("dog body is one glass tile even when the post has several TUI lines; Source stays separate", () => {
+  const html = dogDetail(
+    dog({
+      text: "First TUI line of the post.\nSecond TUI line of the post.\nThird line.",
+    }),
+  );
+  const bodies = tileByKind(html, "body");
+  const sources = tileByKind(html, "source");
+  assert.equal(bodies.length, 1);
+  assert.equal(sources.length, 1);
+  assert.match(bodies[0], /First TUI line of the post/);
+  assert.match(bodies[0], /Second TUI line of the post/);
+  assert.match(bodies[0], /Third line/);
+  assert.doesNotMatch(bodies[0], /Source ·/);
+  assert.doesNotMatch(bodies[0], /lightbox-open|data-lightbox="/);
+  assert.match(sources[0], /Source ·/);
+  assert.doesNotMatch(sources[0], /First TUI line of the post/);
+  assert.doesNotMatch(sources[0], /lightbox-open|data-lightbox="/);
+  assert.equal(tileByKind(html, "handle").length, 1);
+  assert.equal(tileByKind(html, "account").length, 1);
+  assert.equal(tileByKind(html, "posted").length, 1);
 });
 
 test("people / ops / corona reuse interleaved masonry detailMediaStrip + detailMetaBlock", () => {
@@ -172,6 +211,10 @@ test("people / ops / corona reuse interleaved masonry detailMediaStrip + detailM
   assert.match(op, /detail-tile--meta/);
   assert.match(op, /detail-tile--body/);
   assert.match(op, /detail-tile--sources/);
+  assert.equal(tileByKind(op, "body").length, 1);
+  assert.equal(tileByKind(op, "sources").length, 1);
+  assert.doesNotMatch(tileByKind(op, "body")[0], /pane-h">Sources</);
+  assert.doesNotMatch(tileByKind(op, "sources")[0], /Federal operation/);
   const opInner = masonryInner(op);
   assert.match(opInner, /Operation Restore Justice/);
   assert.match(opInner, /pane-h">Sources</);
@@ -197,10 +240,12 @@ test("dense masonry counts media + meta tiles; no screenshot span / tiles-3 clas
       screenshot: "/media/screenshots/dog-comms/ezraacohen-dow-2026.png",
     }),
   );
-  // portrait + screenshot + title + 5 line tiles
+  // portrait + screenshot + title + handle/account/posted + body + Source
   assert.doesNotMatch(two, /detail-media--tiles-3/);
   assert.match(two, /data-tiles="8"/);
   assert.match(two, /detail-tile--screenshot/);
   assert.match(two, /detail-tile--meta/);
-  assert.equal((two.match(/detail-tile--line/g) || []).length, 5);
+  assert.equal(tileByKind(two, "body").length, 1);
+  assert.equal(tileByKind(two, "source").length, 1);
+  assert.equal((two.match(/detail-tile--line/g) || []).length, 0);
 });
