@@ -1,0 +1,58 @@
+name: et-rca-refresh-stamp-prove
+
+# Path-only: prove lab et_meta refresh stamp replicated to Render (post REFRESH).
+# No DROP. No mutate. No leftover touch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stamp_key:
+        description: et_meta k to prove (rca_refresh_prove_YYYYMMDDHHMM)
+        required: true
+        type: string
+
+concurrency:
+  group: et-rca-refresh-stamp-prove
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      STAMP_KEY: ${{ inputs.stamp_key }}
+    steps:
+      - name: Install psql
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Prove stamp + sub_rel + apply
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}"
+          test -n "${STAMP_KEY:-}"
+          case "$STAMP_KEY" in
+            rca_refresh_prove_*) ;;
+            *) echo "refuse: stamp_key must start with rca_refresh_prove_"; exit 2 ;;
+          esac
+          export PGOPTIONS='-c client_min_messages=warning'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT 'sub_rel_rows='||count(*) FROM pg_subscription_rel sr JOIN pg_subscription s ON s.oid=sr.srsubid WHERE s.subname='exittrace_lab_sub';
+            SELECT 'stamp_present='||count(*) FROM et_meta WHERE k='${STAMP_KEY}';
+            SELECT 'sub_enabled='||subenabled::text FROM pg_subscription WHERE subname='exittrace_lab_sub';
+            SELECT 'people='||count(*) FROM people;
+            SELECT 'dog_comms='||count(*) FROM dog_comms;
+          "
+          stamp=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM et_meta WHERE k='${STAMP_KEY}';")
+          rel=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM pg_subscription_rel sr JOIN pg_subscription s ON s.oid=sr.srsubid WHERE s.subname='exittrace_lab_sub';")
+          echo "stamp_count=${stamp} sub_rel=${rel}"
+          test "$stamp" = "1"
+          test "$rel" != "0"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
+          echo "RCA_REFRESH_STAMP_PROVE_OK key=${STAMP_KEY}"
