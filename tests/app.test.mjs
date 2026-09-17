@@ -314,14 +314,16 @@ test("dog-comms page paginates stored rows and opens TUI meta detail", async () 
   const row = dogs[0];
   const detail = await get(`/dog-comms/${row.id}`);
   assert.equal(detail.status, 200);
-  assert.match(detail.body, /<article class="detail">/);
+  assert.match(detail.body, /<article class="detail dog-detail">/);
   assert.match(detail.body, /box-title">Metadata/);
   assert.match(detail.body, /Handle ·/);
   assert.match(detail.body, /Account ·/);
   assert.match(detail.body, /Posted ·/);
   assert.match(detail.body, /Body ·/);
   assert.match(detail.body, /Source ·/);
-  assert.match(detail.body, /Sources · \d+ available/);
+  assert.doesNotMatch(detail.body, /Sources · \d+ available/);
+  assert.doesNotMatch(detail.body, /sources-pane/);
+  assert.match(detail.body, /meta-pane--stack/);
   assert.match(detail.body, /class="source-link"/);
   assert.match(detail.body, new RegExp(row.handle.replace("@", "@")));
   if (row.source_url) {

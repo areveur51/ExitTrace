@@ -971,6 +971,22 @@ img.still.thumb {
   gap: 1rem;
   align-items: flex-start;
 }
+/* Dog-comm detail: stack media above meta on all widths so widescreen
+   does not leave an empty left gutter beside the text column. */
+.meta-pane--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+.meta-pane--stack .detail-media {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.meta-pane--stack .detail-copy {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+}
 .detail-photo {
   position: relative;
   z-index: 1;

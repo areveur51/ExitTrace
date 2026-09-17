@@ -836,18 +836,6 @@ export function dogRow(row) {
   return dogListRow(row, {});
 }
 
-function dogSources(row) {
-  if (!row?.source_url) return [];
-  return [
-    {
-      publisher: row.handle || "Citation",
-      title: row.text || "Official post",
-      url: row.source_url,
-      date: row.posted_at || "",
-    },
-  ];
-}
-
 export function homeBody({ version }) {
   return `
     <div class="home-wordmark">
@@ -1078,14 +1066,13 @@ export function operationDetail(row) {
 
 export function dogDetail(row) {
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, { dog: true });
-  const sources = dogSources(row);
   const sourceLine = row.source_url
     ? `<p class="meta-line">Source · <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Citation" data-title="${esc(row.text || "Official post")}" data-date="${esc(row.posted_at || "")}">${esc(row.source_url)}</a></p>`
     : `<p class="meta-line">Source · —</p>`;
-  return `<article class="detail">
+  return `<article class="detail dog-detail">
     ${boxFrame(
       "Metadata",
-      `<div class="meta-pane">
+      `<div class="meta-pane meta-pane--stack">
       ${detailMediaStrip({
         portraitHtml: photo,
         portraitSrc: isDogMediaHref(row.still) ? row.still : "",
@@ -1106,12 +1093,7 @@ export function dogDetail(row) {
         ],
       })}
     </div>`,
-      { extraClass: "meta-box" },
-    )}
-    ${boxFrame(
-      `● Sources · ${sources.length} available · 1/${sources.length || 0}`,
-      citeList(sources),
-      { active: true, extraClass: "sources-pane" },
+      { active: true, extraClass: "meta-box" },
     )}
   </article>`;
 }
