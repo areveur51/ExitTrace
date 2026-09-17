@@ -645,7 +645,9 @@ function detailMediaStrip({
       }),
     );
   }
-  return `<div class="detail-media detail-media--masonry">${tiles.join("")}</div>`;
+  const mods = ["detail-media", "detail-media--masonry"];
+  if (tiles.length >= 3) mods.push("detail-media--tiles-3");
+  return `<div class="${mods.join(" ")}" data-tiles="${tiles.length}">${tiles.join("")}</div>`;
 }
 
 /** Shared detail-copy: title + optional rating + TUI meta lines + optional body. */
