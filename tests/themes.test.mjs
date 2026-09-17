@@ -136,6 +136,10 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
   assert.match(css, /backdrop-filter:\s*blur\(/);
   assert.match(css, /repeating-radial-gradient/);
   assert.match(css, /Detail shell deepen/);
+  assert.match(css, /detail-media--masonry/);
+  assert.match(css, /column-count/);
+  assert.match(css, /rgba\(6,\s*8,\s*12,\s*0\.34\)/);
+  assert.doesNotMatch(css, /Batcave/i);
   assert.match(css, /html\[data-theme="glass"\] \.detail \.box-pane/);
   assert.match(css, /html\[data-theme="glass"\] \.detail \.meta-pane--stack::before/);
   assert.match(css, /\.meta-pane--stack > \.person-header \{[^}]*display:\s*contents/);

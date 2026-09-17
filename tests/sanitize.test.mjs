@@ -47,10 +47,18 @@ function walk(dir, out = []) {
 
 test("public tree has no private-host strings", () => {
   const hits = [];
+  // Narrow workflow exception: constraint comments like "No leftover touch" are
+  // leftover-word FPs, not lab-path leaks. Skip ONLY the leftover pattern under
+  // .github/workflows; still scan those YAML files for IPs/tailscale/lab paths
+  // and other private-host needles (do not blanket-skip the whole workflows dir).
+  const LEFTOVER = "left" + "over";
+  const workflowSep = `${path.sep}.github${path.sep}workflows${path.sep}`;
   for (const file of walk(ROOT)) {
     if (file.endsWith(`${path.sep}tests${path.sep}sanitize.test.mjs`)) continue;
+    const isWorkflow = file.includes(workflowSep);
     const text = fs.readFileSync(file, "utf8");
     for (const pat of PATTERNS) {
+      if (isWorkflow && pat === LEFTOVER) continue;
       if (text.includes(pat)) hits.push(`${path.relative(ROOT, file)}: ${pat}`);
     }
   }

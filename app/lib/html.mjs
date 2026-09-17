@@ -550,15 +550,58 @@ function lightboxButton(src, inner, { alt = "", credit = "" } = {}) {
   return `<button type="button" class="lightbox-open" data-lightbox="${esc(href)}" data-lightbox-alt="${esc(alt)}" data-lightbox-credit="${esc(credit)}">${inner}</button>`;
 }
 
-function screenshotFigure(src, { alt = "", credit = "" } = {}) {
+/** Strip http(s) URLs from captions — X URL belongs only under Source. */
+function creditWithoutUrls(raw) {
+  return String(raw || "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\s*[·|,;]\s*$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** Extra local stills from dog snapshot.stills (skip primary still). */
+export function dogExtraStills(row) {
+  const primary = String(row?.still || "").trim();
+  const raw = row?.snapshot?.stills;
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set(primary ? [primary] : []);
+  for (const item of raw) {
+    const href = String(item || "").trim();
+    if (!href || seen.has(href) || !isDogMediaHref(href)) continue;
+    seen.add(href);
+    out.push(href);
+  }
+  return out;
+}
+
+function detailMediaTile({
+  kind = "still",
+  src = "",
+  inner = "",
+  alt = "",
+  credit = "",
+} = {}) {
+  const href = String(src || "").trim();
+  const body = lightboxButton(href, inner, { alt, credit });
+  if (!body) return "";
+  return `<figure class="detail-tile detail-tile--${esc(kind)}">${body}</figure>`;
+}
+
+function screenshotTile(src, { alt = "", credit = "" } = {}) {
   const href = normalizeScreenshotHref(src);
   if (!href) return "";
   const img = `<img class="detail-photo screenshot" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
-  const cap = credit ? `<p class="credit screenshot-credit">${esc(credit)}</p>` : "";
-  return `<figure class="detail-screenshot">${lightboxButton(href, img, { alt, credit })}${cap}</figure>`;
+  return detailMediaTile({
+    kind: "screenshot",
+    src: href,
+    inner: img,
+    alt,
+    credit: creditWithoutUrls(credit),
+  });
 }
 
-/** Shared still/portrait + optional screenshot strip (people / ops / dog). */
+/** Shared masonry: portrait + X screenshot + other post media (people / ops / dog). */
 function detailMediaStrip({
   portraitHtml,
   portraitSrc = "",
@@ -567,16 +610,42 @@ function detailMediaStrip({
   screenshot = "",
   screenshotAlt = "",
   screenshotCredit = "",
+  extraMedia = [],
 } = {}) {
-  const portrait = lightboxButton(portraitSrc, portraitHtml, {
-    alt: portraitAlt,
-    credit: portraitCredit,
-  });
-  const shot = screenshotFigure(screenshot, {
+  const tiles = [];
+  if (portraitHtml) {
+    tiles.push(
+      detailMediaTile({
+        kind: "portrait",
+        src: portraitSrc,
+        inner: portraitHtml,
+        alt: portraitAlt,
+        credit: creditWithoutUrls(portraitCredit),
+      }),
+    );
+  }
+  const shot = screenshotTile(screenshot, {
     alt: screenshotAlt,
     credit: screenshotCredit,
   });
-  return `<div class="detail-media">${portrait}${shot}</div>`;
+  if (shot) tiles.push(shot);
+  for (const item of extraMedia || []) {
+    const href = String(item?.src || item || "").trim();
+    if (!href) continue;
+    const alt = item?.alt || "Post media";
+    const credit = creditWithoutUrls(item?.credit || "");
+    const img = `<img class="detail-photo still" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
+    tiles.push(
+      detailMediaTile({
+        kind: "still",
+        src: href,
+        inner: img,
+        alt,
+        credit,
+      }),
+    );
+  }
+  return `<div class="detail-media detail-media--masonry">${tiles.join("")}</div>`;
 }
 
 /** Shared detail-copy: title + optional rating + TUI meta lines + optional body. */
@@ -1083,9 +1152,15 @@ export function operationDetail(row) {
 
 export function dogDetail(row) {
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, { dog: true });
+  // Source line: X URL only — no capture notes / other cite clutter.
   const sourceLine = row.source_url
-    ? `<p class="meta-line">Source · <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Citation" data-title="${esc(row.text || "Official post")}" data-date="${esc(row.posted_at || "")}">${esc(row.source_url)}</a></p>`
+    ? `<p class="meta-line">Source · <a class="source-link" href="${esc(row.source_url)}" rel="noopener noreferrer" data-label="Source" data-title="" data-date="">${esc(row.source_url)}</a></p>`
     : `<p class="meta-line">Source · —</p>`;
+  const extras = dogExtraStills(row).map((src) => ({
+    src,
+    alt: `Post media for ${row.handle}`,
+    credit: row.still_credit || "",
+  }));
   return `<article class="detail dog-detail">
     ${detailShell({
       title: "Metadata",
@@ -1097,6 +1172,7 @@ export function dogDetail(row) {
         screenshot: row.screenshot,
         screenshotAlt: `X-post screenshot of ${row.handle}`,
         screenshotCredit: row.screenshot_credit,
+        extraMedia: extras,
       }),
       metaHtml: detailMetaBlock({
         title: row.handle || "—",
