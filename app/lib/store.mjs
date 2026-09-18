@@ -354,6 +354,20 @@ export function mergeGoldOperations(seedOps, priorOps) {
   return [...merged, ...extras.map(normalizeOperation)];
 }
 
+
+/** Fill-empty merge for kind-comm snapshot. Preserves prior supporting + stills. */
+export function mergeKindSnapshotFillEmpty(nextSnap = {}, priorSnap = {}) {
+  const next = nextSnap && typeof nextSnap === "object" ? { ...nextSnap } : {};
+  const prior = priorSnap && typeof priorSnap === "object" ? priorSnap : {};
+  const nextStills = Array.isArray(next.stills) ? next.stills : [];
+  const priorStills = Array.isArray(prior.stills) ? prior.stills : [];
+  if (!nextStills.length && priorStills.length) next.stills = [...priorStills];
+  const nextSupp = Array.isArray(next.supporting) ? next.supporting : [];
+  const priorSupp = Array.isArray(prior.supporting) ? prior.supporting : [];
+  if (!nextSupp.length && priorSupp.length) next.supporting = priorSupp.map((e) => ({ ...e }));
+  return next;
+}
+
 /** Seed comms win; extra store rows are kept. Gold rows are not overwritten. */
 export function mergeGoldKindComms(seedRows, priorRows, kind = "dog") {
   const goldIds = new Set((seedRows || []).map((row) => row.id));
@@ -377,6 +391,8 @@ export function mergeGoldKindComms(seedRows, priorRows, kind = "dog") {
       ...next,
       screenshot: next.screenshot || prior.screenshot || "",
       screenshot_credit: next.screenshot_credit || prior.screenshot_credit || "",
+      // Fill-empty snapshot merge: never wipe gold supporting / stills on seed hydrate.
+      snapshot: mergeKindSnapshotFillEmpty(next.snapshot, prior.snapshot),
     };
   });
   return [...gold, ...extras.map((row) => normalizeKindComm(row, kind))];

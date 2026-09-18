@@ -13,6 +13,8 @@ import {
   citeFromRow,
   dogDetail,
   dogExtraStills,
+  kindExtraStills,
+  kindSourceHtml,
   operationDetail,
   personDetail,
   sourcePostDetail,
@@ -442,4 +444,32 @@ test("store normalizeDog keeps ISO posted_at; date-only FLOTUS stays date-only",
   const html = dogDetail(flotus);
   assert.match(html, /<time datetime="2022-10-04">Oct 4, 2022<\/time>/);
   assert.doesNotMatch(html, /AM|PM/);
+});
+
+test("dog supporting stills merge into extras; supporting X links stay under Source", () => {
+  const row = dog({
+    snapshot: {
+      stills: [
+        "/media/dog-comms/ezraacohen-dow-2026.jpg",
+        "/media/dog-comms/ezraacohen-dow-2026-2.jpg",
+      ],
+      supporting: [
+        {
+          handle: "@Ally",
+          source_url: "https://x.com/Ally/status/1",
+          still: "/media/dog-comms/ezraacohen-dow-2026-3.jpg",
+          stills: ["/media/dog-comms/ezraacohen-dow-2026-4.jpg"],
+        },
+      ],
+    },
+  });
+  assert.deepEqual(kindExtraStills("dog", row), [
+    "/media/dog-comms/ezraacohen-dow-2026-2.jpg",
+    "/media/dog-comms/ezraacohen-dow-2026-3.jpg",
+    "/media/dog-comms/ezraacohen-dow-2026-4.jpg",
+  ]);
+  assert.match(kindSourceHtml(row), /Supporting · @Ally/);
+  const html = dogDetail(row);
+  assert.match(html, /Supporting · @Ally/);
+  assert.match(html, /ezraacohen-dow-2026-4\.jpg/);
 });
