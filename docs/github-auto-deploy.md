@@ -64,7 +64,7 @@ Live (not `et_meta`) public fields on `keep_up.logical`:
 
 | Public field | Meaning |
 |--|--|
-| `apply_state` | `absent` / `disabled` / `healthy` / `handshake_retry` / `crash_loop` / `lsn_stalled` / `relations_stale` / `poison_txn` (null on the file backend). |
+| `apply_state` | Subscriber only: `disabled` / `healthy` / `handshake_retry` / `crash_loop` / `lsn_stalled` / `relations_stale` / `poison_txn`. `null` when no `pg_subscription` (publisher / lab / file) — not subscriber `absent`. |
 | `apply_error_count` | Live `pg_stat_subscription_stats` apply errors, or null. |
 | `lag_seconds` | Receipt age. A small number is **not** proof apply is healthy. |
 

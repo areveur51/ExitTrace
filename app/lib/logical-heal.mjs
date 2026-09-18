@@ -62,6 +62,24 @@ export function publicApplyState(value) {
   return isApplyState(s) ? s : null;
 }
 
+/** True only when a logical subscription exists (subscriber). Publisher / lab is false. */
+export function isLogicalSubscriber(snapshotOrPresent) {
+  if (snapshotOrPresent && typeof snapshotOrPresent === "object") {
+    return Boolean(snapshotOrPresent.present);
+  }
+  return Boolean(snapshotOrPresent);
+}
+
+/**
+ * Public keep_up.apply_state. No pg_subscription (publisher / lab / file) is null —
+ * the existing "no apply to report" pattern — not subscriber "absent".
+ */
+export function publicHealthApplyState(value) {
+  const state = publicApplyState(value);
+  if (state === "absent") return null;
+  return state;
+}
+
 export function publicApplyErrorCount(value) {
   if (value === null || value === undefined) return null;
   let n = value;
@@ -192,9 +210,12 @@ export function classifyApplyHealth(rawSnapshot, rawPrevious = null) {
   const snap = normalizeSnapshot(rawSnapshot);
   const prev = rawPrevious ? normalizeSnapshot(rawPrevious) : null;
 
-  if (!snap.present) {
+  // No pg_subscription: publisher / lab. Internal "absent" is for planHeal observe.
+  // Public health maps this to null — not a subscriber crash_loop/absent alarm.
+  if (!isLogicalSubscriber(snap)) {
     return {
       state: "absent",
+      subscriber: false,
       lag_seconds: snap.last_msg_receipt_age_seconds,
       apply_error_count: snap.apply_error_count,
       lsn_stalled: false,
@@ -384,7 +405,7 @@ export function planHeal(rawSnapshot, opts = {}) {
     refresh_copy_data: false,
   };
 
-  if (health.state === "absent") {
+  if (!isLogicalSubscriber(snap) || health.state === "absent") {
     return { ...base, actions: ["observe"], reason: "no_subscription_public_dump_ok" };
   }
 
