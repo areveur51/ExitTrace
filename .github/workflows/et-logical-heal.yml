@@ -1,0 +1,114 @@
+name: et-logical-heal
+
+# Auto-recover logical apply: classify crash-loop vs handshake-retry vs LSN stall,
+# reconnect with backoff, REFRESH PUBLICATION WITH (copy_data=false) only when
+# relations are empty/stale. Never SKIP LSN, never TRUNCATE, never copy_data=true,
+# never DROP. Dump --clean is double-gated (var + dispatch confirm).
+# Public default SYNC_MODE is dump; this job no-ops when no subscription exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Run safe heals (reconnect / refresh). Dry-run when false.
+        type: boolean
+        default: true
+      allow_dump_fallback:
+        description: Permit one-shot dump --clean only if ET_DUMP_COLD_FALLBACK is also true and logical is sustained-unhealthy. Off by default.
+        type: boolean
+        default: false
+      sync_mode:
+        description: Override sync mode for this run (default dump; use logical when that is the private primary).
+        type: choice
+        required: false
+        default: dump
+        options:
+          - dump
+          - logical
+  schedule:
+    - cron: "*/15 * * * *"
+
+concurrency:
+  group: et-logical-heal
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  heal:
+    name: classify-and-heal-apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      HEAL_SYNC_MODE: ${{ inputs.sync_mode || vars.SYNC_MODE || 'dump' }}
+      ET_DUMP_COLD_FALLBACK: ${{ vars.ET_DUMP_COLD_FALLBACK }}
+      ET_ALLOW_DUMP_FALLBACK: ${{ inputs.allow_dump_fallback }}
+      ET_AUTO_GAP_UPSERT: ${{ vars.ET_AUTO_GAP_UPSERT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+      - name: npm ci
+        run: npm ci
+      - name: Diagnose and heal logical apply
+        id: heal
+        run: |
+          set -euo pipefail
+          set +x
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "GitHub environment 'production' secret DATABASE_URL is not set"
+            exit 1
+          fi
+          extra=()
+          if [[ "${{ github.event.inputs.apply }}" == "false" ]]; then
+            extra+=(--dry-run)
+          else
+            extra+=(--apply)
+          fi
+          set +e
+          node scripts/logical-apply-heal.mjs "${extra[@]}" | tee "${RUNNER_TEMP}/heal.out"
+          code=$?
+          set -e
+          state="$(sed -n 's/^APPLY_STATE=//p' "${RUNNER_TEMP}/heal.out" | tail -n1)"
+          errors="$(sed -n 's/^APPLY_ERRORS=//p' "${RUNNER_TEMP}/heal.out" | tail -n1)"
+          gap="$(sed -n 's/^GAP_UPSERT=//p' "${RUNNER_TEMP}/heal.out" | tail -n1)"
+          dump="$(sed -n 's/^DUMP_FALLBACK=//p' "${RUNNER_TEMP}/heal.out" | tail -n1)"
+          sign="$(sed -n 's/^SIGN_REQUIRED=//p' "${RUNNER_TEMP}/heal.out" | tail -n1)"
+          echo "apply_state=${state}" >> "$GITHUB_OUTPUT"
+          echo "gap_upsert=${gap}" >> "$GITHUB_OUTPUT"
+          echo "dump_fallback=${dump}" >> "$GITHUB_OUTPUT"
+          echo "sign_required=${sign}" >> "$GITHUB_OUTPUT"
+          echo "APPLY_STATE=${state} APPLY_ERRORS=${errors} EXIT=${code}"
+          if [[ "$code" == "2" || "$sign" == "1" ]]; then
+            echo "HEAL_NEEDS_SIGN — poison txn skip is documented, not auto-run."
+            exit 2
+          fi
+          if [[ "$code" != "0" ]]; then
+            exit "$code"
+          fi
+      - name: Optional gap-upsert catch-up (non-destructive)
+        if: steps.heal.outputs.gap_upsert == '1' && vars.ET_AUTO_GAP_UPSERT == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run et-gap-upsert.yml --ref "${{ github.ref }}"
+          echo "DISPATCHED et-gap-upsert"
+      - name: Optional one-shot dump cold-fallback (destructive; double-gated)
+        if: steps.heal.outputs.dump_fallback == '1' && vars.ET_DUMP_COLD_FALLBACK == 'true' && inputs.allow_dump_fallback == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run lab-to-render-sync.yml --ref "${{ github.ref }}" -f SYNC_MODE=dump
+          echo "DISPATCHED lab-to-render-sync SYNC_MODE=dump (one-shot; scheduled logical stays primary)"

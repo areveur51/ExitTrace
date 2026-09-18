@@ -197,12 +197,17 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 ```
 app/server.mjs              HTTP + pages
 app/lib/keep-up.mjs         public keep_up stamps (et_meta)
+app/lib/logical-heal.mjs    logical apply classify + fail-closed heal plan
+app/lib/gap-upsert.mjs      idempotent published-table upsert plan
 app/lib/store.mjs           Postgres or file fallback
 data/seed.json              portable import
 media/                      portraits, dog-comm stills, derived 10:13 display JPEGs
 app/lib/thumb.mjs           list thumb + denser srcset pipeline (detail uses gold /media stills)
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events
 scripts/stamp-keep-up.mjs   upsert one keep_up et_meta key (Postgres)
+scripts/logical-apply-heal.mjs  classify/heal logical apply (Postgres)
+scripts/gap-upsert-published.mjs  upsert published rows by id (Postgres)
+scripts/export-published-tables.mjs  export published tables as JSON
 scripts/migrate-unique-people.mjs  collapse duplicate live person rows
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/seed-rss-digest.mjs host-side official RSS digest (name leads, not cites)
@@ -211,9 +216,12 @@ scripts/process-add-request.mjs  apply one queued add request (cites from caller
 scripts/build-thumbs.mjs    derive list JPEG/WebP thumbs (and people hero WebP); never wipes media/
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
-docs/github-auto-deploy.md  lab → Render Postgres sync (Actions)
+docs/github-auto-deploy.md  lab → Render Postgres sync + logical heal (Actions)
 docs/screenshots/           README captures of home, lists, dashboard, and downloads
 .github/workflows/lab-to-render-sync.yml
+.github/workflows/et-logical-heal.yml
+.github/workflows/et-gap-upsert.yml
+.github/workflows/et-code-freshness.yml
 exittracectl.sh             start | stop | status | seed | import-posts | digest | promote | add-process | pack
 ```
 

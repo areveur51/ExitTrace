@@ -1388,6 +1388,8 @@ function keepUpFacts(keep) {
     ["logical.stream_started", keepUpDash(keep.logical?.stream_started)],
     ["logical.last_verify", keepUpDash(keep.logical?.last_verify)],
     ["logical.lag_seconds", keepUpDash(keep.logical?.lag_seconds)],
+    ["logical.apply_state", keepUpDash(keep.logical?.apply_state)],
+    ["logical.apply_error_count", keepUpDash(keep.logical?.apply_error_count)],
     ["media_delta.last_success", keepUpDash(keep.media_delta?.last_success)],
     ["media_delta.last_with_files", keepUpDash(keep.media_delta?.last_with_files)],
     ["daily_ingest.last_pass", keepUpDash(keep.daily_ingest?.last_pass)],

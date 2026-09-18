@@ -7,6 +7,14 @@
 # (no-op skip). A private env may set SYNC_MODE=logical later; do not
 # embed host wiring here.
 #
+# Mode machine (see docs/github-auto-deploy.md):
+#   dump (public default): scheduled restore is primary.
+#   logical (env): this scheduled job is a no-op (dump is cold standby).
+#   one-shot dump while logical is primary: workflow_dispatch SYNC_MODE=dump
+#   (input wins over vars.SYNC_MODE). Do not change the repo var to dump
+#   while the logical sub is applying — that is dual-write. et-logical-heal
+#   may dispatch that one-shot only when ET_DUMP_COLD_FALLBACK is armed.
+#
 # Dump source: the lab ExitTrace database, via a host helper whose path
 # is supplied at runtime (ET_LAB_DUMP_SH / ET_LAB_DUMP_OUT).
 #

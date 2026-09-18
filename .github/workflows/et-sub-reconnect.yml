@@ -32,9 +32,23 @@ jobs:
           set -euo pipefail
           test -n "${DATABASE_URL:-}"
           export PGOPTIONS='-c client_min_messages=warning'
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub DISABLE;"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub ENABLE;"
-          sleep 8
+          backoff=8
+          attempt=0
+          while [[ "$attempt" -lt 4 ]]; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub DISABLE;"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub ENABLE;"
+            echo "RECONNECT_ATTEMPT=${attempt} backoff_seconds=${backoff}"
+            sleep "$backoff"
+            pid="$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT pid FROM pg_stat_subscription WHERE subname='exittrace_lab_sub' AND pid IS NOT NULL;")"
+            errors="$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT apply_error_count FROM pg_stat_subscription_stats WHERE subname='exittrace_lab_sub';" 2>/dev/null || true)"
+            echo "pid=${pid:-none} apply_errors=${errors:-unknown}"
+            if [[ -n "${pid:-}" ]]; then
+              break
+            fi
+            attempt=$((attempt + 1))
+            backoff=$((backoff * 2))
+            if [[ "$backoff" -gt 64 ]]; then backoff=64; fi
+          done
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled FROM pg_subscription WHERE subname='exittrace_lab_sub';"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_receipt_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
           echo "RECONNECT_OK"

@@ -1,4 +1,5 @@
-import { getEtMeta, readLogicalLagSeconds } from "./store.mjs";
+import { classifyApplyHealth, publicApplyErrorCount, publicApplyState } from "./logical-heal.mjs";
+import { getEtMeta, readLogicalApplySnapshot } from "./store.mjs";
 
 /** Public keep-up stamps. Stored in et_meta; health never invents a second store. */
 
@@ -31,6 +32,8 @@ export function emptyKeepUp() {
       stream_started: null,
       last_verify: null,
       lag_seconds: null,
+      apply_state: null,
+      apply_error_count: null,
     },
     media_delta: {
       last_success: null,
@@ -157,7 +160,10 @@ export function publicDumpRestoreMode(value) {
   return isDumpRestoreMode(s) ? s : null;
 }
 
-export function buildKeepUp(metaByKey = {}, { lagSeconds = null } = {}) {
+export function buildKeepUp(
+  metaByKey = {},
+  { lagSeconds = null, applyState = null, applyErrorCount = null } = {},
+) {
   const meta = metaByKey && typeof metaByKey === "object" ? metaByKey : {};
   const k = KEEP_UP_META_KEYS;
   const liveLag = publicLagSeconds(lagSeconds);
@@ -168,6 +174,8 @@ export function buildKeepUp(metaByKey = {}, { lagSeconds = null } = {}) {
       stream_started: publicTimestamp(meta[k.logicalStreamStarted]),
       last_verify: publicTimestamp(meta[k.logicalLastVerify]),
       lag_seconds: liveLag !== null ? liveLag : storedLag,
+      apply_state: publicApplyState(applyState),
+      apply_error_count: publicApplyErrorCount(applyErrorCount),
     },
     media_delta: {
       last_success: publicTimestamp(meta[k.mediaDeltaLastSuccess]),
@@ -188,11 +196,19 @@ export function buildKeepUp(metaByKey = {}, { lagSeconds = null } = {}) {
 
 export async function readKeepUp() {
   try {
-    const [meta, lag] = await Promise.all([
+    const [meta, snap] = await Promise.all([
       getEtMeta(KEEP_UP_META_KEY_LIST),
-      readLogicalLagSeconds(),
+      readLogicalApplySnapshot(),
     ]);
-    return buildKeepUp(meta, { lagSeconds: lag });
+    if (!snap) {
+      return buildKeepUp(meta);
+    }
+    const health = classifyApplyHealth(snap);
+    return buildKeepUp(meta, {
+      lagSeconds: health.lag_seconds,
+      applyState: health.state,
+      applyErrorCount: health.apply_error_count,
+    });
   } catch {
     return emptyKeepUp();
   }

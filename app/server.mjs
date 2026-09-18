@@ -41,6 +41,7 @@ import {
   writeFileStore,
 } from "./lib/store.mjs";
 import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
+import { publicGitSha } from "./lib/logical-heal.mjs";
 import {
   addBody,
   identityFilterNav,
@@ -352,6 +353,7 @@ async function healthPayload() {
     source_posts: c.source_posts,
     byCategory: c.byCategory,
     keep_up,
+    git_sha: publicGitSha(process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION),
   };
 }
 

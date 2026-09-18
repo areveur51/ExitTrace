@@ -120,6 +120,9 @@ test("health is 200 on file backend", async () => {
   assert.equal(json.keep_up.logical.stream_started, null);
   assert.equal(json.keep_up.logical.last_verify, null);
   assert.equal(json.keep_up.logical.lag_seconds, null);
+  assert.equal(json.keep_up.logical.apply_state, null);
+  assert.equal(json.keep_up.logical.apply_error_count, null);
+  assert.equal(json.git_sha, null);
   assert.equal(json.keep_up.media_delta.last_success, null);
   assert.equal(json.keep_up.media_delta.last_with_files, null);
   assert.equal(json.keep_up.daily_ingest.last_pass, null);
@@ -133,6 +136,7 @@ test("health HTML includes keep_up", async () => {
   assert.equal(res.status, 200);
   assert.match(res.body, /keep_up/);
   assert.match(res.body, /logical\.stream_started/);
+  assert.match(res.body, /logical\.apply_state/);
   assert.match(res.body, /America\/New_York/);
 });
 

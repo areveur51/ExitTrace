@@ -25,6 +25,8 @@ function assertKeepUpShape(keep) {
   assert.ok("stream_started" in keep.logical);
   assert.ok("last_verify" in keep.logical);
   assert.ok("lag_seconds" in keep.logical);
+  assert.ok("apply_state" in keep.logical);
+  assert.ok("apply_error_count" in keep.logical);
   assert.ok("last_success" in keep.media_delta);
   assert.ok("last_with_files" in keep.media_delta);
   assert.ok("last_pass" in keep.daily_ingest);
@@ -39,6 +41,8 @@ test("empty keep_up has the public shape and null stamps", () => {
   assert.equal(keep.logical.stream_started, null);
   assert.equal(keep.logical.last_verify, null);
   assert.equal(keep.logical.lag_seconds, null);
+  assert.equal(keep.logical.apply_state, null);
+  assert.equal(keep.logical.apply_error_count, null);
   assert.equal(keep.media_delta.last_success, null);
   assert.equal(keep.media_delta.last_with_files, null);
   assert.equal(keep.daily_ingest.last_pass, null);
@@ -67,6 +71,15 @@ test("public keep_up drops secrets, hosts, and instance ids", () => {
   });
   assert.equal(keep.logical.stream_started, null);
   assert.equal(keep.dump_restore.mode, "cold_fallback");
+});
+
+test("live apply_state and apply_error_count are public-safe", () => {
+  const keep = buildKeepUp({}, { applyState: "crash_loop", applyErrorCount: 12, lagSeconds: 1 });
+  assert.equal(keep.logical.apply_state, "crash_loop");
+  assert.equal(keep.logical.apply_error_count, 12);
+  assert.equal(keep.logical.lag_seconds, 1);
+  assert.equal(buildKeepUp({}, { applyState: "truncate" }).logical.apply_state, null);
+  assert.equal(buildKeepUp({}, { applyState: "postgres://x" }).logical.apply_state, null);
 });
 
 test("live lag wins over stored lag; bad lag is null", () => {
@@ -115,6 +128,7 @@ test("health HTML shows keep_up facts and the JSON payload", () => {
   };
   const html = healthBody(payload);
   assert.match(html, /keep_up/);
+  assert.match(html, /logical\.apply_state/);
   assert.match(html, /daily_ingest\.last_pass/);
   assert.match(html, /2026-07-15T12:00:00-04:00/);
   assert.match(html, /America\/New_York/);
