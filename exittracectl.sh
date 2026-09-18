@@ -22,14 +22,10 @@ find_node() {
     command -v node
     return
   fi
-  # Lab host: Node may live under a tools tree, not always on SSH PATH.
-  # Path parts are split so sanitize.test private-host needles stay absent.
-  local _opt="/o"'pt'
-  local _gb="Grok"'Build'
+  # Repo-adjacent tools tree when node is not on PATH.
   for cand in \
-    "${_opt}/${_gb}/tools/node/bin/node" \
-    "${_opt}/${_gb}/tools/node22-glibc217/bin/node" \
-    "${ROOT}/../tools/node/bin/node"; do
+    "${ROOT}/../tools/node/bin/node" \
+    "${ROOT}/../tools/node22-glibc217/bin/node"; do
     if [[ -x "$cand" ]]; then
       echo "$cand"
       return
