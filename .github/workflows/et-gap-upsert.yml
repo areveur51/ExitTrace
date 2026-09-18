@@ -1,0 +1,126 @@
+name: et-gap-upsert
+
+# Reusable idempotent upsert of published tables (people, dog_comms, operations,
+# optional categories) plus person_events. Lab export → Render upsert by id.
+# Never TRUNCATE / DROP / --clean. No media pack. Public dump default unchanged.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: lab_runner exports from the dump runner; two_url uses LAB_DATABASE_URL + DATABASE_URL on ubuntu.
+        type: choice
+        required: false
+        default: lab_runner
+        options:
+          - lab_runner
+          - two_url
+
+concurrency:
+  group: et-gap-upsert
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  export-lab:
+    name: export-published-from-lab
+    if: inputs.source != 'two_url'
+    runs-on: ${{ fromJSON(vars.ET_LAB_RUNNER_LABELS || '["self-hosted","lab"]') }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Export published tables
+        env:
+          ET_LAB_DUMP_SH_FROM_VARS: ${{ vars.ET_LAB_DUMP_SH }}
+        run: |
+          set -euo pipefail
+          npm ci
+          if [[ -n "${DATABASE_URL:-}" ]]; then
+            node scripts/export-published-tables.mjs --out "${RUNNER_TEMP}/published.json"
+          else
+            echo "DATABASE_URL unset on lab runner; refusing to invent a host path."
+            exit 1
+          fi
+          test -s "${RUNNER_TEMP}/published.json"
+      - name: Upload published JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: exittrace-published-gap
+          path: ${{ runner.temp }}/published.json
+          retention-days: 1
+          if-no-files-found: error
+
+  export-two-url:
+    name: export-published-from-lab-url
+    if: inputs.source == 'two_url'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.LAB_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Require LAB_DATABASE_URL
+        run: |
+          set -euo pipefail
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "production secret LAB_DATABASE_URL is not set"
+            exit 1
+          fi
+      - run: npm ci
+      - name: Export published tables
+        run: |
+          set -euo pipefail
+          set +x
+          node scripts/export-published-tables.mjs --out "${RUNNER_TEMP}/published.json"
+          test -s "${RUNNER_TEMP}/published.json"
+      - name: Upload published JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: exittrace-published-gap
+          path: ${{ runner.temp }}/published.json
+          retention-days: 1
+          if-no-files-found: error
+
+  upsert:
+    name: upsert-published-on-render
+    needs: [export-lab, export-two-url]
+    if: always() && (needs.export-lab.result == 'success' || needs.export-two-url.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Require production DATABASE_URL
+        run: |
+          set -euo pipefail
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "GitHub environment 'production' secret DATABASE_URL is not set"
+            exit 1
+          fi
+      - name: Download published JSON
+        uses: actions/download-artifact@v4
+        with:
+          name: exittrace-published-gap
+          path: gap
+      - run: npm ci
+      - name: Upsert missing published rows and prove counts
+        run: |
+          set -euo pipefail
+          set +x
+          test -s gap/published.json
+          node scripts/gap-upsert-published.mjs --from gap/published.json
+          echo "GAP_UPSERT_OK"

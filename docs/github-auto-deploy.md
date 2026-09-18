@@ -50,7 +50,7 @@ Or: `node scripts/stamp-keep-up.mjs --key keep_up.daily_ingest.last_pass` (needs
 |--|--|--|
 | `keep_up.logical.stream_started` | `keep_up.logical.stream_started` | Lab, when the logical stream starts. Replicates with `et_meta`. |
 | `keep_up.logical.last_verify` | `keep_up.logical.last_verify` | Actions `et-cutover-verify` on PASS (Render `et_meta`). |
-| `keep_up.logical.lag_seconds` | `keep_up.logical.lag_seconds` | Optional stored fallback. Health prefers live `pg_stat_subscription` lag when present. |
+| `keep_up.logical.lag_seconds` | `keep_up.logical.lag_seconds` | Optional stored fallback. Health prefers live receipt age when present. Receipt-only lag can look fine during apply crash-loops; use live `apply_state`. |
 | `keep_up.media_delta.last_success` | `keep_up.media_delta.last_success` | Lab media delta on success. |
 | `keep_up.media_delta.last_with_files` | `keep_up.media_delta.last_with_files` | Lab media delta when files moved. |
 | `keep_up.daily_ingest.last_pass` | `keep_up.daily_ingest.last_pass` | Lab daily ingest on PASS. |
@@ -59,3 +59,63 @@ Or: `node scripts/stamp-keep-up.mjs --key keep_up.daily_ingest.last_pass` (needs
 | `keep_up.dump_restore.mode` | `keep_up.dump_restore.mode` | `cold_fallback` or `disabled`. Restore stamps `cold_fallback`. |
 
 Timestamp `v` is `{ "at": "<ISO>" }`. Health labels times in `America/New_York` (ISO offset + `timezone`). `dump_restore.mode` is `{ "mode": "cold_fallback" }` or `{ "mode": "disabled" }`. The health process does not read `SYNC_MODE`.
+
+Live (not `et_meta`) public fields on `keep_up.logical`:
+
+| Public field | Meaning |
+|--|--|
+| `apply_state` | `absent` / `disabled` / `healthy` / `handshake_retry` / `crash_loop` / `lsn_stalled` / `relations_stale` / `poison_txn` (null on the file backend). |
+| `apply_error_count` | Live `pg_stat_subscription_stats` apply errors, or null. |
+| `lag_seconds` | Receipt age. A small number is **not** proof apply is healthy. |
+
+`GET /api/health` also exposes `git_sha` when Render sets `RENDER_GIT_COMMIT` (hex only). File backend is null.
+
+## Mode machine
+
+| `SYNC_MODE` | Logical sub | Dump cron (`lab-to-render-sync`) | Auto heal |
+|--|--|--|--|
+| `dump` (public default) | absent or optional | scheduled `pg_restore --clean` | no-op when no subscription |
+| `logical` (private env var) | primary | skipped (cold standby) | `et-logical-heal` every 15 minutes |
+| `logical` + sustained unhealthy | still primary | one-shot dump **only** if `ET_DUMP_COLD_FALLBACK=true` **and** dispatch `allow_dump_fallback=true` | gap-upsert catch-up if `ET_AUTO_GAP_UPSERT=true` |
+
+Scheduled dump reads `vars.SYNC_MODE` (default `dump`). Dispatch input wins, so a one-shot `SYNC_MODE=dump` does not change the repo var and does not re-enable the dump cron while logical is primary. Do **not** flip `vars.SYNC_MODE` to `dump` while the subscription is enabled — that is dual-write. Changing the var back to dump is a human SIGN (disable the sub first).
+
+## Logical apply heal
+
+[`.github/workflows/et-logical-heal.yml`](../.github/workflows/et-logical-heal.yml) runs `scripts/logical-apply-heal.mjs` (library: `app/lib/logical-heal.mjs`). It reuses the existing subscription name and the same DISABLE/ENABLE / `REFRESH PUBLICATION WITH (copy_data = false)` verbs as `et-sub-reconnect` and `et-sub-refresh-publication`.
+
+Auto (no SIGN):
+
+- Reconnect (DISABLE/ENABLE) with backoff 8/16/32/64s on `handshake_retry`, `crash_loop`, `lsn_stalled`, or a disabled sub.
+- `REFRESH PUBLICATION WITH (copy_data = false)` only when relation rows are empty or none are ready. Never `copy_data=true`.
+- Classify `handshake_retry` when receipt age looks fine but apply errors are rising or the worker is missing.
+
+Still needs Admiral SIGN:
+
+- Poison transaction after three auto reconnects (`poison_txn`). Heal prints the sanitized apply error and a skip recipe. It does **not** run `ALTER SUBSCRIPTION … SKIP`.
+- Destructive dump `--clean`.
+- Re-enabling the dump schedule while logical is primary.
+
+```text
+NEEDS_SIGN poison transaction — do not auto SKIP.
+1. Confirm the apply error on the subscriber (catalog + logs). Do not assume a schema class.
+2. If Admiral SIGNs a skip: ALTER SUBSCRIPTION exittrace_lab_sub SKIP (lsn = '<lsn>');
+3. Run et-gap-upsert (idempotent by id) for any skipped published row.
+4. ENABLE; prove LSN advances and apply_error_count stops rising.
+```
+
+A `posted_at` TEXT vs DATE mismatch is one **class** of apply poison (see `scripts/bootstrap-db.sql`); heal prints `POSTED_AT_TYPE` as a hint and does not assume that is the cause.
+
+Path A / streaming: `et-sub-reconnect` retries ENABLE with the same backoff. `et-path-a-probe` prints apply error counts next to receipt times so handshake retries are not mistaken for a healthy stream.
+
+## Idempotent gap upsert
+
+[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people`, `dog_comms`, `operations`, optional `categories` (skipped if that table is absent), plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`).
+
+Arm automatic catch-up from heal with repository variable `ET_AUTO_GAP_UPSERT=true` (off by default).
+
+## Render code freshness
+
+Render Git auto-deploy on `main` is the deploy plane (Dashboard → the existing web service → Settings → Auto-Deploy). This repo does not force redeploys.
+
+[`.github/workflows/et-code-freshness.yml`](../.github/workflows/et-code-freshness.yml) compares public `/api/health` `git_sha` to `origin/main` when `ET_PUBLIC_HEALTH_URL` is set. Mismatch fails the check and does **not** redeploy. Unset URL → skip.

@@ -43,6 +43,13 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, subenabled FROM pg_subscription WHERE subname='exittrace_lab_sub';"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_send_time, last_msg_receipt_time, latest_end_time FROM pg_stat_subscription WHERE subname='exittrace_lab_sub';"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT state, wait_event_type, wait_event, query FROM pg_stat_activity WHERE pid IN (SELECT pid FROM pg_stat_subscription WHERE subname='exittrace_lab_sub' AND pid IS NOT NULL);"
+          echo "=== apply stats (lag can look fine while apply crash-loops) ==="
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT 'apply_errors='||COALESCE(apply_error_count::text,'null') FROM pg_stat_subscription_stats WHERE subname='exittrace_lab_sub';
+            SELECT 'rel_ready='||count(*) FILTER (WHERE sr.srsubstate IN ('r','s'))||' rel_total='||count(*)
+              FROM pg_subscription_rel sr JOIN pg_subscription s ON s.oid=sr.srsubid
+             WHERE s.subname='exittrace_lab_sub';
+          " 2>&1 || echo "no pg_stat_subscription_stats"
           echo "PROBE_DONE"
       - name: Host port from named secret
         run: |

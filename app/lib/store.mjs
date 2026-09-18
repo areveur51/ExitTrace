@@ -888,23 +888,109 @@ export async function readLogicalApplyDiag() {
  * Public health only gets the number — no sub name, host, or slot.
  */
 export async function readLogicalLagSeconds() {
+  const snap = await readLogicalApplySnapshot();
+  if (!snap) return null;
+  const n = snap.last_msg_receipt_age_seconds;
+  if (n === null || n === undefined) return null;
+  const num = Number(n);
+  if (!Number.isFinite(num)) return null;
+  return Math.max(0, Math.trunc(num));
+}
+
+/**
+ * Live apply snapshot for health/heal. Numbers and flags only — no sub name,
+ * host, slot, conninfo, or query text.
+ */
+export async function readLogicalApplySnapshot() {
   const p = await getPool();
   if (!p) return null;
   try {
     const res = await p.query(
-      `SELECT EXTRACT(EPOCH FROM (now() - COALESCE(last_msg_receipt_time, latest_end_time)))::bigint AS lag_seconds
-         FROM pg_stat_subscription
-        WHERE COALESCE(last_msg_receipt_time, latest_end_time) IS NOT NULL
-        ORDER BY COALESCE(last_msg_receipt_time, latest_end_time) DESC
-        LIMIT 1`,
+      `SELECT
+         EXISTS (SELECT 1 FROM pg_subscription) AS present,
+         COALESCE((SELECT bool_or(subenabled) FROM pg_subscription), false) AS enabled,
+         EXISTS (SELECT 1 FROM pg_stat_subscription WHERE pid IS NOT NULL) AS worker_present,
+         (SELECT received_lsn::text FROM pg_stat_subscription
+           WHERE received_lsn IS NOT NULL ORDER BY latest_end_time DESC NULLS LAST LIMIT 1) AS received_lsn,
+         (SELECT latest_end_lsn::text FROM pg_stat_subscription
+           WHERE latest_end_lsn IS NOT NULL ORDER BY latest_end_time DESC NULLS LAST LIMIT 1) AS latest_end_lsn,
+         (SELECT EXTRACT(EPOCH FROM (now() - COALESCE(last_msg_receipt_time, latest_end_time)))::bigint
+            FROM pg_stat_subscription
+           WHERE COALESCE(last_msg_receipt_time, latest_end_time) IS NOT NULL
+           ORDER BY COALESCE(last_msg_receipt_time, latest_end_time) DESC
+           LIMIT 1) AS last_msg_receipt_age_seconds,
+         (SELECT EXTRACT(EPOCH FROM (now() - last_msg_send_time))::bigint
+            FROM pg_stat_subscription
+           WHERE last_msg_send_time IS NOT NULL
+           ORDER BY last_msg_send_time DESC
+           LIMIT 1) AS last_msg_send_age_seconds,
+         (SELECT COALESCE(SUM(apply_error_count), 0)::bigint FROM pg_stat_subscription_stats) AS apply_error_count,
+         (SELECT COALESCE(SUM(sync_error_count), 0)::bigint FROM pg_stat_subscription_stats) AS sync_error_count,
+         (SELECT count(*)::int FROM pg_subscription_rel) AS rel_count,
+         (SELECT count(*)::int FROM pg_subscription_rel WHERE srsubstate IN ('r', 's')) AS rel_ready_count`,
     );
-    const n = res.rows[0]?.lag_seconds;
-    if (n === null || n === undefined) return null;
-    const num = Number(n);
-    if (!Number.isFinite(num)) return null;
-    return Math.max(0, Math.trunc(num));
+    const row = res.rows[0];
+    if (!row) return null;
+    return {
+      present: Boolean(row.present),
+      enabled: Boolean(row.enabled),
+      worker_present: Boolean(row.worker_present),
+      received_lsn: row.received_lsn || null,
+      latest_end_lsn: row.latest_end_lsn || null,
+      last_msg_receipt_age_seconds:
+        row.last_msg_receipt_age_seconds === null || row.last_msg_receipt_age_seconds === undefined
+          ? null
+          : Math.max(0, Math.trunc(Number(row.last_msg_receipt_age_seconds))),
+      last_msg_send_age_seconds:
+        row.last_msg_send_age_seconds === null || row.last_msg_send_age_seconds === undefined
+          ? null
+          : Math.max(0, Math.trunc(Number(row.last_msg_send_age_seconds))),
+      apply_error_count:
+        row.apply_error_count === null || row.apply_error_count === undefined
+          ? null
+          : Math.max(0, Math.trunc(Number(row.apply_error_count))),
+      sync_error_count:
+        row.sync_error_count === null || row.sync_error_count === undefined
+          ? null
+          : Math.max(0, Math.trunc(Number(row.sync_error_count))),
+      rel_count:
+        row.rel_count === null || row.rel_count === undefined
+          ? null
+          : Math.max(0, Math.trunc(Number(row.rel_count))),
+      rel_ready_count:
+        row.rel_ready_count === null || row.rel_ready_count === undefined
+          ? null
+          : Math.max(0, Math.trunc(Number(row.rel_ready_count))),
+    };
   } catch {
-    return null;
+    try {
+      const lag = await p.query(
+        `SELECT EXTRACT(EPOCH FROM (now() - COALESCE(last_msg_receipt_time, latest_end_time)))::bigint AS lag_seconds
+           FROM pg_stat_subscription
+          WHERE COALESCE(last_msg_receipt_time, latest_end_time) IS NOT NULL
+          ORDER BY COALESCE(last_msg_receipt_time, latest_end_time) DESC
+          LIMIT 1`,
+      );
+      const n = lag.rows[0]?.lag_seconds;
+      if (n === null || n === undefined) return null;
+      const num = Number(n);
+      if (!Number.isFinite(num)) return null;
+      return {
+        present: true,
+        enabled: true,
+        worker_present: true,
+        received_lsn: null,
+        latest_end_lsn: null,
+        last_msg_receipt_age_seconds: Math.max(0, Math.trunc(num)),
+        last_msg_send_age_seconds: null,
+        apply_error_count: null,
+        sync_error_count: null,
+        rel_count: null,
+        rel_ready_count: null,
+      };
+    } catch {
+      return null;
+    }
   }
 }
 

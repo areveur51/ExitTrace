@@ -1,0 +1,74 @@
+name: et-code-freshness
+
+# Compare public /api/health git_sha (Render injects RENDER_GIT_COMMIT) to origin/main.
+# Does not force a redeploy. Skip when ET_PUBLIC_HEALTH_URL is unset.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+concurrency:
+  group: et-code-freshness
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    name: compare-runtime-sha-to-main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ET_PUBLIC_HEALTH_URL: ${{ vars.ET_PUBLIC_HEALTH_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: main
+      - name: Compare health git_sha to main (no redeploy)
+        run: |
+          set -euo pipefail
+          main_sha="$(git rev-parse HEAD)"
+          echo "MAIN_SHA=${main_sha}"
+          if [[ -z "${ET_PUBLIC_HEALTH_URL:-}" ]]; then
+            echo "ET_PUBLIC_HEALTH_URL unset; skip (no force redeploy)."
+            echo "CODE_FRESHNESS_SKIP"
+            exit 0
+          fi
+          url="${ET_PUBLIC_HEALTH_URL%/}"
+          case "$url" in
+            */api/health) ;;
+            *) url="${url}/api/health" ;;
+          esac
+          body="$(curl -fsS --max-time 20 "$url")"
+          runtime="$(printf '%s' "$body" | node -e '
+            let s = "";
+            process.stdin.on("data", (c) => { s += c; });
+            process.stdin.on("end", () => {
+              try {
+                const j = JSON.parse(s);
+                const sha = j && j.git_sha ? String(j.git_sha) : "";
+                if (!/^[0-9a-f]{7,40}$/i.test(sha)) {
+                  console.log("");
+                  process.exit(0);
+                }
+                console.log(sha.toLowerCase());
+              } catch {
+                console.log("");
+              }
+            });
+          ')"
+          echo "RUNTIME_SHA=${runtime}"
+          if [[ -z "$runtime" ]]; then
+            echo "health git_sha missing or not a SHA; skip (no force redeploy)."
+            echo "CODE_FRESHNESS_SKIP"
+            exit 0
+          fi
+          if [[ "$main_sha" == "$runtime"* || "$runtime" == "$main_sha"* ]]; then
+            echo "CODE_FRESHNESS_OK"
+            exit 0
+          fi
+          echo "CODE_FRESHNESS_STALE runtime!=main (no redeploy from this job)"
+          exit 1

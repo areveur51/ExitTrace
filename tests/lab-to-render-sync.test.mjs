@@ -54,8 +54,33 @@ test("lab-to-render-sync workflow matches the locked contract", () => {
   assert.match(wf, /keep_up\.dump_restore\.last_success/);
   assert.match(wf, /keep_up\.dump_restore\.mode/);
   assert.match(wf, /cold_fallback/);
+  assert.match(wf, /Mode machine/);
+  assert.match(wf, /one-shot dump/);
+  assert.match(wf, /et-logical-heal/);
   assert.doesNotMatch(wf, /RENDER_DATABASE_URL/);
   assertNoPrivateHost(wf, "workflow");
+});
+
+test("logical heal and gap upsert workflows stay fail-closed", () => {
+  const heal = fs.readFileSync(path.join(ROOT, ".github/workflows/et-logical-heal.yml"), "utf8");
+  const gap = fs.readFileSync(path.join(ROOT, ".github/workflows/et-gap-upsert.yml"), "utf8");
+  const fresh = fs.readFileSync(path.join(ROOT, ".github/workflows/et-code-freshness.yml"), "utf8");
+  assert.match(heal, /logical-apply-heal\.mjs/);
+  assert.match(heal, /copy_data=false/);
+  assert.match(heal, /Never SKIP LSN/);
+  assert.match(heal, /Public default SYNC_MODE is dump/);
+  assert.match(heal, /ET_DUMP_COLD_FALLBACK/);
+  assert.match(heal, /allow_dump_fallback/);
+  assert.doesNotMatch(heal, /REFRESH PUBLICATION WITH \(copy_data\s*=\s*true\)/);
+  assert.doesNotMatch(heal, /TRUNCATE/);
+  assert.match(gap, /gap-upsert-published\.mjs/);
+  assert.match(gap, /export-published-tables\.mjs/);
+  assert.match(gap, /Never TRUNCATE/);
+  assert.match(fresh, /ET_PUBLIC_HEALTH_URL/);
+  assert.match(fresh, /no force redeploy|Does not force a redeploy/);
+  assertNoPrivateHost(heal, "heal workflow");
+  assertNoPrivateHost(gap, "gap workflow");
+  assertNoPrivateHost(fresh, "freshness workflow");
 });
 
 test("docs name production DATABASE_URL, generic runner labels, and dump env placeholders", () => {
@@ -80,6 +105,11 @@ test("docs name production DATABASE_URL, generic runner labels, and dump env pla
   assert.match(doc, /et_meta/);
   assert.match(doc, /America\/New_York/);
   assert.match(doc, /scripts\/stamp-keep-up\.mjs/);
+  assert.match(doc, /Mode machine/);
+  assert.match(doc, /et-logical-heal/);
+  assert.match(doc, /et-gap-upsert/);
+  assert.match(doc, /NEEDS_SIGN/);
+  assert.match(doc, /RENDER_GIT_COMMIT/);
   assert.doesNotMatch(doc, /RENDER_DATABASE_URL/);
   assertNoPrivateHost(doc, "docs");
 });
