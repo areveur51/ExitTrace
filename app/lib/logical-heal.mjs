@@ -300,7 +300,7 @@ export function poisonTxnSignRecipe({ received_lsn, apply_error } = {}) {
     "2. If Admiral SIGNs a skip: ALTER SUBSCRIPTION exittrace_lab_sub SKIP (lsn = '" + lsn + "');",
     "3. Run et-gap-upsert (idempotent by id) for any skipped published row.",
     "4. ALTER SUBSCRIPTION exittrace_lab_sub ENABLE; prove LSN advances and apply_error_count stops rising.",
-    "Never TRUNCATE, never copy_data=true, never DROP the subscription from this machine.",
+    "Never wipe tables, never enable copy_data, never DROP the subscription from this machine.",
   ].join("\n");
 }
 

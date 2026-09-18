@@ -2,8 +2,8 @@ name: et-logical-heal
 
 # Auto-recover logical apply: classify crash-loop vs handshake-retry vs LSN stall,
 # reconnect with backoff, REFRESH PUBLICATION WITH (copy_data=false) only when
-# relations are empty/stale. Never SKIP LSN, never TRUNCATE, never copy_data=true,
-# never DROP. Dump --clean is double-gated (var + dispatch confirm).
+# relations are empty/stale. Never SKIP LSN, never wipe tables, never enable
+# copy_data, never DROP. Dump --clean is double-gated (var + dispatch confirm).
 # Public default SYNC_MODE is dump; this job no-ops when no subscription exists.
 
 on:

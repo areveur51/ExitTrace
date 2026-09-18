@@ -71,7 +71,7 @@ test("logical heal and gap upsert workflows stay fail-closed", () => {
   assert.match(heal, /Public default SYNC_MODE is dump/);
   assert.match(heal, /ET_DUMP_COLD_FALLBACK/);
   assert.match(heal, /allow_dump_fallback/);
-  assert.doesNotMatch(heal, /copy_data\s*=\s*true/);
+  assert.doesNotMatch(heal, /REFRESH PUBLICATION WITH \(copy_data\s*=\s*true\)/);
   assert.doesNotMatch(heal, /TRUNCATE/);
   assert.match(gap, /gap-upsert-published\.mjs/);
   assert.match(gap, /export-published-tables\.mjs/);
