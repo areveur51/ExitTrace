@@ -1,37 +1,76 @@
-/** Derived local list thumbs. Never fetch X, Wikimedia, or news at view time. */
+/** Derived local list thumbs. Never fetch X, Wikimedia, or news at view time.
+ *  Never writes into media/people or media/dog-comms. Never deletes originals.
+ */
 
 import fs from "fs";
 import path from "path";
+import { createRequire } from "node:module";
+import { readFile } from "node:fs/promises";
 import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
+import { simd } from "wasm-feature-detect";
 
 export const LIST_THUMB_CSS_W = 40;
 export const LIST_THUMB_CSS_H = 52;
-/** One 10:13 cover crop for list thumbs and person detail. CSS only changes size. */
-export const PORTRAIT_PX_W = 192;
-export const PORTRAIT_PX_H = 250;
-export const DETAIL_PORTRAIT_CSS_W = PORTRAIT_PX_W;
-export const DETAIL_PORTRAIT_CSS_H = PORTRAIT_PX_H;
+/** Default list bitmap is 2× the 40×52 CSS box (documented 80×104). */
+export const LIST_THUMB_PX_W = 80;
+export const LIST_THUMB_PX_H = 104;
+/** Denser srcset density (4× CSS). */
+export const LIST_THUMB_2X_W = 160;
+export const LIST_THUMB_2X_H = 208;
+/** ≥2× the 192×250 detail CSS box — never the 80×104 / old 192 list thumb. */
+export const HERO_PX_W = 384;
+export const HERO_PX_H = 500;
+export const PORTRAIT_PX_W = LIST_THUMB_PX_W;
+export const PORTRAIT_PX_H = LIST_THUMB_PX_H;
+export const DETAIL_PORTRAIT_CSS_W = 192;
+export const DETAIL_PORTRAIT_CSS_H = 250;
 /** Cache-bust when the derived crop pipeline changes (immutable media URLs). */
-export const PORTRAIT_CACHE = "2";
+export const PORTRAIT_CACHE = "3";
+export const LIST_THUMB_QUALITY = 78;
+export const LIST_THUMB_WEBP_QUALITY = 78;
 
 export function isDogMediaHref(raw) {
   const text = String(raw || "").trim();
   return text.startsWith("/media/dog-comms/") && !text.includes("..");
 }
-export const LIST_THUMB_PX_W = PORTRAIT_PX_W;
-export const LIST_THUMB_PX_H = PORTRAIT_PX_H;
-export const LIST_THUMB_QUALITY = 78;
 
 const PEOPLE = "/media/people/";
 const DOGS = "/media/dog-comms/";
 const THUMBS = "/media/thumbs/";
 const EXTS = [".jpg", ".jpeg", ".png", ".webp"];
-const THUMB_REL = /^thumbs\/(people|dog-comms)\/[a-z0-9][a-z0-9._-]*\.jpg$/i;
+const THUMB_REL =
+  /^thumbs\/(people|dog-comms)\/([a-z0-9][a-z0-9_-]*)(\.(?:2x|hero))?\.(jpg|webp)$/i;
+const VARIANT_SIZE = {
+  "": { w: LIST_THUMB_PX_W, h: LIST_THUMB_PX_H },
+  ".2x": { w: LIST_THUMB_2X_W, h: LIST_THUMB_2X_H },
+  ".hero": { w: HERO_PX_W, h: HERO_PX_H },
+};
 const TUI_BG = { r: 0x0d, g: 0x0d, b: 0x12 };
+const require = createRequire(import.meta.url);
 
 function stemOf(name) {
   return path.parse(path.basename(String(name || ""))).name;
+}
+
+export function parseThumbRel(thumbRel) {
+  const m = String(thumbRel || "").match(THUMB_REL);
+  if (!m) return null;
+  const kind = m[1];
+  const stem = m[2];
+  const variant = (m[3] || "").toLowerCase();
+  const ext = m[4].toLowerCase();
+  return {
+    kind,
+    stem,
+    variant,
+    ext,
+    rel: `thumbs/${kind}/${stem}${variant}.${ext}`,
+  };
+}
+
+export function variantSize(variant) {
+  return VARIANT_SIZE[String(variant || "").toLowerCase()] || VARIANT_SIZE[""];
 }
 
 function localLeaf(href, prefix) {
@@ -44,39 +83,63 @@ function localLeaf(href, prefix) {
   return leaf;
 }
 
-/** Map a catalog still href to the shared derived portrait href. External URLs are dropped. */
-export function listThumbHref(src) {
+function catalogKind(src) {
   const text = String(src || "").trim();
-  if (!text) return "";
+  if (!text) return null;
   if (text.startsWith(THUMBS) && !text.includes("..")) {
-    const rel = text.slice("/media/".length);
-    return THUMB_REL.test(rel) ? text : "";
+    const parsed = parseThumbRel(text.slice("/media/".length));
+    return parsed ? { kind: parsed.kind, stem: parsed.stem } : null;
   }
   const person = localLeaf(text, PEOPLE);
-  if (person) return `${THUMBS}people/${stemOf(person)}.jpg`;
+  if (person) return { kind: "people", stem: stemOf(person) };
   const dog = localLeaf(text, DOGS);
-  if (dog) return `${THUMBS}dog-comms/${stemOf(dog)}.jpg`;
-  return "";
+  if (dog) return { kind: "dog-comms", stem: stemOf(dog) };
+  return null;
+}
+
+/** Map a catalog still href to a derived thumb href. External URLs are dropped. */
+export function thumbHrefFor(src, { variant = "", ext = "jpg" } = {}) {
+  const cat = catalogKind(src);
+  if (!cat) return "";
+  const suffix = String(variant || "").toLowerCase();
+  const format = String(ext || "jpg").toLowerCase().replace(/^\./, "");
+  if (suffix && suffix !== ".2x" && suffix !== ".hero") return "";
+  if (format !== "jpg" && format !== "webp") return "";
+  return `${THUMBS}${cat.kind}/${cat.stem}${suffix}.${format}`;
+}
+
+/** Default list JPEG (80×104). */
+export function listThumbHref(src) {
+  return thumbHrefFor(src, { variant: "", ext: "jpg" });
 }
 
 export function isThumbHref(src) {
   const text = String(src || "").trim();
-  return text.startsWith(THUMBS) && THUMB_REL.test(text.slice("/media/".length));
+  return text.startsWith(THUMBS) && !!parseThumbRel(text.slice("/media/".length));
 }
 
 export function thumbRelFromHref(href) {
   const text = String(href || "").trim();
   if (!text.startsWith(THUMBS)) return "";
-  const rel = text.slice("/media/".length);
-  return THUMB_REL.test(rel) ? rel : "";
+  const parsed = parseThumbRel(text.slice("/media/".length));
+  return parsed ? parsed.rel : "";
 }
 
 export function sourceRelCandidates(thumbRel) {
-  if (!THUMB_REL.test(thumbRel)) return [];
-  const parts = thumbRel.split("/");
-  const kind = parts[1];
-  const stem = stemOf(parts[2]);
-  return EXTS.map((ext) => `${kind}/${stem}${ext}`);
+  const parsed = parseThumbRel(thumbRel);
+  if (!parsed) return [];
+  return EXTS.map((ext) => `${parsed.kind}/${parsed.stem}${ext}`);
+}
+
+/** Gold catalog still for people / dog-comms. Empty when the href is not local media. */
+export function goldMediaHref(src) {
+  const text = String(src || "").trim();
+  if (localLeaf(text, PEOPLE) || isDogMediaHref(text)) return text;
+  return "";
+}
+
+export function detailHeroHref(src, ext = "webp") {
+  return thumbHrefFor(src, { variant: ".hero", ext });
 }
 
 function decodeStill(buf) {
@@ -99,29 +162,14 @@ function decodeStill(buf) {
   return null;
 }
 
-/** Cover-crop to 10:13. Head-biased: extra height is taken from the bottom so faces stay. */
-function coverResize(src, dw, dh) {
+function bilinearResize(src, dw, dh, crop) {
   const sw = src.width;
   const sh = src.height;
-  if (!sw || !sh) return null;
-  const srcAspect = sw / sh;
-  const dstAspect = dw / dh;
-  let cw;
-  let ch;
-  let sx;
-  let sy;
-  if (srcAspect > dstAspect) {
-    ch = sh;
-    cw = Math.max(1, Math.round(sh * dstAspect));
-    sx = Math.max(0, Math.round((sw - cw) / 2));
-    sy = 0;
-  } else {
-    cw = sw;
-    ch = Math.max(1, Math.round(sw / dstAspect));
-    sx = 0;
-    const extraH = Math.max(0, sh - ch);
-    sy = Math.max(0, Math.round(extraH * 0.18));
-  }
+  if (!sw || !sh || !dw || !dh) return null;
+  const sx = crop?.sx ?? 0;
+  const sy = crop?.sy ?? 0;
+  const cw = crop?.cw ?? sw;
+  const ch = crop?.ch ?? sh;
   const out = Buffer.alloc(dw * dh * 4);
   for (let y = 0; y < dh; y++) {
     const fy = sy + ((y + 0.5) * ch) / dh - 0.5;
@@ -156,10 +204,55 @@ function coverResize(src, dw, dh) {
   return { width: dw, height: dh, data: out };
 }
 
-export function renderPortraitJpeg(buf) {
+/** Cover-crop to 10:13. Head-biased: extra height is taken from the bottom so faces stay. */
+function coverResize(src, dw, dh) {
+  const sw = src.width;
+  const sh = src.height;
+  if (!sw || !sh) return null;
+  const srcAspect = sw / sh;
+  const dstAspect = dw / dh;
+  let cw;
+  let ch;
+  let sx;
+  let sy;
+  if (srcAspect > dstAspect) {
+    ch = sh;
+    cw = Math.max(1, Math.round(sh * dstAspect));
+    sx = Math.max(0, Math.round((sw - cw) / 2));
+    sy = 0;
+  } else {
+    cw = sw;
+    ch = Math.max(1, Math.round(sw / dstAspect));
+    sx = 0;
+    const extraH = Math.max(0, sh - ch);
+    sy = Math.max(0, Math.round(extraH * 0.18));
+  }
+  return bilinearResize(src, dw, dh, { sx, sy, cw, ch });
+}
+
+/** Keep gold composition. Downscale only when a side exceeds maxEdge. */
+function heroFrame(src) {
+  const maxEdge = 1600;
+  const m = Math.max(src.width, src.height);
+  if (m <= maxEdge) return src;
+  const scale = maxEdge / m;
+  return bilinearResize(
+    src,
+    Math.max(1, Math.round(src.width * scale)),
+    Math.max(1, Math.round(src.height * scale)),
+  );
+}
+
+function frameForVariant(decoded, variant) {
+  if (variant === ".hero") return heroFrame(decoded);
+  const { w, h } = variantSize(variant);
+  return coverResize(decoded, w, h);
+}
+
+export function renderPortraitJpeg(buf, variant = "") {
   const decoded = decodeStill(buf);
   if (!decoded) return null;
-  const resized = coverResize(decoded, PORTRAIT_PX_W, PORTRAIT_PX_H);
+  const resized = frameForVariant(decoded, variant);
   if (!resized) return null;
   try {
     const encoded = jpeg.encode(resized, LIST_THUMB_QUALITY);
@@ -169,9 +262,47 @@ export function renderPortraitJpeg(buf) {
   }
 }
 
-/** Alias of renderPortraitJpeg so list and detail stay on one crop. */
+/** Alias of the default list crop. */
 export function renderListThumb(buf) {
-  return renderPortraitJpeg(buf);
+  return renderPortraitJpeg(buf, "");
+}
+
+let webpEncodePromise = null;
+
+async function webpEncoder() {
+  if (!webpEncodePromise) {
+    webpEncodePromise = (async () => {
+      const encodeMod = await import("@jsquash/webp/encode.js");
+      const useSimd = await simd();
+      const wasmRel = useSimd
+        ? "@jsquash/webp/codec/enc/webp_enc_simd.wasm"
+        : "@jsquash/webp/codec/enc/webp_enc.wasm";
+      const compiled = await WebAssembly.compile(await readFile(require.resolve(wasmRel)));
+      await encodeMod.init(compiled);
+      return encodeMod.default;
+    })();
+  }
+  return webpEncodePromise;
+}
+
+export async function renderPortraitWebp(buf, variant = "") {
+  const decoded = decodeStill(buf);
+  if (!decoded) return null;
+  const resized = frameForVariant(decoded, variant);
+  if (!resized) return null;
+  try {
+    const encode = await webpEncoder();
+    const data = resized.data instanceof Uint8ClampedArray
+      ? resized.data
+      : new Uint8ClampedArray(resized.data);
+    const encoded = await encode(
+      { data, width: resized.width, height: resized.height },
+      { quality: LIST_THUMB_WEBP_QUALITY },
+    );
+    return encoded && encoded.byteLength ? Buffer.from(encoded) : null;
+  } catch {
+    return null;
+  }
 }
 
 const MAX_SRC_BYTES = 4 * 1024 * 1024;
@@ -197,14 +328,26 @@ function jpegSofSize(buf) {
   return null;
 }
 
-function jpegMatchesPortraitSize(file) {
+function isWebpRiff(file) {
+  try {
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(12);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+    return n >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP";
+  } catch {
+    return false;
+  }
+}
+
+function jpegMatchesSize(file, w, h) {
   try {
     const fd = fs.openSync(file, "r");
     const buf = Buffer.alloc(65536);
     const n = fs.readSync(fd, buf, 0, buf.length, 0);
     fs.closeSync(fd);
     const size = jpegSofSize(buf.subarray(0, n));
-    return !!(size && size.width === PORTRAIT_PX_W && size.height === PORTRAIT_PX_H);
+    return !!(size && size.width === w && size.height === h);
   } catch {
     return false;
   }
@@ -215,6 +358,15 @@ function destIfUsable(dest) {
     return dest;
   }
   return null;
+}
+
+function existingMatches(dest, parsed) {
+  const existing = destIfUsable(dest);
+  if (!existing) return null;
+  if (parsed.ext === "webp") return isWebpRiff(existing) ? existing : null;
+  if (parsed.variant === ".hero") return existing;
+  const { w, h } = variantSize(parsed.variant);
+  return jpegMatchesSize(existing, w, h) ? existing : null;
 }
 
 function findSourceFile(mediaDir, thumbRel) {
@@ -229,20 +381,30 @@ function findSourceFile(mediaDir, thumbRel) {
   return null;
 }
 
+function atomicWrite(dest, buf) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const tmp = `${dest}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, buf);
+  fs.renameSync(tmp, dest);
+}
+
 /** Build or reuse a derived thumb on disk. Returns the thumb path, or null.
  *  Request path never rebuilds in parallel and never decodes huge sources (avoids 502/OOM).
+ *  Writes only under media/thumbs/. Never touches originals.
  */
-export function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = {}) {
-  if (!THUMB_REL.test(thumbRel)) return null;
+export async function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = {}) {
+  const parsed = parseThumbRel(thumbRel);
+  if (!parsed) return null;
   const root = path.resolve(mediaDir);
-  const dest = path.resolve(root, thumbRel);
+  const dest = path.resolve(root, parsed.rel);
   if (dest === root || !dest.startsWith(root + path.sep)) return null;
-  const src = findSourceFile(root, thumbRel);
+  const src = findSourceFile(root, parsed.rel);
   if (!src) return destIfUsable(dest);
-  const existing = destIfUsable(dest);
+  const matching = existingMatches(dest, parsed);
   const srcStat = fs.statSync(src);
-  const fresh = existing && fs.statSync(existing).mtimeMs >= srcStat.mtimeMs;
-  if (existing && fresh && jpegMatchesPortraitSize(existing)) return existing;
+  const fresh = matching && fs.statSync(matching).mtimeMs >= srcStat.mtimeMs;
+  if (matching && fresh) return matching;
+  const existing = destIfUsable(dest);
   if (existing && !upgrade) {
     if (rebuildBusy || srcStat.size > MAX_SRC_BYTES) return existing;
   }
@@ -250,12 +412,13 @@ export function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = {}) {
   if (rebuildBusy && !upgrade) return existing;
   rebuildBusy = true;
   try {
-    const rendered = renderPortraitJpeg(fs.readFileSync(src));
+    const raw = fs.readFileSync(src);
+    const rendered =
+      parsed.ext === "webp"
+        ? await renderPortraitWebp(raw, parsed.variant)
+        : renderPortraitJpeg(raw, parsed.variant);
     if (!rendered) return existing;
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    const tmp = `${dest}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, rendered);
-    fs.renameSync(tmp, dest);
+    atomicWrite(dest, rendered);
     return dest;
   } catch {
     return existing;
@@ -264,7 +427,7 @@ export function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = {}) {
   }
 }
 
-export function buildAllThumbs(mediaDir) {
+export async function buildAllThumbs(mediaDir) {
   const root = path.resolve(mediaDir);
   const made = [];
   for (const kind of ["people", "dog-comms"]) {
@@ -272,9 +435,16 @@ export function buildAllThumbs(mediaDir) {
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
     for (const name of fs.readdirSync(dir)) {
       if (!EXTS.includes(path.extname(name).toLowerCase())) continue;
-      const rel = `thumbs/${kind}/${stemOf(name)}.jpg`;
-      const dest = ensureThumbFile(root, rel, { upgrade: true });
-      if (dest) made.push(rel);
+      const stem = stemOf(name);
+      const variants = kind === "people" ? ["", ".2x", ".hero"] : ["", ".2x"];
+      for (const variant of variants) {
+        for (const ext of ["jpg", "webp"]) {
+          if (variant === ".hero" && ext === "jpg") continue;
+          const rel = `thumbs/${kind}/${stem}${variant}.${ext}`;
+          const dest = await ensureThumbFile(root, rel, { upgrade: true });
+          if (dest) made.push(rel);
+        }
+      }
     }
   }
   return made;

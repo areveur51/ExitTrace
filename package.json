@@ -9,6 +9,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@jsquash/webp": "^1.5.0",
     "jpeg-js": "^0.4.4",
     "pg": "^8.13.1",
     "pngjs": "^7.0.0"

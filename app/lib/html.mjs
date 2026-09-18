@@ -25,11 +25,14 @@ import {
   pageWindow,
 } from "./paginate.mjs";
 import {
-  listThumbHref,
+  thumbHrefFor,
+  goldMediaHref,
   DETAIL_PORTRAIT_CSS_H,
   DETAIL_PORTRAIT_CSS_W,
   LIST_THUMB_CSS_H,
   LIST_THUMB_CSS_W,
+  LIST_THUMB_PX_W,
+  LIST_THUMB_2X_W,
   PORTRAIT_CACHE,
   isDogMediaHref,
 } from "./thumb.mjs";
@@ -528,24 +531,47 @@ function portraitSrc(href) {
   return `${href}?p=${PORTRAIT_CACHE}`;
 }
 
-/** One derived 10:13 still. List and person detail differ only by CSS size. */
+function listPortraitPicture(src, label, kind = "portrait") {
+  const jpg = thumbHrefFor(src, { variant: "", ext: "jpg" });
+  if (!jpg) {
+    return `<span class="initials thumb" aria-hidden="true">${esc(initials(label))}</span>`;
+  }
+  const jpg2 = thumbHrefFor(src, { variant: ".2x", ext: "jpg" });
+  const webp = thumbHrefFor(src, { variant: "", ext: "webp" });
+  const webp2 = thumbHrefFor(src, { variant: ".2x", ext: "webp" });
+  const srcsetJpg = `${portraitSrc(jpg)} ${LIST_THUMB_PX_W}w, ${portraitSrc(jpg2)} ${LIST_THUMB_2X_W}w`;
+  const srcsetWebp = `${portraitSrc(webp)} ${LIST_THUMB_PX_W}w, ${portraitSrc(webp2)} ${LIST_THUMB_2X_W}w`;
+  return `<picture class="thumb-src">
+    <source type="image/webp" srcset="${esc(srcsetWebp)}" sizes="${LIST_THUMB_CSS_W}px">
+    <img class="${kind} thumb" src="${esc(portraitSrc(jpg))}" srcset="${esc(srcsetJpg)}" sizes="${LIST_THUMB_CSS_W}px" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async">
+  </picture>`;
+}
+
+function peopleDetailPortrait(src, label) {
+  const gold = goldMediaHref(src);
+  if (!gold) {
+    return `<span class="initials detail-photo portrait" aria-hidden="true">${esc(initials(label))}</span>`;
+  }
+  const webpGold = gold.toLowerCase().endsWith(".webp");
+  const webpHref = webpGold ? gold : thumbHrefFor(src, { variant: ".hero", ext: "webp" });
+  const jpegHref = webpGold ? thumbHrefFor(src, { variant: ".hero", ext: "jpg" }) : gold;
+  return `<picture class="detail-portrait">
+    <source type="image/webp" srcset="${esc(portraitSrc(webpHref))}">
+    <img class="detail-photo portrait" src="${esc(portraitSrc(jpegHref))}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">
+  </picture>`;
+}
+
+/** List: small CSS + denser srcset + lazy. Detail: gold /media still, never the list thumb. */
 function localPortraitImg(src, label, { size = "list", kind = "portrait" } = {}) {
-  const href = listThumbHref(src);
-  if (!href) {
-    const cls = size === "detail" ? "initials detail-photo portrait" : "initials thumb";
-    return `<span class="${cls}" aria-hidden="true">${esc(initials(label))}</span>`;
-  }
-  if (size === "detail") {
-    return `<img class="detail-photo portrait" src="${esc(portraitSrc(href))}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">`;
-  }
-  return `<img class="${kind} thumb" src="${esc(portraitSrc(href))}" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async">`;
+  if (size === "detail") return peopleDetailPortrait(src, label);
+  return listPortraitPicture(src, label, kind);
 }
 
 export function localMediaThumb(src, label, kind = "portrait") {
   return localPortraitImg(src, label, { size: "list", kind });
 }
 
-/** Person detail uses the same derived portrait as the list thumb. Dog stills keep the full local still. */
+/** Lightbox opens the gold /media still (or screenshot), never the 80×104 list thumb. */
 function lightboxButton(src, inner, { alt = "", credit = "" } = {}) {
   const href = String(src || "").trim();
   if (!href || !String(inner || "").includes("<img")) return inner;

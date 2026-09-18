@@ -193,8 +193,9 @@ test("gold person pages stay one card and do not invent birth or event attrs", a
   assert.match(page.body, /class="event-tag-row"/);
   assert.match(page.body, /Firings/);
   assert.match(page.body, /The New York Times/);
-  assert.match(page.body, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=2"/);
-  assert.doesNotMatch(page.body, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.match(page.body, /src="\/media\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(page.body, /james-comey\.hero\.webp\?p=3/);
+  assert.doesNotMatch(page.body, /<img[^>]+src="\/media\/thumbs\/people\/james-comey\.jpg/);
   assert.doesNotMatch(page.body, /Birth date|Age at event|Announced/);
   assert.doesNotMatch(page.body, /Director, Federal Bureau of Investigation/);
   assert.doesNotMatch(page.body, /Synopsis/);

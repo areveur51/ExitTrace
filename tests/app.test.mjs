@@ -792,7 +792,7 @@ test("optional API page= uses the same window without inventing rows", async () 
   }
 });
 
-test("list thumbs and person detail share the same derived 10:13 portrait JPEG", async () => {
+test("list uses small thumbs + srcset; person masonry uses the gold still", async () => {
   const row = newestFirst(
     seed.people.filter((r) => r.category === "firings" && r.photo),
     "event_date",
@@ -802,19 +802,28 @@ test("list thumbs and person detail share the same derived 10:13 portrait JPEG",
   const list = await get("/firings");
   const detail = await get(`/people/${row.id}`);
   const thumb = await getRaw(`/media/thumbs/people/${stem}.jpg`);
+  const dense = await getRaw(`/media/thumbs/people/${stem}.2x.jpg`);
+  const heroWebp = await getRaw(`/media/thumbs/people/${stem}.hero.webp`);
   const original = await getRaw(row.photo);
 
-  assert.match(list.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg\\?p=2"`));
+  assert.match(list.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg\\?p=3"`));
+  assert.match(list.body, new RegExp(`${stem}\\.2x\\.jpg\\?p=3 160w`));
+  assert.match(list.body, /loading="lazy"/);
   assert.doesNotMatch(list.body, new RegExp(`src="/media/people/${stem}\\.`));
   assert.match(detail.body, /class="person-header"/);
   assert.match(detail.body, /class="detail-photo portrait"/);
-  assert.match(detail.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg\\?p=2"`));
+  assert.match(detail.body, new RegExp(`src="/media/people/${stem}\\.jpg\\?p=3"`));
+  assert.match(detail.body, new RegExp(`${stem}\\.hero\\.webp\\?p=3`));
+  assert.match(detail.body, /data-lightbox="\/media\/people\//);
   assert.doesNotMatch(detail.body, /class="portrait thumb"/);
-  assert.doesNotMatch(detail.body, new RegExp(`src="/media/people/${stem}\\.`));
+  assert.doesNotMatch(detail.body, new RegExp(`<img[^>]+src="/media/thumbs/people/${stem}\\.jpg`));
 
   assert.equal(thumb.status, 200);
+  assert.equal(dense.status, 200);
+  assert.equal(heroWebp.status, 200);
   assert.equal(original.status, 200);
   assert.match(thumb.headers["content-type"], /image\/jpeg/);
+  assert.match(heroWebp.headers["content-type"], /image\/webp/);
   assert.match(thumb.headers["cache-control"], /max-age=31536000/);
   assert.match(thumb.headers["cache-control"], /immutable/);
   assert.match(original.headers["cache-control"], /max-age=31536000/);
@@ -822,6 +831,10 @@ test("list thumbs and person detail share the same derived 10:13 portrait JPEG",
   const originalBytes = Number(original.headers["content-length"]);
   assert.ok(thumbBytes > 0 && originalBytes > 0);
   const decoded = jpeg.decode(thumb.body, { useTArray: true });
-  assert.equal(decoded.width, 192);
-  assert.equal(decoded.height, 250);
+  assert.equal(decoded.width, 80);
+  assert.equal(decoded.height, 104);
+  const decoded2x = jpeg.decode(dense.body, { useTArray: true });
+  assert.equal(decoded2x.width, 160);
+  assert.equal(decoded2x.height, 208);
+  assert.equal(heroWebp.body.toString("ascii", 0, 4), "RIFF");
 });
