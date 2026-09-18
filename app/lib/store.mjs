@@ -33,6 +33,7 @@ import {
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { asPostedAt } from "./categories.mjs";
+import { isLogicalSubscriber } from "./logical-heal.mjs";
 import { commsKind } from "./kind-comms.mjs";
 import {
   buildOperationRow,
@@ -575,7 +576,9 @@ export async function upsertEtMeta(k, v) {
 }
 
 /**
- * Ops heal for lab→Render logical apply crash-loop.
+ * Ops heal for lab→Render logical apply crash-loop. Subscriber-only:
+ * no pg_subscription (publisher / lab) is a no-op. Never auto-SKIP an LSN
+ * (Worf #100: SKIP needs Admiral SIGN; not planned or auto-run).
  * - Promote dog_comms.posted_at DATE→TEXT (idempotent; matches bootstrap-db.sql).
  * - Idempotent upsert of data/ops/logical-gap-heal-20260918.json.gz snapshot.
  * - Advance pg_replication_origin to lab tip, then ENABLE subscription.
@@ -584,6 +587,31 @@ export async function upsertEtMeta(k, v) {
 export async function healLogicalApply() {
   const p = await getPool();
   if (!p) return { ok: false, reason: "no_pool" };
+  let present = false;
+  try {
+    const sub = await p.query(`SELECT EXISTS (SELECT 1 FROM pg_subscription) AS present`);
+    present = Boolean(sub.rows[0]?.present);
+  } catch {
+    present = false;
+  }
+  if (!isLogicalSubscriber(present)) {
+    return {
+      ok: true,
+      reason: "no_subscription",
+      posted_at_type_before: null,
+      posted_at_type_after: null,
+      altered: false,
+      apply_error_count_before: null,
+      bounced: false,
+      gap_upserted: false,
+      origin_advanced: false,
+      lab_tip_lsn: null,
+      people: null,
+      dog_comms: null,
+      operations: null,
+      warren: null,
+    };
+  }
   const out = {
     ok: true,
     posted_at_type_before: null,
@@ -799,24 +827,7 @@ export async function healLogicalApply() {
         client.release();
       }
 
-      // Skip poison txn(s) stuck at confirmed_flush, then fast-forward origin to tip.
-      const skipLsns = [];
-      if (gap.confirmed_flush_lsn) skipLsns.push(String(gap.confirmed_flush_lsn));
-      // Next commit LSNs observed via publisher peek of the crash window.
-      for (const lsn of ["0/D4F63B50", "0/D4F653A8", "0/D4F65440"]) {
-        if (!skipLsns.includes(lsn)) skipLsns.push(lsn);
-      }
-      out.skipped_lsns = [];
-      for (const lsn of skipLsns) {
-        try {
-          await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub SKIP (lsn = '${lsn}')`);
-          out.skipped_lsns.push(lsn);
-        } catch (e) {
-          out.skip_error = String(e?.message || e).slice(0, 160);
-          break;
-        }
-      }
-
+      // Fast-forward origin to tip. Never auto-SKIP an LSN here.
       if (out.lab_tip_lsn) {
         try {
           const origins = await p.query(

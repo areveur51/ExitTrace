@@ -12,9 +12,11 @@ import {
   MAX_AUTO_RECONNECTS,
   SUSTAINED_UNHEALTHY_MS,
   classifyApplyHealth,
+  isLogicalSubscriber,
   planHeal,
   poisonTxnSignRecipe,
   publicApplyErrorCount,
+  publicHealthApplyState,
   publicApplyState,
   publicGitSha,
   reconnectBackoffSeconds,
@@ -52,6 +54,24 @@ test("public apply_state and error count are allowlisted", () => {
   assert.equal(publicApplyErrorCount({ apply_error_count: 12 }), 12);
   assert.equal(publicApplyErrorCount(-4), 0);
   assert.equal(publicApplyErrorCount("nope"), null);
+});
+
+test("publisher / no pg_subscription is not a public subscriber absent alarm", () => {
+  assert.equal(isLogicalSubscriber({ present: false }), false);
+  assert.equal(isLogicalSubscriber(false), false);
+  assert.equal(isLogicalSubscriber({ present: true }), true);
+  const none = classifyApplyHealth({ present: false });
+  assert.equal(none.state, "absent");
+  assert.equal(none.subscriber, false);
+  assert.equal(none.reason, "no_subscription");
+  assert.notEqual(none.state, "crash_loop");
+  assert.equal(publicHealthApplyState(none.state), null);
+  assert.equal(publicHealthApplyState("absent"), null);
+  assert.equal(publicHealthApplyState("crash_loop"), "crash_loop");
+  assert.equal(publicHealthApplyState(null), null);
+  const observe = planHeal({ present: false });
+  assert.deepEqual(observe.actions, ["observe"]);
+  assert.equal(observe.actions.includes("skip_lsn"), false);
 });
 
 test("publicGitSha accepts only hex SHAs", () => {
@@ -228,4 +248,23 @@ test("heal library and keep-up do not read process SYNC_MODE", () => {
     const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
     assert.doesNotMatch(text, /process\.env\.SYNC_MODE/);
   }
+});
+
+test("boot heal is subscriber-only and never auto-SKIPs LSN", () => {
+  const store = fs.readFileSync(path.join(ROOT, "app/lib/store.mjs"), "utf8");
+  const server = fs.readFileSync(path.join(ROOT, "app/server.mjs"), "utf8");
+  const heal = fs.readFileSync(path.join(ROOT, "app/lib/logical-heal.mjs"), "utf8");
+  const keep = fs.readFileSync(path.join(ROOT, "app/lib/keep-up.mjs"), "utf8");
+  const script = fs.readFileSync(path.join(ROOT, "scripts/logical-apply-heal.mjs"), "utf8");
+  assert.match(store, /EXISTS \(SELECT 1 FROM pg_subscription\)/);
+  assert.match(store, /isLogicalSubscriber/);
+  assert.match(store, /no_subscription/);
+  assert.doesNotMatch(store, /ALTER SUBSCRIPTION\s+[A-Za-z_][A-Za-z0-9_]*\s+SKIP/);
+  assert.doesNotMatch(store, /SKIP \(lsn\s*=/);
+  assert.doesNotMatch(store, /0\/D4F63B50|0\/D4F653A8|0\/D4F65440/);
+  assert.doesNotMatch(server, /SKIP \(lsn\s*=/);
+  assert.doesNotMatch(heal, /actions\.push\(["']skip/);
+  assert.doesNotMatch(script, /ALTER SUBSCRIPTION[^\n]*SKIP/);
+  assert.match(keep, /isLogicalSubscriber/);
+  assert.match(keep, /publicHealthApplyState/);
 });

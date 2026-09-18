@@ -1052,7 +1052,7 @@ async function boot() {
     try {
       const heal = await healLogicalApply();
       console.log(
-        `[exittrace] logical_heal ok=${heal.ok} altered=${heal.altered} bounced=${heal.bounced} posted_at=${heal.posted_at_type_after} apply_errors_before=${heal.apply_error_count_before} people=${heal.people} dog_comms=${heal.dog_comms}`,
+        `[exittrace] logical_heal ok=${heal.ok} reason=${heal.reason || ""} altered=${heal.altered} bounced=${heal.bounced} posted_at=${heal.posted_at_type_after} apply_errors_before=${heal.apply_error_count_before} people=${heal.people} dog_comms=${heal.dog_comms}`,
       );
     } catch (err) {
       console.error('[exittrace] logical_heal failed', err);

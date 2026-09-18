@@ -80,6 +80,7 @@ test("live apply_state and apply_error_count are public-safe", () => {
   assert.equal(keep.logical.lag_seconds, 1);
   assert.equal(buildKeepUp({}, { applyState: "truncate" }).logical.apply_state, null);
   assert.equal(buildKeepUp({}, { applyState: "postgres://x" }).logical.apply_state, null);
+  assert.equal(buildKeepUp({}, { applyState: "absent" }).logical.apply_state, null);
 });
 
 test("live lag wins over stored lag; bad lag is null", () => {

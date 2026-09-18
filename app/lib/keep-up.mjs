@@ -1,4 +1,9 @@
-import { classifyApplyHealth, publicApplyErrorCount, publicApplyState } from "./logical-heal.mjs";
+import {
+  classifyApplyHealth,
+  isLogicalSubscriber,
+  publicApplyErrorCount,
+  publicHealthApplyState,
+} from "./logical-heal.mjs";
 import { getEtMeta, readLogicalApplySnapshot } from "./store.mjs";
 
 /** Public keep-up stamps. Stored in et_meta; health never invents a second store. */
@@ -174,7 +179,7 @@ export function buildKeepUp(
       stream_started: publicTimestamp(meta[k.logicalStreamStarted]),
       last_verify: publicTimestamp(meta[k.logicalLastVerify]),
       lag_seconds: liveLag !== null ? liveLag : storedLag,
-      apply_state: publicApplyState(applyState),
+      apply_state: publicHealthApplyState(applyState),
       apply_error_count: publicApplyErrorCount(applyErrorCount),
     },
     media_delta: {
@@ -200,7 +205,7 @@ export async function readKeepUp() {
       getEtMeta(KEEP_UP_META_KEY_LIST),
       readLogicalApplySnapshot(),
     ]);
-    if (!snap) {
+    if (!snap || !isLogicalSubscriber(snap)) {
       return buildKeepUp(meta);
     }
     const health = classifyApplyHealth(snap);
