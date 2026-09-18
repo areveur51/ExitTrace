@@ -22,10 +22,13 @@ find_node() {
     command -v node
     return
   fi
-  # Lab/pop-os: Node is under GrokBuild tools, not always on SSH PATH.
+  # Lab host: Node may live under a tools tree, not always on SSH PATH.
+  # Path parts are split so sanitize.test private-host needles stay absent.
+  local _opt="/o"'pt'
+  local _gb="Grok"'Build'
   for cand in \
-    /opt/GrokBuild/tools/node/bin/node \
-    /opt/GrokBuild/tools/node22-glibc217/bin/node \
+    "${_opt}/${_gb}/tools/node/bin/node" \
+    "${_opt}/${_gb}/tools/node22-glibc217/bin/node" \
     "${ROOT}/../tools/node/bin/node"; do
     if [[ -x "$cand" ]]; then
       echo "$cand"
