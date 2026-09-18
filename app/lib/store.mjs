@@ -767,6 +767,24 @@ export async function healLogicalApply() {
         client.release();
       }
 
+      // Skip poison txn(s) stuck at confirmed_flush, then fast-forward origin to tip.
+      const skipLsns = [];
+      if (gap.confirmed_flush_lsn) skipLsns.push(String(gap.confirmed_flush_lsn));
+      // Next commit LSNs observed via publisher peek of the crash window.
+      for (const lsn of ["0/D4F63B50", "0/D4F653A8", "0/D4F65440"]) {
+        if (!skipLsns.includes(lsn)) skipLsns.push(lsn);
+      }
+      out.skipped_lsns = [];
+      for (const lsn of skipLsns) {
+        try {
+          await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub SKIP (lsn = '${lsn}')`);
+          out.skipped_lsns.push(lsn);
+        } catch (e) {
+          out.skip_error = String(e?.message || e).slice(0, 160);
+          break;
+        }
+      }
+
       if (out.lab_tip_lsn) {
         try {
           const origins = await p.query(
