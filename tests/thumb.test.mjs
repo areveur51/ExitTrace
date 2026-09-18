@@ -17,6 +17,7 @@ import {
   detailHeroHref,
   ensureThumbFile,
   goldMediaHref,
+  isCommsMediaHref,
   isDogMediaHref,
   isThumbHref,
   listThumbHref,
@@ -59,6 +60,10 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
     "/media/thumbs/dog-comms/dod-k9-2020.jpg",
   );
   assert.equal(
+    listThumbHref("/media/red-folder-comms/flotus-2026-09-17.jpg"),
+    "/media/thumbs/red-folder-comms/flotus-2026-09-17.jpg",
+  );
+  assert.equal(
     listThumbHref("/media/thumbs/people/james-comey.jpg"),
     "/media/thumbs/people/james-comey.jpg",
   );
@@ -74,6 +79,8 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
   assert.equal(isDogMediaHref("/media/dog-comms/dod-k9-2020.jpg"), true);
   assert.equal(isDogMediaHref("/media/people/james-comey.jpg"), false);
   assert.equal(isDogMediaHref("/media/dog-comms/../people/x.jpg"), false);
+  assert.equal(isCommsMediaHref("/media/red-folder-comms/flotus-2026-09-17.jpg", "red-folder-comms"), true);
+  assert.equal(isCommsMediaHref("/media/dog-comms/dod-k9-2020.jpg", "red-folder-comms"), false);
   assert.deepEqual(sourceRelCandidates("thumbs/people/james-comey.jpg"), [
     "people/james-comey.jpg",
     "people/james-comey.jpeg",

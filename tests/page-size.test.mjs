@@ -102,6 +102,7 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
   const celebs = await requestPage("/deaths/celebrities");
   const unsorted = await requestPage("/unsorted");
   const dogs = await requestPage("/dog-comms");
+  const folders = await requestPage("/red-folder-comms");
   const home = await requestPage("/");
   const add = await requestPage("/add");
   const detail = await requestPage("/people/james-comey");
@@ -124,7 +125,7 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
     assert.match(res.body, /data-page-size-set="34"/);
     assert.match(res.body, /data-page-size-set="51"/);
   }
-  for (const res of [dogs, home, add, detail, dash]) {
+  for (const res of [dogs, folders, home, add, detail, dash]) {
     assert.doesNotMatch(res.body, /data-page-size=/);
     assert.doesNotMatch(res.body, /data-page-size-set=/);
     assert.doesNotMatch(res.body, /class="page-size"/);
@@ -149,6 +150,8 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
   const dogCards = countClass(dogs.body, "dog-card");
   assert.ok(dogCards <= DOG_PAGE_SIZE);
   assert.ok(dogCards > 0);
+  assert.equal(folders.status, 200);
+  assert.doesNotMatch(folders.body, /class="age-filter"/);
 });
 
 test("app.js persists page size in localStorage like themes", () => {

@@ -114,6 +114,10 @@ Path A / streaming: `et-sub-reconnect` retries ENABLE with the same backoff. `et
 
 Arm automatic catch-up from heal with repository variable `ET_AUTO_GAP_UPSERT=true` (off by default).
 
+## Red-folder comms publication
+
+`red_folder_comms` is a `dog_comms` twin. Lab adds it with `scripts/add-red-folder-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE red_folder_comms` when missing). Subscriber then `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)` only if the relation is missing. Never `copy_data=true`. Media uses the existing media-delta rsync path. Do not gap-upsert the existing lab harvest rows from this restore.
+
 ## Render code freshness
 
 Render Git auto-deploy on `main` is the deploy plane (Dashboard → the existing web service → Settings → Auto-Deploy). This repo does not force redeploys.

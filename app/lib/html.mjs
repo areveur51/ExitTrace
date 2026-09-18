@@ -34,8 +34,9 @@ import {
   LIST_THUMB_PX_W,
   LIST_THUMB_2X_W,
   PORTRAIT_CACHE,
-  isDogMediaHref,
+  isCommsMediaHref,
 } from "./thumb.mjs";
+import { commsKind, commsKindByPath, isCommsKind } from "./kind-comms.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
 import {
@@ -177,6 +178,7 @@ function keymapItems(activePath) {
     { key: "b", href: "/dashboard", label: "Dashboard" },
     { key: "u", href: "/unsorted" },
     { key: "c", href: "/dog-comms", label: "Dog" },
+    { key: "e", href: "/red-folder-comms", label: "Red Folder" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ].map((item) => ({
     ...item,
@@ -271,7 +273,7 @@ export function keymapFooter(activePath) {
     .join("");
   return `<footer class="keymap" aria-label="Catalog">
     <div class="keymap-keys">${chips}</div>
-    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm and red-folder-comm stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -383,8 +385,9 @@ export function breadcrumbItems({
     items.push({ href: p, label: label || "Source post" });
     return items;
   }
-  if (p.startsWith("/dog-comms/") && p !== "/dog-comms") {
-    items.push({ href: "/dog-comms", label: "Dog comms" });
+  const comms = commsKindByPath(p);
+  if (comms && p !== comms.path) {
+    items.push({ href: comms.path, label: comms.label });
     items.push({ href: p, label: label || "Snapshot" });
     return items;
   }
@@ -587,8 +590,9 @@ function creditWithoutUrls(raw) {
     .trim();
 }
 
-/** Extra local stills from dog snapshot.stills (skip primary still). */
-export function dogExtraStills(row) {
+/** Extra local stills from comms snapshot.stills (skip primary still). */
+export function kindExtraStills(kind, row) {
+  const spec = commsKind(kind);
   const primary = String(row?.still || "").trim();
   const raw = row?.snapshot?.stills;
   if (!Array.isArray(raw)) return [];
@@ -596,11 +600,16 @@ export function dogExtraStills(row) {
   const seen = new Set(primary ? [primary] : []);
   for (const item of raw) {
     const href = String(item || "").trim();
-    if (!href || seen.has(href) || !isDogMediaHref(href)) continue;
+    if (!href || seen.has(href) || !isCommsMediaHref(href, spec.mediaDir)) continue;
     seen.add(href);
     out.push(href);
   }
   return out;
+}
+
+/** Extra local stills from dog snapshot.stills (skip primary still). */
+export function dogExtraStills(row) {
+  return kindExtraStills("dog", row);
 }
 
 function detailMediaTile({
@@ -778,10 +787,11 @@ function detailShell({
   );
 }
 
-export function localMediaPortrait(src, label, { dog = false } = {}) {
-  if (dog) {
+export function localMediaPortrait(src, label, { dog = false, commsKind: kind } = {}) {
+  const spec = kind ? commsKind(kind) : dog ? commsKind("dog") : null;
+  if (spec) {
     const href = String(src || "").trim();
-    if (isDogMediaHref(href)) {
+    if (isCommsMediaHref(href, spec.mediaDir)) {
       return `<img class="detail-photo portrait" src="${esc(href)}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">`;
     }
     return `<span class="initials detail-photo portrait" aria-hidden="true">${esc(initials(label))}</span>`;
@@ -915,15 +925,20 @@ export function operationRow(row, { selected } = {}) {
   </a>`;
 }
 
-export function dogListRow(row, { selected } = {}) {
-  const href = `/dog-comms/${encodeURIComponent(row.id)}`;
-  return `<a class="tui-row dog-card${selected ? " is-selected" : ""}" href="${esc(href)}">
+export function kindListRow(kind, row, { selected } = {}) {
+  const spec = commsKind(kind);
+  const href = `${spec.path}/${encodeURIComponent(row.id)}`;
+  return `<a class="tui-row ${spec.cardClass}${selected ? " is-selected" : ""}" href="${esc(href)}">
     ${thumb(row.still, row.handle, "still")}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.handle)}</div>
-      <div class="tui-meta"><time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · Dog comms</div>
+      <div class="tui-meta"><time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · ${esc(spec.label)}</div>
     </div>
   </a>`;
+}
+
+export function dogListRow(row, opts = {}) {
+  return kindListRow("dog", row, opts);
 }
 
 function groupByYear(rows, dateKey, render) {
@@ -975,7 +990,9 @@ export function catalogList(items, { showDeath } = {}) {
   if (!items.length) return `<p class="empty">No rows on this page.</p>`;
   return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => {
     if (item.type === "source") return sourcePostRow(item.row, opts);
-    if (item.type === "dog") return dogListRow(item.row, opts);
+    if (item.type === "dog" || item.type === "red_folder" || isCommsKind(item.type)) {
+      return kindListRow(item.type === "dog" ? "dog" : item.type, item.row, opts);
+    }
     if (item.type === "operation") return operationRow(item.row, opts);
     return personRow(item.row, { ...opts, showDeath });
   })}</div>`;
@@ -1003,9 +1020,16 @@ export function operationList(rows) {
   return `<div class="people-list tui-list">${groupByYear(rows, "event_date", operationRow)}</div>`;
 }
 
-export function dogList(rows) {
+export function kindList(kind, rows) {
+  const spec = commsKind(kind);
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="dog-page tui-list">${groupByYear(rows, "posted_at", dogListRow)}</div>`;
+  return `<div class="${spec.pageClass} tui-list">${groupByYear(rows, "posted_at", (row, opts) =>
+    kindListRow(kind, row, opts),
+  )}</div>`;
+}
+
+export function dogList(rows) {
+  return kindList("dog", rows);
 }
 
 export function pager(meta, { basePath, noun = "rows", pageSizes } = {}) {
@@ -1062,7 +1086,7 @@ export function homeBody({ version }) {
     <form class="tui-search" action="/search" method="get" role="search">
       <label class="tui-search-label">
         <span class="chev" aria-hidden="true">〉</span>
-        <input type="search" name="q" placeholder="Search people, operations, dog comms, and unsorted posts..." autocomplete="off" enterkeyhint="search">
+        <input type="search" name="q" placeholder="Search people, operations, dog comms, red-folder comms, and unsorted posts..." autocomplete="off" enterkeyhint="search">
       </label>
     </form>
     <p class="home-tag">Sourced public-role exits and official government dog-comms since 2017. A seed set, not a census.</p>`;
@@ -1280,20 +1304,22 @@ export function operationDetail(row) {
   </article>`;
 }
 
-export function dogDetail(row) {
-  const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, { dog: true });
-  // Source tile: X URL only — no capture notes / other cite clutter. Separate from cite.
-  const extras = dogExtraStills(row).map((src) => ({
+export function kindDetail(kind, row) {
+  const spec = commsKind(kind);
+  const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
+    commsKind: spec.id,
+  });
+  const extras = kindExtraStills(spec.id, row).map((src) => ({
     src,
     alt: `Post media for ${row.handle}`,
     credit: row.still_credit || "",
   }));
-  return `<article class="detail dog-detail">
+  return `<article class="detail ${spec.detailClass}">
     ${detailShell({
       title: "Metadata",
       mediaHtml: detailMediaStrip({
         portraitHtml: photo,
-        portraitSrc: isDogMediaHref(row.still) ? row.still : "",
+        portraitSrc: isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "",
         portraitAlt: `Stored still for ${row.handle}`,
         portraitCredit: row.still_credit,
         screenshot: row.screenshot,
@@ -1311,6 +1337,10 @@ export function dogDetail(row) {
   </article>`;
 }
 
+export function dogDetail(row) {
+  return kindDetail("dog", row);
+}
+
 export function searchBody(items, q) {
   if (!String(q || "").trim()) {
     return `<p class="empty">Type a name, role, handle, or stored post text. Search stays local.</p>`;
@@ -1321,10 +1351,12 @@ export function searchBody(items, q) {
   const people = [];
   const operations = [];
   const dogs = [];
+  const folders = [];
   const sources = [];
   for (const item of items) {
     if (item.type === "source") sources.push(item);
     else if (item.type === "dog") dogs.push(item);
+    else if (item.type === "red_folder") folders.push(item);
     else if (item.type === "operation") operations.push(item);
     else people.push(item);
   }
@@ -1332,7 +1364,9 @@ export function searchBody(items, q) {
   const render = (item) => {
     const selected = first;
     first = false;
-    if (item.type === "dog") return dogListRow(item.row, { selected });
+    if (item.type === "dog" || item.type === "red_folder") {
+      return kindListRow(item.type, item.row, { selected });
+    }
     if (item.type === "source") return sourcePostRow(item.row, { selected });
     if (item.type === "operation") return operationRow(item.row, { selected });
     return personRow(item.row, { selected, showDeath: isDeathCategory(item.row.category) });
@@ -1341,6 +1375,7 @@ export function searchBody(items, q) {
   if (people.length) blocks.push(people.map(render).join(""));
   if (operations.length) blocks.push(operations.map(render).join(""));
   if (dogs.length) blocks.push(dogs.map(render).join(""));
+  if (folders.length) blocks.push(folders.map(render).join(""));
   if (sources.length) {
     blocks.push(
       `<section class="tui-group unsorted-group">

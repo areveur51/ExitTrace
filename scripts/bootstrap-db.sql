@@ -123,6 +123,39 @@ UPDATE dog_comms
 ALTER TABLE dog_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE dog_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 
+-- Red-folder comms: twin of dog_comms. Lab harvest rows stay annotate-only.
+CREATE TABLE IF NOT EXISTS red_folder_comms (
+  id TEXT PRIMARY KEY,
+  posted_at TEXT NOT NULL,
+  handle TEXT NOT NULL,
+  account_name TEXT,
+  text TEXT NOT NULL,
+  still TEXT,
+  still_credit TEXT,
+  screenshot TEXT,
+  screenshot_credit TEXT,
+  source_url TEXT NOT NULL,
+  snapshot JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS red_folder_comms_posted_at_idx ON red_folder_comms (posted_at DESC);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'red_folder_comms'
+       AND column_name = 'posted_at' AND data_type = 'date'
+  ) THEN
+    ALTER TABLE red_folder_comms
+      ALTER COLUMN posted_at TYPE TEXT
+      USING to_char(posted_at, 'YYYY-MM-DD');
+  END IF;
+END $$;
+
+ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
+ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
+
 -- Parked public posts (not identified people). Gold people stay in `people`.
 CREATE TABLE IF NOT EXISTS source_posts (
   id TEXT PRIMARY KEY,

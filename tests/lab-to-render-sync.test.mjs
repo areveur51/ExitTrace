@@ -110,6 +110,9 @@ test("docs name production DATABASE_URL, generic runner labels, and dump env pla
   assert.match(doc, /et-gap-upsert/);
   assert.match(doc, /NEEDS_SIGN/);
   assert.match(doc, /RENDER_GIT_COMMIT/);
+  assert.match(doc, /add-red-folder-comms-publication\.sql/);
+  assert.match(doc, /ALTER PUBLICATION exittrace_lab_pub ADD TABLE red_folder_comms/);
+  assert.match(doc, /copy_data = false/);
   assert.doesNotMatch(doc, /RENDER_DATABASE_URL/);
   assertNoPrivateHost(doc, "docs");
 });

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
  * Derive list thumbs from stored stills. Writes only under media/thumbs/.
- * Never deletes or overwrites originals in media/people or media/dog-comms.
+ * Never deletes or overwrites originals in media/people, media/dog-comms,
+ * or media/red-folder-comms.
  *
  * Default list JPEG/WebP is 80×104 (2× of the 40×52 CSS box). A denser
  * 160×208 pair is also written for srcset. People get a ≥2× hero WebP
- * (and JPEG) for detail <picture> fallback. Dog detail keeps the gold still.
+ * (and JPEG) for detail <picture> fallback. Dog and red-folder detail keep the gold still.
  *
  * The running app also builds a missing file on first request.
  * Does not fetch remote images. Run: npm run thumbs

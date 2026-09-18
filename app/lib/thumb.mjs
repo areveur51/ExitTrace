@@ -1,5 +1,6 @@
 /** Derived local list thumbs. Never fetch X, Wikimedia, or news at view time.
- *  Never writes into media/people or media/dog-comms. Never deletes originals.
+ *  Never writes into media/people, media/dog-comms, or media/red-folder-comms.
+ *  Never deletes originals.
  */
 
 import fs from "fs";
@@ -31,16 +32,23 @@ export const LIST_THUMB_QUALITY = 78;
 export const LIST_THUMB_WEBP_QUALITY = 78;
 
 export function isDogMediaHref(raw) {
+  return isCommsMediaHref(raw, "dog-comms");
+}
+
+export function isCommsMediaHref(raw, mediaDir) {
   const text = String(raw || "").trim();
-  return text.startsWith("/media/dog-comms/") && !text.includes("..");
+  const dir = String(mediaDir || "").replace(/^\/+|\/+$/g, "");
+  if (!dir || dir.includes("..") || dir.includes("/")) return false;
+  return text.startsWith(`/media/${dir}/`) && !text.includes("..");
 }
 
 const PEOPLE = "/media/people/";
 const DOGS = "/media/dog-comms/";
+const RED_FOLDER = "/media/red-folder-comms/";
 const THUMBS = "/media/thumbs/";
 const EXTS = [".jpg", ".jpeg", ".png", ".webp"];
 const THUMB_REL =
-  /^thumbs\/(people|dog-comms)\/([a-z0-9][a-z0-9_-]*)(\.(?:2x|hero))?\.(jpg|webp)$/i;
+  /^thumbs\/(people|dog-comms|red-folder-comms)\/([a-z0-9][a-z0-9_-]*)(\.(?:2x|hero))?\.(jpg|webp)$/i;
 const VARIANT_SIZE = {
   "": { w: LIST_THUMB_PX_W, h: LIST_THUMB_PX_H },
   ".2x": { w: LIST_THUMB_2X_W, h: LIST_THUMB_2X_H },
@@ -94,6 +102,8 @@ function catalogKind(src) {
   if (person) return { kind: "people", stem: stemOf(person) };
   const dog = localLeaf(text, DOGS);
   if (dog) return { kind: "dog-comms", stem: stemOf(dog) };
+  const folder = localLeaf(text, RED_FOLDER);
+  if (folder) return { kind: "red-folder-comms", stem: stemOf(folder) };
   return null;
 }
 
@@ -131,10 +141,12 @@ export function sourceRelCandidates(thumbRel) {
   return EXTS.map((ext) => `${parsed.kind}/${parsed.stem}${ext}`);
 }
 
-/** Gold catalog still for people / dog-comms. Empty when the href is not local media. */
+/** Gold catalog still for people / dog-comms / red-folder-comms. Empty when the href is not local media. */
 export function goldMediaHref(src) {
   const text = String(src || "").trim();
-  if (localLeaf(text, PEOPLE) || isDogMediaHref(text)) return text;
+  if (localLeaf(text, PEOPLE) || isDogMediaHref(text) || isCommsMediaHref(text, "red-folder-comms")) {
+    return text;
+  }
   return "";
 }
 
@@ -430,7 +442,7 @@ export async function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = 
 export async function buildAllThumbs(mediaDir) {
   const root = path.resolve(mediaDir);
   const made = [];
-  for (const kind of ["people", "dog-comms"]) {
+  for (const kind of ["people", "dog-comms", "red-folder-comms"]) {
     const dir = path.join(root, kind);
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
     for (const name of fs.readdirSync(dir)) {

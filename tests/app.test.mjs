@@ -115,6 +115,8 @@ test("health is 200 on file backend", async () => {
   assert.equal(json.backend, "file");
   assert.equal(json.people, seed.people.length);
   assert.equal(json.dog_comms, seed.dog_comms.length);
+  assert.equal(json.red_folder_comms, 0);
+  assert.equal(json.byCategory.red_folder_comms, 0);
   assert.equal(json.operations, (seed.operations || []).length);
   assert.equal(json.keep_up.timezone, "America/New_York");
   assert.equal(json.keep_up.logical.stream_started, null);
@@ -169,6 +171,7 @@ test("html pages render", async () => {
     "/group-operations/fraud",
     "/unsorted",
     "/dog-comms",
+    "/red-folder-comms",
     "/add",
     "/add?mode=dog",
     "/add?mode=operation",
@@ -292,6 +295,7 @@ test("every category list page ships a pager", async () => {
     "/group-operations/fraud",
     "/unsorted",
     "/dog-comms",
+    "/red-folder-comms",
   ];
   for (const p of paths) {
     const res = await get(p);
@@ -508,6 +512,7 @@ test("list pages lock Glass only and keep catalog copy, not pin LARP", async () 
   assert.doesNotMatch(list.body, /href="\/add"/);
   assert.doesNotMatch(list.body, /href="\/search"/);
   assert.match(list.body, /href="\/dog-comms"/);
+  assert.match(list.body, /href="\/red-folder-comms"/);
   assert.match(list.body, /data-key="f"/);
   assert.match(list.body, />Firings</);
   assert.doesNotMatch(
