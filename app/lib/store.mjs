@@ -542,6 +542,155 @@ export async function upsertEtMeta(k, v) {
 }
 
 /**
+ * Ops heal for lab→Render logical apply crash-loop.
+ * - Promote dog_comms.posted_at DATE→TEXT (idempotent; matches bootstrap-db.sql).
+ * - Bounce exittrace_lab_sub DISABLE/ENABLE when apply_error_count > 0.
+ * Returns a public-safe summary (no DSNs, hosts, or passwords).
+ */
+export async function healLogicalApply() {
+  const p = await getPool();
+  if (!p) return { ok: false, reason: 'no_pool' };
+  const out = {
+    ok: true,
+    posted_at_type_before: null,
+    posted_at_type_after: null,
+    altered: false,
+    apply_error_count_before: null,
+    bounced: false,
+    warren: null,
+    people: null,
+    dog_comms: null,
+    operations: null,
+  };
+  try {
+    const typeRes = await p.query(
+      `SELECT data_type FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='dog_comms' AND column_name='posted_at'`,
+    );
+    out.posted_at_type_before = typeRes.rows[0]?.data_type || null;
+    if (out.posted_at_type_before === 'date') {
+      await p.query(
+        `ALTER TABLE dog_comms
+           ALTER COLUMN posted_at TYPE TEXT
+           USING to_char(posted_at, 'YYYY-MM-DD')`,
+      );
+      out.altered = true;
+    }
+    const typeAfter = await p.query(
+      `SELECT data_type FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='dog_comms' AND column_name='posted_at'`,
+    );
+    out.posted_at_type_after = typeAfter.rows[0]?.data_type || null;
+
+    // Promote snapshot ISO clocks when column is TEXT (safe re-run).
+    if (out.posted_at_type_after === 'text') {
+      await p.query(
+        `UPDATE dog_comms
+            SET posted_at = snapshot->>'posted_at'
+          WHERE snapshot ? 'posted_at'
+            AND (snapshot->>'posted_at') ~ '[Tt ][0-9]{2}:'
+            AND posted_at !~ '[Tt ][0-9]{2}:'`,
+      );
+    }
+
+    let errCount = null;
+    try {
+      const er = await p.query(
+        `SELECT apply_error_count FROM pg_stat_subscription_stats
+          WHERE subname = 'exittrace_lab_sub'`,
+      );
+      errCount = er.rows[0] ? Number(er.rows[0].apply_error_count) : null;
+    } catch {
+      errCount = null;
+    }
+    out.apply_error_count_before = errCount;
+
+    // Bounce when we altered the type, or when apply is clearly crash-looping.
+    const shouldBounce = out.altered || (Number.isFinite(errCount) && errCount > 0);
+    if (shouldBounce) {
+      await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub DISABLE`);
+      await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub ENABLE`);
+      out.bounced = true;
+    }
+
+    const counts = await p.query(
+      `SELECT
+         (SELECT count(*)::int FROM people) AS people,
+         (SELECT count(*)::int FROM dog_comms) AS dog_comms,
+         (SELECT count(*)::int FROM operations) AS operations,
+         (SELECT count(*)::int FROM people WHERE id='warren-buffett') AS warren`,
+    );
+    const row = counts.rows[0] || {};
+    out.people = row.people ?? null;
+    out.dog_comms = row.dog_comms ?? null;
+    out.operations = row.operations ?? null;
+    out.warren = row.warren ?? null;
+
+    try {
+      await p.query(
+        `INSERT INTO et_meta (k, v) VALUES ('keep_up.logical.last_heal', $1::jsonb)
+         ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v`,
+        [
+          JSON.stringify({
+            at: new Date().toISOString(),
+            altered: out.altered,
+            bounced: out.bounced,
+            posted_at_type: out.posted_at_type_after,
+            apply_error_count_before: out.apply_error_count_before,
+          }),
+        ],
+      );
+    } catch {
+      // et_meta may be unavailable; heal still counts.
+    }
+  } catch (err) {
+    out.ok = false;
+    out.reason = String(err?.message || err).slice(0, 200);
+  }
+  return out;
+}
+
+/**
+ * Public-safe logical apply diagnostics for /api/health (no hosts/secrets).
+ */
+export async function readLogicalApplyDiag() {
+  const p = await getPool();
+  if (!p) return null;
+  const diag = {
+    posted_at_type: null,
+    apply_error_count: null,
+    received_lsn_present: null,
+    sub_enabled: null,
+  };
+  try {
+    const t = await p.query(
+      `SELECT data_type FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='dog_comms' AND column_name='posted_at'`,
+    );
+    diag.posted_at_type = t.rows[0]?.data_type || null;
+  } catch { /* ignore */ }
+  try {
+    const e = await p.query(
+      `SELECT apply_error_count FROM pg_stat_subscription_stats WHERE subname='exittrace_lab_sub'`,
+    );
+    diag.apply_error_count = e.rows[0] ? Number(e.rows[0].apply_error_count) : null;
+  } catch { /* ignore */ }
+  try {
+    const s = await p.query(
+      `SELECT subenabled FROM pg_subscription WHERE subname='exittrace_lab_sub'`,
+    );
+    diag.sub_enabled = s.rows[0] ? !!s.rows[0].subenabled : null;
+  } catch { /* ignore */ }
+  try {
+    const r = await p.query(
+      `SELECT received_lsn IS NOT NULL AS present FROM pg_stat_subscription WHERE subname='exittrace_lab_sub'`,
+    );
+    diag.received_lsn_present = r.rows[0] ? !!r.rows[0].present : null;
+  } catch { /* ignore */ }
+  return diag;
+}
+
+/**
  * Live subscriber apply lag on this database, when a logical sub exists.
  * Public health only gets the number — no sub name, host, or slot.
  */
