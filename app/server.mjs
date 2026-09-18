@@ -19,6 +19,8 @@ import {
   backendName,
   counts,
   ensureSchema,
+  healLogicalApply,
+  readLogicalApplyDiag,
   getPool,
   importSeed,
   migrateUniquePeople,
@@ -340,6 +342,24 @@ async function healthPayload() {
     keep_up = await readKeepUp();
   } catch {
     keep_up = emptyKeepUp();
+  }
+  let logical_diag = null;
+  try {
+    logical_diag = await readLogicalApplyDiag();
+  } catch {
+    logical_diag = null;
+  }
+  if (logical_diag && keep_up && typeof keep_up === 'object') {
+    keep_up = {
+      ...keep_up,
+      logical: {
+        ...(keep_up.logical || {}),
+        posted_at_type: logical_diag.posted_at_type,
+        apply_error_count: logical_diag.apply_error_count,
+        received_lsn_present: logical_diag.received_lsn_present,
+        sub_enabled: logical_diag.sub_enabled,
+      },
+    };
   }
   return {
     ok: true,
@@ -1021,6 +1041,14 @@ async function boot() {
   if (databaseUrl()) {
     const pool = await getPool();
     await ensureSchema(pool, bootstrapSql);
+    try {
+      const heal = await healLogicalApply();
+      console.log(
+        `[exittrace] logical_heal ok=${heal.ok} altered=${heal.altered} bounced=${heal.bounced} posted_at=${heal.posted_at_type_after} apply_errors_before=${heal.apply_error_count_before} people=${heal.people} dog_comms=${heal.dog_comms}`,
+      );
+    } catch (err) {
+      console.error('[exittrace] logical_heal failed', err);
+    }
     const imported = await importSeed(pool, seed);
     const migrated = await migrateUniquePeople();
     console.log(
