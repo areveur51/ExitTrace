@@ -2,8 +2,9 @@ import {
   categoryById,
   categoryByPath,
   formatDate,
-  formatXDateTime,
+  formatPosted,
   formatUsd,
+  postedAtValue,
   initials,
   isDeathCategory,
   isGroupOpsCategory,
@@ -823,12 +824,12 @@ export function citeBlock({
   postedAt = "",
   body = "",
 } = {}) {
-  const posted = String(postedAt || "").trim();
+  const posted = postedAtValue(postedAt);
   return `<div class="cite-block">
     <header class="cite-head">
       <span class="handle">${esc(posterLabel(handle))}</span>
       <span class="acct">${esc(String(accountName || "").trim() || "—")}</span>
-      <time datetime="${esc(posted)}">${esc(formatXDateTime(posted))}</time>
+      <time datetime="${esc(posted)}">${esc(formatPosted(posted))}</time>
     </header>
     <p class="post-text">${esc(body || "—")}</p>
   </div>`;
@@ -841,7 +842,7 @@ export function citeFromRow(row = {}) {
   const accountName = String(
     row.account_name || row.poster_name || snap.account_name || "",
   ).trim();
-  const postedAt = String(row.posted_at || snap.posted_at || "").trim();
+  const postedAt = postedAtValue(row.posted_at, snap.posted_at, snap.datetime);
   const body =
     row.text != null && String(row.text) !== ""
       ? String(row.text)
