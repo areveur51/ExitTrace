@@ -180,7 +180,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /api/people?category=` | Seeded person rows |
 | `GET /api/source-posts?category=` | Parked public posts |
 | `GET /api/dog-comms` | Stored official posts |
-| `GET /media/...` | Files on disk. People list and person detail share one derived 10:13 portrait under `/media/thumbs/people/`. Catalog stills stay under `/media/people/`. |
+| `GET /media/...` | Files on disk. People list uses derived thumbs under `/media/thumbs/people/` (small CSS, denser srcset, lazy). Person detail / masonry / lightbox use the gold `/media/people/` still (WebP + JPEG fallback). Dog detail keeps the full `/media/dog-comms/` still. |
 
 ## Configuration
 
@@ -200,7 +200,7 @@ app/lib/keep-up.mjs         public keep_up stamps (et_meta)
 app/lib/store.mjs           Postgres or file fallback
 data/seed.json              portable import
 media/                      portraits, dog-comm stills, derived 10:13 display JPEGs
-app/lib/thumb.mjs           one cover-crop pipeline for list thumbs and person detail
+app/lib/thumb.mjs           list thumb + denser srcset pipeline (detail uses gold /media stills)
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events
 scripts/stamp-keep-up.mjs   upsert one keep_up et_meta key (Postgres)
 scripts/migrate-unique-people.mjs  collapse duplicate live person rows
@@ -208,7 +208,7 @@ scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/seed-rss-digest.mjs host-side official RSS digest (name leads, not cites)
 scripts/promote-source-post.mjs  promote one Unsorted post to a person row
 scripts/process-add-request.mjs  apply one queued add request (cites from caller)
-scripts/build-thumbs.mjs    derive the shared 10:13 portrait JPEG from stored stills
+scripts/build-thumbs.mjs    derive list JPEG/WebP thumbs (and people hero WebP); never wipes media/
 scripts/pack-data.sh        zip for GitHub Releases
 scripts/fetch-data.sh       unpack a published zip
 docs/github-auto-deploy.md  lab → Render Postgres sync (Actions)

@@ -689,6 +689,17 @@ body.tui-home .home-stage {
   font-size: 0.82rem;
 }
 
+picture.thumb-src {
+  display: contents;
+}
+picture.detail-portrait {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+picture.detail-portrait img {
+  display: block;
+}
 .thumb,
 .portrait,
 img.still.thumb {

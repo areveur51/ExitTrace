@@ -61,13 +61,15 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
 
   assert.match(person, /class="portrait thumb"/);
   assert.match(person, /width="40" height="52"/);
-  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=2"/);
+  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(person, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=3 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=3 160w"/);
+  assert.match(person, /type="image\/webp"/);
   assert.match(person, /loading="lazy"/);
   assert.match(person, /decoding="async"/);
-  assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg/);
   assert.match(dogRow, /class="still thumb"/);
   assert.match(dogRow, /width="40" height="52"/);
-  assert.match(dogRow, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=2"/);
+  assert.match(dogRow, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=3"/);
   assert.match(dogRow, /loading="lazy"/);
   assert.match(dogRow, /decoding="async"/);
   assert.doesNotMatch(dogRow, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
@@ -78,17 +80,21 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
   assert.doesNotMatch(search, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
 });
 
-test("person list and detail share the derived 10:13 portrait; dog snapshots keep the full still", () => {
+test("person list uses small thumbs + srcset; detail masonry uses the gold still; dogs keep the full still", () => {
   const list = personRow(firing());
   const person = personDetail(firing());
   const dogPage = dogDetail(dog());
-  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=2"/);
+  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(list, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=3 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=3 160w"/);
+  assert.match(list, /loading="lazy"/);
   assert.match(person, /class="person-header"/);
   assert.match(person, /class="detail-photo portrait"/);
-  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=2"/);
+  assert.match(person, /src="\/media\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(person, /type="image\/webp"/);
+  assert.match(person, /james-comey\.hero\.webp\?p=3/);
   assert.match(person, /width="192" height="250"/);
   assert.doesNotMatch(person, /class="portrait thumb"/);
-  assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(person, /<img[^>]+src="\/media\/thumbs\/people\/james-comey\.jpg/);
   assert.doesNotMatch(person, /upload\.wikimedia\.org/);
   assert.match(dogPage, /class="detail-photo portrait"/);
   assert.match(dogPage, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
@@ -152,6 +158,8 @@ test("CSS keeps list still.thumb at portrait size on all viewports including 720
   assert.match(css, /\.person-header \.detail-photo\.portrait/);
   assert.match(css, /width:\s*192px/);
   assert.match(css, /height:\s*250px/);
+  assert.match(css, /picture\.thumb-src/);
+  assert.match(css, /display:\s*contents/);
 });
 
 test("death list and search previews print one death date and never 'died <date>'", () => {

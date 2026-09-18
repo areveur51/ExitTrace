@@ -289,6 +289,9 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
   assert.match(person, /detail-tile--screenshot/);
   assert.match(person, /detail-tile--meta/);
   assert.match(masonryInner(person), /detail-tile--meta[\s\S]*James Comey/);
+  assert.match(person, /src="\/media\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(person, /james-comey\.hero\.webp\?p=3/);
+  assert.doesNotMatch(person, /<img[^>]+src="\/media\/thumbs\/people\/james-comey\.jpg/);
   assert.match(person, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
   assert.equal(tileByKind(person, "cite").length, 0);
   for (const tile of metaTiles(person)) {

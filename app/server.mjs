@@ -317,14 +317,14 @@ function serveFile(res, filePath, req) {
   });
 }
 
-function serveMedia(res, reqPath, req) {
+async function serveMedia(res, reqPath, req) {
   const rel = decodeURIComponent(String(reqPath || "")).replace(/^\/+/, "");
   if (rel.startsWith("thumbs/")) {
     const href = `/media/${rel}`;
     const thumbRel = thumbRelFromHref(href);
     let dest = null;
     try {
-      dest = thumbRel ? ensureThumbFile(mediaDir, thumbRel) : null;
+      dest = thumbRel ? await ensureThumbFile(mediaDir, thumbRel) : null;
     } catch {
       dest = null;
     }
@@ -536,7 +536,7 @@ async function handle(req, res) {
     return;
   }
   if (p.startsWith("/media/")) {
-    return serveMedia(res, p.slice("/media/".length), req);
+    return await serveMedia(res, p.slice("/media/".length), req);
   }
 
   if (p === "/") {
