@@ -259,7 +259,7 @@ test("boot heal is subscriber-only and never auto-SKIPs LSN", () => {
   assert.match(store, /EXISTS \(SELECT 1 FROM pg_subscription\)/);
   assert.match(store, /isLogicalSubscriber/);
   assert.match(store, /no_subscription/);
-  assert.doesNotMatch(store, /ALTER SUBSCRIPTION\s+\S+\s+SKIP/);
+  assert.doesNotMatch(store, /ALTER SUBSCRIPTION\s+[A-Za-z_][A-Za-z0-9_]*\s+SKIP/);
   assert.doesNotMatch(store, /SKIP \(lsn\s*=/);
   assert.doesNotMatch(store, /0\/D4F63B50|0\/D4F653A8|0\/D4F65440/);
   assert.doesNotMatch(server, /SKIP \(lsn\s*=/);

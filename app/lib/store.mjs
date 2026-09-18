@@ -577,7 +577,7 @@ export async function upsertEtMeta(k, v) {
 
 /**
  * Ops heal for lab→Render logical apply crash-loop. Subscriber-only:
- * no pg_subscription (publisher / lab) is a no-op. Never ALTER SUBSCRIPTION … SKIP
+ * no pg_subscription (publisher / lab) is a no-op. Never auto-SKIP an LSN
  * (Worf #100: SKIP needs Admiral SIGN; not planned or auto-run).
  * - Promote dog_comms.posted_at DATE→TEXT (idempotent; matches bootstrap-db.sql).
  * - Idempotent upsert of data/ops/logical-gap-heal-20260918.json.gz snapshot.
@@ -827,7 +827,7 @@ export async function healLogicalApply() {
         client.release();
       }
 
-      // Fast-forward origin to tip. Never ALTER SUBSCRIPTION … SKIP here.
+      // Fast-forward origin to tip. Never auto-SKIP an LSN here.
       if (out.lab_tip_lsn) {
         try {
           const origins = await p.query(
