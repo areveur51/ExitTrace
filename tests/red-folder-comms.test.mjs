@@ -241,7 +241,7 @@ test("red folder supporting group renders cite+source+optional screenshot+stills
   assert.match(second, new RegExp(`data-lightbox="${row._shots.shot1.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
   assert.match(second, /areveur51-2026-09-18-4\.png/);
   assert.match(second, /data-lightbox="\/media\/red-folder-comms\/areveur51-2026-09-18-4\.png"/);
-  assert.match(second, /data-tiles="6"/); // shot + 4 stills + cite + source
+  assert.match(second, /data-tiles="7"/); // shot + 4 stills + cite + source
   assert.doesNotMatch(second, /MarijkeANON\/status\/2100995431534649639/);
   assert.doesNotMatch(second, /MELANIATRUMP\/status\/2001266577077837917/);
 
