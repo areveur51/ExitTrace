@@ -22,6 +22,16 @@ find_node() {
     command -v node
     return
   fi
+  # Lab/pop-os: Node is under GrokBuild tools, not always on SSH PATH.
+  for cand in \
+    /opt/GrokBuild/tools/node/bin/node \
+    /opt/GrokBuild/tools/node22-glibc217/bin/node \
+    "${ROOT}/../tools/node/bin/node"; do
+    if [[ -x "$cand" ]]; then
+      echo "$cand"
+      return
+    fi
+  done
   echo "node not found (need Node 20+)" >&2
   return 1
 }

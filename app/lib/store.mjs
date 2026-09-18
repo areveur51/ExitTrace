@@ -1724,7 +1724,7 @@ export async function findDogMatch({ id, source_url, handle, posted_at } = {}) {
   }
   if (handleKey && date) {
     const q = await p.query(
-      "SELECT * FROM dog_comms WHERE lower(regexp_replace(handle, '^@', '')) = $1 AND posted_at = $2",
+      "SELECT * FROM dog_comms WHERE lower(regexp_replace(handle, '^@', '')) = $1 AND left(posted_at::text, 10) = $2",
       [handleKey, date],
     );
     if (q.rows[0]) return normalizeDog(q.rows[0]);
