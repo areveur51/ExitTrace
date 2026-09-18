@@ -83,7 +83,7 @@ ON CONFLICT (person_id, kind) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS dog_comms (
   id TEXT PRIMARY KEY,
-  posted_at DATE NOT NULL,
+  posted_at TEXT NOT NULL,
   handle TEXT NOT NULL,
   account_name TEXT,
   text TEXT NOT NULL,
@@ -96,6 +96,28 @@ CREATE TABLE IF NOT EXISTS dog_comms (
 );
 
 CREATE INDEX IF NOT EXISTS dog_comms_posted_at_idx ON dog_comms (posted_at DESC);
+
+-- Keep X clocks for CITE: DATE truncated ISO to a day. TEXT holds YYYY-MM-DD or full ISO.
+-- Existing DATE columns promote to TEXT without inventing a clock (date-only stays date-only).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'dog_comms'
+       AND column_name = 'posted_at' AND data_type = 'date'
+  ) THEN
+    ALTER TABLE dog_comms
+      ALTER COLUMN posted_at TYPE TEXT
+      USING to_char(posted_at, 'YYYY-MM-DD');
+  END IF;
+END $$;
+
+-- Prefer snapshot ISO clock into column when column is still date-only (no invented midnight).
+UPDATE dog_comms
+   SET posted_at = snapshot->>'posted_at'
+ WHERE snapshot ? 'posted_at'
+   AND (snapshot->>'posted_at') ~ '[Tt ][0-9]{2}:'
+   AND posted_at !~ '[Tt ][0-9]{2}:';
 
 -- Optional local X-post screenshot. Empty stays empty. Does not replace still.
 ALTER TABLE dog_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
