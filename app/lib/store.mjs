@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { databaseUrl } from "./env.mjs";
 import {
   PromoteError,
@@ -544,12 +545,13 @@ export async function upsertEtMeta(k, v) {
 /**
  * Ops heal for lab→Render logical apply crash-loop.
  * - Promote dog_comms.posted_at DATE→TEXT (idempotent; matches bootstrap-db.sql).
- * - Bounce exittrace_lab_sub DISABLE/ENABLE when apply_error_count > 0.
+ * - Idempotent upsert of data/ops/logical-gap-heal-20260918.json.gz snapshot.
+ * - Advance pg_replication_origin to lab tip, then ENABLE subscription.
  * Returns a public-safe summary (no DSNs, hosts, or passwords).
  */
 export async function healLogicalApply() {
   const p = await getPool();
-  if (!p) return { ok: false, reason: 'no_pool' };
+  if (!p) return { ok: false, reason: "no_pool" };
   const out = {
     ok: true,
     posted_at_type_before: null,
@@ -557,10 +559,13 @@ export async function healLogicalApply() {
     altered: false,
     apply_error_count_before: null,
     bounced: false,
-    warren: null,
+    gap_upserted: false,
+    origin_advanced: false,
+    lab_tip_lsn: null,
     people: null,
     dog_comms: null,
     operations: null,
+    warren: null,
   };
   try {
     const typeRes = await p.query(
@@ -568,7 +573,7 @@ export async function healLogicalApply() {
         WHERE table_schema='public' AND table_name='dog_comms' AND column_name='posted_at'`,
     );
     out.posted_at_type_before = typeRes.rows[0]?.data_type || null;
-    if (out.posted_at_type_before === 'date') {
+    if (out.posted_at_type_before === "date") {
       await p.query(
         `ALTER TABLE dog_comms
            ALTER COLUMN posted_at TYPE TEXT
@@ -582,17 +587,6 @@ export async function healLogicalApply() {
     );
     out.posted_at_type_after = typeAfter.rows[0]?.data_type || null;
 
-    // Promote snapshot ISO clocks when column is TEXT (safe re-run).
-    if (out.posted_at_type_after === 'text') {
-      await p.query(
-        `UPDATE dog_comms
-            SET posted_at = snapshot->>'posted_at'
-          WHERE snapshot ? 'posted_at'
-            AND (snapshot->>'posted_at') ~ '[Tt ][0-9]{2}:'
-            AND posted_at !~ '[Tt ][0-9]{2}:'`,
-      );
-    }
-
     let errCount = null;
     try {
       const er = await p.query(
@@ -605,9 +599,194 @@ export async function healLogicalApply() {
     }
     out.apply_error_count_before = errCount;
 
-    // Bounce when we altered the type, or when apply is clearly crash-looping.
-    const shouldBounce = out.altered || (Number.isFinite(errCount) && errCount > 0);
-    if (shouldBounce) {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const root = path.resolve(here, "../..");
+    const gapPathGz = path.join(root, "data/ops/logical-gap-heal-20260918.json.gz");
+    const gapPath = path.join(root, "data/ops/logical-gap-heal-20260918.json");
+    let gap = null;
+    try {
+      if (fs.existsSync(gapPathGz)) {
+        const { gunzipSync } = await import("node:zlib");
+        gap = JSON.parse(gunzipSync(fs.readFileSync(gapPathGz)).toString("utf8"));
+      } else if (fs.existsSync(gapPath)) {
+        gap = JSON.parse(fs.readFileSync(gapPath, "utf8"));
+      }
+    } catch (e) {
+      out.gap_load_error = String(e?.message || e).slice(0, 120);
+    }
+
+    const needsCatchup =
+      out.altered || (Number.isFinite(errCount) && errCount > 0) || gap != null;
+
+    if (needsCatchup && gap) {
+      try {
+        await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub DISABLE`);
+      } catch {
+        /* already disabled */
+      }
+
+      const people = Array.isArray(gap.people) ? gap.people : [];
+      const dogs = Array.isArray(gap.dog_comms) ? gap.dog_comms : [];
+      const ops = Array.isArray(gap.operations) ? gap.operations : [];
+      const events = Array.isArray(gap.person_events) ? gap.person_events : [];
+      out.lab_tip_lsn = gap.lab_tip_lsn || null;
+
+      const client = await p.connect();
+      try {
+        await client.query("BEGIN");
+        for (const raw of people) {
+          const row = normalizePerson(raw);
+          await client.query(
+            `INSERT INTO people (
+               id, category, name, role, event_date, death_date, birth_date, country_of_origin,
+               photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
+               net_worth_source, sources, summary, events, tags, career
+             ) VALUES (
+               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb
+             )
+             ON CONFLICT (id) DO UPDATE SET
+               category = EXCLUDED.category,
+               name = EXCLUDED.name,
+               role = EXCLUDED.role,
+               event_date = EXCLUDED.event_date,
+               death_date = EXCLUDED.death_date,
+               birth_date = EXCLUDED.birth_date,
+               country_of_origin = EXCLUDED.country_of_origin,
+               photo = EXCLUDED.photo,
+               photo_credit = EXCLUDED.photo_credit,
+               screenshot = EXCLUDED.screenshot,
+               screenshot_credit = EXCLUDED.screenshot_credit,
+               net_worth_usd = EXCLUDED.net_worth_usd,
+               net_worth_note = EXCLUDED.net_worth_note,
+               net_worth_source = EXCLUDED.net_worth_source,
+               sources = EXCLUDED.sources,
+               summary = EXCLUDED.summary,
+               events = EXCLUDED.events,
+               tags = EXCLUDED.tags,
+               career = EXCLUDED.career`,
+            personValues(row),
+          );
+        }
+        for (const raw of dogs) {
+          const row = normalizeDog(raw);
+          await client.query(
+            `INSERT INTO dog_comms (
+               id, posted_at, handle, account_name, text, still, still_credit,
+               screenshot, screenshot_credit, source_url, snapshot
+             ) VALUES (
+               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb
+             )
+             ON CONFLICT (id) DO UPDATE SET
+               posted_at = EXCLUDED.posted_at,
+               handle = EXCLUDED.handle,
+               account_name = EXCLUDED.account_name,
+               text = EXCLUDED.text,
+               still = EXCLUDED.still,
+               still_credit = EXCLUDED.still_credit,
+               screenshot = EXCLUDED.screenshot,
+               screenshot_credit = EXCLUDED.screenshot_credit,
+               source_url = EXCLUDED.source_url,
+               snapshot = EXCLUDED.snapshot`,
+            [
+              row.id,
+              row.posted_at,
+              row.handle,
+              row.account_name,
+              row.text,
+              row.still,
+              row.still_credit,
+              row.screenshot,
+              row.screenshot_credit,
+              row.source_url,
+              JSON.stringify(row.snapshot || {}),
+            ],
+          );
+        }
+        for (const raw of ops) {
+          const row = normalizeOperation(raw);
+          await client.query(
+            `INSERT INTO operations (
+               id, name, event_date, announced_date, agencies, summary,
+               victim_count, arrest_count, tags, sources, screenshot
+             ) VALUES (
+               $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb,$11
+             )
+             ON CONFLICT (id) DO UPDATE SET
+               name = EXCLUDED.name,
+               event_date = EXCLUDED.event_date,
+               announced_date = EXCLUDED.announced_date,
+               agencies = EXCLUDED.agencies,
+               summary = EXCLUDED.summary,
+               victim_count = EXCLUDED.victim_count,
+               arrest_count = EXCLUDED.arrest_count,
+               tags = EXCLUDED.tags,
+               sources = EXCLUDED.sources,
+               screenshot = EXCLUDED.screenshot`,
+            operationValues(row),
+          );
+        }
+        for (const raw of events) {
+          await client.query(
+            `INSERT INTO person_events (
+               person_id, kind, event_date, sources, announced_date, position,
+               organization, country, branch, comments, age_at_event, alleged_reason
+             ) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12)
+             ON CONFLICT (person_id, kind) DO UPDATE SET
+               event_date = EXCLUDED.event_date,
+               sources = EXCLUDED.sources,
+               announced_date = EXCLUDED.announced_date,
+               position = EXCLUDED.position,
+               organization = EXCLUDED.organization,
+               country = EXCLUDED.country,
+               branch = EXCLUDED.branch,
+               comments = EXCLUDED.comments,
+               age_at_event = EXCLUDED.age_at_event,
+               alleged_reason = EXCLUDED.alleged_reason`,
+            [
+              raw.person_id,
+              raw.kind,
+              raw.event_date,
+              JSON.stringify(raw.sources || []),
+              raw.announced_date || null,
+              raw.position || null,
+              raw.organization || null,
+              raw.country || null,
+              raw.branch || null,
+              raw.comments || null,
+              raw.age_at_event ?? null,
+              raw.alleged_reason || null,
+            ],
+          );
+        }
+        await client.query("COMMIT");
+        out.gap_upserted = true;
+      } catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+      } finally {
+        client.release();
+      }
+
+      if (out.lab_tip_lsn) {
+        try {
+          const origins = await p.query(
+            `SELECT roname FROM pg_replication_origin WHERE roname LIKE 'pg_%' ORDER BY roname`,
+          );
+          for (const o of origins.rows) {
+            await p.query(`SELECT pg_replication_origin_advance($1, $2::pg_lsn)`, [
+              o.roname,
+              out.lab_tip_lsn,
+            ]);
+            out.origin_advanced = true;
+          }
+        } catch (e) {
+          out.origin_error = String(e?.message || e).slice(0, 160);
+        }
+      }
+
+      await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub ENABLE`);
+      out.bounced = true;
+    } else if (needsCatchup) {
       await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub DISABLE`);
       await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub ENABLE`);
       out.bounced = true;
@@ -627,32 +806,28 @@ export async function healLogicalApply() {
     out.warren = row.warren ?? null;
 
     try {
-      await p.query(
-        `INSERT INTO et_meta (k, v) VALUES ('keep_up.logical.last_heal', $1::jsonb)
-         ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v`,
-        [
-          JSON.stringify({
-            at: new Date().toISOString(),
-            altered: out.altered,
-            bounced: out.bounced,
-            posted_at_type: out.posted_at_type_after,
-            apply_error_count_before: out.apply_error_count_before,
-          }),
-        ],
-      );
+      await upsertEtMeta("keep_up.logical.last_heal", {
+        at: new Date().toISOString(),
+        altered: out.altered,
+        bounced: out.bounced,
+        gap_upserted: out.gap_upserted,
+        origin_advanced: out.origin_advanced,
+        lab_tip_lsn: out.lab_tip_lsn,
+        posted_at_type: out.posted_at_type_after,
+        apply_error_count_before: out.apply_error_count_before,
+        people: out.people,
+        dog_comms: out.dog_comms,
+      });
     } catch {
-      // et_meta may be unavailable; heal still counts.
+      /* ignore */
     }
   } catch (err) {
     out.ok = false;
-    out.reason = String(err?.message || err).slice(0, 200);
+    out.reason = String(err?.message || err).slice(0, 240);
   }
   return out;
 }
 
-/**
- * Public-safe logical apply diagnostics for /api/health (no hosts/secrets).
- */
 export async function readLogicalApplyDiag() {
   const p = await getPool();
   if (!p) return null;
