@@ -335,20 +335,80 @@ export function formatDate(iso) {
   }).format(d);
 }
 
-/** X-native posted datetime: `6:39 PM · Aug 26, 2026`. Date-only stays `MMM D, YYYY` (no invented clock). */
-export function formatXDateTime(raw) {
-  if (raw == null || raw === "") return "—";
-  const s = String(raw).trim();
-  if (/\b\d{1,2}:\d{2}\s*(?:AM|PM)\b/i.test(s) && /·/.test(s)) return s;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return formatDate(s);
+const X_CLOCK_RE = /\b\d{1,2}:\d{2}\s*(?:AM|PM)\b/i;
+const ISO_TIME_RE = /T\d{2}:\d{2}/;
+const SPACE_TIME_RE = /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-  const normalized = s.includes("T") ? s : s.replace(" ", "T");
-  const iso = /Z$|[+-]\d{2}:\d{2}$/.test(normalized) ? normalized : `${normalized}Z`;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) {
-    const day = s.slice(0, 10);
-    return /^\d{4}-\d{2}-\d{2}$/.test(day) ? formatDate(day) : s;
+function utcMidnight(d) {
+  return (
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0 &&
+    d.getUTCMilliseconds() === 0
+  );
+}
+
+function localMidnight(d) {
+  return (
+    d.getHours() === 0 &&
+    d.getMinutes() === 0 &&
+    d.getSeconds() === 0 &&
+    d.getMilliseconds() === 0
+  );
+}
+
+function ymd(year, month, day) {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** pg DATE often arrives as a JS Date at UTC or local midnight — not a stored clock. */
+function dateLooksDateOnly(d) {
+  return utcMidnight(d) || localMidnight(d);
+}
+
+/** True when the stored value itself carries a clock (ISO/X/time). Date-only is false. */
+export function hasPostedTime(raw) {
+  if (raw == null || raw === "") return false;
+  if (raw instanceof Date) {
+    if (Number.isNaN(raw.getTime())) return false;
+    return !dateLooksDateOnly(raw);
   }
+  const s = String(raw).trim();
+  if (!s || DATE_ONLY_RE.test(s)) return false;
+  if (X_CLOCK_RE.test(s)) return true;
+  if (ISO_TIME_RE.test(s) || SPACE_TIME_RE.test(s)) return true;
+  if (/\d{2}:\d{2}:\d{2}/.test(s)) return true;
+  return false;
+}
+
+/**
+ * Keep posted datetime for CITE. Unlike calendar asDate, ISO/X clocks are not sliced to a day.
+ * pg DATE (JS Date at midnight) stays `YYYY-MM-DD` so we do not invent 12:00 AM.
+ */
+export function asPostedAt(raw) {
+  if (raw == null || raw === "") return null;
+  if (raw instanceof Date) {
+    if (Number.isNaN(raw.getTime())) return null;
+    if (utcMidnight(raw)) return raw.toISOString().slice(0, 10);
+    if (localMidnight(raw)) return ymd(raw.getFullYear(), raw.getMonth() + 1, raw.getDate());
+    return raw.toISOString();
+  }
+  const s = String(raw).trim();
+  return s || null;
+}
+
+/** First candidate with a real clock, else the first present value. */
+export function postedAtValue(...candidates) {
+  const vals = [];
+  for (const raw of candidates) {
+    const v = asPostedAt(raw);
+    if (v) vals.push(v);
+  }
+  return vals.find((v) => hasPostedTime(v)) || vals[0] || "";
+}
+
+function formatXClock(d) {
   const clock = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -366,6 +426,34 @@ export function formatXDateTime(raw) {
   }).format(d);
   return `${hour}:${minute} ${period} · ${date}`;
 }
+
+/**
+ * Shared CITE posted formatter (X-native): `6:39 PM · Aug 26, 2026`.
+ * Date-only stored values stay `MMM D, YYYY` — no invented clock.
+ */
+export function formatPosted(raw) {
+  if (raw == null || raw === "") return "—";
+  if (raw instanceof Date) return formatPosted(asPostedAt(raw) || "");
+  const s = String(raw).trim();
+  if (!s) return "—";
+  if (X_CLOCK_RE.test(s) && /·/.test(s)) return s;
+  if (!hasPostedTime(s)) {
+    const day = DATE_ONLY_RE.test(s) ? s : s.slice(0, 10);
+    return DATE_ONLY_RE.test(day) ? formatDate(day) : s;
+  }
+
+  const normalized = s.includes("T") ? s : s.replace(" ", "T");
+  const iso = /Z$|[+-]\d{2}:\d{2}$/.test(normalized) ? normalized : `${normalized}Z`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    const day = s.slice(0, 10);
+    return DATE_ONLY_RE.test(day) ? formatDate(day) : s;
+  }
+  return formatXClock(d);
+}
+
+/** @deprecated use formatPosted — kept as the shared CITE alias. */
+export const formatXDateTime = formatPosted;
 
 export function initials(name) {
   return String(name || "")

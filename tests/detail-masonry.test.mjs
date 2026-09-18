@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatXDateTime } from "../app/lib/categories.mjs";
+import {
+  asPostedAt,
+  formatPosted,
+  formatXDateTime,
+  hasPostedTime,
+  postedAtValue,
+} from "../app/lib/categories.mjs";
+import { getDogComm, setMemory } from "../app/lib/store.mjs";
 import {
   citeBlock,
   citeFromRow,
@@ -71,11 +78,35 @@ function tileByKind(html, kind) {
   return html.match(re) || [];
 }
 
-test("formatXDateTime is X-native clock · date; date-only does not invent a time", () => {
-  assert.equal(formatXDateTime("2026-08-26T18:39:00Z"), "6:39 PM · Aug 26, 2026");
-  assert.equal(formatXDateTime("6:39 PM · Aug 26, 2026"), "6:39 PM · Aug 26, 2026");
-  assert.equal(formatXDateTime("2026-01-15"), "Jan 15, 2026");
-  assert.equal(formatXDateTime(""), "—");
+test("formatPosted is X-native clock · date; date-only does not invent a time", () => {
+  assert.equal(formatPosted, formatXDateTime);
+  assert.equal(formatPosted("2026-08-26T18:39:00Z"), "6:39 PM · Aug 26, 2026");
+  assert.equal(formatPosted("2026-08-26 18:39:00"), "6:39 PM · Aug 26, 2026");
+  assert.equal(formatPosted("6:39 PM · Aug 26, 2026"), "6:39 PM · Aug 26, 2026");
+  assert.equal(formatPosted("2026-01-15"), "Jan 15, 2026");
+  assert.equal(formatPosted("2022-10-04"), "Oct 4, 2022");
+  assert.equal(formatPosted(""), "—");
+  assert.equal(hasPostedTime("2026-08-26T18:39:00Z"), true);
+  assert.equal(hasPostedTime("2026-08-26T00:00:00Z"), true);
+  assert.equal(hasPostedTime("2026-01-15"), false);
+  assert.equal(hasPostedTime(new Date("2026-08-26T18:39:00Z")), true);
+  assert.equal(hasPostedTime(new Date("2026-08-26T00:00:00.000Z")), false);
+  assert.equal(formatPosted(new Date("2026-08-26T18:39:00Z")), "6:39 PM · Aug 26, 2026");
+  assert.equal(formatPosted(new Date("2026-08-26T00:00:00.000Z")), "Aug 26, 2026");
+  assert.equal(formatPosted("2026-08-26T00:00:00Z"), "12:00 AM · Aug 26, 2026");
+  assert.equal(asPostedAt("2026-08-26T18:39:00Z"), "2026-08-26T18:39:00Z");
+  assert.equal(asPostedAt("2026-01-15"), "2026-01-15");
+  assert.equal(asPostedAt(new Date("2026-08-26T18:39:00Z")), "2026-08-26T18:39:00.000Z");
+  assert.equal(asPostedAt(new Date("2026-10-04T00:00:00.000Z")), "2026-10-04");
+  const localMidnight = new Date(2022, 9, 4, 0, 0, 0, 0);
+  assert.equal(hasPostedTime(localMidnight), false);
+  assert.equal(asPostedAt(localMidnight), "2022-10-04");
+  assert.equal(formatPosted(localMidnight), "Oct 4, 2022");
+  assert.equal(
+    postedAtValue("2022-10-04", "2026-08-26T18:39:00Z"),
+    "2026-08-26T18:39:00Z",
+  );
+  assert.equal(postedAtValue("2022-10-04", "2022-10-04"), "2022-10-04");
 });
 
 test("citeBlock is the shared CITE markup; citeFromRow maps dog and source-post fields", () => {
@@ -108,6 +139,24 @@ test("citeBlock is the shared CITE markup; citeFromRow maps dog and source-post 
     body: "Multi-still dog post.",
   }));
   assert.equal(fromPost, fromDog);
+
+  const fromSnapTime = citeFromRow({
+    handle: "@FLOTUS",
+    account_name: "The First Lady",
+    posted_at: "2022-10-04",
+    text: "Champ and Major have joined us in the White House! 💕🐾",
+    snapshot: { posted_at: "2022-10-04T22:41:00Z" },
+  });
+  assert.match(fromSnapTime, /<time datetime="2022-10-04T22:41:00Z">10:41 PM · Oct 4, 2022<\/time>/);
+  const flotusDateOnly = citeFromRow({
+    handle: "@FLOTUS",
+    account_name: "The First Lady",
+    posted_at: "2022-10-04",
+    text: "Today marks 50 years.",
+    snapshot: { posted_at: "2022-10-04" },
+  });
+  assert.match(flotusDateOnly, /<time datetime="2022-10-04">Oct 4, 2022<\/time>/);
+  assert.doesNotMatch(flotusDateOnly, /AM|PM/);
 });
 
 test("dogExtraStills skips primary and keeps local dog media only", () => {
@@ -186,6 +235,15 @@ test("dog detail masonry: one CITE tile + Source; lightbox on media only; X URL 
   assert.doesNotMatch(html, /Batcave/i);
   assert.doesNotMatch(html, /Sources · \d+ available/);
   assert.doesNotMatch(html, /dog-snapshot|Citation:/);
+
+  const timed = dogDetail(
+    dog({
+      posted_at: "2026-08-26T18:39:00Z",
+      snapshot: { posted_at: "2026-08-26T18:39:00Z" },
+    }),
+  );
+  assert.match(tileByKind(timed, "cite")[0], /6:39 PM · Aug 26, 2026/);
+  assert.match(tileByKind(timed, "cite")[0], /datetime="2026-08-26T18:39:00Z"/);
 });
 
 test("dog CITE is one glass tile even when the post has several TUI lines; Source stays separate", () => {
@@ -315,7 +373,19 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
   assert.match(post, /class="cite-block"/);
   assert.match(post, /class="handle">@example_desk</);
   assert.match(post, /class="acct">Example Desk</);
+  assert.match(post, /<time datetime="2024-03-01">Mar 1, 2024<\/time>/);
   assert.doesNotMatch(post, /Poster ·|Posted ·|Synopsis/);
+
+  const timedPost = sourcePostDetail({
+    id: "sp-arrest-timed",
+    category: "arrests",
+    poster_handle: "@example_desk",
+    poster_name: "Example Desk",
+    posted_at: "2024-03-01T14:05:00Z",
+    text: "Police said a public official was arrested this morning.",
+    source_url: "https://example.com/n/arrest-1",
+  });
+  assert.match(timedPost, /2:05 PM · Mar 1, 2024/);
 });
 
 test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 class", () => {
@@ -338,4 +408,35 @@ test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 c
   assert.equal(tileByKind(two, "cite").length, 1);
   assert.equal(tileByKind(two, "source").length, 1);
   assert.equal((two.match(/detail-tile--line/g) || []).length, 0);
+});
+
+test("store normalizeDog keeps ISO posted_at; date-only FLOTUS stays date-only", async () => {
+  setMemory({
+    people: [],
+    dog_comms: [
+      dog({
+        id: "ezra-iso",
+        posted_at: "2026-08-26T18:39:00Z",
+        snapshot: { posted_at: "2026-08-26T18:39:00Z" },
+      }),
+      {
+        id: "flotus-haney-commander",
+        posted_at: "2022-10-04",
+        handle: "@FLOTUS",
+        account_name: "The First Lady",
+        text: "Today marks 50 years.",
+        still: "/media/dog-comms/flotus-haney-commander.jpg",
+        source_url: "https://x.com/FLOTUS/status/1577448330208346113",
+        snapshot: { posted_at: "2022-10-04" },
+      },
+    ],
+  });
+  const iso = await getDogComm("ezra-iso");
+  assert.equal(iso.posted_at, "2026-08-26T18:39:00Z");
+  assert.match(dogDetail(iso), /6:39 PM · Aug 26, 2026/);
+  const flotus = await getDogComm("flotus-haney-commander");
+  assert.equal(flotus.posted_at, "2022-10-04");
+  const html = dogDetail(flotus);
+  assert.match(html, /<time datetime="2022-10-04">Oct 4, 2022<\/time>/);
+  assert.doesNotMatch(html, /AM|PM/);
 });

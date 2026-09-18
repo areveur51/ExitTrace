@@ -31,6 +31,7 @@ import {
   personTags,
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
+import { asPostedAt } from "./categories.mjs";
 import {
   buildOperationRow,
   findOperationMatch,
@@ -110,7 +111,7 @@ function normalizePerson(row) {
 function normalizeDog(row) {
   return {
     id: row.id,
-    posted_at: asDate(row.posted_at),
+    posted_at: asPostedAt(row.posted_at),
     handle: row.handle,
     account_name: row.account_name || "",
     text: row.text,
@@ -135,7 +136,7 @@ function normalizeSourcePost(row) {
     text: row.text || "",
     poster_handle: row.poster_handle || "",
     poster_name: row.poster_name || "",
-    posted_at: asDate(row.posted_at),
+    posted_at: asPostedAt(row.posted_at),
     media_urls: Array.isArray(row.media_urls) ? row.media_urls : [],
     gold_person_id: row.gold_person_id || null,
   };
