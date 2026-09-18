@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   kindDetail,
+  kindExtraStills,
   kindList,
   kindListRow,
+  kindSourceHtml,
+  kindSupportingEntries,
   searchBody,
 } from "../app/lib/html.mjs";
 import {
@@ -11,6 +14,7 @@ import {
   searchCatalog,
   setMemory,
   loadSeedFile,
+  mergeKindSnapshotFillEmpty,
 } from "../app/lib/store.mjs";
 import { handle } from "../app/server.mjs";
 import { fileURLToPath } from "url";
@@ -118,4 +122,101 @@ test("live red-folder insert is listed, detailed, and searchable", async () => {
   const json = JSON.parse(health.body);
   assert.equal(json.red_folder_comms, 1);
   assert.equal(json.byCategory.red_folder_comms, 1);
+});
+
+test("red folder supporting X links render in Source tile; stills join masonry", () => {
+  const row = folder({
+    id: "melaniatrump-2025-12-17-8fe71a81",
+    handle: "@MELANIATRUMP",
+    account_name: "MELANIA TRUMP",
+    text: "MELANIA, the film, exclusively in theaters worldwide on January 30th, 2026.",
+    still: "/media/red-folder-comms/melaniatrump-2025-12-17.jpg",
+    screenshot: "/media/screenshots/red-folder-comms/melaniatrump-2025-12-17.png",
+    source_url: "https://x.com/MELANIATRUMP/status/2001266577077837917",
+    snapshot: {
+      stills: ["/media/red-folder-comms/melaniatrump-2025-12-17.jpg"],
+      supporting: [
+        {
+          text: "McDonald’s - Melania",
+          still: "/media/red-folder-comms/marijkeanon-2026-09-18.jpg",
+          handle: "@MarijkeANON",
+          posted_at: "2026-09-18",
+          source_url: "https://x.com/MarijkeANON/status/2100995431534649639",
+          account_name: "MarijkeANON",
+          stills: [],
+        },
+        {
+          text: "@MarijkeANON Melania Trailer features her hat + red folder + Barron",
+          still: "/media/red-folder-comms/areveur51-2026-09-18.png",
+          handle: "@Areveur51",
+          posted_at: "2026-09-18",
+          source_url: "https://x.com/Areveur51/status/2101014802256494801",
+          account_name: "Areveur51",
+          stills: [
+            "/media/red-folder-comms/areveur51-2026-09-18-2.png",
+            "/media/red-folder-comms/areveur51-2026-09-18-3.png",
+            "/media/red-folder-comms/areveur51-2026-09-18-4.png",
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(kindSupportingEntries(row).length, 2);
+  assert.deepEqual(kindExtraStills("red_folder", row), [
+    "/media/red-folder-comms/marijkeanon-2026-09-18.jpg",
+    "/media/red-folder-comms/areveur51-2026-09-18.png",
+    "/media/red-folder-comms/areveur51-2026-09-18-2.png",
+    "/media/red-folder-comms/areveur51-2026-09-18-3.png",
+    "/media/red-folder-comms/areveur51-2026-09-18-4.png",
+  ]);
+  const sources = kindSourceHtml(row);
+  assert.match(sources, /Source · <a class="source-link" href="https:\/\/x\.com\/MELANIATRUMP\/status\/2001266577077837917"/);
+  assert.match(sources, /Supporting · @MarijkeANON · <a class="source-link" href="https:\/\/x\.com\/MarijkeANON\/status\/2100995431534649639"/);
+  assert.match(sources, /Supporting · @Areveur51 · <a class="source-link" href="https:\/\/x\.com\/Areveur51\/status\/2101014802256494801"/);
+
+  const html = kindDetail("red_folder", row);
+  assert.match(html, /data-tiles="9"/); // portrait+shot+5 stills + cite + source
+  assert.match(html, /marijkeanon-2026-09-18\.jpg/);
+  assert.match(html, /areveur51-2026-09-18-4\.png/);
+  assert.match(html, /Supporting · @MarijkeANON/);
+  assert.match(html, /Supporting · @Areveur51/);
+  // Primary + supporting X URLs stay under the Source tile only.
+  const withoutSource = html.replace(
+    /<section class="detail-tile detail-tile--meta detail-tile--source">[\s\S]*?<\/section>/,
+    "",
+  );
+  assert.doesNotMatch(withoutSource, /https:\/\/x\.com\/MELANIATRUMP\/status\/2001266577077837917/);
+  assert.doesNotMatch(withoutSource, /https:\/\/x\.com\/MarijkeANON\/status\/2100995431534649639/);
+  assert.doesNotMatch(withoutSource, /https:\/\/x\.com\/Areveur51\/status\/2101014802256494801/);
+});
+
+test("red folder without supporting keeps a single Source line", () => {
+  const html = kindDetail("red_folder", folder());
+  assert.match(html, /Source ·/);
+  assert.doesNotMatch(html, /Supporting ·/);
+  assert.equal((html.match(/source-link/g) || []).length, 1);
+});
+
+test("mergeKindSnapshotFillEmpty keeps prior supporting and stills", () => {
+  const merged = mergeKindSnapshotFillEmpty(
+    { text: "seed" },
+    {
+      stills: ["/media/red-folder-comms/a.jpg"],
+      supporting: [{ source_url: "https://x.com/a/status/1", handle: "@a" }],
+    },
+  );
+  assert.deepEqual(merged.stills, ["/media/red-folder-comms/a.jpg"]);
+  assert.equal(merged.supporting[0].source_url, "https://x.com/a/status/1");
+  const keepNext = mergeKindSnapshotFillEmpty(
+    {
+      stills: ["/media/red-folder-comms/b.jpg"],
+      supporting: [{ source_url: "https://x.com/b/status/2" }],
+    },
+    {
+      stills: ["/media/red-folder-comms/a.jpg"],
+      supporting: [{ source_url: "https://x.com/a/status/1" }],
+    },
+  );
+  assert.deepEqual(keepNext.stills, ["/media/red-folder-comms/b.jpg"]);
+  assert.equal(keepNext.supporting[0].source_url, "https://x.com/b/status/2");
 });

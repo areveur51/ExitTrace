@@ -590,17 +590,67 @@ function creditWithoutUrls(raw) {
     .trim();
 }
 
-/** Extra local stills from comms snapshot.stills (skip primary still). */
+/** Supporting X posts stored on snapshot.supporting (never invents). */
+export function kindSupportingEntries(row) {
+  const raw = row?.snapshot?.supporting;
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const sourceUrl = String(item.source_url || "").trim();
+    if (!sourceUrl || seen.has(sourceUrl)) continue;
+    seen.add(sourceUrl);
+    out.push({
+      source_url: sourceUrl,
+      handle: String(item.handle || "").trim(),
+      account_name: String(item.account_name || "").trim(),
+      text: String(item.text || "").trim(),
+      posted_at: String(item.posted_at || "").trim(),
+      still: String(item.still || "").trim(),
+      still_credit: String(item.still_credit || "").trim(),
+      stills: Array.isArray(item.stills)
+        ? item.stills.map((s) => String(s || "").trim()).filter(Boolean)
+        : [],
+    });
+  }
+  return out;
+}
+
+/** Local media hrefs nested under supporting entries (skip primary). */
+export function kindSupportingStills(kind, row) {
+  const spec = commsKind(kind);
+  const primary = String(row?.still || "").trim();
+  const seen = new Set(primary ? [primary] : []);
+  const out = [];
+  for (const entry of kindSupportingEntries(row)) {
+    const hrefs = [entry.still, ...(entry.stills || [])];
+    for (const href of hrefs) {
+      if (!href || seen.has(href) || !isCommsMediaHref(href, spec.mediaDir)) continue;
+      seen.add(href);
+      out.push(href);
+    }
+  }
+  return out;
+}
+
+/** Extra local stills: snapshot.stills + supporting stills (skip primary). */
 export function kindExtraStills(kind, row) {
   const spec = commsKind(kind);
   const primary = String(row?.still || "").trim();
   const raw = row?.snapshot?.stills;
-  if (!Array.isArray(raw)) return [];
   const out = [];
   const seen = new Set(primary ? [primary] : []);
-  for (const item of raw) {
-    const href = String(item || "").trim();
-    if (!href || seen.has(href) || !isCommsMediaHref(href, spec.mediaDir)) continue;
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const href = String(item || "").trim();
+      if (!href || seen.has(href) || !isCommsMediaHref(href, spec.mediaDir)) continue;
+      seen.add(href);
+      out.push(href);
+    }
+  }
+  for (const href of kindSupportingStills(kind, row)) {
+    if (!href || seen.has(href)) continue;
     seen.add(href);
     out.push(href);
   }
@@ -610,6 +660,18 @@ export function kindExtraStills(kind, row) {
 /** Extra local stills from dog snapshot.stills (skip primary still). */
 export function dogExtraStills(row) {
   return kindExtraStills("dog", row);
+}
+
+/** Primary Source line plus supporting X links (same tile; no wipe of gold). */
+export function kindSourceHtml(row) {
+  const lines = [detailSourceLine(row?.source_url)];
+  for (const entry of kindSupportingEntries(row)) {
+    const label = entry.handle
+      ? `Supporting · ${entry.handle}`
+      : "Supporting";
+    lines.push(detailSourceLine(entry.source_url, { label }));
+  }
+  return lines.filter(Boolean).join("");
 }
 
 function detailMediaTile({
@@ -1328,7 +1390,7 @@ export function kindDetail(kind, row) {
         extraMedia: extras,
         metaHtml: detailMetaBlock({
           citeHtml: citeFromRow(row),
-          sourceHtml: detailSourceLine(row.source_url),
+          sourceHtml: kindSourceHtml(row),
         }),
       }),
       active: true,
