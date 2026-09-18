@@ -105,7 +105,7 @@ On the subscriber, only if the relation is missing after that ADD:
 ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false);
 ```
 
-Never omit `copy_data = false`. Never `copy_data=true`. Media stills (`media/red-folder-comms/` and screenshots under `media/screenshots/red-folder-comms/`) travel on the existing media-delta rsync path. Gap-upsert published tables stay `people`, `dog_comms`, `operations`, optional `categories` — this restore does not upsert harvest `red_folder_comms` rows.
+Never omit `copy_data = false`. Never `copy_data=true`. Media stills (`media/red-folder-comms/` and screenshots under `media/screenshots/red-folder-comms/`, including `{id}/support/{n}/`) travel on the existing media-delta rsync path. Gap-upsert published tables stay `people`, `dog_comms`, `operations`, optional `categories` — this restore does not upsert harvest `red_folder_comms` rows.
 
 GitHub Releases publish a zip of those two directories. The `/downloads` page describes the zip and does not fetch it.
 

@@ -7,22 +7,29 @@ const PREFIXES = {
   operations: "/media/screenshots/operations/",
 };
 
-const LEAF = /^[a-z0-9][a-z0-9._-]*\.(jpe?g|png|webp|gif)$/i;
+/** Kind-comm supporting shots: screenshots/{dog|red-folder}-comms/{id}/support/{n}/ */
+const SUPPORT_KINDS = new Set(["dog-comms", "red-folder-comms"]);
 
-function localLeaf(href, prefix) {
+const LEAF = /^[a-z0-9][a-z0-9._-]*\.(jpe?g|png|webp|gif)$/i;
+const SUPPORT_REL =
+  /^[a-z0-9][a-z0-9._-]*\/support\/\d+\/[a-z0-9][a-z0-9._-]*\.(jpe?g|png|webp|gif)$/i;
+
+function localRel(href, prefix, { allowSupport = false } = {}) {
   const text = String(href || "").trim();
   if (!text.startsWith(prefix) || text.includes("..") || text.includes("\\")) {
     return "";
   }
-  const leaf = text.slice(prefix.length);
-  if (!leaf || leaf.includes("/") || !LEAF.test(leaf)) return "";
-  return leaf;
+  const rel = text.slice(prefix.length);
+  if (!rel) return "";
+  if (!rel.includes("/")) return LEAF.test(rel) ? rel : "";
+  if (allowSupport && SUPPORT_REL.test(rel)) return rel;
+  return "";
 }
 
 export function screenshotKindFromHref(raw) {
   const text = String(raw || "").trim();
   for (const [kind, prefix] of Object.entries(PREFIXES)) {
-    if (localLeaf(text, prefix)) return kind;
+    if (localRel(text, prefix, { allowSupport: SUPPORT_KINDS.has(kind) })) return kind;
   }
   return "";
 }
@@ -31,9 +38,20 @@ export function isScreenshotHref(raw, kind) {
   const text = String(raw || "").trim();
   if (kind) {
     const prefix = PREFIXES[kind];
-    return !!(prefix && localLeaf(text, prefix));
+    return !!(prefix && localRel(text, prefix, { allowSupport: SUPPORT_KINDS.has(kind) }));
   }
   return !!screenshotKindFromHref(text);
+}
+
+/** Allowlisted dir for a supporting screenshot. Empty when kind/id/n are invalid. */
+export function supportingScreenshotPrefix(screenshotKind, id, n) {
+  const prefix = PREFIXES[screenshotKind];
+  const safeId = String(id || "").trim();
+  const idx = Number(n);
+  if (!prefix || !SUPPORT_KINDS.has(screenshotKind)) return "";
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(safeId)) return "";
+  if (!Number.isInteger(idx) || idx < 0) return "";
+  return `${prefix}${safeId}/support/${idx}/`;
 }
 
 export function normalizeScreenshotHref(raw, kind) {
