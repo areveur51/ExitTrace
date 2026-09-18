@@ -3,6 +3,7 @@
 const PREFIXES = {
   people: "/media/screenshots/people/",
   "dog-comms": "/media/screenshots/dog-comms/",
+  "red-folder-comms": "/media/screenshots/red-folder-comms/",
   operations: "/media/screenshots/operations/",
 };
 

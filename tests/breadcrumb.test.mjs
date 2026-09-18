@@ -153,6 +153,17 @@ test("detail pages link back through the parent catalog", () => {
     ],
   );
   assert.deepEqual(
+    breadcrumbItems({
+      path: "/red-folder-comms/flotus-2026-09-17-abc12345",
+      label: "@FLOTUS",
+    }),
+    [
+      { href: "/", label: "Home" },
+      { href: "/red-folder-comms", label: "Red Folder comms" },
+      { href: "/red-folder-comms/flotus-2026-09-17-abc12345", label: "@FLOTUS" },
+    ],
+  );
+  assert.deepEqual(
     breadcrumbItems({ path: "/posts/abc-1", label: "Source post" }),
     [
       { href: "/", label: "Home" },

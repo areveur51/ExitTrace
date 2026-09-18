@@ -175,6 +175,14 @@ export const CATEGORIES = [
     path: "/dog-comms",
     blurb: "Official government posts about dogs, or that include a dog in the image. Stored locally; the source URL is a citation only.",
   },
+  {
+    id: "red_folder_comms",
+    kind: "red_folder",
+    title: "Red Folder comms",
+    nav: "Red Folder comms",
+    path: "/red-folder-comms",
+    blurb: "Stored official and news-org posts about a red folder. Catalog page of posts, not a person row. Stored locally; the source URL is a citation only.",
+  },
 ];
 
 export const PERSON_CATEGORIES = CATEGORIES.filter((c) => c.kind === "person");
@@ -188,7 +196,7 @@ export const IMPORT_CATEGORY_IDS = [
   "death_unspecified",
 ];
 
-/** Person categories a promote may write. dog_comms is catalog-only, not a person row. */
+/** Person categories a promote may write. dog_comms and red_folder_comms are catalog-only, not person rows. */
 export const PROMOTE_CATEGORY_IDS = [
   "firings",
   "resignations",
@@ -247,6 +255,15 @@ export function mapImportCategory(raw) {
     .replace(/-/g, "_");
   if (!key) return null;
   if (key === "dog_comms" || key === "dog" || key === "dog_comm" || key === "dogcomms") {
+    return null;
+  }
+  if (
+    key === "red_folder_comms" ||
+    key === "red_folder" ||
+    key === "redfolder" ||
+    key === "red_folder_comm" ||
+    key === "redfoldercomms"
+  ) {
     return null;
   }
   return IMPORT_ALIASES[key] || null;

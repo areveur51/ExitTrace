@@ -199,6 +199,7 @@ test("age filter is not on catalog lists; listPeople still excludes rows without
   const arrests = await requestPage("/arrests");
   const unsorted = await requestPage("/unsorted");
   const dogs = await requestPage("/dog-comms");
+  const folders = await requestPage("/red-folder-comms");
   const home = await requestPage("/");
   const add = await requestPage("/add");
   const detail = await requestPage("/people/james-comey");
@@ -210,7 +211,7 @@ test("age filter is not on catalog lists; listPeople still excludes rows without
     assert.doesNotMatch(res.body, /name="max_age"/);
     assert.doesNotMatch(res.body, /Age at death/);
   }
-  for (const res of [unsorted, dogs, home, add, detail]) {
+  for (const res of [unsorted, dogs, folders, home, add, detail]) {
     assert.doesNotMatch(res.body, /class="age-filter"/);
     assert.doesNotMatch(res.body, /name="min_age"/);
   }

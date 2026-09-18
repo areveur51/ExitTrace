@@ -24,15 +24,15 @@ import {
   getPool,
   importSeed,
   migrateUniquePeople,
-  countDogComms,
+  countKindComms,
   countOperations,
   countPeople,
   countSourcePosts,
-  getDogComm,
+  getKindComm,
   getOperation,
   getPerson,
   getSourcePost,
-  listDogComms,
+  listKindComms,
   listOperations,
   listPeople,
   listSourcePosts,
@@ -51,8 +51,8 @@ import {
   dashboardBody,
   dashboardMissingBody,
   dashboardRankBody,
-  dogDetail,
-  dogList,
+  kindDetail,
+  kindList,
   downloadsBody,
   healthBody,
   homeBody,
@@ -101,6 +101,7 @@ import {
   rankDimension,
 } from "./lib/dashboard.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
+import { commsKind, commsKindByPath, isCommsKind } from "./lib/kind-comms.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -369,6 +370,7 @@ async function healthPayload() {
     port,
     people: c.people,
     dog_comms: c.dog_comms,
+    red_folder_comms: c.red_folder_comms,
     operations: c.operations,
     source_posts: c.source_posts,
     byCategory: c.byCategory,
@@ -497,23 +499,25 @@ async function handle(req, res) {
     }
     return sendJson(res, 200, { operations: await listOperations({ tags }) });
   }
-  if (p === "/api/dog-comms") {
+  if (p === "/api/dog-comms" || p === "/api/red-folder-comms") {
+    const kind = p === "/api/red-folder-comms" ? "red_folder" : "dog";
+    const spec = commsKind(kind);
     if (url.searchParams.has("page")) {
-      const total = await countDogComms();
+      const total = await countKindComms(kind);
       const meta = paginate({
         total,
         page: parsePage(url.searchParams),
         pageSize: DOG_PAGE_SIZE,
       });
       return sendJson(res, 200, {
-        dog_comms: await listDogComms({
+        [spec.memoryKey]: await listKindComms(kind, {
           limit: meta.limit,
           offset: meta.offset,
         }),
         ...meta,
       });
     }
-    return sendJson(res, 200, { dog_comms: await listDogComms() });
+    return sendJson(res, 200, { [spec.memoryKey]: await listKindComms(kind) });
   }
   if (p === "/api/source-posts") {
     const category = url.searchParams.get("category") || undefined;
@@ -571,7 +575,7 @@ async function handle(req, res) {
         heading: "ExitTrace",
         mode: "home",
         query: "home",
-        countLabel: `${c.people} people · ${c.operations || 0} operations · ${c.dog_comms} dog comms`,
+        countLabel: `${c.people} people · ${c.operations || 0} operations · ${c.dog_comms} dog comms · ${c.red_folder_comms || 0} red-folder comms`,
         body: homeBody({ version: APP_VERSION }),
       }),
     );
@@ -849,9 +853,10 @@ async function handle(req, res) {
     );
   }
 
-  if (p.startsWith("/dog-comms/") && p !== "/dog-comms/") {
-    const id = safeId(p.slice("/dog-comms/".length));
-    const row = id ? await getDogComm(id) : null;
+  const commsDetail = commsKindByPath(p);
+  if (commsDetail && p !== commsDetail.path && p !== `${commsDetail.path}/`) {
+    const id = safeId(p.slice(`${commsDetail.path}/`.length));
+    const row = id ? await getKindComm(commsDetail.id, id) : null;
     if (!row) {
       send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
@@ -860,12 +865,12 @@ async function handle(req, res) {
       res,
       layout({
         title: row.handle,
-        path: `/dog-comms/${row.id}`,
+        path: `${commsDetail.path}/${row.id}`,
         heading: row.handle,
         query: row.handle,
         crumbLabel: row.handle,
         countLabel: "detail",
-        body: dogDetail(row),
+        body: kindDetail(commsDetail.id, row),
       }),
     );
   }
@@ -998,14 +1003,15 @@ async function handle(req, res) {
       }),
     );
   }
-  if (cat && cat.kind === "dog") {
-    const total = await countDogComms();
+  if (cat && isCommsKind(cat.kind)) {
+    const spec = commsKind(cat.kind);
+    const total = await countKindComms(spec.id);
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
       pageSize: DOG_PAGE_SIZE,
     });
-    const rows = await listDogComms({
+    const rows = await listKindComms(spec.id, {
       limit: meta.limit,
       offset: meta.offset,
     });
@@ -1019,7 +1025,7 @@ async function handle(req, res) {
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: listSection(
-          dogList(rows),
+          kindList(spec.id, rows),
           pager(meta, { basePath: cat.path, noun: "posts" }),
           listHead({
             title: cat.title,

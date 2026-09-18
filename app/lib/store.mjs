@@ -33,6 +33,7 @@ import {
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { asPostedAt } from "./categories.mjs";
+import { commsKind } from "./kind-comms.mjs";
 import {
   buildOperationRow,
   findOperationMatch,
@@ -109,7 +110,8 @@ function normalizePerson(row) {
   });
 }
 
-function normalizeDog(row) {
+function normalizeKindComm(row, kind = "dog") {
+  const spec = commsKind(kind);
   return {
     id: row.id,
     posted_at: asPostedAt(row.posted_at),
@@ -118,11 +120,15 @@ function normalizeDog(row) {
     text: row.text,
     still: row.still || "",
     still_credit: row.still_credit || "",
-    screenshot: normalizeScreenshotHref(row.screenshot, "dog-comms"),
+    screenshot: normalizeScreenshotHref(row.screenshot, spec.screenshotKind),
     screenshot_credit: normalizeScreenshotCredit(row.screenshot_credit),
     source_url: row.source_url,
     snapshot: row.snapshot && typeof row.snapshot === "object" ? row.snapshot : {},
   };
+}
+
+function normalizeDog(row) {
+  return normalizeKindComm(row, "dog");
 }
 
 function normalizeSourcePost(row) {
@@ -235,7 +241,10 @@ export function loadSeedFile(seedPath) {
   const raw = JSON.parse(fs.readFileSync(seedPath, "utf8"));
   return {
     people: (raw.people || []).map(normalizePerson),
-    dog_comms: (raw.dog_comms || []).map(normalizeDog),
+    dog_comms: (raw.dog_comms || []).map((row) => normalizeKindComm(row, "dog")),
+    red_folder_comms: (raw.red_folder_comms || []).map((row) =>
+      normalizeKindComm(row, "red_folder"),
+    ),
     source_posts: (raw.source_posts || []).map(normalizeSourcePost),
     add_requests: (raw.add_requests || []).map(normalizeAddRequest),
     operations: (raw.operations || []).map(normalizeOperation),
@@ -249,7 +258,10 @@ export function loadFileStore(dataDir) {
   const raw = JSON.parse(fs.readFileSync(out, "utf8"));
   return {
     people: (raw.people || []).map(normalizePerson),
-    dog_comms: (raw.dog_comms || []).map(normalizeDog),
+    dog_comms: (raw.dog_comms || []).map((row) => normalizeKindComm(row, "dog")),
+    red_folder_comms: (raw.red_folder_comms || []).map((row) =>
+      normalizeKindComm(row, "red_folder"),
+    ),
     source_posts: (raw.source_posts || []).map(normalizeSourcePost),
     add_requests: (raw.add_requests || []).map(normalizeAddRequest),
     operations: (raw.operations || []).map(normalizeOperation),
@@ -261,6 +273,7 @@ function emptyMemory() {
   return {
     people: [],
     dog_comms: [],
+    red_folder_comms: [],
     source_posts: [],
     add_requests: [],
     operations: [],
@@ -271,7 +284,10 @@ function emptyMemory() {
 export function setMemory(seed) {
   memory = {
     people: (seed.people || []).map(normalizePerson),
-    dog_comms: (seed.dog_comms || []).map(normalizeDog),
+    dog_comms: (seed.dog_comms || []).map((row) => normalizeKindComm(row, "dog")),
+    red_folder_comms: (seed.red_folder_comms || []).map((row) =>
+      normalizeKindComm(row, "red_folder"),
+    ),
     source_posts: (seed.source_posts || []).map(normalizeSourcePost),
     add_requests: (seed.add_requests || []).map(normalizeAddRequest),
     operations: (seed.operations || []).map(normalizeOperation),
@@ -337,21 +353,23 @@ export function mergeGoldOperations(seedOps, priorOps) {
   return [...merged, ...extras.map(normalizeOperation)];
 }
 
-/** Seed dogs win; extra store dogs are kept. Gold rows are not overwritten. */
-export function mergeGoldDogs(seedDogs, priorDogs) {
-  const goldIds = new Set((seedDogs || []).map((row) => row.id));
+/** Seed comms win; extra store rows are kept. Gold rows are not overwritten. */
+export function mergeGoldKindComms(seedRows, priorRows, kind = "dog") {
+  const goldIds = new Set((seedRows || []).map((row) => row.id));
   const goldUrls = new Set(
-    (seedDogs || []).map((row) => canonicalPublicUrl(row.source_url)).filter(Boolean),
+    (seedRows || []).map((row) => canonicalPublicUrl(row.source_url)).filter(Boolean),
   );
-  const extras = (priorDogs || []).filter((row) => {
+  const extras = (priorRows || []).filter((row) => {
     if (goldIds.has(row.id)) return false;
     const url = canonicalPublicUrl(row.source_url);
     if (url && goldUrls.has(url)) return false;
     return true;
   });
-  const priorById = new Map((priorDogs || []).map((row) => [row.id, normalizeDog(row)]));
-  const gold = (seedDogs || []).map((row) => {
-    const next = normalizeDog(row);
+  const priorById = new Map(
+    (priorRows || []).map((row) => [row.id, normalizeKindComm(row, kind)]),
+  );
+  const gold = (seedRows || []).map((row) => {
+    const next = normalizeKindComm(row, kind);
     const prior = priorById.get(next.id);
     if (!prior) return next;
     return {
@@ -360,7 +378,12 @@ export function mergeGoldDogs(seedDogs, priorDogs) {
       screenshot_credit: next.screenshot_credit || prior.screenshot_credit || "",
     };
   });
-  return [...gold, ...extras.map(normalizeDog)];
+  return [...gold, ...extras.map((row) => normalizeKindComm(row, kind))];
+}
+
+/** Seed dogs win; extra store dogs are kept. Gold rows are not overwritten. */
+export function mergeGoldDogs(seedDogs, priorDogs) {
+  return mergeGoldKindComms(seedDogs, priorDogs, "dog");
 }
 
 export function hydrateFileMemory(dataDir, seed) {
@@ -368,6 +391,11 @@ export function hydrateFileMemory(dataDir, seed) {
   return setMemory({
     people: mergeGoldPeople(seed.people, prior.people),
     dog_comms: mergeGoldDogs(seed.dog_comms, prior.dog_comms),
+    red_folder_comms: mergeGoldKindComms(
+      seed.red_folder_comms,
+      prior.red_folder_comms,
+      "red_folder",
+    ),
     operations: mergeGoldOperations(seed.operations, prior.operations),
     source_posts: prior.source_posts,
     add_requests: prior.add_requests || [],
@@ -382,6 +410,9 @@ export async function importSeed(p, seed) {
     setMemory({
       people: seed.people,
       dog_comms: seed.dog_comms,
+      red_folder_comms: seed.red_folder_comms?.length
+        ? seed.red_folder_comms
+        : getMemory().red_folder_comms,
       operations: seed.operations,
       source_posts: incoming.length ? incoming : existing,
       meta: seed.meta,
@@ -389,6 +420,7 @@ export async function importSeed(p, seed) {
     return {
       people: seed.people.length,
       dog_comms: seed.dog_comms.length,
+      red_folder_comms: getMemory().red_folder_comms.length,
       operations: (seed.operations || []).length,
       source_posts: getMemory().source_posts.length,
     };
@@ -1289,19 +1321,20 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   return projectListed(q.rows.map(normalizePerson), categories);
 }
 
-export async function listDogComms(opts = {}) {
+export async function listKindComms(kind, opts = {}) {
+  const spec = commsKind(kind);
   const limit = finiteInt(opts.limit, null);
   const offset = finiteInt(opts.offset, 0);
   const p = await getPool();
   if (!p) {
     return applyWindow(
-      getMemory().dog_comms.slice().sort(compareDogs),
+      (getMemory()[spec.memoryKey] || []).slice().sort(compareDogs),
       limit,
       offset,
     );
   }
   const params = [];
-  let sql = "SELECT * FROM dog_comms ORDER BY posted_at DESC, handle ASC";
+  let sql = `SELECT * FROM ${spec.table} ORDER BY posted_at DESC, handle ASC`;
   if (limit != null) {
     params.push(limit);
     sql += ` LIMIT $${params.length}`;
@@ -1312,7 +1345,15 @@ export async function listDogComms(opts = {}) {
     sql += ` OFFSET $${params.length}`;
   }
   const q = await p.query(sql, params);
-  return q.rows.map(normalizeDog);
+  return q.rows.map((row) => normalizeKindComm(row, spec.id));
+}
+
+export async function listDogComms(opts = {}) {
+  return listKindComms("dog", opts);
+}
+
+export async function listRedFolderComms(opts = {}) {
+  return listKindComms("red_folder", opts);
 }
 
 export async function countPeople(categoryOrOpts) {
@@ -1353,11 +1394,20 @@ export async function countPeople(categoryOrOpts) {
   return q.rows[0].n;
 }
 
-export async function countDogComms() {
+export async function countKindComms(kind) {
+  const spec = commsKind(kind);
   const p = await getPool();
-  if (!p) return getMemory().dog_comms.length;
-  const q = await p.query("SELECT COUNT(*)::int AS n FROM dog_comms");
+  if (!p) return (getMemory()[spec.memoryKey] || []).length;
+  const q = await p.query(`SELECT COUNT(*)::int AS n FROM ${spec.table}`);
   return q.rows[0].n;
+}
+
+export async function countDogComms() {
+  return countKindComms("dog");
+}
+
+export async function countRedFolderComms() {
+  return countKindComms("red_folder");
 }
 
 export async function listOperations(opts = {}) {
@@ -2039,6 +2089,7 @@ export async function counts() {
   if (!p) {
     const people = getMemory().people;
     const dogs = getMemory().dog_comms;
+    const folders = getMemory().red_folder_comms || [];
     const byCategory = {};
     for (const row of people) {
       const kinds = new Set(
@@ -2051,6 +2102,7 @@ export async function counts() {
     }
     const operations = getMemory().operations || [];
     byCategory.dog_comms = dogs.length;
+    byCategory.red_folder_comms = folders.length;
     byCategory.operations = operations.length;
     for (const row of operations) {
       for (const tag of row.tags || []) {
@@ -2060,14 +2112,16 @@ export async function counts() {
     return {
       people: people.length,
       dog_comms: dogs.length,
+      red_folder_comms: folders.length,
       operations: operations.length,
       source_posts: (getMemory().source_posts || []).length,
       byCategory,
     };
   }
-  const [peopleCount, dogCount, postCount, opCount, grouped, opTags] = await Promise.all([
+  const [peopleCount, dogCount, folderCount, postCount, opCount, grouped, opTags] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM people"),
     p.query("SELECT COUNT(*)::int AS n FROM dog_comms"),
+    p.query("SELECT COUNT(*)::int AS n FROM red_folder_comms"),
     p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
     p.query("SELECT COUNT(*)::int AS n FROM operations"),
     p.query(
@@ -2091,11 +2145,13 @@ export async function counts() {
     for (const row of fallback.rows) byCategory[row.category] = row.n;
   }
   byCategory.dog_comms = dogCount.rows[0].n;
+  byCategory.red_folder_comms = folderCount.rows[0].n;
   byCategory.operations = opCount.rows[0].n;
   for (const row of opTags.rows) byCategory[row.category] = row.n;
   return {
     people: peopleCount.rows[0].n,
     dog_comms: dogCount.rows[0].n,
+    red_folder_comms: folderCount.rows[0].n,
     operations: opCount.rows[0].n,
     source_posts: postCount.rows[0].n,
     byCategory,
@@ -2110,12 +2166,21 @@ export async function getPerson(id) {
   return q.rows[0] ? normalizePerson(q.rows[0]) : null;
 }
 
-export async function getDogComm(id) {
+export async function getKindComm(kind, id) {
   if (!id) return null;
+  const spec = commsKind(kind);
   const p = await getPool();
-  if (!p) return getMemory().dog_comms.find((r) => r.id === id) || null;
-  const q = await p.query("SELECT * FROM dog_comms WHERE id = $1", [id]);
-  return q.rows[0] ? normalizeDog(q.rows[0]) : null;
+  if (!p) return (getMemory()[spec.memoryKey] || []).find((r) => r.id === id) || null;
+  const q = await p.query(`SELECT * FROM ${spec.table} WHERE id = $1`, [id]);
+  return q.rows[0] ? normalizeKindComm(q.rows[0], spec.id) : null;
+}
+
+export async function getDogComm(id) {
+  return getKindComm("dog", id);
+}
+
+export async function getRedFolderComm(id) {
+  return getKindComm("red_folder", id);
 }
 
 export async function findDogMatch({ id, source_url, handle, posted_at } = {}) {
@@ -2160,39 +2225,49 @@ export async function findDogMatch({ id, source_url, handle, posted_at } = {}) {
   return null;
 }
 
-export async function insertDogComm(row) {
-  const dog = normalizeDog(row);
+export async function insertKindComm(kind, row) {
+  const spec = commsKind(kind);
+  const comm = normalizeKindComm(row, spec.id);
   const p = await getPool();
   if (!p) {
     const mem = getMemory();
-    if (mem.dog_comms.some((r) => r.id === dog.id)) {
-      throw new PromoteError(`dog comm exists: ${dog.id}`, "id_collision");
+    const list = mem[spec.memoryKey] || (mem[spec.memoryKey] = []);
+    if (list.some((r) => r.id === comm.id)) {
+      throw new PromoteError(`${spec.label} exists: ${comm.id}`, "id_collision");
     }
-    mem.dog_comms.push(dog);
-    return dog;
+    list.push(comm);
+    return comm;
   }
   await p.query(
-    `INSERT INTO dog_comms (
+    `INSERT INTO ${spec.table} (
        id, posted_at, handle, account_name, text, still, still_credit,
        screenshot, screenshot_credit, source_url, snapshot
      ) VALUES (
        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb
      )`,
     [
-      dog.id,
-      dog.posted_at,
-      dog.handle,
-      dog.account_name,
-      dog.text,
-      dog.still,
-      dog.still_credit,
-      dog.screenshot,
-      dog.screenshot_credit,
-      dog.source_url,
-      JSON.stringify(dog.snapshot || {}),
+      comm.id,
+      comm.posted_at,
+      comm.handle,
+      comm.account_name,
+      comm.text,
+      comm.still,
+      comm.still_credit,
+      comm.screenshot,
+      comm.screenshot_credit,
+      comm.source_url,
+      JSON.stringify(comm.snapshot || {}),
     ],
   );
-  return dog;
+  return comm;
+}
+
+export async function insertDogComm(row) {
+  return insertKindComm("dog", row);
+}
+
+export async function insertRedFolderComm(row) {
+  return insertKindComm("red_folder", row);
 }
 
 export function persistAddRequests(dataDir) {
@@ -2420,26 +2495,35 @@ export async function searchPeople(q) {
   return res.rows.map(normalizePerson);
 }
 
-export async function searchDogComms(q) {
+export async function searchKindComms(kind, q) {
+  const spec = commsKind(kind);
   const raw = String(q || "").trim();
   if (!raw) return [];
   const p = await getPool();
   if (!p) {
     const needle = raw.toLowerCase();
-    return getMemory()
-      .dog_comms.filter((r) => matchesDog(r, needle))
+    return (getMemory()[spec.memoryKey] || [])
+      .filter((r) => matchesDog(r, needle))
       .slice()
       .sort(compareDogs);
   }
   const res = await p.query(
-    `SELECT * FROM dog_comms
+    `SELECT * FROM ${spec.table}
      WHERE handle ILIKE $1 ESCAPE '\\'
         OR account_name ILIKE $1 ESCAPE '\\'
         OR text ILIKE $1 ESCAPE '\\'
      ORDER BY posted_at DESC, handle ASC`,
     [likeNeedle(raw)],
   );
-  return res.rows.map(normalizeDog);
+  return res.rows.map((row) => normalizeKindComm(row, spec.id));
+}
+
+export async function searchDogComms(q) {
+  return searchKindComms("dog", q);
+}
+
+export async function searchRedFolderComms(q) {
+  return searchKindComms("red_folder", q);
 }
 
 export async function searchSourcePosts(q) {
@@ -2491,9 +2575,10 @@ export async function searchOperations(q) {
 }
 
 export async function searchCatalog(q) {
-  const [people, dogs, posts, operations] = await Promise.all([
+  const [people, dogs, folders, posts, operations] = await Promise.all([
     searchPeople(q),
-    searchDogComms(q),
+    searchKindComms("dog", q),
+    searchKindComms("red_folder", q),
     searchSourcePosts(q),
     searchOperations(q),
   ]);
@@ -2501,6 +2586,7 @@ export async function searchCatalog(q) {
     ...people.map((row) => ({ type: "person", date: row.event_date || "", row })),
     ...operations.map((row) => ({ type: "operation", date: row.event_date || "", row })),
     ...dogs.map((row) => ({ type: "dog", date: row.posted_at || "", row })),
+    ...folders.map((row) => ({ type: "red_folder", date: row.posted_at || "", row })),
     ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),
   ];
 }

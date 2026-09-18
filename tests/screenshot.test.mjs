@@ -132,6 +132,10 @@ test("screenshot hrefs are fail-closed and optional", () => {
     "/media/screenshots/dog-comms/dod-k9-2020.jpg",
   );
   assert.equal(
+    normalizeScreenshotHref("/media/screenshots/red-folder-comms/flotus-2026-09-17.jpg", "red-folder-comms"),
+    "/media/screenshots/red-folder-comms/flotus-2026-09-17.jpg",
+  );
+  assert.equal(
     normalizeScreenshotHref("/media/screenshots/operations/restore.jpg", "operations"),
     "/media/screenshots/operations/restore.jpg",
   );

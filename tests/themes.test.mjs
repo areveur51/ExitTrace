@@ -102,6 +102,7 @@ test("layout defaults to Glass with real catalog routes and no theme picker", ()
   assert.doesNotMatch(footer, /href="\/add"/);
   assert.doesNotMatch(footer, /href="\/search"/);
   assert.match(footer, /href="\/dog-comms"/);
+  assert.match(footer, /href="\/red-folder-comms"/);
   assert.match(footer, /\]<\/span> Firings</);
   assert.match(footer, /\]<\/span> Resignations</);
   assert.match(footer, /\]<\/span> Arrests</);

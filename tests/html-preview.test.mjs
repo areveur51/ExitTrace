@@ -125,6 +125,7 @@ test("public chrome keeps catalog labels and omits pin larp copy", () => {
   assert.match(html, /href: "\/indictments"/);
   assert.match(html, /href: "\/unsorted"/);
   assert.match(html, /href: "\/dog-comms"/);
+  assert.match(html, /href: "\/red-folder-comms"/);
   assert.doesNotMatch(html, /key: "n", href: "\/add"/);
   assert.doesNotMatch(html, /key: "s", href: "\/search"/);
   assert.doesNotMatch(
