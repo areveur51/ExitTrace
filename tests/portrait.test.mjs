@@ -53,6 +53,20 @@ test("Wikimedia, official-gov, and curated news URLs are eligible portraits", ()
   assert.equal(isNewsPortraitHost("cdn.theguardian.com"), false);
   assert.equal(isNewsPortraitHost("attacker.bbc.com"), false);
   assert.equal(isNewsPortraitHost("guim.co.uk"), false);
+  assert.equal(isNewsPortraitHost("static.independent.co.uk"), true);
+  assert.equal(isNewsPortraitHost("assets.apnews.com"), true);
+  assert.equal(
+    isEligiblePortraitUrl("https://static.independent.co.uk/2026/09/09/example.jpg"),
+    true,
+  );
+  assert.equal(
+    isEligiblePortraitUrl("https://assets.apnews.com/ab/cd/example.jpg"),
+    true,
+  );
+  assert.equal(isNewsPortraitHost("evil.independent.co.uk"), false);
+  assert.equal(isNewsPortraitHost("cdn.independent.co.uk"), false);
+  assert.equal(isNewsPortraitHost("notassets.apnews.com"), false);
+  assert.equal(isNewsPortraitHost("evil.apnews.com"), false);
   assert.equal(isEligiblePortraitUrl("https://x.com/RandomCat/photo.jpg"), false);
   assert.equal(isEligiblePortraitUrl("/media/people/casey-vale.jpg"), false);
   assert.equal(isEligiblePortraitUrl("file:///etc/passwd"), false);
