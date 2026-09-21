@@ -46,33 +46,64 @@ const NEWS_PORTRAIT_HOSTS = new Set([
   "www.independent.co.uk",
 ]);
 
+const NEWS_PORTRAIT_HOST_EXACT = new Set(
+  [...NEWS_PORTRAIT_HOSTS].map((h) => String(h).toLowerCase().replace(/^www\./, "")),
+);
+
+/** Set-exact host match. `www.` is stripped; arbitrary subdomains of curated apexes are not accepted. */
 export function isNewsPortraitHost(host) {
   const h = String(host || "").toLowerCase().replace(/^www\./, "");
-  if (NEWS_PORTRAIT_HOSTS.has(h) || NEWS_PORTRAIT_HOSTS.has(`www.${h}`)) return true;
-  return (
-    h === "guim.co.uk" || h.endsWith(".guim.co.uk") ||
-    h === "bbci.co.uk" || h.endsWith(".bbci.co.uk") ||
-    h === "nyt.com" || h.endsWith(".nyt.com") ||
-    h === "reutersmedia.net" || h.endsWith(".reutersmedia.net") ||
-    h === "eluniversal.com.mx" || h.endsWith(".eluniversal.com.mx") ||
-    h === "jornada.com.mx" || h.endsWith(".jornada.com.mx") ||
-    h === "infobae.com" || h.endsWith(".infobae.com") ||
-    h === "diariocorreo.pe" || h.endsWith(".diariocorreo.pe") ||
-    h === "elcomercio.pe" || h.endsWith(".elcomercio.pe") ||
-    h === "theguardian.com" || h.endsWith(".theguardian.com") ||
-    h === "reuters.com" || h.endsWith(".reuters.com") ||
-    h === "bbc.co.uk" || h === "bbc.com" || h.endsWith(".bbc.co.uk") || h.endsWith(".bbc.com") ||
-    h === "nytimes.com" || h.endsWith(".nytimes.com") ||
-    h === "washingtonpost.com" || h.endsWith(".washingtonpost.com") ||
-    h === "apnews.com" || h.endsWith(".apnews.com") ||
-    h === "mirror.co.uk" || h.endsWith(".mirror.co.uk") ||
-    h === "independent.co.uk" || h.endsWith(".independent.co.uk")
-  );
+  return Boolean(h) && NEWS_PORTRAIT_HOST_EXACT.has(h);
+}
+
+function ipv4Octets(host) {
+  const m = String(host || "").match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const parts = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])];
+  return parts.every((n) => n <= 255) ? parts : null;
+}
+
+/** Loopback, RFC1918, and link-local hosts. Fail-closed on empty host. */
+export function isBlockedPortraitHost(host) {
+  const raw = String(host || "")
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/%.*/, "");
+  if (!raw) return true;
+  if (raw === "localhost" || raw.endsWith(".localhost") || raw === "0.0.0.0") return true;
+
+  const v4mapped = raw.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (v4mapped) return isBlockedPortraitHost(v4mapped[1]);
+
+  const octets = ipv4Octets(raw);
+  if (octets) {
+    const [a, b] = octets;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    return false;
+  }
+
+  if (raw.includes(":")) {
+    if (raw === "::1" || raw === "::" || raw === "0:0:0:0:0:0:0:1") return true;
+    const head = raw.split(":")[0] || "";
+    const n = parseInt(head.padEnd(4, "0"), 16);
+    if (!Number.isFinite(n)) return true;
+    if (n >= 0xfe80 && n <= 0xfebf) return true;
+    if (n >= 0xfc00 && n <= 0xfdff) return true;
+    return false;
+  }
+  return false;
 }
 
 export function isEligiblePortraitUrl(raw) {
-  const parsed = parseHttpUrl(raw);
+  const text = String(raw || "").trim();
+  if (!text || /^file:/i.test(text)) return false;
+  const parsed = parseHttpUrl(text);
   if (!parsed) return false;
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  if (isBlockedPortraitHost(parsed.hostname)) return false;
   const host = hostOf(parsed);
   if (isGovHost(host)) return true;
   if (
@@ -145,6 +176,45 @@ function copyIntoPeople(mediaDir, personId, srcPath, srcName) {
   return existingDest(dest, href);
 }
 
+const MAX_FETCH_HOPS = 4;
+
+function nextPortraitUrl(current, location) {
+  const loc = String(location || "").trim();
+  if (!loc || /^file:/i.test(loc)) return "";
+  try {
+    const next = new URL(loc, current).href;
+    return /^file:/i.test(next) ? "" : next;
+  } catch {
+    return "";
+  }
+}
+
+async function fetchEligiblePortrait(startUrl) {
+  let current = startUrl;
+  for (let hop = 0; hop < MAX_FETCH_HOPS; hop++) {
+    if (!isEligiblePortraitUrl(current)) return null;
+    const parsed = parseHttpUrl(current);
+    if (!parsed || isBlockedPortraitHost(parsed.hostname)) return null;
+    const res = await fetch(parsed.href, {
+      headers: { "user-agent": UA },
+      signal: AbortSignal.timeout(20000),
+      redirect: "manual",
+    });
+    const finalUrl = res.url || parsed.href;
+    if (!isEligiblePortraitUrl(finalUrl)) return null;
+    const finalParsed = parseHttpUrl(finalUrl);
+    if (!finalParsed || isBlockedPortraitHost(finalParsed.hostname)) return null;
+    if (res.status >= 300 && res.status < 400) {
+      current = nextPortraitUrl(parsed.href, res.headers.get("location"));
+      if (!current) return null;
+      continue;
+    }
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  }
+  return null;
+}
+
 async function storeEligibleUrl(mediaDir, personId, url) {
   const canonical = canonicalPublicUrl(url);
   if (!isEligiblePortraitUrl(canonical)) return null;
@@ -155,13 +225,8 @@ async function storeEligibleUrl(mediaDir, personId, url) {
   const already = existingDest(dest, href, creditForSource(canonical));
   if (already) return already;
   try {
-    const res = await fetch(canonical, {
-      headers: { "user-agent": UA },
-      signal: AbortSignal.timeout(20000),
-    });
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 800) return null;
+    const buf = await fetchEligiblePortrait(canonical);
+    if (!buf || buf.length < 800) return null;
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, buf);
     return existingDest(dest, href, creditForSource(canonical));
