@@ -1,4 +1,5 @@
-/** Attach a local Wikimedia or official-gov portrait. Never invent. Never overwrite gold. */
+/** Attach a local Wikimedia, official-gov, or explicitly supplied news-org portrait.
+ * Never invent. Never overwrite gold. Never name-search. */
 
 import fs from "fs";
 import path from "path";
@@ -13,17 +14,76 @@ export function peopleMediaDir(mediaDir) {
   return path.join(path.resolve(mediaDir || process.env.MEDIA_DIR || "media"), "people");
 }
 
+/** News-org hosts allowed only when a URL is explicitly supplied (KEEP --photo).
+ * Never name-search. Fail-closed on unknown hosts. */
+const NEWS_PORTRAIT_HOSTS = new Set([
+  "i.guim.co.uk",
+  "media.guim.co.uk",
+  "static.guim.co.uk",
+  "www.theguardian.com",
+  "theguardian.com",
+  "www.reuters.com",
+  "reuters.com",
+  "www.bbc.co.uk",
+  "www.bbc.com",
+  "ichef.bbci.co.uk",
+  "www.nytimes.com",
+  "static01.nyt.com",
+  "www.washingtonpost.com",
+  "www.ap.org",
+  "apnews.com",
+  "dims.apnews.com",
+  "www.afp.com",
+  "www.eluniversal.com.mx",
+  "www.jornada.com.mx",
+  "www.infobae.com",
+  "diariocorreo.pe",
+  "www.diariocorreo.pe",
+  "elcomercio.pe",
+  "www.elcomercio.pe",
+  "www.mirror.co.uk",
+  "i2-prod.mirror.co.uk",
+  "www.independent.co.uk",
+]);
+
+export function isNewsPortraitHost(host) {
+  const h = String(host || "").toLowerCase().replace(/^www\./, "");
+  if (NEWS_PORTRAIT_HOSTS.has(h) || NEWS_PORTRAIT_HOSTS.has(`www.${h}`)) return true;
+  return (
+    h === "guim.co.uk" || h.endsWith(".guim.co.uk") ||
+    h === "bbci.co.uk" || h.endsWith(".bbci.co.uk") ||
+    h === "nyt.com" || h.endsWith(".nyt.com") ||
+    h === "reutersmedia.net" || h.endsWith(".reutersmedia.net") ||
+    h === "eluniversal.com.mx" || h.endsWith(".eluniversal.com.mx") ||
+    h === "jornada.com.mx" || h.endsWith(".jornada.com.mx") ||
+    h === "infobae.com" || h.endsWith(".infobae.com") ||
+    h === "diariocorreo.pe" || h.endsWith(".diariocorreo.pe") ||
+    h === "elcomercio.pe" || h.endsWith(".elcomercio.pe") ||
+    h === "theguardian.com" || h.endsWith(".theguardian.com") ||
+    h === "reuters.com" || h.endsWith(".reuters.com") ||
+    h === "bbc.co.uk" || h === "bbc.com" || h.endsWith(".bbc.co.uk") || h.endsWith(".bbc.com") ||
+    h === "nytimes.com" || h.endsWith(".nytimes.com") ||
+    h === "washingtonpost.com" || h.endsWith(".washingtonpost.com") ||
+    h === "apnews.com" || h.endsWith(".apnews.com") ||
+    h === "mirror.co.uk" || h.endsWith(".mirror.co.uk") ||
+    h === "independent.co.uk" || h.endsWith(".independent.co.uk")
+  );
+}
+
 export function isEligiblePortraitUrl(raw) {
   const parsed = parseHttpUrl(raw);
   if (!parsed) return false;
   const host = hostOf(parsed);
   if (isGovHost(host)) return true;
-  return (
+  if (
     host === "upload.wikimedia.org" ||
     host === "commons.wikimedia.org" ||
     host === "wikimedia.org" ||
     host.endsWith(".wikipedia.org")
-  );
+  ) {
+    return true;
+  }
+  return isNewsPortraitHost(host);
 }
 
 export function isPeopleMediaHref(raw) {
@@ -63,6 +123,7 @@ function creditForSource(raw, supplied = "") {
   const parsed = parseHttpUrl(raw);
   if (!parsed) return "";
   if (isGovHost(hostOf(parsed))) return "Official government work";
+  if (isNewsPortraitHost(hostOf(parsed))) return "News organization portrait";
   if (isEligiblePortraitUrl(raw)) return "Wikimedia Commons";
   return "";
 }

@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   findLocalPortrait,
   isEligiblePortraitUrl,
+  isNewsPortraitHost,
   isPeopleMediaHref,
   resolvePortrait,
 } from "../app/lib/portrait.mjs";
@@ -17,7 +18,7 @@ function writeStill(dir, name, bytes = "portrait-bytes") {
   return file;
 }
 
-test("only Wikimedia and official-gov URLs are eligible portraits", () => {
+test("Wikimedia, official-gov, and curated news URLs are eligible portraits", () => {
   assert.equal(
     isEligiblePortraitUrl(
       "https://upload.wikimedia.org/wikipedia/commons/a/a9/Example.jpg",
@@ -34,6 +35,16 @@ test("only Wikimedia and official-gov URLs are eligible portraits", () => {
   );
   assert.equal(isEligiblePortraitUrl("https://www.fbi.gov/image.jpg"), true);
   assert.equal(isEligiblePortraitUrl("https://example.com/selfie.jpg"), false);
+  assert.equal(
+    isEligiblePortraitUrl("https://i.guim.co.uk/img/media/example.jpg"),
+    true,
+  );
+  assert.equal(
+    isEligiblePortraitUrl("https://www.eluniversal.com.mx/resizer/v2/example.jpg"),
+    true,
+  );
+  assert.equal(isNewsPortraitHost("i.guim.co.uk"), true);
+  assert.equal(isNewsPortraitHost("evil.example"), false);
   assert.equal(isEligiblePortraitUrl("https://x.com/RandomCat/photo.jpg"), false);
   assert.equal(isEligiblePortraitUrl("/media/people/casey-vale.jpg"), false);
   assert.equal(isPeopleMediaHref("/media/people/casey-vale.jpg"), true);
