@@ -2006,6 +2006,11 @@ export async function applyIdentifiedPerson(input) {
   const row = buildPersonRow({ ...parsed, photo: "", photo_credit: "" }, people);
   const created = await insertPerson(row);
   let person = await attachPersonPortrait(created, extras);
+  if (!person.photo) {
+    console.warn(
+      `[exittrace] KEEP insert blank portrait id=${person.id} — supply --photo (gov/Commons/news) on first pass`,
+    );
+  }
   person = await attachPersonNetWorth(person, extras);
   return {
     action: "created",
