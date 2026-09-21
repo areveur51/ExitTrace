@@ -33,6 +33,7 @@ const NEWS_PORTRAIT_HOSTS = new Set([
   "www.ap.org",
   "apnews.com",
   "dims.apnews.com",
+  "assets.apnews.com",
   "www.afp.com",
   "www.eluniversal.com.mx",
   "www.jornada.com.mx",
@@ -44,6 +45,7 @@ const NEWS_PORTRAIT_HOSTS = new Set([
   "www.mirror.co.uk",
   "i2-prod.mirror.co.uk",
   "www.independent.co.uk",
+  "static.independent.co.uk",
 ]);
 
 const NEWS_PORTRAIT_HOST_EXACT = new Set(
