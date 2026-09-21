@@ -19,6 +19,7 @@ import { mergePersonAnnotate } from "../app/lib/promote.mjs";
 import {
   isScreenshotHref,
   normalizeScreenshotHref,
+  supportingScreenshotPrefix,
 } from "../app/lib/screenshot.mjs";
 import { handle } from "../app/server.mjs";
 import {
@@ -143,6 +144,39 @@ test("screenshot hrefs are fail-closed and optional", () => {
     normalizeScreenshotHref("/media/screenshots/people/james-comey.jpg", "operations"),
     "",
   );
+  assert.equal(
+    supportingScreenshotPrefix("red-folder-comms", "melaniatrump-2025-12-17-8fe71a81", 0),
+    "/media/screenshots/red-folder-comms/melaniatrump-2025-12-17-8fe71a81/support/0/",
+  );
+  assert.equal(
+    normalizeScreenshotHref(
+      "/media/screenshots/red-folder-comms/melaniatrump-2025-12-17-8fe71a81/support/0/shot.png",
+      "red-folder-comms",
+    ),
+    "/media/screenshots/red-folder-comms/melaniatrump-2025-12-17-8fe71a81/support/0/shot.png",
+  );
+  assert.equal(
+    normalizeScreenshotHref(
+      "/media/screenshots/dog-comms/ezra-iso/support/2/ally.png",
+      "dog-comms",
+    ),
+    "/media/screenshots/dog-comms/ezra-iso/support/2/ally.png",
+  );
+  assert.equal(
+    normalizeScreenshotHref(
+      "/media/screenshots/people/james-comey/support/0/shot.png",
+      "people",
+    ),
+    "",
+  );
+  assert.equal(
+    normalizeScreenshotHref(
+      "/media/screenshots/red-folder-comms/melaniatrump-2025-12-17-8fe71a81/support/0/../secret.png",
+    ),
+    "",
+  );
+  assert.equal(supportingScreenshotPrefix("people", "james-comey", 0), "");
+  assert.equal(supportingScreenshotPrefix("red-folder-comms", "../x", 0), "");
 });
 
 test("store columns stay optional and do not invent or replace gold stills", async () => {

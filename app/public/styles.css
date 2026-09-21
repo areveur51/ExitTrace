@@ -1037,6 +1037,13 @@ img.still.thumb {
   flex-direction: column;
   gap: 0;
 }
+/* Supporting frost groups stack under the main post; masonry stays shared. */
+.supporting-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+}
 .meta-pane {
   display: flex;
   gap: 1rem;
@@ -1847,6 +1854,9 @@ html[data-theme="glass"] .dash-stats {
 }
 
 @media (max-width: 720px) {
+  .supporting-group .detail-media--masonry {
+    column-count: 1;
+  }
   .tui-top {
     grid-template-columns: 1fr;
     gap: 0.2rem;

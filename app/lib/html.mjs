@@ -596,12 +596,13 @@ export function kindSupportingEntries(row) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   const seen = new Set();
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
+  raw.forEach((item, index) => {
+    if (!item || typeof item !== "object") return;
     const sourceUrl = String(item.source_url || "").trim();
-    if (!sourceUrl || seen.has(sourceUrl)) continue;
+    if (!sourceUrl || seen.has(sourceUrl)) return;
     seen.add(sourceUrl);
     out.push({
+      index,
       source_url: sourceUrl,
       handle: String(item.handle || "").trim(),
       account_name: String(item.account_name || "").trim(),
@@ -612,8 +613,10 @@ export function kindSupportingEntries(row) {
       stills: Array.isArray(item.stills)
         ? item.stills.map((s) => String(s || "").trim()).filter(Boolean)
         : [],
+      screenshot: normalizeScreenshotHref(item.screenshot),
+      screenshot_credit: String(item.screenshot_credit || "").trim(),
     });
-  }
+  });
   return out;
 }
 
@@ -634,8 +637,8 @@ export function kindSupportingStills(kind, row) {
   return out;
 }
 
-/** Extra local stills: snapshot.stills + supporting stills (skip primary). */
-export function kindExtraStills(kind, row) {
+/** Extra local stills: snapshot.stills + optional supporting stills (skip primary). */
+export function kindExtraStills(kind, row, { includeSupporting = true } = {}) {
   const spec = commsKind(kind);
   const primary = String(row?.still || "").trim();
   const raw = row?.snapshot?.stills;
@@ -649,10 +652,12 @@ export function kindExtraStills(kind, row) {
       out.push(href);
     }
   }
-  for (const href of kindSupportingStills(kind, row)) {
-    if (!href || seen.has(href)) continue;
-    seen.add(href);
-    out.push(href);
+  if (includeSupporting) {
+    for (const href of kindSupportingStills(kind, row)) {
+      if (!href || seen.has(href)) continue;
+      seen.add(href);
+      out.push(href);
+    }
   }
   return out;
 }
@@ -662,16 +667,71 @@ export function dogExtraStills(row) {
   return kindExtraStills("dog", row);
 }
 
-/** Primary Source line plus supporting X links (same tile; no wipe of gold). */
-export function kindSourceHtml(row) {
+/** Primary Source line plus optional supporting X links (same tile; no wipe of gold). */
+export function kindSourceHtml(row, { includeSupporting = true } = {}) {
   const lines = [detailSourceLine(row?.source_url)];
-  for (const entry of kindSupportingEntries(row)) {
-    const label = entry.handle
-      ? `Supporting · ${entry.handle}`
-      : "Supporting";
-    lines.push(detailSourceLine(entry.source_url, { label }));
+  if (includeSupporting) {
+    for (const entry of kindSupportingEntries(row)) {
+      const label = entry.handle
+        ? `Supporting · ${entry.handle}`
+        : "Supporting";
+      lines.push(detailSourceLine(entry.source_url, { label }));
+    }
   }
   return lines.filter(Boolean).join("");
+}
+
+/** That supporting entry's still / stills only (skip primary; fail-closed local media). */
+export function kindEntryStills(kind, row, entry) {
+  const spec = commsKind(kind);
+  const primary = String(row?.still || "").trim();
+  const seen = new Set(primary ? [primary] : []);
+  const out = [];
+  for (const href of [entry?.still, ...(entry?.stills || [])]) {
+    const text = String(href || "").trim();
+    if (!text || seen.has(text) || !isCommsMediaHref(text, spec.mediaDir)) continue;
+    seen.add(text);
+    out.push(text);
+  }
+  return out;
+}
+
+/** One frost group: cite-DRY + Source (this URL only) + screenshot/stills masonry. */
+export function kindSupportingGroupHtml(kind, row, entry) {
+  const handle = entry?.handle || row?.handle || "";
+  const extras = kindEntryStills(kind, row, entry).map((src) => ({
+    src,
+    alt: `Post media for ${handle}`,
+    credit: entry?.still_credit || "",
+  }));
+  return `<section class="supporting-group" data-supporting-index="${esc(String(entry?.index ?? ""))}">
+    ${detailShell({
+      title: "Supporting",
+      mediaHtml: detailMediaStrip({
+        screenshot: entry?.screenshot,
+        screenshotAlt: `X-post screenshot of ${handle}`,
+        screenshotCredit: entry?.screenshot_credit,
+        extraMedia: extras,
+        metaHtml: detailMetaBlock({
+          citeHtml: citeFromRow({
+            handle: entry?.handle,
+            account_name: entry?.account_name,
+            posted_at: entry?.posted_at,
+            text: entry?.text,
+          }),
+          sourceHtml: detailSourceLine(entry?.source_url),
+        }),
+      }),
+      active: true,
+      extraClass: "meta-box",
+    })}
+  </section>`;
+}
+
+export function kindSupportingGroupsHtml(kind, row) {
+  return kindSupportingEntries(row)
+    .map((entry) => kindSupportingGroupHtml(kind, row, entry))
+    .join("");
 }
 
 function detailMediaTile({
@@ -1368,14 +1428,16 @@ export function operationDetail(row) {
 
 export function kindDetail(kind, row) {
   const spec = commsKind(kind);
+  const grouped = !!spec.supportingGroups;
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
     commsKind: spec.id,
   });
-  const extras = kindExtraStills(spec.id, row).map((src) => ({
+  const extras = kindExtraStills(spec.id, row, { includeSupporting: !grouped }).map((src) => ({
     src,
     alt: `Post media for ${row.handle}`,
     credit: row.still_credit || "",
   }));
+  const groups = grouped ? kindSupportingGroupsHtml(spec.id, row) : "";
   return `<article class="detail ${spec.detailClass}">
     ${detailShell({
       title: "Metadata",
@@ -1390,12 +1452,12 @@ export function kindDetail(kind, row) {
         extraMedia: extras,
         metaHtml: detailMetaBlock({
           citeHtml: citeFromRow(row),
-          sourceHtml: kindSourceHtml(row),
+          sourceHtml: kindSourceHtml(row, { includeSupporting: !grouped }),
         }),
       }),
       active: true,
       extraClass: "meta-box",
-    })}
+    })}${groups}
   </article>`;
 }
 

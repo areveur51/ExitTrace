@@ -111,6 +111,23 @@ function normalizePerson(row) {
   });
 }
 
+/** Accept supporting[].screenshot + screenshot_credit. Invalid shot hrefs fail closed. */
+function normalizeKindSnapshot(raw, kind) {
+  if (!raw || typeof raw !== "object") return {};
+  const snap = { ...raw };
+  if (!Array.isArray(raw.supporting)) return snap;
+  const spec = commsKind(kind);
+  snap.supporting = raw.supporting.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    return {
+      ...item,
+      screenshot: normalizeScreenshotHref(item.screenshot, spec.screenshotKind),
+      screenshot_credit: normalizeScreenshotCredit(item.screenshot_credit),
+    };
+  });
+  return snap;
+}
+
 function normalizeKindComm(row, kind = "dog") {
   const spec = commsKind(kind);
   return {
@@ -124,7 +141,7 @@ function normalizeKindComm(row, kind = "dog") {
     screenshot: normalizeScreenshotHref(row.screenshot, spec.screenshotKind),
     screenshot_credit: normalizeScreenshotCredit(row.screenshot_credit),
     source_url: row.source_url,
-    snapshot: row.snapshot && typeof row.snapshot === "object" ? row.snapshot : {},
+    snapshot: normalizeKindSnapshot(row.snapshot, spec.id),
   };
 }
 

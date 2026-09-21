@@ -18,6 +18,7 @@ export const KIND_COMMS = Object.freeze({
     label: "Dog comms",
     navLabel: "Dog",
     keymapKey: "c",
+    supportingGroups: false,
   }),
   red_folder: Object.freeze({
     id: "red_folder",
@@ -34,6 +35,7 @@ export const KIND_COMMS = Object.freeze({
     label: "Red Folder comms",
     navLabel: "Red Folder",
     keymapKey: "e",
+    supportingGroups: true,
   }),
 });
 
