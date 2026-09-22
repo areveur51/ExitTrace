@@ -1306,10 +1306,11 @@ function personIndictmentUnsealed(row, categories) {
   return personEvents(row).some((ev) => allow.has(ev.kind) && ev.unsealed === true);
 }
 
-function peopleUnsealedWhere(params, unsealed, categories) {
+export function peopleUnsealedWhere(params, unsealed, categories) {
   if (unsealed !== true) return "";
   const kinds = (categories || []).filter((id) => isIndictmentKeepKind(id));
-  if (!kinds.length) return "";
+  // No indictment kinds: match the memory filter, which excludes every row.
+  if (!kinds.length) return " AND FALSE";
   params.push(kinds);
   const n = params.length;
   return ` AND (

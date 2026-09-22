@@ -26,6 +26,7 @@ import {
   getPerson,
   listPeople,
   loadSeedFile,
+  peopleUnsealedWhere,
   setMemory,
 } from "../app/lib/store.mjs";
 import { IDENTITY_TAG_IDS, parseTagFilter, parseUnsealedFilter } from "../app/lib/tags.mjs";
@@ -167,6 +168,26 @@ test("promote sets unsealed only from cite wording and does not clear a stored t
   assert.equal(filled.person.events[0].unsealed, true);
   assert.equal(filled.person.events[0].comments, "The indictment remains sealed");
   assert.equal(filled.person.name, "Mina Holt");
+});
+
+test("unsealed SQL with no indictment kinds is always false", async () => {
+  assert.equal(peopleUnsealedWhere([], true, []), " AND FALSE");
+  assert.equal(peopleUnsealedWhere([], true, ["firings", "arrests"]), " AND FALSE");
+  assert.equal(peopleUnsealedWhere([], false, []), "");
+  const params = [];
+  const sql = peopleUnsealedWhere(params, true, ["firings", "indictment_civilian"]);
+  assert.match(sql, /e\.unsealed IS TRUE/);
+  assert.deepEqual(params[0], ["indictment_civilian"]);
+
+  setMemory(goldSeed());
+  const people = await countPeople();
+  const ops = await countOperations();
+  const dogs = await countDogComms();
+  assert.equal(await countPeople({ unsealed: true }), 0);
+  assert.equal((await listPeople({ category: "firings", unsealed: true })).length, 0);
+  assert.equal(await countPeople(), people);
+  assert.equal(await countOperations(), ops);
+  assert.equal(await countDogComms(), dogs);
 });
 
 test("?tags=unsealed narrows existing indictment routes and does not add a route", async () => {
