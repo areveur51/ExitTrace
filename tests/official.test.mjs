@@ -33,6 +33,16 @@ test("USAO Southern District of Florida is an official gov cite handle", () => {
     isOfficialCiteUrl("https://x.com/FBIDirectorKash/status/2100210000000000001"),
     true,
   );
+  assert.equal(isOfficialGovHandle("FBI_Response"), true);
+  assert.equal(isOfficialGovHandle("@fbi_response"), true);
+  assert.equal(
+    isOfficialGovPostUrl("https://x.com/FBI_Response/status/2100220000000000001"),
+    true,
+  );
+  assert.equal(
+    isOfficialCiteUrl("https://x.com/FBI_Response/status/2100220000000000001"),
+    true,
+  );
   const post = "https://x.com/USAO_SDFL/status/2099958115349463197";
   assert.equal(isOfficialCiteUrl(post), true);
   assert.equal(isOfficialGovPostUrl(post), true);
