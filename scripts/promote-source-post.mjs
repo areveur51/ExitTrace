@@ -36,7 +36,7 @@ function usage(exitCode = 0) {
   --cite-url <https://…> --cite-url <https://…> \\
   [--summary "…"] [--role "…"] [--birth-date YYYY-MM-DD] [--country-of-origin "…"] \\
   [--position "…"] [--organization "…"] [--reason "…"] [--comments "…"] [--country "…"] [--branch "…"] \\
-  [--military] \\
+  [--military] [--unsealed-evidence "quote that the cite unsealed or made public the indictment"] \\
   [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"] \\
   [--net-worth <USD>] [--net-worth-source <Forbes|Bloomberg URL>] [--net-worth-note "…"]
 
@@ -60,6 +60,10 @@ If the same person already exists (id/slug or normalized name), the new KEEP
 kind is attached as an event. A second person row is not created. Existing
 name, event fields, cites, photo, and net-worth stay put (gold annotate-only).
 Each event is fail-closed on its own calendar event_date plus two official cites.
+Indictment events may set unsealed true only when a cite URL/title or the
+event comments/reason/summary clearly states unsealed or made public.
+Sealed, negated, or unclear stays null. A flag without that wording does
+not set it. unsealed is not a new category.
 
 After the row is written, the host process is not done until live HTML
 shows it on the list page and the detail page. Health counts are not
@@ -102,6 +106,7 @@ function parseArgs(argv) {
     else if (arg === "--country") out.country = take();
     else if (arg === "--branch") out.branch = take();
     else if (arg === "--comments") out.comments = take();
+    else if (arg === "--unsealed-evidence") out.unsealed_evidence = take();
     else if (arg === "--birth-date" || arg === "--birth_date") out.birth_date = take();
     else if (arg === "--country-of-origin" || arg === "--origin-country") {
       out.country_of_origin = take();

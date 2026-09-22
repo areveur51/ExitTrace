@@ -8,11 +8,13 @@ import { parseStoredAge, stampEventAge } from "./age.mjs";
 import {
   eventFromLead,
   isMilitaryInput,
+  evidenceCorpus,
   mapLeadReason,
   mergeEventAttrs,
   normalizeEventAttrs,
   parseOriginCountry,
   resolveEventCalendar,
+  unsealedFromEvidence,
 } from "./event-attrs.mjs";
 import { personTags } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
@@ -153,13 +155,23 @@ export function normalizePersonEvent(raw, fallback = {}) {
   const attrs = mergeEventAttrs(fallback, raw);
   const age_at_event =
     parseStoredAge(raw.age_at_event) ?? parseStoredAge(fallback.age_at_event);
-  return {
+  const event = {
     kind,
     event_date,
     sources,
     ...attrs,
     age_at_event,
   };
+  if (isIndictmentKeepKind(kind)) {
+    event.unsealed =
+      raw.unsealed === true || fallback.unsealed === true ? true : null;
+  }
+  return event;
+}
+
+function mergedUnsealed(kind, ...flags) {
+  if (!isIndictmentKeepKind(kind)) return null;
+  return flags.some((flag) => flag === true) ? true : null;
 }
 
 function uniqueEvents(events) {
@@ -172,14 +184,18 @@ function uniqueEvents(events) {
       byKind.set(ev.kind, ev);
       continue;
     }
-    byKind.set(ev.kind, {
+    const merged = {
       kind: prior.kind,
       event_date: prior.event_date,
       sources: mergeCites(prior.sources, ev.sources).sources,
       ...mergeEventAttrs(prior, ev),
       age_at_event:
         parseStoredAge(prior.age_at_event) ?? parseStoredAge(ev.age_at_event),
-    });
+    };
+    if (isIndictmentKeepKind(prior.kind)) {
+      merged.unsealed = mergedUnsealed(prior.kind, prior.unsealed, ev.unsealed);
+    }
+    byKind.set(ev.kind, merged);
   }
   return [...byKind.values()].sort((a, b) => {
     const d = String(b.event_date).localeCompare(String(a.event_date));
@@ -290,6 +306,8 @@ export function projectPerson(row, kinds) {
 /**
  * One event, one kind. Civilian and non-civilian indictment are the same
  * indictment classification — do not double-tag. Unclear stays un-tagged.
+ * `unsealed` is not a kind: true only when cites clearly state unsealed or
+ * made public; otherwise null. A stored true is not cleared.
  */
 export function resolveEventKind(person, kind) {
   const key = String(kind || "").trim();
@@ -318,6 +336,13 @@ export function attachPersonEvent(person, incoming) {
       age_at_event:
         parseStoredAge(events[i].age_at_event) ?? parseStoredAge(ev.age_at_event),
     };
+    if (isIndictmentKeepKind(events[i].kind)) {
+      next[i].unsealed = mergedUnsealed(
+        events[i].kind,
+        events[i].unsealed,
+        ev.unsealed,
+      );
+    }
     return {
       person: projectPerson({ ...person, events: next }),
       added: merged.added,
@@ -407,30 +432,45 @@ export function mergePersonAnnotate(gold, prior) {
   const extra = projectPerson(prior);
   const eventsByKind = new Map();
   for (const ev of keep.events) {
-    eventsByKind.set(ev.kind, {
+    const row = {
       kind: ev.kind,
       event_date: ev.event_date,
       sources: (ev.sources || []).slice(),
       ...mergeEventAttrs(ev, {}),
       age_at_event: parseStoredAge(ev.age_at_event),
-    });
+    };
+    if (isIndictmentKeepKind(ev.kind)) {
+      row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
+    }
+    eventsByKind.set(ev.kind, row);
   }
   for (const ev of extra.events) {
     const existing = eventsByKind.get(ev.kind);
     if (!existing) {
-      eventsByKind.set(ev.kind, {
+      const row = {
         kind: ev.kind,
         event_date: ev.event_date,
         sources: (ev.sources || []).slice(),
         ...mergeEventAttrs(ev, {}),
         age_at_event: parseStoredAge(ev.age_at_event),
-      });
+      };
+      if (isIndictmentKeepKind(ev.kind)) {
+        row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
+      }
+      eventsByKind.set(ev.kind, row);
       continue;
     }
     existing.sources = mergeCites(existing.sources, ev.sources).sources;
     Object.assign(existing, mergeEventAttrs(existing, ev));
     if (existing.age_at_event == null) {
       existing.age_at_event = parseStoredAge(ev.age_at_event);
+    }
+    if (isIndictmentKeepKind(existing.kind)) {
+      existing.unsealed = mergedUnsealed(
+        existing.kind,
+        existing.unsealed,
+        ev.unsealed,
+      );
     }
   }
   return projectPerson({
@@ -551,6 +591,11 @@ export function validateIdentifiedPersonInput(input = {}) {
     country_of_origin,
     military,
     career: personCareer(input),
+    unsealed: unsealedFromEvidence(
+      { ...input, unsealed_evidence: evidenceCorpus(input) },
+      category,
+    ),
+    unsealed_evidence: evidenceCorpus(input),
     photo: String(input.photo || "").trim(),
     photo_credit: String(input.photo_credit || "").trim(),
     net_worth_usd: input.net_worth_usd,
@@ -619,13 +664,20 @@ export function validatePromoteInput(input = {}) {
 export function incomingPersonEvent(input, sources) {
   const lead = eventFromLead(input, { kind: input.category, tags: input.tags });
   const attrs = normalizeEventAttrs(input);
-  return {
+  const event = {
     kind: input.category,
     event_date: input.event_date,
     announced_date: input.announced_date || lead?.announced_date || "",
     sources: sources || [],
     ...attrs,
   };
+  if (isIndictmentKeepKind(input.category)) {
+    event.unsealed = unsealedFromEvidence(
+      { ...input, sources: sources || input.sources },
+      input.category,
+    );
+  }
+  return event;
 }
 
 export function buildPersonRow(input, people) {

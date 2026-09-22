@@ -78,7 +78,7 @@ import {
   parsePage,
 } from "./lib/paginate.mjs";
 import { parseAgeBand } from "./lib/age.mjs";
-import { filterPath, parseTagFilter } from "./lib/tags.mjs";
+import { filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
   fillEmptyFromGrokipedia,
@@ -887,8 +887,9 @@ async function handle(req, res) {
           ? catalogListKinds("indictment_unspecified")
           : catalogListKinds(cat.id);
     const tags = parseTagFilter(url.searchParams, p);
+    const unsealed = isIndictmentCategory(cat.id) && parseUnsealedFilter(url.searchParams);
     const pageSize = parseCookiePageSize(req.headers.cookie);
-    const listOpts = { category: kinds, tags };
+    const listOpts = { category: kinds, tags, unsealed };
     const total = await countPeople(listOpts);
     const meta = paginate({
       total,
@@ -901,7 +902,7 @@ async function handle(req, res) {
       offset: meta.offset,
     });
     const heading = gov ? "Officials" : cat.title;
-    const listPath = filterPath(cat.path, { tags });
+    const listPath = filterPath(cat.path, { tags, unsealed });
     return sendHtml(
       res,
       layout({
@@ -914,7 +915,7 @@ async function handle(req, res) {
         lede: gov
           ? "People tagged official — government, appointed, military, or law-enforcement roles. One card per person; tags are not exclusive."
           : `${cat.blurb} One card per person. Identity tags are independent of the event. Seeded rows only — not exhaustive.`,
-        body: `${identityFilterNav(cat.path, { tags })}${listSection(
+        body: `${identityFilterNav(cat.path, { tags, unsealed })}${listSection(
           peopleList(rows, { showDeath: deaths }),
           pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({

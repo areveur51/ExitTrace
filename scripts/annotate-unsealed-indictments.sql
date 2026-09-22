@@ -1,0 +1,17 @@
+-- Annotate-only notes for indictment unsealed.
+--
+-- The column is added in scripts/bootstrap-db.sql and left NULL:
+--   ALTER TABLE person_events ADD COLUMN IF NOT EXISTS unsealed BOOLEAN;
+-- That statement does not update people, operations, or dog rows, and it
+-- does not set unsealed on existing events.
+--
+-- Do not execute a row change from this file. The app reads people.events JSON
+-- together with person_events. Use the dry-run helper, then --apply:
+--   node scripts/annotate-unsealed-indictments.mjs
+--   node scripts/annotate-unsealed-indictments.mjs --apply
+--
+-- The helper sets true only on indictment_civilian or
+-- indictment_non_civilian when stored cite or comment text clearly states
+-- unsealed or made public, and only when the current value is not already
+-- true. It does not rewrite other person fields or stills, and it does not
+-- write data/seed.json.
