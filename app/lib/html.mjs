@@ -11,6 +11,7 @@ import {
   isIndictmentCategory,
   GROUP_OPS_KEEP_IDS,
   PROMOTE_CATEGORY_IDS,
+  isIndictmentKeepKind,
 } from "./categories.mjs";
 import { normalizeOperationTags, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
@@ -225,7 +226,7 @@ export function pageSizeSelector(activeSize = PAGE_SIZE) {
   </nav>`;
 }
 
-export function identityFilterNav(basePath, { tags = [] } = {}) {
+export function identityFilterNav(basePath, { tags = [], unsealed = false } = {}) {
   const main = catalogMainPath(basePath);
   const selected = normalizeTags(tags);
   const locked = main === "/government" ? ["official"] : [];
@@ -256,9 +257,16 @@ export function identityFilterNav(basePath, { tags = [] } = {}) {
       return `<option value="${esc(o.href)}"${on ? " selected" : ""}>${esc(o.label)}</option>`;
     })
     .join("");
+  const unsealedChip =
+    main === "/indictments"
+      ? `<a class="keychip unsealed-filter" href="${esc(
+          filterPath(basePath, { tags: selected, unsealed: !unsealed }),
+        )}" aria-pressed="${unsealed ? "true" : "false"}">Unsealed</a>`
+      : "";
   return `<nav class="identity-filters" aria-label="Identity filters">
     <label class="identity-filters-label" for="identity-filter">Filters</label>
     <select class="identity-filter-select" id="identity-filter" data-filter-select>${opts}</select>
+    ${unsealedChip}
   </nav>`;
 }
 
@@ -1273,8 +1281,12 @@ export function eventTagRow(ev, { birthDate } = {}) {
     const name = EVENT_ATTR_LABELS[field] || field;
     return `<p class="meta-line">${esc(name)} · ${esc(value)}</p>`;
   }).join("");
+  const unsealedBadge =
+    isIndictmentKeepKind(kind) && ev.unsealed === true
+      ? ` <span class="keychip event-badge" data-unsealed="true">Unsealed</span>`
+      : "";
   return `<article class="event-tag-row" data-kind="${esc(kind)}">
-    <h3 class="event-h">${esc(label)}</h3>
+    <h3 class="event-h">${esc(label)}${unsealedBadge}</h3>
     <p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>
     ${announced}
     ${ageLine}
@@ -1737,6 +1749,7 @@ export function dashboardBody(model, { path = "/dashboard", range } = {}) {
       <p class="dash-stat"><span class="dash-stat-label">Operations</span> ${dashCount(model.operations?.all?.operations)}</p>
       <p class="dash-stat"><span class="dash-stat-label">Victims</span> ${dashCount(model.operations?.all?.victims)}</p>
       <p class="dash-stat"><span class="dash-stat-label">Arrests</span> ${dashCount(model.operations?.all?.arrests)}</p>
+      <a class="dash-stat" href="/indictments?tags=unsealed" data-unsealed-count="${Math.max(0, Number(model.unsealed) || 0)}"><span class="dash-stat-label">Unsealed</span> ${dashCount(model.unsealed ?? 0)}</a>
     </section>
     <div class="dash-standings">
       ${operationStandingBlock(model.operations)}

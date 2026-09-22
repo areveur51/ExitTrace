@@ -1,6 +1,10 @@
 /** One event schema for harvest leads and dashboard slices. No parallel copy. */
 
-import { DEATH_KEEP_IDS, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
+import {
+  DEATH_KEEP_IDS,
+  PROMOTE_CATEGORY_IDS,
+  isIndictmentKeepKind,
+} from "./categories.mjs";
 import { normalizeTags } from "./tags.mjs";
 
 function parseLeadDate(raw) {
@@ -93,6 +97,110 @@ export function isMilitaryInput(raw = {}) {
       ? raw.tags.split(",")
       : [];
   return tags.some((item) => String(item || "").trim().toLowerCase() === "military");
+}
+
+/**
+ * Fail-closed unsealed rule for indictment_civilian | indictment_non_civilian only.
+ * Set true only when cite URL/title or event comments/reason/summary clearly
+ * state unsealed / unsealing / made public. Sealed, negated, or unclear stays
+ * null. A bare unsealed=true flag is not evidence. Not a KEEP kind.
+ */
+const UNCLEAR_UNSEALED_RE =
+  /\b(?:unclear|not clear|unknown whether|cannot confirm|can't confirm|unconfirmed)\b/i;
+
+function evidenceBits(input = {}) {
+  const bits = [];
+  const push = (value) => {
+    if (value == null) return;
+    if (typeof value === "object") {
+      push(value.title);
+      push(value.publisher);
+      push(value.url);
+      push(value.raw);
+      push(value.canonical);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) bits.push(text);
+  };
+  push(input.comments);
+  push(input.Comments);
+  push(input.reason);
+  push(input.Reason);
+  push(input.summary);
+  push(input.unsealed_evidence);
+  push(input.unsealedEvidence);
+  const cites = []
+    .concat(input.cite_urls || [])
+    .concat(input.sources || []);
+  for (const cite of cites) push(cite);
+  return bits.join("\n");
+}
+
+export function textStatesUnsealed(raw) {
+  const body = String(raw || "");
+  if (!body.trim()) return false;
+  if (UNCLEAR_UNSEALED_RE.test(body)) return false;
+  const phrase = /\b(?:unsealed|unsealing|made public)\b/gi;
+  let match;
+  while ((match = phrase.exec(body))) {
+    const before = body.slice(Math.max(0, match.index - 32), match.index);
+    if (/(?:\b(?:not|never|no|without)\b|n't)\s*$/i.test(before)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** True or null. Never false. Non-indictment kinds stay null. */
+export function unsealedFromEvidence(input = {}, kind) {
+  const eventKind = String(kind || input.kind || input.category || "").trim();
+  if (!isIndictmentKeepKind(eventKind)) return null;
+  return textStatesUnsealed(evidenceBits(input)) ? true : null;
+}
+
+export function evidenceCorpus(input = {}) {
+  return evidenceBits(input);
+}
+
+/**
+ * Annotate-only: null → true when this event's cites/comments clearly state
+ * unsealed. A stored true is left alone. Other kinds are not modified.
+ */
+export function annotateUnsealedEvent(ev) {
+  if (!ev || typeof ev !== "object") return { event: ev, changed: false };
+  if (!isIndictmentKeepKind(ev.kind)) return { event: ev, changed: false };
+  if (ev.unsealed === true) return { event: ev, changed: false };
+  if (unsealedFromEvidence(ev, ev.kind) !== true) return { event: ev, changed: false };
+  return { event: { ...ev, unsealed: true }, changed: true };
+}
+
+export function annotateUnsealedPerson(person) {
+  const events = Array.isArray(person?.events) ? person.events : [];
+  let changed = false;
+  const nextEvents = events.map((ev) => {
+    const result = annotateUnsealedEvent(ev);
+    if (result.changed) changed = true;
+    return result.event;
+  });
+  if (!changed) return { person, changed: false };
+  return { person: { ...person, events: nextEvents }, changed: true };
+}
+
+export function planUnsealedAnnotations(people) {
+  const plans = [];
+  for (const person of people || []) {
+    const result = annotateUnsealedPerson(person);
+    if (!result.changed) continue;
+    const before = new Map(
+      (person.events || []).map((ev) => [ev.kind, ev.unsealed === true]),
+    );
+    for (const ev of result.person.events || []) {
+      if (ev?.unsealed === true && !before.get(ev.kind)) {
+        plans.push({ id: person.id, kind: ev.kind });
+      }
+    }
+  }
+  return plans;
 }
 
 /**

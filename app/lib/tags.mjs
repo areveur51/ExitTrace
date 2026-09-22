@@ -31,6 +31,34 @@ export const PATH_TAGS = {
 
 const TAG_SET = new Set(IDENTITY_TAG_IDS);
 
+/**
+ * Event filter token for indictment lists. Not an identity tag and not a KEEP kind.
+ * Stored as person_events.unsealed / people.events[].unsealed, not people.tags.
+ */
+export const UNSEALED_FILTER = "unsealed";
+
+function searchParamsOf(searchParams) {
+  return searchParams instanceof URLSearchParams
+    ? searchParams
+    : new URLSearchParams(searchParams || "");
+}
+
+function rawTagTokens(raw) {
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(",")
+      : [];
+  return list
+    .map((item) =>
+      String(item || "")
+        .trim()
+        .toLowerCase()
+        .replace(/-/g, "_"),
+    )
+    .filter(Boolean);
+}
+
 export function normalizeTag(raw) {
   const id = String(raw || "")
     .trim()
@@ -96,14 +124,23 @@ export function matchesTags(row, tags) {
   return want.some((id) => have.has(id));
 }
 
+/** True when the tags query includes the indictment event token `unsealed`. */
+export function parseUnsealedFilter(searchParams) {
+  const src = searchParamsOf(searchParams);
+  if (!src.has("tags")) return false;
+  return rawTagTokens(src.get("tags")).includes(UNSEALED_FILTER);
+}
+
 export function parseTagFilter(searchParams, pathname) {
-  const src =
-    searchParams instanceof URLSearchParams
-      ? searchParams
-      : new URLSearchParams(searchParams || "");
-  const fromQuery = src.has("tags") ? normalizeTags(src.get("tags")) : null;
+  const src = searchParamsOf(searchParams);
   const fromPath = PATH_TAGS[String(pathname || "").split("?")[0]] || [];
-  return fromQuery || fromPath.slice();
+  if (!src.has("tags")) return fromPath.slice();
+  const identity = normalizeTags(
+    rawTagTokens(src.get("tags")).filter((id) => id !== UNSEALED_FILTER),
+  );
+  // `?tags=unsealed` is an event filter. Keep the path's identity slice.
+  if (!identity.length && parseUnsealedFilter(src)) return fromPath.slice();
+  return identity;
 }
 
 export function catalogMainPath(pathname) {
@@ -115,10 +152,11 @@ export function catalogMainPath(pathname) {
   return p;
 }
 
-export function filterQuery({ tags } = {}) {
+export function filterQuery({ tags, unsealed = false } = {}) {
   const params = new URLSearchParams();
-  const selected = normalizeTags(tags);
-  if (selected.length) params.set("tags", selected.join(","));
+  const parts = normalizeTags(tags);
+  if (unsealed) parts.push(UNSEALED_FILTER);
+  if (parts.length) params.set("tags", parts.join(","));
   return params.toString();
 }
 
@@ -144,6 +182,7 @@ export function pathForTagFilter(mainPath, tags) {
 
 export function filterPath(basePath, filter) {
   const selected = normalizeTags(filter?.tags);
+  const unsealed = filter?.unsealed === true;
   const main = catalogMainPath(basePath);
   const here = String(basePath || "").split("?")[0];
   const path =
@@ -159,6 +198,7 @@ export function filterPath(basePath, filter) {
       PATH_TAGS[path].every((id) => selected.includes(id))
         ? []
         : selected,
+    unsealed,
   });
   if (!q) return path;
   return `${path}?${q}`;

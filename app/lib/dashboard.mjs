@@ -8,7 +8,13 @@ import {
   parseAgeBand,
   storedAgeAtEvent,
 } from "./age.mjs";
-import { categoryById, isDeathCategory, GROUP_OPS_KEEP_IDS, PROMOTE_CATEGORY_IDS } from "./categories.mjs";
+import {
+  categoryById,
+  isDeathCategory,
+  isIndictmentKeepKind,
+  GROUP_OPS_KEEP_IDS,
+  PROMOTE_CATEGORY_IDS,
+} from "./categories.mjs";
 import { EVENT_ATTR_FIELDS } from "./event-attrs.mjs";
 import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
@@ -649,6 +655,17 @@ export function operationStandingByTag(operations, range) {
   return { range: resolved, all, byTag };
 }
 
+/** Indictment events with unsealed true. Null and false stay out of the count. */
+export function countUnsealedIndictments(people) {
+  let n = 0;
+  for (const row of people || []) {
+    for (const ev of personEvents(row)) {
+      if (isIndictmentKeepKind(ev.kind) && ev.unsealed === true) n += 1;
+    }
+  }
+  return n;
+}
+
 export function buildDashboard(people, range, operations = []) {
   const rows = filterPeopleToRange(people, range);
   const dimensions = DASH_DIMENSIONS.map((dim) => {
@@ -665,6 +682,7 @@ export function buildDashboard(people, range, operations = []) {
     trends: trendSeries(rows),
     dimensions,
     operations: operationStandingByTag(operations, range),
+    unsealed: countUnsealedIndictments(rows),
     age: ageStanding(people, range),
     missing: missingStanding(people, range),
     operationsMissing: operationMissingStanding(operations, range),

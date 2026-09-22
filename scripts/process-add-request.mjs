@@ -37,6 +37,7 @@ function usage(exitCode = 0) {
   [--birth-date YYYY-MM-DD] [--country-of-origin "…"]
   [--position "…"] [--organization "…"] [--reason "…"] [--comments "…"]
   [--country "…"] [--branch "…"] [--military]
+  [--unsealed-evidence "quote that the cite unsealed or made public the indictment"]
   [--agencies "…"] [--victim-count N] [--arrest-count N] [--announced-date YYYY-MM-DD]
   [--net-worth <USD>] [--net-worth-source <Forbes|Bloomberg URL>] [--net-worth-note "…"]
 
@@ -71,6 +72,9 @@ If the person already exists (id/slug or normalized name), the new KEEP kind
 is attached as an event. A second person row is not created. Each event is
 fail-closed on its own calendar date plus two official cites. Wikipedia is
 not a cite. Gold name, event fields, cites, photo, and net-worth stay put.
+Indictment unsealed is null unless the cite text, comments, reason, or
+summary clearly states unsealed or made public. Do not guess. A stored
+true is not cleared.
 
 The Unsorted classify walk stays a separate path (import-posts / promote).
 If a queued hint URL happens to match one parked post, the same fail-closed
@@ -125,6 +129,7 @@ function parseArgs(argv) {
     else if (arg === "--country") out.country = take();
     else if (arg === "--branch") out.branch = take();
     else if (arg === "--comments") out.comments = take();
+    else if (arg === "--unsealed-evidence") out.unsealed_evidence = take();
     else if (arg === "--agencies") out.agencies = take();
     else if (arg === "--victim-count" || arg === "--victim_count") out.victim_count = take();
     else if (arg === "--arrest-count" || arg === "--arrest_count") out.arrest_count = take();

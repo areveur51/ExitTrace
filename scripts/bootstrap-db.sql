@@ -58,6 +58,11 @@ ALTER TABLE person_events ADD COLUMN IF NOT EXISTS branch TEXT;
 ALTER TABLE person_events ADD COLUMN IF NOT EXISTS comments TEXT;
 -- Whole years from people.birth_date + this tag's event_date. Null if either date is missing.
 ALTER TABLE person_events ADD COLUMN IF NOT EXISTS age_at_event INTEGER;
+-- Indictment events only (indictment_civilian | indictment_non_civilian).
+-- Nullable boolean. NULL until cites clearly state unsealed or made public.
+-- Not a KEEP kind. Adding the column does not update people, operations,
+-- dog rows, or existing event values. Leave existing rows null.
+ALTER TABLE person_events ADD COLUMN IF NOT EXISTS unsealed BOOLEAN;
 
 CREATE INDEX IF NOT EXISTS person_events_kind_idx ON person_events (kind);
 CREATE INDEX IF NOT EXISTS person_events_event_date_idx ON person_events (event_date DESC);

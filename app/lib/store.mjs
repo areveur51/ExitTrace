@@ -32,7 +32,7 @@ import {
   personTags,
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
-import { asPostedAt } from "./categories.mjs";
+import { asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
 import { commsKind } from "./kind-comms.mjs";
 import {
@@ -822,8 +822,9 @@ export async function healLogicalApply() {
           await client.query(
             `INSERT INTO person_events (
                person_id, kind, event_date, sources, announced_date, position,
-               organization, country, branch, comments, age_at_event, alleged_reason
-             ) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12)
+               organization, country, branch, comments, age_at_event, alleged_reason,
+               unsealed
+             ) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13)
              ON CONFLICT (person_id, kind) DO UPDATE SET
                event_date = EXCLUDED.event_date,
                sources = EXCLUDED.sources,
@@ -834,7 +835,11 @@ export async function healLogicalApply() {
                branch = EXCLUDED.branch,
                comments = EXCLUDED.comments,
                age_at_event = EXCLUDED.age_at_event,
-               alleged_reason = EXCLUDED.alleged_reason`,
+               alleged_reason = EXCLUDED.alleged_reason,
+               unsealed = CASE
+                 WHEN person_events.unsealed IS TRUE THEN TRUE
+                 ELSE EXCLUDED.unsealed
+               END`,
             [
               raw.person_id,
               raw.kind,
@@ -848,6 +853,7 @@ export async function healLogicalApply() {
               raw.comments || null,
               raw.age_at_event ?? null,
               raw.alleged_reason || null,
+              raw.unsealed === true ? true : null,
             ],
           );
         }
@@ -1086,6 +1092,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       minAge: maybeOpts?.minAge,
       maxAge: maybeOpts?.maxAge,
       tags: maybeOpts?.tags,
+      unsealed: maybeOpts?.unsealed === true,
     };
   }
   if (categoryOrOpts && typeof categoryOrOpts === "object") {
@@ -1096,6 +1103,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       minAge: categoryOrOpts.minAge,
       maxAge: categoryOrOpts.maxAge,
       tags: categoryOrOpts.tags,
+      unsealed: categoryOrOpts.unsealed === true,
     };
   }
   return {
@@ -1105,6 +1113,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
     minAge: maybeOpts?.minAge,
     maxAge: maybeOpts?.maxAge,
     tags: maybeOpts?.tags,
+    unsealed: maybeOpts?.unsealed === true,
   };
 }
 
@@ -1291,11 +1300,43 @@ function peopleTagWhere(params, tags) {
   return sql;
 }
 
-function peopleWhere(categories, params, ageFilter, tags) {
+function personIndictmentUnsealed(row, categories) {
+  const allow = new Set((categories || []).filter((id) => isIndictmentKeepKind(id)));
+  if (!allow.size) return false;
+  return personEvents(row).some((ev) => allow.has(ev.kind) && ev.unsealed === true);
+}
+
+export function peopleUnsealedWhere(params, unsealed, categories) {
+  if (unsealed !== true) return "";
+  const kinds = (categories || []).filter((id) => isIndictmentKeepKind(id));
+  // No indictment kinds: match the memory filter, which excludes every row.
+  if (!kinds.length) return " AND FALSE";
+  params.push(kinds);
+  const n = params.length;
+  return ` AND (
+    EXISTS (
+      SELECT 1 FROM person_events e
+       WHERE e.person_id = people.id
+         AND e.kind = ANY($${n}::text[])
+         AND e.unsealed IS TRUE
+    )
+    OR (
+      NOT EXISTS (SELECT 1 FROM person_events e WHERE e.person_id = people.id)
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
+         WHERE ev->>'kind' = ANY($${n}::text[])
+           AND ev->>'unsealed' = 'true'
+      )
+    )
+  )`;
+}
+
+function peopleWhere(categories, params, ageFilter, tags, unsealed) {
   const kindSql = peopleKindWhere(categories, params);
   const tagSql = peopleTagWhere(params, tags);
   const ageSql = peopleAgeWhere(params, ageFilter, categories);
-  const extra = `${tagSql}${ageSql}`;
+  const unsealedSql = peopleUnsealedWhere(params, unsealed, categories);
+  const extra = `${tagSql}${ageSql}${unsealedSql}`;
   if (!kindSql && !extra) return "";
   if (kindSql) return `${kindSql}${extra}`;
   return ` WHERE ${extra.replace(/^ AND /, "")}`;
@@ -1333,6 +1374,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const categories = asCategories(args.category);
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const tags = normalizeTags(args.tags);
+  const unsealed = args.unsealed === true;
   const p = await getPool();
   if (!p) {
     let rows = getMemory().people.map((r) =>
@@ -1344,13 +1386,16 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
     if (tags.length) {
       rows = rows.filter((r) => matchesTags(r, tags));
     }
+    if (unsealed) {
+      rows = rows.filter((r) => personIndictmentUnsealed(r, categories));
+    }
     if (ageFilterActive(ageFilter)) {
       rows = rows.filter((r) => matchesAgeFilter(r, ageFilter));
     }
     return applyWindow(rows.slice().sort(comparePeople), limit, offset);
   }
   const params = [];
-  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags)}`;
+  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed)}`;
   sql += peopleKindOrder(categories, params);
   if (limit != null) {
     params.push(limit);
@@ -1410,6 +1455,7 @@ export async function countPeople(categoryOrOpts) {
   const categories = asCategories(args.category);
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const tags = normalizeTags(args.tags);
+  const unsealed = args.unsealed === true;
   const p = await getPool();
   if (!p) {
     let rows = getMemory().people;
@@ -1419,6 +1465,9 @@ export async function countPeople(categoryOrOpts) {
     if (tags.length) {
       rows = rows.filter((r) => matchesTags(r, tags));
     }
+    if (unsealed) {
+      rows = rows.filter((r) => personIndictmentUnsealed(r, categories));
+    }
     if (ageFilterActive(ageFilter)) {
       rows = rows
         .map((r) => (categories.length ? projectPerson(r, categories) : projectPerson(r)))
@@ -1426,13 +1475,13 @@ export async function countPeople(categoryOrOpts) {
     }
     return rows.length;
   }
-  if (!categories.length && !ageFilterActive(ageFilter) && !tags.length) {
+  if (!categories.length && !ageFilterActive(ageFilter) && !tags.length && !unsealed) {
     const q = await p.query("SELECT COUNT(*)::int AS n FROM people");
     return q.rows[0].n;
   }
   const params = [];
   const q = await p.query(
-    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter, tags)}`,
+    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed)}`,
     params,
   );
   return q.rows[0].n;
@@ -1755,9 +1804,10 @@ async function syncPersonEvents(client, row) {
     await client.query(
       `INSERT INTO person_events (
          person_id, kind, event_date, sources, announced_date,
-         position, organization, country, branch, comments, age_at_event
+         position, organization, country, branch, comments, age_at_event,
+         unsealed
        )
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (person_id, kind) DO UPDATE SET
          event_date = person_events.event_date,
          sources = EXCLUDED.sources,
@@ -1767,7 +1817,11 @@ async function syncPersonEvents(client, row) {
          country = COALESCE(NULLIF(person_events.country, ''), EXCLUDED.country),
          branch = COALESCE(NULLIF(person_events.branch, ''), EXCLUDED.branch),
          comments = COALESCE(NULLIF(person_events.comments, ''), EXCLUDED.comments),
-         age_at_event = COALESCE(person_events.age_at_event, EXCLUDED.age_at_event)`,
+         age_at_event = COALESCE(person_events.age_at_event, EXCLUDED.age_at_event),
+         unsealed = CASE
+           WHEN person_events.unsealed IS TRUE THEN TRUE
+           ELSE EXCLUDED.unsealed
+         END`,
       [
         person.id,
         ev.kind,
@@ -1780,6 +1834,7 @@ async function syncPersonEvents(client, row) {
         ev.branch || null,
         ev.comments || null,
         ev.age_at_event ?? null,
+        ev.unsealed === true ? true : null,
       ],
     );
   }

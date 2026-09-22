@@ -96,6 +96,7 @@ const EVENT_COLS = Object.freeze([
   "branch",
   "comments",
   "age_at_event",
+  "unsealed",
 ]);
 
 const CATEGORY_COLS = Object.freeze(["id", "kind", "title", "nav", "path", "blurb"]);
@@ -138,11 +139,19 @@ function updateSet(table, cols) {
   const keys = new Set(Array.isArray(key) ? key : [key]);
   return cols
     .filter((c) => !keys.has(c))
-    .map((c) => `${quoteIdent(c)} = EXCLUDED.${quoteIdent(c)}`)
+    .map((c) => {
+      if (table === "person_events" && c === "unsealed") {
+        return `${quoteIdent(c)} = CASE WHEN ${quoteIdent(table)}.${quoteIdent(c)} IS TRUE THEN TRUE ELSE EXCLUDED.${quoteIdent(c)} END`;
+      }
+      return `${quoteIdent(c)} = EXCLUDED.${quoteIdent(c)}`;
+    })
     .join(",\n  ");
 }
 
 function rowValue(table, col, row) {
+  if (table === "person_events" && col === "unsealed") {
+    return row?.unsealed === true ? true : null;
+  }
   const v = row?.[col];
   if (v === undefined || v === null) return null;
   if (JSONB_COLS[table]?.includes(col)) {

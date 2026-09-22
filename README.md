@@ -128,9 +128,9 @@ Releases:
 | `/government` | Officials filter — people tagged official (any event) |
 | `/arrests` | Public-role arrests (identified people) |
 | `/corona-comms` | People tagged corona comms (identified people) |
-| `/indictments` | All identified indictments; identity filters apply |
-| `/indictments/civilians` | Indictments filtered to people tagged civilian |
-| `/indictments/non-civilians` | Indictments filtered to people tagged non-civilian |
+| `/indictments` | All identified indictments; identity filters apply. `?tags=unsealed` narrows to indictment events stored unsealed |
+| `/indictments/civilians` | Indictments filtered to people tagged civilian. `?tags=unsealed` keeps that slice |
+| `/indictments/non-civilians` | Indictments filtered to people tagged non-civilian. `?tags=unsealed` keeps that slice |
 | `/deaths` | All identified deaths; identity filters apply |
 | `/deaths/celebrities` | Deaths filtered to people tagged celebrity |
 | `/deaths/officials` | Deaths filtered to people tagged official |

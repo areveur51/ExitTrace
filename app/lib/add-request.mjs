@@ -474,6 +474,9 @@ export function mergeProcessOverlay(request, overlay = {}) {
     country: String(overlay.country || request.country || "").trim(),
     branch: String(overlay.branch || request.branch || "").trim(),
     comments: String(overlay.comments || request.comments || "").trim(),
+    unsealed_evidence: String(
+      overlay.unsealed_evidence || request.unsealed_evidence || "",
+    ).trim(),
     military:
       overlay.military !== undefined && overlay.military !== ""
         ? overlay.military
