@@ -47,6 +47,7 @@ export const OFFICIAL_GOV_HANDLES = new Set(
     "secretsservice",
     "fbi",
     "fbidirectorkash",
+    "fbi_response",
     "cia",
     "nsa",
     "odnigov",
