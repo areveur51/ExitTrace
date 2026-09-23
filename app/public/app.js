@@ -9,6 +9,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   for (const img of document.querySelectorAll("img.portrait, img.still, img.thumb, img.detail-photo:not(.screenshot)")) {
     img.addEventListener("error", () => {
+      const fallback = img.getAttribute("data-portrait-fallback");
+      if (fallback) {
+        if (img.dataset.portraitFell === "1") return;
+        img.dataset.portraitFell = "1";
+        if ((img.getAttribute("src") || "") === fallback) return;
+        img.removeAttribute("srcset");
+        const picture = img.closest("picture");
+        if (picture) {
+          for (const source of picture.querySelectorAll("source")) source.remove();
+        }
+        img.src = fallback;
+        return;
+      }
       const span = document.createElement("span");
       span.className = img.className.includes("detail-photo")
         ? "initials detail-photo"

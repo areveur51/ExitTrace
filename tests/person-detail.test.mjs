@@ -167,7 +167,9 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   assert.match(html, /casey-vale-quit/);
   assert.doesNotMatch(html, /dog-comm|dog_comms/);
   assert.doesNotMatch(html, /Synopsis|Role ·/);
-  assert.match(html, /class="initials detail-photo portrait"/);
+  assert.match(html, /class="detail-photo portrait empty-portrait"/);
+  assert.match(html, /src="\/empty-portrait\.jpg/);
+  assert.doesNotMatch(html, /class="initials detail-photo portrait"/);
   assert.doesNotMatch(html, /class="portrait thumb"/);
   assert.doesNotMatch(html, /upload\.wikimedia\.org/);
   const tags = html.match(/<article class="event-tag-row"[\s\S]*?<\/article>/g) || [];

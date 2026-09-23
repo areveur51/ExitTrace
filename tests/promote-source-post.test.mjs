@@ -152,7 +152,9 @@ test("promote fixture source post adds one officials-style person", async () => 
 
   const html = personDetail(result.person);
   assert.match(html, /Casey Vale/);
-  assert.match(html, />CV<\/span>/);
+  assert.match(html, /src="\/empty-portrait\.jpg/);
+  assert.match(html, /alt="Casey Vale"/);
+  assert.doesNotMatch(html, />CV<\/span>/);
   assert.doesNotMatch(html, /example_desk/);
 
   const seedIds = new Set(seed.people.map((r) => r.id));

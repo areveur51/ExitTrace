@@ -278,7 +278,9 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   const opHtml = operationDetail(
     operation({ screenshot: "/media/screenshots/operations/restore.jpg" }),
   );
-  assert.match(opHtml, /class="initials detail-photo"/);
+  assert.match(opHtml, /class="detail-photo portrait empty-portrait"/);
+  assert.match(opHtml, /src="\/empty-portrait\.jpg/);
+  assert.doesNotMatch(opHtml, /data-lightbox="\/empty-portrait/);
   assert.match(opHtml, /src="\/media\/screenshots\/operations\/restore\.jpg"/);
   assert.match(opHtml, /data-lightbox="\/media\/screenshots\/operations\/restore\.jpg"/);
   assert.match(opHtml, /meta-pane--stack/);
@@ -307,7 +309,8 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   const opList = operationRow(
     operation({ screenshot: "/media/screenshots/operations/restore.jpg" }),
   );
-  assert.match(opList, /class="initials thumb"/);
+  assert.match(opList, /class="portrait thumb empty-portrait"/);
+  assert.match(opList, /src="\/empty-portrait\.jpg/);
   assert.doesNotMatch(opList, /screenshots/);
 });
 

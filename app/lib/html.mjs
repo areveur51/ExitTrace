@@ -5,7 +5,6 @@ import {
   formatPosted,
   formatUsd,
   postedAtValue,
-  initials,
   DEATH_UNCONFIRMED_ID,
   isDeathCategory,
   isDeathFamily,
@@ -95,6 +94,11 @@ export const ASSET_VERSION = `${PKG_VERSION}-${createHash("sha1")
   .update(readFileSync(path.join(PUBLIC_DIR, "styles.css")))
   .update("\0")
   .update(readFileSync(path.join(PUBLIC_DIR, "app.js")))
+  .digest("hex")
+  .slice(0, 10)}`;
+/** UI-only portrait when a well has no local still. Not written into the catalog. */
+export const EMPTY_PORTRAIT_HREF = `/empty-portrait.jpg?v=${createHash("sha1")
+  .update(readFileSync(path.join(PUBLIC_DIR, "empty-portrait.jpg")))
   .digest("hex")
   .slice(0, 10)}`;
 
@@ -562,11 +566,25 @@ function portraitSrc(href) {
   return `${href}?p=${PORTRAIT_CACHE}`;
 }
 
+function portraitFallbackAttr() {
+  return ` data-portrait-fallback="${esc(EMPTY_PORTRAIT_HREF)}"`;
+}
+
+/** Shared portrait well when src is empty or not a local still. One asset, every surface. */
+function emptyPortraitImg({ size = "list", kind = "portrait", label = "" } = {}) {
+  const detail = size === "detail";
+  const cls = detail
+    ? "detail-photo portrait empty-portrait"
+    : `${kind} thumb empty-portrait`;
+  const w = detail ? DETAIL_PORTRAIT_CSS_W : LIST_THUMB_CSS_W;
+  const h = detail ? DETAIL_PORTRAIT_CSS_H : LIST_THUMB_CSS_H;
+  const loading = detail ? "" : ` loading="lazy"`;
+  return `<img class="${cls}" src="${esc(EMPTY_PORTRAIT_HREF)}" alt="${esc(label)}" width="${w}" height="${h}"${loading} decoding="async"${portraitFallbackAttr()}>`;
+}
+
 function listPortraitPicture(src, label, kind = "portrait") {
   const jpg = thumbHrefFor(src, { variant: "", ext: "jpg" });
-  if (!jpg) {
-    return `<span class="initials thumb" aria-hidden="true">${esc(initials(label))}</span>`;
-  }
+  if (!jpg) return emptyPortraitImg({ size: "list", kind, label });
   const jpg2 = thumbHrefFor(src, { variant: ".2x", ext: "jpg" });
   const webp = thumbHrefFor(src, { variant: "", ext: "webp" });
   const webp2 = thumbHrefFor(src, { variant: ".2x", ext: "webp" });
@@ -574,21 +592,19 @@ function listPortraitPicture(src, label, kind = "portrait") {
   const srcsetWebp = `${portraitSrc(webp)} ${LIST_THUMB_PX_W}w, ${portraitSrc(webp2)} ${LIST_THUMB_2X_W}w`;
   return `<picture class="thumb-src">
     <source type="image/webp" srcset="${esc(srcsetWebp)}" sizes="${LIST_THUMB_CSS_W}px">
-    <img class="${kind} thumb" src="${esc(portraitSrc(jpg))}" srcset="${esc(srcsetJpg)}" sizes="${LIST_THUMB_CSS_W}px" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async">
+    <img class="${kind} thumb" src="${esc(portraitSrc(jpg))}" srcset="${esc(srcsetJpg)}" sizes="${LIST_THUMB_CSS_W}px" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async"${portraitFallbackAttr()}>
   </picture>`;
 }
 
 function peopleDetailPortrait(src, label) {
   const gold = goldMediaHref(src);
-  if (!gold) {
-    return `<span class="initials detail-photo portrait" aria-hidden="true">${esc(initials(label))}</span>`;
-  }
+  if (!gold) return emptyPortraitImg({ size: "detail", label });
   const webpGold = gold.toLowerCase().endsWith(".webp");
   const webpHref = webpGold ? gold : thumbHrefFor(src, { variant: ".hero", ext: "webp" });
   const jpegHref = webpGold ? thumbHrefFor(src, { variant: ".hero", ext: "jpg" }) : gold;
   return `<picture class="detail-portrait">
     <source type="image/webp" srcset="${esc(portraitSrc(webpHref))}">
-    <img class="detail-photo portrait" src="${esc(portraitSrc(jpegHref))}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">
+    <img class="detail-photo portrait" src="${esc(portraitSrc(jpegHref))}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async"${portraitFallbackAttr()}>
   </picture>`;
 }
 
@@ -956,9 +972,9 @@ export function localMediaPortrait(src, label, { dog = false, commsKind: kind } 
   if (spec) {
     const href = String(src || "").trim();
     if (isCommsMediaHref(href, spec.mediaDir)) {
-      return `<img class="detail-photo portrait" src="${esc(href)}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async">`;
+      return `<img class="detail-photo portrait" src="${esc(href)}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async"${portraitFallbackAttr()}>`;
     }
-    return `<span class="initials detail-photo portrait" aria-hidden="true">${esc(initials(label))}</span>`;
+    return emptyPortraitImg({ size: "detail", label });
   }
   return localPortraitImg(src, label, { size: "detail", kind: "portrait" });
 }
@@ -1186,7 +1202,7 @@ export function operationRow(row, { selected } = {}) {
   const tagLabel = tags.map((id) => operationTagLabel(id)).filter(Boolean).join(", ") || "Operation";
   const agencies = (row.agencies || []).filter(Boolean).join(", ") || "—";
   return `<a class="tui-row operation-card${selected ? " is-selected" : ""}" href="${esc(href)}">
-    <span class="initials thumb" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>
+    ${thumb(row.photo, row.name || "OP")}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.name || "—")}</div>
       <div class="tui-meta"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(tagLabel)} · ${esc(agencies)} · victims ${esc(countCell(row.victim_count))} · arrests ${esc(countCell(row.arrest_count))}</div>
@@ -1734,7 +1750,9 @@ export function operationDetail(row, { attributions } = {}) {
     ${detailShell({
       title: "Operation",
       mediaHtml: detailMediaStrip({
-        portraitHtml: `<span class="initials detail-photo" aria-hidden="true">${esc(initials(row.name || "OP"))}</span>`,
+        portraitHtml: localMediaPortrait(row.photo, row.name || "OP"),
+        portraitSrc: isPeopleMediaHref(row.photo) ? row.photo : "",
+        portraitAlt: row.name || "OP",
         screenshot: row.screenshot,
         screenshotAlt: `X-post screenshot of ${row.name || "operation"}`,
         metaHtml: detailMetaBlock({

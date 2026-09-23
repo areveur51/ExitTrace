@@ -583,7 +583,12 @@ async function handle(req, res) {
     });
   }
 
-  if (p === "/styles.css" || p === "/app.js" || p.startsWith("/media/themes/")) {
+  if (
+    p === "/styles.css" ||
+    p === "/app.js" ||
+    p === "/empty-portrait.jpg" ||
+    p.startsWith("/media/themes/")
+  ) {
     const filePath = p.startsWith("/media/themes/")
       ? safeJoin(PUBLIC, p.slice(1))
       : path.join(PUBLIC, p.slice(1));
