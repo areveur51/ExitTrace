@@ -7,7 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { loadDotEnv } from "../app/lib/env.mjs";
 import { pollIntervalMs } from "../app/lib/mention-queue.mjs";
-import { pollOnce } from "../app/lib/x-mention-poll.mjs";
+import { pollJournal, pollOnce } from "../app/lib/x-mention-poll.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -27,7 +27,7 @@ Environment names (values stay on the host, never in git):
   MENTION_QUEUE_URL
   MENTION_QUEUE_BOT_TOKEN
   MENTION_POLL_MS
-  MENTION_SOFT_ACK
+  MENTION_SOFT_ACK       (off unless 1/true/yes; newly created rows only)
   MENTION_STATE_PATH
   MENTION_BLOCKLIST
   MENTION_AUTHOR_MAX
@@ -45,20 +45,19 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 const loop = process.argv.includes("--loop");
 
+function emit(result) {
+  const line = pollJournal(result);
+  if (line) console.log(line);
+}
+
 async function main() {
   if (!loop) {
-    const result = await pollOnce();
-    console.log(
-      `mention_poll since=${result.since_id || ""} results=${result.results.length}`,
-    );
+    emit(await pollOnce());
     return;
   }
   for (;;) {
     try {
-      const result = await pollOnce();
-      console.log(
-        `mention_poll since=${result.since_id || ""} results=${result.results.length}`,
-      );
+      emit(await pollOnce());
     } catch (err) {
       console.error(err instanceof Error ? err.message : "mention poll failed");
     }

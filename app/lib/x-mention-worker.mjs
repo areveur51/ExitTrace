@@ -1,7 +1,8 @@
 /**
  * Claim the Render queue, dig fail-closed, write the lab lead, then reply.
- * A reply failure does not change queue status.
+ * A reply failure does not change queue status and does not stop the pass.
  * GitHub Actions is not this worker.
+ * Empty pending and unreplied lists do no claim, dig, or reply work.
  */
 
 import { spawn } from "node:child_process";
@@ -17,6 +18,15 @@ export const COMPLETE_BODY_KEYS = Object.freeze([
   "kept_person_slug",
   "error_reason",
 ]);
+
+/** Claim-next calls per worker pass. Digs stay sequential inside this cap. */
+export const CLAIMS_PER_TICK = 5;
+
+export function workerJournal(result) {
+  const count = Array.isArray(result?.results) ? result.results.length : 0;
+  if (!count) return "";
+  return `mention_worker results=${count}`;
+}
 
 const SCRUBBED = [
   "MENTION_QUEUE_BOT_TOKEN",
@@ -134,6 +144,16 @@ async function deliverFinal({ row, env, fetchImpl, token, base }) {
   return { replied: true, reason: plan.reason || "" };
 }
 
+async function finishReply(row, ctx) {
+  let reply_error = "";
+  try {
+    await deliverFinal({ row, ...ctx });
+  } catch {
+    reply_error = "reply_failed";
+  }
+  return reply_error;
+}
+
 export async function workerOnce({
   env = process.env,
   fetchImpl = globalThis.fetch,
@@ -146,9 +166,7 @@ export async function workerOnce({
   const token = String(env.MENTION_QUEUE_WORKER_TOKEN || "").trim();
   const owner = String(env.MENTION_CLAIM_OWNER || "mention-worker").trim();
   if (!token) throw new Error("MENTION_QUEUE_WORKER_TOKEN is unset");
-  if (!digImpl && !env.MENTION_DIG_COMMAND) {
-    throw new Error("MENTION_DIG_COMMAND is unset");
-  }
+  const pollMs = pollIntervalMs(env.MENTION_WORKER_POLL_MS || env.MENTION_POLL_MS);
   const results = [];
   const unreplied = await requestJson(
     fetchImpl,
@@ -156,13 +174,15 @@ export async function workerOnce({
     queueEndpoint(base, "/unreplied"),
     token,
   );
-  for (const row of unreplied.rows || []) {
-    let reply_error = "";
-    try {
-      await deliverFinal({ row, env, fetchImpl, token, base });
-    } catch {
-      reply_error = "reply_failed";
-    }
+  const pending = await requestJson(fetchImpl, "GET", queueEndpoint(base, "/pending"), token);
+  const unrepliedRows = unreplied.rows || [];
+  const pendingRows = pending.rows || [];
+  if (!unrepliedRows.length && !pendingRows.length) {
+    return { results, poll_ms: pollMs };
+  }
+  const ctx = { env, fetchImpl, token, base };
+  for (const row of unrepliedRows) {
+    const reply_error = await finishReply(row, ctx);
     results.push({
       subject_status_id: row.subject_status_id,
       status: row.status,
@@ -170,13 +190,21 @@ export async function workerOnce({
       swept: true,
     });
   }
-  const pending = await requestJson(fetchImpl, "GET", queueEndpoint(base, "/pending"), token);
-  for (const item of pending.rows || []) {
-    const claim = await requestJson(fetchImpl, "POST", queueEndpoint(base, "/claim"), token, {
-      subject_status_id: item.subject_status_id,
-      claim_owner: owner,
-    });
-    if (!claim.claimed || !claim.row) continue;
+  if (!pendingRows.length) return { results, poll_ms: pollMs };
+  if (!digImpl && !env.MENTION_DIG_COMMAND) {
+    throw new Error("MENTION_DIG_COMMAND is unset");
+  }
+  for (let n = 0; n < CLAIMS_PER_TICK; n++) {
+    let claim;
+    try {
+      claim = await requestJson(fetchImpl, "POST", queueEndpoint(base, "/claim"), token, {
+        subject_status_id: "",
+        claim_owner: owner,
+      });
+    } catch {
+      break;
+    }
+    if (!claim.claimed || !claim.row) break;
     let envelope = null;
     try {
       envelope = digImpl
@@ -196,12 +224,7 @@ export async function workerOnce({
       token,
       body,
     );
-    let reply_error = "";
-    try {
-      await deliverFinal({ row: completed.row, env, fetchImpl, token, base });
-    } catch {
-      reply_error = "reply_failed";
-    }
+    const reply_error = await finishReply(completed.row, ctx);
     results.push({
       subject_status_id: claim.row.subject_status_id,
       status: completed.row?.status || dug.status,
@@ -209,5 +232,5 @@ export async function workerOnce({
       swept: false,
     });
   }
-  return { results, poll_ms: pollIntervalMs(env.MENTION_WORKER_POLL_MS || env.MENTION_POLL_MS) };
+  return { results, poll_ms: pollMs };
 }

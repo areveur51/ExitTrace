@@ -7,7 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { loadDotEnv } from "../app/lib/env.mjs";
 import { pollIntervalMs } from "../app/lib/mention-queue.mjs";
-import { workerOnce } from "../app/lib/x-mention-worker.mjs";
+import { workerJournal, workerOnce } from "../app/lib/x-mention-worker.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -49,16 +49,19 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 const loop = process.argv.includes("--loop");
 
+function emit(result) {
+  const line = workerJournal(result);
+  if (line) console.log(line);
+}
+
 async function main() {
   if (!loop) {
-    const result = await workerOnce();
-    console.log(`mention_worker results=${result.results.length}`);
+    emit(await workerOnce());
     return;
   }
   for (;;) {
     try {
-      const result = await workerOnce();
-      console.log(`mention_worker results=${result.results.length}`);
+      emit(await workerOnce());
     } catch (err) {
       console.error(err instanceof Error ? err.message : "mention worker failed");
     }

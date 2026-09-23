@@ -1,4 +1,6 @@
 # Coarse mention poll. 10 minutes is inside the 5–15 minute band.
+# The worker timer starts about 3 minutes later (OnBootSec=8min).
+# Do not tighten OnUnitActiveSec for HTTP 402/429. Backoff stays in the poll process.
 [Unit]
 Description=ExitTrace X mention poll cadence
 
