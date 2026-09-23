@@ -198,7 +198,7 @@ export const CATEGORIES = [
     title: "Central Casting",
     nav: "Central Casting",
     path: "/central-casting",
-    blurb: "One card per identified person, not a harvest clip. This catalog holds both Trump “looks the part / Hollywood ideal” and “replacement” claim senses; filter by sense. Classifications are cite-backed badges on the existing person KEEP. Stored locally; the source URL is a citation only.",
+    blurb: "One card per identified person, not a harvest clip. Membership annotates an existing person. Cites and X media sit on the person detail. Stored locally; the source URL is a citation only.",
   },
 ];
 

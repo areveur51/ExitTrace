@@ -1,13 +1,9 @@
--- Add central_casting_comms to the lab publication so later evidence/glossary inserts replicate.
+-- Add central_casting_comms to the lab publication so later evidence inserts replicate.
 -- Not the parent list. Parent /central-casting is unique-person KEEP cards.
--- Does not invent, delete, or rewrite rows.
--- No seed rows in this script. Seed after PLACE is two glossary rows (person_id NULL),
--- one sense each: replacement and looks_the_part. Not person cards.
--- sense is NOT NULL: looks_the_part | replacement. Both senses are valid.
+-- Does not invent, delete, or rewrite rows. No seed rows in this script.
 --
--- Cite gate (Riker DESIGN LOCK, Admiral CLEAR): ongoing KEEP is official/gov/news-org
--- plus quote-chain standing. Definition seed may park on an Admiral-named cite only
--- when the chain has no official (death_unconfirmed-class, seed only).
+-- Cite gate (Riker DESIGN LOCK AMEND, Admiral CLEAR): ongoing KEEP is official/gov/news-org
+-- plus quote-chain standing. Harvest attaches under the person. Membership is cite URLs.
 --
 -- Lab publisher (table must already exist via scripts/bootstrap-db.sql):
 --   psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-central-casting-comms-publication.sql

@@ -40,16 +40,15 @@ import {
   isCommsMediaHref,
 } from "./thumb.mjs";
 import {
+  CENTRAL_CASTING_DETAIL,
   CENTRAL_CASTING_KEYMAP,
-  CENTRAL_CASTING_MEDIA_DIR,
   CENTRAL_CASTING_PATH,
-  CENTRAL_CASTING_SCREENSHOT_KIND,
   commsKind,
   commsKindByPath,
   isCommsKind,
   KIND_COMMS,
   KIND_COMM_IDS,
-  centralCastingSenseLabel,
+  mediaSpec,
 } from "./kind-comms.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
@@ -651,7 +650,7 @@ export function kindSupportingEntries(row) {
 
 /** Local media hrefs nested under supporting entries (skip primary). */
 export function kindSupportingStills(kind, row) {
-  const spec = commsKind(kind);
+  const spec = mediaSpec(kind);
   const primary = String(row?.still || "").trim();
   const seen = new Set(primary ? [primary] : []);
   const out = [];
@@ -668,7 +667,7 @@ export function kindSupportingStills(kind, row) {
 
 /** Extra local stills: snapshot.stills + optional supporting stills (skip primary). */
 export function kindExtraStills(kind, row, { includeSupporting = true } = {}) {
-  const spec = commsKind(kind);
+  const spec = mediaSpec(kind);
   const primary = String(row?.still || "").trim();
   const raw = row?.snapshot?.stills;
   const out = [];
@@ -712,7 +711,7 @@ export function kindSourceHtml(row, { includeSupporting = true } = {}) {
 
 /** That supporting entry's still / stills only (skip primary; fail-closed local media). */
 export function kindEntryStills(kind, row, entry) {
-  const spec = commsKind(kind);
+  const spec = mediaSpec(kind);
   const primary = String(row?.still || "").trim();
   const seen = new Set(primary ? [primary] : []);
   const out = [];
@@ -939,7 +938,7 @@ function detailShell({
 }
 
 export function localMediaPortrait(src, label, { dog = false, commsKind: kind } = {}) {
-  const spec = kind ? commsKind(kind) : dog ? commsKind("dog") : null;
+  const spec = kind ? mediaSpec(kind) : dog ? mediaSpec("dog") : null;
   if (spec) {
     const href = String(src || "").trim();
     if (isCommsMediaHref(href, spec.mediaDir)) {
@@ -1076,104 +1075,16 @@ export function operationRow(row, { selected } = {}) {
   </a>`;
 }
 
-export function centralCastingSenseBadge(row) {
-  const sense = String(row?.sense || "");
-  const label = centralCastingSenseLabel(sense);
-  if (!label) return "";
-  return `<span class="sense-badge" data-sense="${esc(sense)}">${esc(label)}</span>`;
-}
-
-/** All | Looks the part | Replacement. Values are local paths so the shared filter select can navigate. */
-export function centralCastingSenseNav(activeSense = "") {
-  const current = String(activeSense || "");
-  const options = [
-    { sense: "", label: "All" },
-    { sense: "looks_the_part", label: "Looks the part" },
-    { sense: "replacement", label: "Replacement" },
-  ];
-  const opts = options
-    .map((o) => {
-      const href = o.sense
-        ? `${CENTRAL_CASTING_PATH}?sense=${encodeURIComponent(o.sense)}`
-        : CENTRAL_CASTING_PATH;
-      const on = current === o.sense;
-      return `<option value="${esc(href)}"${on ? " selected" : ""}>${esc(o.label)}</option>`;
-    })
-    .join("");
-  return `<nav class="identity-filters central-casting-sense" aria-label="Central Casting sense">
-    <label class="identity-filters-label" for="central-casting-sense">Sense</label>
-    <select class="identity-filter-select" id="central-casting-sense" data-filter-select>${opts}</select>
-  </nav>`;
-}
-
-export function centralCastingPersonRow(row, opts = {}) {
-  const badges = (row.central_casting || [])
-    .map((item) => centralCastingSenseBadge(item))
+/** Membership cites plus one red-folder masonry per harvest clip. Not a list card. */
+export function centralCastingDetailHtml(row, clips = []) {
+  const sources = (row?.central_casting || [])
+    .map((url) => String(url || "").trim())
     .filter(Boolean)
-    .join("");
-  return personRow(row, {
-    ...opts,
-    badges: badges ? `<span class="sense-badges">${badges}</span> ` : "",
-  });
-}
-
-export function centralCastingPeopleList(rows) {
-  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="tui-list central-casting-people">${rows
-    .map((row, i) => centralCastingPersonRow(row, { selected: i === 0 }))
-    .join("")}</div>`;
-}
-
-export function centralCastingGlossary(rows = []) {
-  const items = (rows || []).filter((row) => row && row.role === "glossary" && !row.person_id);
-  if (!items.length) return "";
-  const lis = items
-    .map(
-      (row) => `<li class="glossary-row" role="glossary" data-sense="${esc(row.sense)}" data-person-id="">
-      ${centralCastingSenseBadge(row)}
-      <a href="${esc(row.source_url)}" rel="noopener noreferrer">${esc(row.text || row.source_url)}</a>
-    </li>`,
-    )
-    .join("");
-  return `<section class="central-casting-glossary" role="glossary" aria-label="Glossary"><h2>Glossary</h2><ul>${lis}</ul></section>`;
-}
-
-function centralCastingStillHrefs(row) {
-  const primary = String(row?.still || "").trim();
-  const seen = new Set();
-  const out = [];
-  const push = (href) => {
-    const text = String(href || "").trim();
-    if (!text || seen.has(text) || !isCommsMediaHref(text, CENTRAL_CASTING_MEDIA_DIR)) return;
-    seen.add(text);
-    out.push(text);
-  };
-  push(primary);
-  for (const item of row?.snapshot?.stills || []) push(item);
-  return out;
-}
-
-export function centralCastingEvidenceHtml(clips = []) {
-  if (!clips.length) return "";
-  return clips
-    .map((row) => {
-      const stills = centralCastingStillHrefs(row)
-        .map(
-          (src) =>
-            `<img src="${esc(src)}" alt="${esc(`Post media for ${row.handle || "clip"}`)}">`,
-        )
-        .join("");
-      const shot = normalizeScreenshotHref(row.screenshot, CENTRAL_CASTING_SCREENSHOT_KIND);
-      const shotHtml = shot
-        ? `<img src="${esc(shot)}" alt="${esc(`X-post screenshot of ${row.handle || "clip"}`)}">`
-        : "";
-      return `<figure class="central-casting-evidence" data-clip-id="${esc(row.id)}" data-sense="${esc(row.sense)}" data-person-id="${esc(row.person_id || "")}">
-      ${centralCastingSenseBadge(row)}
-      ${stills}${shotHtml}
-      ${citeFromRow(row)}
-    </figure>`;
-    })
-    .join("");
+    .map((url) => ({ url, publisher: url, title: "", date: "" }));
+  const media = (clips || []).map((clip) => commsDetail(CENTRAL_CASTING_DETAIL, clip)).join("");
+  if (!sources.length && !media) return "";
+  const cites = sources.length ? citeList(sources) : "";
+  return `<section class="central-casting-person" data-person-id="${esc(row?.id || "")}">${cites}${media}</section>`;
 }
 
 export function kindListRow(kind, row, { selected } = {}) {
@@ -1470,25 +1381,16 @@ function personTagChips(row) {
 
 export function personDetail(row, { centralCastingClips = [] } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
-  const senses = filled.central_casting || [];
-  const clips = centralCastingClips || [];
-  const cc =
-    senses.length || clips.length
-      ? `<section class="central-casting-person" data-person-id="${esc(filled.id)}">
-      <h2>Central Casting</h2>
-      <p class="sense-badges">${senses.map((item) => centralCastingSenseBadge(item)).join(" ")}</p>
-      ${centralCastingEvidenceHtml(clips)}
-    </section>`
-      : "";
+  const cc = centralCastingDetailHtml(filled, centralCastingClips);
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled)}${cc}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled)}`,
       active: true,
       extraClass: "person-pane",
     })}
-  </article>`;
+  </article>${cc}`;
 }
 
 function sourceUrlItems(row) {
@@ -1579,8 +1481,8 @@ export function operationDetail(row) {
   </article>`;
 }
 
-export function kindDetail(kind, row) {
-  const spec = commsKind(kind);
+/** Shared dog / red-folder / central-casting harvest detail: cite, post body, X link, supportive media. */
+export function commsDetail(spec, row) {
   const grouped = !!spec.supportingGroups;
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
     commsKind: spec.id,
@@ -1612,6 +1514,10 @@ export function kindDetail(kind, row) {
       extraClass: "meta-box",
     })}${groups}
   </article>`;
+}
+
+export function kindDetail(kind, row) {
+  return commsDetail(commsKind(kind), row);
 }
 
 export function dogDetail(row) {

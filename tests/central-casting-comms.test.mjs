@@ -5,16 +5,17 @@ import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { dashRankEvents } from "../app/lib/dashboard.mjs";
 import { DisplayError, listPathForPerson } from "../app/lib/display-check.mjs";
-import { personDetail } from "../app/lib/html.mjs";
+import { commsDetail, kindDetail, personDetail } from "../app/lib/html.mjs";
 import {
   CENTRAL_CASTING_CITE_GATE,
+  CENTRAL_CASTING_DETAIL,
   CENTRAL_CASTING_KEYMAP,
   CENTRAL_CASTING_PATH,
-  CENTRAL_CASTING_SENSES,
   CentralCastingClassifyError,
-  CentralCastingSenseError,
   KIND_COMMS,
   centralCastingCiteStanding,
+  mergeCentralCasting,
+  normalizeCentralCasting,
 } from "../app/lib/kind-comms.mjs";
 import {
   DEATH_KEEP_IDS,
@@ -27,6 +28,7 @@ import {
   annotateCentralCasting,
   getPerson,
   insertCentralCastingClip,
+  listCentralCastingPeople,
   loadSeedFile,
   setMemory,
 } from "../app/lib/store.mjs";
@@ -34,6 +36,7 @@ import { handle } from "../app/server.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CITE = "https://www.nytimes.com/2017/05/09/us/politics/james-comey-fired-fbi.html";
+const CITE_2 = "https://www.reuters.com/world/us/james-comey-2017-05-09/";
 
 function goldSeed() {
   return loadSeedFile(path.join(ROOT, "data", "seed.json"));
@@ -42,7 +45,6 @@ function goldSeed() {
 function evidence(overrides = {}) {
   return {
     id: "nytimes-2026-09-17-abc12345",
-    role: "evidence",
     person_id: "james-comey",
     posted_at: "2026-09-17",
     handle: "@nytimes",
@@ -50,11 +52,27 @@ function evidence(overrides = {}) {
     text: "Stored central-casting snapshot.",
     still: "/media/central-casting-comms/nytimes-2026-09-17.jpg",
     source_url: "https://x.com/nytimes/status/2100603347044585925",
-    sense: "looks_the_part",
     snapshot: {
       stills: [
         "/media/central-casting-comms/nytimes-2026-09-17-2.jpg",
         "/media/central-casting-comms/nytimes-2026-09-17-3.jpg",
+      ],
+      supporting: [
+        {
+          text: "Supportive still standing on the detail.",
+          still: "/media/central-casting-comms/support-2026-09-17.jpg",
+          handle: "@Reuters",
+          posted_at: "2026-09-17",
+          source_url: "https://x.com/Reuters/status/2100603347044585999",
+          account_name: "Reuters",
+          stills: ["/media/central-casting-comms/support-2026-09-17-2.jpg"],
+          screenshot: `${supportingScreenshotPrefix(
+            "central-casting-comms",
+            "nytimes-2026-09-17-abc12345",
+            0,
+          )}reuters.png`,
+          screenshot_credit: "X",
+        },
       ],
     },
     ...overrides,
@@ -102,10 +120,8 @@ test("central casting is a person list, not a KIND_COMMS clip catalog", () => {
   assert.equal(categoryByPath("/central-casting").nav, "Central Casting");
   assert.equal(categoryByPath("/central-casting-comms"), null);
   const blurb = categoryByPath("/central-casting").blurb;
-  assert.match(blurb, /Trump “looks the part \/ Hollywood ideal”/);
-  assert.match(blurb, /“replacement” claim senses/);
-  assert.match(blurb, /filter by sense/);
   assert.match(blurb, /One card per identified person/);
+  assert.doesNotMatch(blurb, /sense|glossary|looks the part|replacement/i);
   assert.equal(PROMOTE_CATEGORY_IDS.includes("central_casting"), false);
   assert.equal(PROMOTE_CATEGORY_IDS.includes("central_casting_comms"), false);
   assert.equal(DEATH_KEEP_IDS.includes("central_casting"), false);
@@ -121,10 +137,12 @@ test("central casting is a person list, not a KIND_COMMS clip catalog", () => {
   });
   assert.deepEqual(ranked.map((ev) => ev.kind), ["firings"]);
   assert.equal(CENTRAL_CASTING_CITE_GATE.personKeep, false);
-  assert.deepEqual(CENTRAL_CASTING_SENSES, ["looks_the_part", "replacement"]);
+  assert.equal(CENTRAL_CASTING_CITE_GATE.senses, undefined);
+  assert.equal(CENTRAL_CASTING_DETAIL.supportingGroups, true);
+  assert.equal(KIND_COMMS.red_folder.supportingGroups, true);
 });
 
-test("cite gate keeps official and quote-chain standing; seed exception is seed-only", () => {
+test("cite gate keeps official and quote-chain standing", () => {
   assert.equal(
     centralCastingCiteStanding({ sourceUrl: "https://www.nytimes.com/2026/09/17/us/desk.html" }),
     "official",
@@ -136,19 +154,23 @@ test("cite gate keeps official and quote-chain standing; seed exception is seed-
     }),
     "quote_chain",
   );
-  assert.equal(
-    centralCastingCiteStanding({
-      sourceUrl: "https://x.com/someone/status/1",
-      seed: true,
-      admiralNamed: true,
-    }),
-    "seed_admiral_named",
-  );
   assert.equal(centralCastingCiteStanding({ sourceUrl: "https://x.com/someone/status/1" }), "");
-  assert.match(CENTRAL_CASTING_CITE_GATE.seedOnly, /death_unconfirmed-class/);
+  assert.equal(CENTRAL_CASTING_CITE_GATE.seedOnly, undefined);
 });
 
-test("bootstrap sense is NOT NULL, glossary person_id is null, and publication does not seed", () => {
+test("legacy sense objects collapse to cite URLs and gold membership is kept", () => {
+  assert.deepEqual(
+    normalizeCentralCasting([
+      { sense: "looks_the_part", sources: [CITE] },
+      { sense: "replacement", sources: [CITE, CITE_2] },
+    ]),
+    [CITE, CITE_2],
+  );
+  assert.deepEqual(mergeCentralCasting([], [CITE]), [CITE]);
+  assert.deepEqual(normalizeCentralCasting([]), []);
+});
+
+test("bootstrap drops sense and glossary, and publication does not seed", () => {
   const sql = fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sql"), "utf8");
   const pub = fs.readFileSync(
     path.join(ROOT, "scripts", "add-central-casting-comms-publication.sql"),
@@ -156,185 +178,263 @@ test("bootstrap sense is NOT NULL, glossary person_id is null, and publication d
   );
   const create = sql.slice(sql.indexOf("CREATE TABLE IF NOT EXISTS central_casting_comms"));
   const table = create.slice(0, create.indexOf(");") + 2);
-  assert.match(table, /sense TEXT NOT NULL/);
-  assert.match(table, /person_id TEXT/);
-  assert.match(table, /role TEXT NOT NULL/);
-  assert.match(sql, /CHECK \(sense IN \('looks_the_part', 'replacement'\)\)/);
-  assert.match(sql, /role = 'glossary' AND person_id IS NULL/);
-  assert.match(sql, /role = 'evidence' AND person_id IS NOT NULL/);
+  assert.match(table, /person_id TEXT NOT NULL/);
+  assert.doesNotMatch(table, /sense/);
+  assert.doesNotMatch(table, /glossary/);
+  assert.doesNotMatch(table, /\brole\b/);
+  assert.match(sql, /DROP COLUMN IF EXISTS sense/);
+  assert.match(sql, /DROP COLUMN IF EXISTS role/);
   assert.match(sql, /central_casting JSONB NOT NULL/);
-  assert.doesNotMatch(table, /\btags?\b/i);
+  assert.match(sql, /JTitor \+ Warsh/);
+  assert.match(sql, /role = 'glossary'\s+AND person_id IS NULL/);
+  assert.doesNotMatch(sql, /role = 'glossary' OR person_id IS NULL/);
+  assert.doesNotMatch(sql, /DELETE FROM people/i);
+  assert.doesNotMatch(sql, /looks_the_part|replacement/);
   assert.doesNotMatch(sql, /INSERT INTO central_casting_comms/i);
   assert.doesNotMatch(sql, /INSERT INTO people/i);
+  assert.match(sql, /jsonb_array_length\(migrated\.urls\) > 0/);
   assert.match(pub, /ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms/);
   assert.match(pub, /copy_data = false/);
   assert.doesNotMatch(pub, /^\s*[^-\n]*copy_data\s*=\s*true/im);
   assert.doesNotMatch(pub, /INSERT INTO central_casting_comms/i);
+  assert.doesNotMatch(pub, /glossary|looks_the_part|sense/i);
 });
 
-test("invalid sense and missing cite are rejected; annotation does not create a person", async () => {
+test("live migration keeps 7 persons and drops only the JTitor and Warsh glossary rows", async () => {
+  const seed = goldSeed();
+  const members = seed.people.slice(0, 7);
+  assert.equal(members.length, 7);
+  const before = seed.people.length;
+  for (const person of members) {
+    person.central_casting = [
+      { sense: "looks_the_part", sources: [CITE] },
+      { sense: "replacement", sources: [`https://example.com/cc/${person.id}`] },
+    ];
+  }
+  const memberId = members[0].id;
+  seed.central_casting_comms = [
+    {
+      id: "glossary-jtitor",
+      role: "glossary",
+      person_id: null,
+      sense: "replacement",
+      posted_at: "2026-09-01",
+      handle: "",
+      text: "JTitor",
+      source_url: "https://www.example.com/jtitor",
+    },
+    {
+      id: "glossary-warsh",
+      role: "glossary",
+      person_id: null,
+      sense: "looks_the_part",
+      posted_at: "2026-09-01",
+      handle: "",
+      text: "Warsh",
+      source_url: "https://www.example.com/warsh",
+    },
+    evidence({
+      id: "kept-evidence",
+      person_id: memberId,
+      role: "evidence",
+      sense: "looks_the_part",
+      text: "Evidence stays under the person.",
+    }),
+  ];
+  setMemory(seed);
+  assert.equal(seed.people.length, before);
+  const listed = (await listCentralCastingPeople()).map((row) => row.id).sort();
+  assert.deepEqual(listed, members.map((person) => person.id).sort());
+  for (const person of members) {
+    const row = await getPerson(person.id);
+    assert.deepEqual(row.central_casting, [CITE, `https://example.com/cc/${person.id}`]);
+    assert.equal(JSON.stringify(row.central_casting).includes("sense"), false);
+    assert.equal(row.events.some((ev) => ev.kind === "central_casting"), false);
+  }
+  const page = await requestPage("/central-casting");
+  assert.equal(personHrefs(page.body).length, 7);
+  assert.doesNotMatch(page.body, /JTitor|Warsh|glossary|data-sense|sense-badge/i);
+  const detail = await requestPage(`/people/${memberId}`);
+  assert.match(detail.body, /Evidence stays under the person/);
+  assert.match(detail.body, /class="sources cite-list"/);
+  assert.match(detail.body, /class="post-text"/);
+  assert.match(detail.body, /class="supporting-group"/);
+  assert.match(detail.body, /https:\/\/x\.com\/nytimes\/status\/2100603347044585925/);
+  assert.doesNotMatch(detail.body, /JTitor|Warsh|glossary|data-sense/i);
+  const health = await requestPage("/api/health");
+  const counts = JSON.parse(health.body);
+  assert.equal(counts.central_casting, 7);
+  assert.equal(counts.central_casting_comms, undefined);
+});
+
+test("missing cite and glossary are rejected; annotation does not create a person", async () => {
   const seed = goldSeed();
   setMemory(seed);
   const before = seed.people.length;
   await assert.rejects(
-    () => annotateCentralCasting("james-comey", { sense: "", sources: [CITE] }),
-    (err) => err instanceof CentralCastingSenseError,
-  );
-  await assert.rejects(
-    () => annotateCentralCasting("james-comey", { sense: "arrested", sources: [CITE] }),
-    (err) => err instanceof CentralCastingSenseError,
-  );
-  await assert.rejects(
-    () => annotateCentralCasting("james-comey", { sense: "looks_the_part", sources: [] }),
+    () => annotateCentralCasting("james-comey", { sources: [] }),
     (err) => err instanceof CentralCastingClassifyError && err.code === "missing_cite",
   );
   await assert.rejects(
-    () => annotateCentralCasting("not-a-person", { sense: "replacement", sources: [CITE] }),
+    () => annotateCentralCasting("not-a-person", { sources: [CITE] }),
     (err) => err instanceof CentralCastingClassifyError && err.code === "missing_person",
   );
   await assert.rejects(
     () => insertCentralCastingClip(evidence({ role: "glossary", person_id: "james-comey" })),
-    (err) => err instanceof CentralCastingClassifyError && err.code === "glossary_person",
+    (err) => err instanceof CentralCastingClassifyError && err.code === "glossary_removed",
   );
   await assert.rejects(
-    () => insertCentralCastingClip(evidence({ role: "evidence", person_id: "" })),
+    () => insertCentralCastingClip(evidence({ person_id: "" })),
     (err) => err instanceof CentralCastingClassifyError && err.code === "evidence_person",
   );
   const person = await getPerson("james-comey");
   assert.deepEqual(person.central_casting, []);
   assert.equal(person.events.some((ev) => ev.kind === "central_casting"), false);
-  assert.equal((await getPerson("nobody")), null);
+  assert.equal(await getPerson("nobody"), null);
   const listed = await requestPage("/central-casting");
   assert.equal(personHrefs(listed.body).length, 0);
   assert.equal(seed.people.length, before);
 });
 
-test("unique person cards, dual badges, sense filter, glossary null person, no clip cards", async () => {
+test("unique person cards, shared red-folder detail, no sense filter or glossary", async () => {
   setMemory(goldSeed());
   await insertCentralCastingClip(evidence());
   await insertCentralCastingClip(
     evidence({
       id: "reuters-2026-09-18-def67890",
-      sense: "replacement",
-      text: "Stored replacement clip.",
+      text: "Second harvest clip under the same person.",
       still: "/media/central-casting-comms/reuters-2026-09-18.jpg",
       source_url: "https://x.com/Reuters/status/2100603347044585926",
+      snapshot: { stills: ["/media/central-casting-comms/reuters-2026-09-18-2.jpg"] },
     }),
   );
-  await insertCentralCastingClip({
-    id: "glossary-replacement",
-    role: "glossary",
-    person_id: null,
-    sense: "replacement",
-    posted_at: "2026-09-01",
-    handle: "",
-    text: "Replacement definition",
-    source_url: "https://www.example.com/jtitor17-definition",
-  });
-  await insertCentralCastingClip({
-    id: "glossary-looks",
-    role: "glossary",
-    person_id: null,
-    sense: "looks_the_part",
-    posted_at: "2026-09-01",
-    handle: "",
-    text: "Looks the part definition",
-    source_url: "https://www.example.com/warsh-clip",
-  });
 
   const clipsOnly = await requestPage("/central-casting");
   assert.equal(clipsOnly.status, 200);
   assert.equal(personHrefs(clipsOnly.body).length, 0);
-  assert.match(clipsOnly.body, /role="glossary"/);
-  assert.match(clipsOnly.body, /data-person-id=""/);
+  assert.doesNotMatch(clipsOnly.body, /glossary|data-sense|sense-badge|central-casting-sense/i);
   assert.doesNotMatch(clipsOnly.body, /class="central-casting-card"/);
   assert.doesNotMatch(clipsOnly.body, /Stored central-casting snapshot/);
 
-  await annotateCentralCasting("james-comey", { sense: "looks_the_part", sources: [CITE] });
-  await annotateCentralCasting("james-comey", { sense: "replacement", sources: [CITE] });
-  await annotateCentralCasting("rex-tillerson", { sense: "replacement", sources: [CITE] });
+  await annotateCentralCasting("james-comey", { sources: [CITE] });
+  await annotateCentralCasting("james-comey", { sources: [CITE, CITE_2] });
+  await annotateCentralCasting("rex-tillerson", { sources: [CITE] });
   const comey = await getPerson("james-comey");
-  assert.deepEqual(
-    comey.central_casting.map((item) => item.sense),
-    ["looks_the_part", "replacement"],
-  );
+  assert.deepEqual(comey.central_casting, [CITE, CITE_2]);
+  assert.equal(comey.central_casting.some((item) => item && item.sense), false);
   assert.equal(comey.events.some((ev) => ev.kind === "central_casting"), false);
 
   const all = await requestPage("/central-casting");
   assert.equal(all.status, 200);
+  assert.match(all.body, /class="people-list tui-list"/);
   assert.deepEqual(personHrefs(all.body).sort(), ["/people/james-comey", "/people/rex-tillerson"]);
   assert.equal(all.body.split('href="/people/james-comey"').length - 1, 1);
-  assert.match(all.body, /data-sense="looks_the_part"/);
-  assert.match(all.body, />Looks the part</);
-  assert.match(all.body, /data-sense="replacement"/);
-  assert.match(all.body, />Replacement</);
-  assert.match(all.body, /value="\/central-casting" selected/);
-  assert.match(all.body, /value="\/central-casting\?sense=looks_the_part"/);
-  assert.match(all.body, /value="\/central-casting\?sense=replacement"/);
-  assert.match(all.body, /role="glossary"/);
+  assert.doesNotMatch(all.body, /data-sense|sense-badge|glossary|looks_the_part|Looks the part/i);
   assert.doesNotMatch(all.body, /class="central-casting-card"/);
   assert.doesNotMatch(all.body, /class="central-casting-evidence"/);
   assert.doesNotMatch(all.body, /Stored central-casting snapshot/);
 
-  const looks = await requestPage("/central-casting?sense=looks_the_part");
-  assert.deepEqual(personHrefs(looks.body), ["/people/james-comey"]);
-  assert.match(looks.body, /data-sense="looks_the_part"/);
-  assert.match(looks.body, /data-sense="replacement"/);
-
-  const replaced = await requestPage("/central-casting?sense=replacement");
-  assert.deepEqual(personHrefs(replaced.body).sort(), [
+  const ignored = await requestPage("/central-casting?sense=looks_the_part");
+  assert.equal(ignored.status, 200);
+  assert.deepEqual(personHrefs(ignored.body).sort(), [
     "/people/james-comey",
     "/people/rex-tillerson",
   ]);
-  assert.equal(replaced.body.split('href="/people/james-comey"').length - 1, 1);
-  assert.equal(replaced.body.split('href="/people/rex-tillerson"').length - 1, 1);
+  assert.doesNotMatch(ignored.body, /data-sense|sense-badge|glossary/i);
 
-  const bad = await requestPage("/central-casting?sense=arrested");
-  assert.equal(bad.status, 400);
+  const junk = await requestPage("/central-casting?sense=arrested");
+  assert.equal(junk.status, 200);
+  assert.equal(personHrefs(junk.body).length, 2);
   const child = await requestPage("/central-casting/looks-the-part");
   assert.equal(child.status, 404);
 
-  const legacy = await requestPage("/central-casting-comms?sense=replacement");
+  const legacy = await requestPage("/central-casting-comms?sense=replacement&page=1");
   assert.equal(legacy.status, 302);
-  assert.equal(legacy.headers.Location, "/central-casting?sense=replacement");
+  assert.equal(legacy.headers.Location, "/central-casting?page=1");
 
   const api = await requestPage("/api/central-casting?sense=looks_the_part");
   const json = JSON.parse(api.body);
-  assert.equal(json.people.length, 1);
-  assert.equal(json.people[0].id, "james-comey");
-  assert.equal(json.central_casting, 1);
+  assert.equal(json.people.length, 2);
+  assert.equal(json.central_casting, 2);
+  assert.equal(json.central_casting_by_sense, undefined);
 
   const shot = "/media/screenshots/central-casting-comms/nytimes-2026-09-17.png";
   await insertCentralCastingClip(
     evidence({
       id: "shot-clip",
       screenshot: shot,
+      text: "Screenshot clip standing on the detail.",
       snapshot: { stills: ["/media/central-casting-comms/nytimes-2026-09-17-2.jpg"] },
     }),
   );
   await insertCentralCastingClip(
     evidence({
       id: "bad-shot",
+      text: "Bad screenshot is omitted.",
       screenshot: "/media/screenshots/people/nested/nope.jpg",
+      snapshot: {},
     }),
   );
   const detail = await requestPage("/people/james-comey");
   assert.equal(detail.status, 200);
   assert.match(detail.body, /class="detail person-detail"/);
-  assert.match(detail.body, /data-sense="looks_the_part"/);
-  assert.match(detail.body, /data-sense="replacement"/);
-  assert.match(detail.body, /class="central-casting-evidence"/);
+  assert.match(detail.body, /class="people-list"|class="sources cite-list"/);
+  assert.match(detail.body, /class="sources cite-list"/);
+  assert.match(detail.body, new RegExp(CITE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(detail.body, /class="detail central-casting-detail"/);
+  assert.match(detail.body, /class="cite-block"/);
+  assert.match(detail.body, /class="post-text">Stored central-casting snapshot/);
+  assert.match(detail.body, /Source ·/);
+  assert.match(detail.body, /https:\/\/x\.com\/nytimes\/status\/2100603347044585925/);
+  assert.match(detail.body, /class="supporting-group"/);
+  assert.match(detail.body, /class="detail-media detail-media--masonry"/);
   assert.match(detail.body, /src="\/media\/central-casting-comms\/nytimes-2026-09-17\.jpg"/);
   assert.match(detail.body, /src="\/media\/central-casting-comms\/nytimes-2026-09-17-2\.jpg"/);
+  assert.match(detail.body, /src="\/media\/central-casting-comms\/support-2026-09-17\.jpg"/);
+  assert.match(detail.body, /src="\/media\/central-casting-comms\/support-2026-09-17-2\.jpg"/);
   assert.match(detail.body, new RegExp(shot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(detail.body, /Second harvest clip under the same person/);
   assert.doesNotMatch(detail.body, /nested\/nope\.jpg/);
+  assert.doesNotMatch(detail.body, /data-sense|sense-badge|glossary|looks_the_part/i);
   assert.equal(detail.body.split('href="/people/james-comey"').length - 1, 0);
+  assert.equal(detail.body.split('class="tui-row person-card').length - 1, 0);
+
+  const folder = kindDetail("red_folder", {
+    ...evidence(),
+    still: "/media/red-folder-comms/nytimes-2026-09-17.jpg",
+    snapshot: {
+      stills: [],
+      supporting: [
+        {
+          text: "Red folder support.",
+          still: "/media/red-folder-comms/support.jpg",
+          handle: "@Reuters",
+          posted_at: "2026-09-17",
+          source_url: "https://x.com/Reuters/status/2100603347044585999",
+          account_name: "Reuters",
+        },
+      ],
+    },
+  });
+  const clipHtml = commsDetail(CENTRAL_CASTING_DETAIL, evidence({ screenshot: shot }));
+  for (const marker of [
+    'class="cite-block"',
+    'class="post-text"',
+    "Source ·",
+    'class="supporting-group"',
+    'class="detail-media detail-media--masonry"',
+  ]) {
+    assert.match(folder, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(clipHtml, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
 
   const html = personDetail(comey, {
     centralCastingClips: [evidence({ screenshot: shot })],
   });
-  assert.match(html, /data-sense="looks_the_part"/);
-  assert.match(html, /data-sense="replacement"/);
+  assert.match(html, /class="sources cite-list"/);
+  assert.match(html, /class="detail central-casting-detail"/);
+  assert.match(html, /class="supporting-group"/);
+  assert.doesNotMatch(html, /data-sense|glossary/i);
   assert.match(
     supportingScreenshotPrefix("central-casting-comms", "nytimes-2026-09-17-abc12345", 0),
     /\/media\/screenshots\/central-casting-comms\/nytimes-2026-09-17-abc12345\/support\/0\/$/,
@@ -345,7 +445,7 @@ test("unique person cards, dual badges, sense filter, glossary null person, no c
   assert.equal(counts.central_casting, 2);
   assert.equal(counts.byCategory.central_casting, 2);
   assert.equal(counts.central_casting_comms, undefined);
-  assert.deepEqual(counts.central_casting_by_sense, { looks_the_part: 1, replacement: 2 });
+  assert.equal(counts.central_casting_by_sense, undefined);
 
   const home = await requestPage("/");
   assert.match(home.body, /2 central casting/);
