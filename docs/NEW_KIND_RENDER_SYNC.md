@@ -27,6 +27,12 @@ A new table is all of the following, in order:
 - Counts: lab export row counts versus Render after gap-upsert (non-decreasing; `PROOF` lines from `scripts/gap-upsert-published.mjs`).
 - Media: media-delta stills for the new paths, separate from the logical stream.
 
+## Render-only queue
+
+`mention_queue` is excluded from exittrace_lab_pub / publication SQL / NEW_KIND_RENDER_SYNC checklist.
+
+It is the X mention queue on the Render app database (`scripts/mention-queue.sql`). The Render server applies that file on boot. It is not a KEEP table. Do not add a publication script for it. Do not extend gap-upsert, export, or media-delta for it. Lab KEEP rows still move by logical replication and media-delta. The queue is not published. Place the lab lead path first, then enable the Render queue surface.
+
 ## Locks
 
 - No dual-write. Do not run dump/restore while the subscription is the primary writer.

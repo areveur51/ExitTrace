@@ -1,0 +1,13 @@
+# Coarse mention poll. 10 minutes is inside the 5–15 minute band.
+[Unit]
+Description=ExitTrace X mention poll cadence
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Persistent=true
+Unit=exittrace-mention-poll.service
+
+[Install]
+WantedBy=timers.target

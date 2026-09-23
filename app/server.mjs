@@ -104,6 +104,7 @@ import {
   rankDimension,
 } from "./lib/dashboard.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
+import { dispatchMentionRoute } from "./lib/mention-http.mjs";
 import {
   CENTRAL_CASTING_LEGACY_PATH,
   CENTRAL_CASTING_PATH,
@@ -127,10 +128,10 @@ const seedPath = path.join(dataDir, "seed.json");
 const APP_VERSION = JSON.parse(
   fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
 ).version;
-const bootstrapSql = fs.readFileSync(
-  path.join(ROOT, "scripts", "bootstrap-db.sql"),
-  "utf8",
-);
+const bootstrapSql = [
+  fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sql"), "utf8"),
+  fs.readFileSync(path.join(ROOT, "scripts", "mention-queue.sql"), "utf8"),
+].join("\n");
 
 const MIME = {
   ".css": "text/css; charset=utf-8",
@@ -402,6 +403,11 @@ async function healthPayload() {
 async function handle(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
   const p = url.pathname;
+
+  if (p.startsWith("/api/mention-queue")) {
+    await dispatchMentionRoute(req, res, { send, readBody });
+    return;
+  }
 
   if (p === "/add" && req.method === "POST") {
     let fields = {};

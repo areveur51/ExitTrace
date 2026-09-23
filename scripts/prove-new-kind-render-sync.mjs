@@ -23,6 +23,7 @@ Do not wipe media or datasets. Gap-upsert never DELETE / TRUNCATE / DROP / --cle
 5. Prove publication membership, subscription relation, LSN advance, row counts, and media-delta.
    people.central_casting rides the people upsert (json array, empty default, never invented).
    red_folder_comms and central_casting_comms (plus person_id) are in the gap-upsert table list.
+mention_queue is Render-only and is excluded from exittrace_lab_pub / publication SQL / NEW_KIND_RENDER_SYNC checklist. Do not gap-upsert mention_queue.
 `.trim();
 
 const invoked = process.argv[1] && process.argv[1].endsWith("prove-new-kind-render-sync.mjs");

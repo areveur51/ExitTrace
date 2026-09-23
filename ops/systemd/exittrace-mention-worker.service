@@ -1,0 +1,13 @@
+# Host timer unit for claim and dig. Fill __INSTALL_PREFIX__ on the host.
+# GitHub Actions does not run this unit.
+# DATABASE_URL in the env file is the lab database. The queue URL is the Render app.
+[Unit]
+Description=ExitTrace X mention worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__INSTALL_PREFIX__
+EnvironmentFile=-/etc/exittrace/mention.env
+ExecStart=/usr/bin/node __INSTALL_PREFIX__/scripts/x-mention-worker.mjs --once

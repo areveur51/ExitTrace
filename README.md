@@ -197,6 +197,8 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `DATA_DIR` | `./data` | Seed / file store |
 | `DATABASE_URL` | unset | Optional Postgres (`postgres://USER:PASS@127.0.0.1:5433/exittrace`) |
 
+X mention queue env names (values stay on the host; never commit them) are listed in `docs/X_MENTION_QUEUE.md`: `MENTION_QUEUE_BOT_TOKEN`, `MENTION_QUEUE_WORKER_TOKEN`, `EXITTRACE_PUBLIC_ORIGIN`, `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, `X_USER_ID`, `MENTION_QUEUE_URL`, `MENTION_POLL_MS`, `MENTION_WORKER_POLL_MS`, `MENTION_CLAIM_LEASE_MS`, `MENTION_AUTHOR_MAX`, `MENTION_AUTHOR_WINDOW_MS`, `MENTION_BLOCKLIST`, `MENTION_SOFT_ACK`, `MENTION_STATE_PATH`, `MENTION_CLAIM_OWNER`, `MENTION_DIG_COMMAND`, `MENTION_WORKER_DATABASE`, `MENTION_INSTALL_PREFIX`. Admiral and Q place those names. `mention_queue` is Render-only and is excluded from `exittrace_lab_pub`.
+
 ## Layout
 
 ```
@@ -210,6 +212,12 @@ media/                      portraits, dog-comm and red-folder-comm stills, deri
 app/lib/kind-comms.mjs      shared dog / red-folder catalog kind; Central Casting sense lock
 app/lib/thumb.mjs           list thumb + denser srcset pipeline (detail uses gold /media stills)
 scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events + red_folder_comms + central_casting_comms
+scripts/mention-queue.sql   Render-only mention_queue (not in exittrace_lab_pub)
+scripts/x-mention-poll.mjs  poll mentions and POST the Render queue
+scripts/x-mention-worker.mjs  claim, lab lead ingest, complete the queue
+scripts/install-mention-units.mjs  fill host systemd units
+ops/systemd/                mention poll and worker timer templates
+docs/X_MENTION_QUEUE.md     mention queue env names and place order
 scripts/add-red-folder-comms-publication.sql  lab publication ADD TABLE red_folder_comms
 scripts/add-central-casting-comms-publication.sql  lab publication ADD TABLE central_casting_comms
 scripts/stamp-keep-up.mjs   upsert one keep_up et_meta key (Postgres)

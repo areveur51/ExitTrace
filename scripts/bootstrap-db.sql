@@ -489,3 +489,8 @@ CREATE INDEX IF NOT EXISTS add_requests_status_idx ON add_requests (status, crea
 ALTER TABLE add_requests DROP CONSTRAINT IF EXISTS add_requests_kind_check;
 ALTER TABLE add_requests ADD CONSTRAINT add_requests_kind_check
   CHECK (kind IN ('person', 'dog', 'operation'));
+
+-- mention_queue is not created in this file.
+-- Apply scripts/mention-queue.sql on the Render app database.
+-- The Render server also applies that file on boot.
+-- mention_queue is excluded from exittrace_lab_pub / publication SQL / NEW_KIND_RENDER_SYNC checklist.
