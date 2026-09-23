@@ -165,37 +165,13 @@ document.addEventListener("DOMContentLoaded", () => {
   for (const el of document.querySelectorAll(".dash-count[data-count]")) countUp(el);
 
   const modal = document.getElementById("tui-modal");
-  const modalTitle = document.getElementById("modal-title");
-  const modalBody = document.getElementById("modal-body");
   const modalOk = document.getElementById("modal-ok");
   let modalHref = "";
-  let modalMode = "link";
 
   function closeModal() {
     if (!modal) return;
     modal.hidden = true;
     modalHref = "";
-    modalMode = "link";
-  }
-
-  function escText(s) {
-    return String(s ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function openModal({ title, bodyHtml, href, mode, toast }) {
-    if (!modal || !modalTitle || !modalBody || !modalOk) return;
-    modalTitle.textContent = title;
-    modalBody.innerHTML = bodyHtml;
-    modalHref = href || "";
-    modalMode = mode || "link";
-    modalOk.hidden = !modalHref;
-    modal.hidden = false;
-    modalOk.focus();
-    if (toast) showToast(toast);
   }
 
   function confirmModal() {
@@ -238,35 +214,9 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener("click", closeLightbox);
   });
 
-  function previewSource(src) {
-    const label = src.getAttribute("data-label") || src.textContent;
-    const title = src.getAttribute("data-title") || "";
-    const date = src.getAttribute("data-date") || "";
-    const href = src.getAttribute("href") || "";
-    openModal({
-      title: "Source preview",
-      href,
-      mode: "link",
-      toast: "source preview",
-      bodyHtml: `<p><strong>${escText(label)}</strong></p>
-        ${title ? `<p>${escText(title)}</p>` : ""}
-        ${date ? `<p>${escText(date)}</p>` : ""}
-        <p class="cite">Citation only. This app does not fetch the page.</p>
-        <p class="cite">${escText(href)}</p>`,
-    });
-  }
-
-
   document.addEventListener(
     "click",
     (e) => {
-      const src = e.target.closest?.(".source-link");
-      if (src) {
-        e.preventDefault();
-        e.stopPropagation();
-        previewSource(src);
-        return;
-      }
       const shot = e.target.closest?.(".lightbox-open");
       if (shot) {
         e.preventDefault();
@@ -280,12 +230,6 @@ document.addEventListener("DOMContentLoaded", () => {
     },
     true,
   );
-  for (const a of document.querySelectorAll(".source-link")) {
-    a.addEventListener("click", (e) => {
-      e.preventDefault();
-      previewSource(a);
-    });
-  }
 
   const rows = [...document.querySelectorAll(".tui-row")];
   function selectRow(row) {
