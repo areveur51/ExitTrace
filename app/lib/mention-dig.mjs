@@ -11,26 +11,41 @@ import { canonicalPublicUrl } from "./urls.mjs";
 export const LEAD_SOURCE_X_MENTION = "x_mention";
 export const SOFT_ACK_TEXT = "Queued for ExitTrace review.";
 
-const PUBLIC_FAIL = Object.freeze({
-  cites_floor: "ExitTrace did not keep this. Two official cites were not on file.",
-  missing_subject: "ExitTrace did not keep this. No named subject was on file.",
-});
-
 export function normalizeErrorReason(raw, fallback) {
   const text = String(raw || "").trim();
   if (/^[a-z0-9_]{1,80}$/.test(text)) return text;
   return fallback;
 }
 
-export function publicFailText(code) {
-  return PUBLIC_FAIL[code] || "ExitTrace did not keep this.";
+/** Display name, or a slug turned into words. URLs are dropped. */
+export function plainKeepLabel(displayName, slug) {
+  const named = plainWords(displayName);
+  if (named) return named;
+  return plainWords(String(slug || "").replace(/-/g, " "));
 }
 
-export function personKeepUrl(origin, slug) {
-  const base = String(origin || "").trim().replace(/\/+$/, "");
-  if (!/^https:\/\/[^\s/]+/i.test(base)) return "";
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(slug || ""))) return "";
-  return `${base}/people/${slug}`;
+export function keepReplyText(displayName, slug) {
+  const label = plainKeepLabel(displayName, slug);
+  if (!label) return "";
+  const text = `ExitTrace kept ${label}.`;
+  if (hasUrl(text)) return "";
+  return text;
+}
+
+function plainWords(raw) {
+  const text = String(raw || "")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/\bwww\.\S+/gi, " ")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  if (!text || hasUrl(text)) return "";
+  return text;
+}
+
+function hasUrl(text) {
+  return /https?:\/\//i.test(text) || /\bwww\./i.test(text);
 }
 
 export function mentionCiteBanList(row = {}) {
@@ -174,26 +189,20 @@ export async function digMention(row = {}, envelope) {
   }
 }
 
-export function buildReplyPlan(row, { origin = "", priorFinal = false } = {}) {
-  if (!row) return { reply: false, reason: "not_found", text: "" };
-  if (row.reply_final_at || priorFinal) {
-    return { reply: false, reason: "one_url_per_keep", text: "" };
-  }
-  if (row.status === "kept") {
-    const text = personKeepUrl(origin, row.kept_person_slug);
-    if (!text) return { reply: false, reason: "missing_origin", text: "" };
-    return { reply: true, kind: "final", reason: "kept", text };
-  }
-  if (
-    (row.status === "fail_closed" || row.status === "rejected") &&
-    row.reply_soft_at
-  ) {
-    return {
-      reply: true,
-      kind: "final",
-      reason: row.status,
-      text: publicFailText(row.error_reason),
-    };
-  }
-  return { reply: false, reason: "no_reply", text: "" };
+function quietPlan(reason) {
+  return { reply: false, reason, text: "", media: [] };
+}
+
+/**
+ * Final X reply only for KEEP. One plain-text confirmation. No URL and no media.
+ * fail_closed, rejected, ambiguous_subject, and dig failures stay silent.
+ * priorFinal is the earlier subject that already owns this KEEP slug.
+ */
+export function buildReplyPlan(row, { priorFinal = false, displayName = "" } = {}) {
+  if (!row) return quietPlan("not_found");
+  if (row.reply_final_at || priorFinal) return quietPlan("first_mentioner");
+  if (row.status !== "kept") return quietPlan("no_reply");
+  const text = keepReplyText(displayName, row.kept_person_slug);
+  if (!text) return quietPlan("missing_label");
+  return { reply: true, kind: "final", reason: "kept", text, media: [] };
 }

@@ -26,7 +26,7 @@ Do not point the worker at a parked database. Do not wipe media.
 4. The host dig command reads one mention JSON object on stdin and writes one JSON envelope on stdout. It does not receive queue tokens or X tokens. If it is unset, the worker refuses to claim.
 5. `digMention` parks a name lead with `source=x_mention` and empty cites, then calls `processAddRequest` only when the envelope already has a subject and at least two official cites that are not the mention or the subject status. Otherwise the queue row becomes `fail_closed` or `rejected`.
 6. Complete sends only queue status fields (`subject_status_id`, `claim_owner`, `status`, `kept_person_slug`, `error_reason`). It does not insert a person.
-7. Soft-ack, when enabled, is exactly `Queued for ExitTrace review.` A final reply prefers one `https` URL `/people/{slug}` per KEEP. A fail-closed or rejected reason is sent only when that subject was soft-acked. A failed soft-ack or final reply does not stop the rest of the pass and does not change queue status. A successful enqueue ack (`ok: true` with `created: true` or `duplicate: true`) advances `since_id` even when the soft-ack fails. A mentions GET without that ack does not. A queue 401 does not advance `since_id`. A 403 HTML challenge or a 5xx backs off in process and does not advance `since_id`. The next worker pass retries unreplied rows.
+7. Soft-ack, when enabled, is exactly `Queued for ExitTrace review.` Leave it off. A final reply is sent only when the dig status is `kept`, and only to the first mentioner for that subject (the row that won enqueue on `subject_status_id`). The text is `ExitTrace kept {name}.` using the person or operation display name, or the slug as plain words. No `http` or `https` URL. No media. `fail_closed`, `rejected`, `ambiguous_subject`, and dig failures get no reply. A later mention of the same subject is a duplicate and gets no second final. Another KEEP that shares the slug does not get a second final; later rows stay silent. A failed soft-ack or final reply does not stop the rest of the pass and does not change queue status. A successful enqueue ack (`ok: true` with `created: true` or `duplicate: true`) advances `since_id` even when the soft-ack fails. A mentions GET without that ack does not. A queue 401 does not advance `since_id`. A 403 HTML challenge or a 5xx backs off in process and does not advance `since_id`. The next worker pass retries unreplied KEEP rows that still owe that one final.
 
 ## Attribution
 
@@ -70,7 +70,6 @@ Render app:
 
 - `MENTION_QUEUE_BOT_TOKEN` — poller POST enqueue and soft-ack stamp only
 - `MENTION_QUEUE_WORKER_TOKEN` — pending, claim, complete, final reply stamp only
-- `EXITTRACE_PUBLIC_ORIGIN` — `https` origin used for the one KEEP URL
 - `MENTION_AUTHOR_MAX`
 - `MENTION_AUTHOR_WINDOW_MS`
 - `MENTION_BLOCKLIST`
@@ -174,7 +173,8 @@ Picard CLEAR ~6:16pm ET 2026-09-23 reinforces the Riker DESIGN LOCK ~2:05pm ET. 
 
 - CF Skip on `/api/mention-queue` (the whole prefix). Bot Fight must not answer the poll host with an HTML challenge.
 - Bot and worker tokens differ: `MENTION_QUEUE_BOT_TOKEN` ≠ `MENTION_QUEUE_WORKER_TOKEN`. Unset or identical tokens fail closed.
-- Soft-ack is `0` (`MENTION_SOFT_ACK` unset). Leave it off.
+- Soft-ack is `0` (`MENTION_SOFT_ACK` unset). Leave it off. Do not enable it.
+- Final X reply (Riker DESIGN LOCK ~2026-09-23 6:06pm ET, Admiral CLEAR): only when dig status is `kept`. One text reply to the first mentioner for that `subject_status_id`. Template `ExitTrace kept {name}.` Name is the person or operation display name, otherwise the slug as plain words. No URL. No media. No reply on `fail_closed`, `rejected`, `ambiguous_subject`, or dig failure. No second final for a later mention of the same subject, and no second final when another KEEP shares the slug.
 - `MENTION_STATE_PATH` is a durable host file. The since id must still be there after a reboot.
 - Warm dig helper: on the worker host run `node scripts/x-mention-dig-warm.mjs` and set `MENTION_DIG_COMMAND` to `node scripts/x-mention-dig-call.mjs`. Digs stay one at a time. This checklist does not change the dig program.
 - Prove a queue 401 is JSON `{"ok":false,"error":"unauthorized"}`, not an HTML page. An HTML 401 is a challenge, not a token mismatch.
@@ -189,3 +189,4 @@ Copy this into the hub runbook. This PR does not edit a live hub runbook and doe
 - Worker host: prefer the long-lived warm helper `node scripts/x-mention-dig-warm.mjs` (user service, `Type=simple`). Set `MENTION_DIG_INNER` to the one-shot dig program. Set `MENTION_DIG_COMMAND` to `node scripts/x-mention-dig-call.mjs`. The helper stays loaded and runs a dig only when that client is called, which is only after a claim. Digs stay one at a time. GitHub Actions does not run the dig.
 - Timers stay on a 10 minute band inside 5–15 minutes. Poll `OnBootSec=5min`, worker `OnBootSec=8min` (about 3 minutes later). Both `OnUnitActiveSec=10min`. No interval under 5 minutes. Install the templates on the host; do not tighten them for 402/429.
 - Mentions are leads, not cites. Fail closed. Do not invent cites. Do not publish `mention_queue`. Do not touch the parked database.
+- Final reply (Riker DESIGN LOCK ~2026-09-23 6:06pm ET, Admiral CLEAR): `ExitTrace kept {name}.` to the first mentioner only when the dig status is `kept`. Name is the person or operation display name, or the slug as plain words. No URL. No media. No reply on fail-closed, rejected, ambiguous, or dig failure. No second final for a later mention of that subject or another KEEP that shares the slug. Soft-ack stays off.

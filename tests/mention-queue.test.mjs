@@ -6,7 +6,7 @@ import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { handle } from "../app/server.mjs";
-import { leadIngest, SOFT_ACK_TEXT, buildReplyPlan, digMention, publicFailText } from "../app/lib/mention-dig.mjs";
+import { leadIngest, SOFT_ACK_TEXT, buildReplyPlan, digMention, keepReplyText } from "../app/lib/mention-dig.mjs";
 import {
   POLL_MAX_MS,
   POLL_MIN_MS,
@@ -16,6 +16,7 @@ import {
   claimMention,
   completeMention,
   enqueueMention,
+  listUnrepliedMentions,
   pollIntervalMs,
   readMentionTokens,
   resetMentionQueue,
@@ -33,7 +34,7 @@ import {
   queueBackoffMs,
   shouldSoftAck,
 } from "../app/lib/x-mention-poll.mjs";
-import { xBackoffMs } from "../app/lib/x-client.mjs";
+import { replyBody, xBackoffMs } from "../app/lib/x-client.mjs";
 import {
   CLAIMS_PER_TICK,
   COMPLETE_BODY_KEYS,
@@ -61,7 +62,7 @@ const WORKER = "worker-token-test";
 
 process.env.MENTION_QUEUE_BOT_TOKEN = BOT;
 process.env.MENTION_QUEUE_WORKER_TOKEN = WORKER;
-process.env.EXITTRACE_PUBLIC_ORIGIN = "https://exittrace.example";
+delete process.env.EXITTRACE_PUBLIC_ORIGIN;
 
 const CITES = [
   "https://www.example.com/news/quota-mention-held",
@@ -393,57 +394,203 @@ test("complete does not write a person; reply failure is separate from status", 
   assert.equal(replay.replayed, true);
 });
 
-test("one KEEP URL and fail-closed reason only after soft-ack", async () => {
+async function finishMention(subject_status_id, fields, now) {
+  await claimMention({ subject_status_id, claim_owner: "mention-worker", now });
+  return completeMention({
+    subject_status_id,
+    claim_owner: "mention-worker",
+    now,
+    ...fields,
+  });
+}
+
+test("KEEP final is one plain reply to the first mentioner", async () => {
   resetMentionQueue();
-  await enqueueMention(mention({ referenced_json: null, mention_status_id: "3400000000000000001" }));
-  await stampMentionReply({ subject_status_id: "3400000000000000001", kind: "soft" });
-  await claimMention({ subject_status_id: "3400000000000000001", claim_owner: "mention-worker" });
-  await completeMention({
-    subject_status_id: "3400000000000000001",
-    claim_owner: "mention-worker",
-    status: "fail_closed",
-    error_reason: "cites_floor",
+  const seed = loadSeedFile(path.join(ROOT, "data", "seed.json"));
+  setMemory({
+    ...seed,
+    people: [...seed.people, { id: "quota-mention", name: "Quota Mention", category: "arrests" }],
+    operations: [
+      ...(seed.operations || []),
+      {
+        id: "restore-justice",
+        name: "Restore Justice",
+        event_date: "2024-01-02",
+        agencies: ["FBI"],
+        summary: "A federal operation.",
+      },
+    ],
   });
-  const reasoned = await planMentionReply("3400000000000000001");
-  assert.equal(reasoned.reply, true);
-  assert.equal(reasoned.text, publicFailText("cites_floor"));
-  assert.equal(reasoned.text.includes("http"), false);
+  const quoted = "2000000000000000099";
+  const first = await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000003",
+      author_id: "1110000000000000001",
+      author_handle: "firstauthor",
+      quoted_id: quoted,
+    }),
+    { now: new Date("2026-09-23T22:00:00.000Z") },
+  );
+  const duplicate = await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000009",
+      author_id: "2220000000000000002",
+      author_handle: "laterauthor",
+      quoted_id: quoted,
+    }),
+    { now: new Date("2026-09-23T22:01:00.000Z") },
+  );
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.row.mention_status_id, first.row.mention_status_id);
+  assert.equal(duplicate.row.author_id, first.row.author_id);
+  await finishMention(quoted, { status: "kept", kept_person_slug: "quota-mention" });
 
-  await enqueueMention(mention({ referenced_json: null, mention_status_id: "3400000000000000002" }));
-  await claimMention({ subject_status_id: "3400000000000000002", claim_owner: "mention-worker" });
-  await completeMention({
-    subject_status_id: "3400000000000000002",
-    claim_owner: "mention-worker",
-    status: "fail_closed",
-    error_reason: "cites_floor",
-  });
-  const quiet = await planMentionReply("3400000000000000002");
-  assert.equal(quiet.reply, false);
+  const posts = [];
+  const fetchImpl = async (url, opts) => {
+    const target = String(url);
+    if (target.endsWith("/work")) {
+      return jsonResponse(200, { ok: true, pending: [], unreplied: await listUnrepliedMentions() });
+    }
+    if (target.includes("/reply-plan")) {
+      const id = new URL(target).searchParams.get("subject_status_id");
+      return jsonResponse(200, await planMentionReply(id));
+    }
+    if (target.includes("/tweets")) {
+      posts.push(JSON.parse(opts.body));
+      return jsonResponse(201, {});
+    }
+    if (target.endsWith("/reply")) {
+      const body = JSON.parse(opts.body);
+      assert.equal(body.kind, "final");
+      await stampMentionReply({ subject_status_id: body.subject_status_id, kind: "final" });
+      return jsonResponse(200, { ok: true });
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const env = {
+    MENTION_WORKER_DATABASE: "lab",
+    MENTION_QUEUE_URL: "https://queue.example",
+    MENTION_QUEUE_WORKER_TOKEN: WORKER,
+    X_API_KEY: "k",
+    X_API_SECRET: "s",
+    X_ACCESS_TOKEN: "t",
+    X_ACCESS_TOKEN_SECRET: "ts",
+    X_USER_ID: "50",
+  };
+  const once = await workerOnce({ env, fetchImpl });
+  assert.equal(once.results.length, 1);
+  assert.equal(once.results[0].reply_error, "");
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].text, "ExitTrace kept Quota Mention.");
+  assert.equal(posts[0].text.includes("http"), false);
+  assert.equal(/https?:\/\//i.test(posts[0].text), false);
+  assert.deepEqual(Object.keys(posts[0]).sort(), ["reply", "text"]);
+  assert.equal(posts[0].media, undefined);
+  assert.equal(posts[0].attachments, undefined);
+  assert.equal(posts[0].reply.in_reply_to_tweet_id, first.row.mention_status_id);
+  assert.deepEqual(posts[0], replyBody({ inReplyTo: first.row.mention_status_id, text: posts[0].text }));
 
-  await enqueueMention(mention({ referenced_json: null, mention_status_id: "3400000000000000003" }));
-  await claimMention({ subject_status_id: "3400000000000000003", claim_owner: "mention-worker" });
-  await completeMention({
-    subject_status_id: "3400000000000000003",
-    claim_owner: "mention-worker",
-    status: "kept",
-    kept_person_slug: "quota-mention",
-  });
-  const firstUrl = await planMentionReply("3400000000000000003");
-  assert.equal(firstUrl.text, "https://exittrace.example/people/quota-mention");
-  await stampMentionReply({ subject_status_id: "3400000000000000003", kind: "final" });
+  const again = await workerOnce({ env, fetchImpl });
+  assert.equal(again.results.length, 0);
+  assert.equal(posts.length, 1);
+  const stamped = await planMentionReply(quoted);
+  assert.equal(stamped.reply, false);
+  assert.equal(stamped.reason, "first_mentioner");
 
-  await enqueueMention(mention({ referenced_json: null, mention_status_id: "3400000000000000004" }));
-  await claimMention({ subject_status_id: "3400000000000000004", claim_owner: "mention-worker" });
-  await completeMention({
-    subject_status_id: "3400000000000000004",
-    claim_owner: "mention-worker",
-    status: "kept",
-    kept_person_slug: "quota-mention",
-  });
-  const second = await planMentionReply("3400000000000000004");
-  assert.equal(second.reply, false);
-  assert.equal(second.reason, "one_url_per_keep");
-  assert.equal(buildReplyPlan({ status: "kept", kept_person_slug: "quota-mention" }, { origin: "" }).reply, false);
+  const opSubject = "2000000000000000088";
+  await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000088",
+      author_id: "3330000000000000003",
+      author_handle: "opauthor",
+      quoted_id: opSubject,
+    }),
+    { now: new Date("2026-09-23T22:02:00.000Z") },
+  );
+  await finishMention(opSubject, { status: "kept", kept_person_slug: "restore-justice" });
+  const opPlan = await planMentionReply(opSubject);
+  assert.equal(opPlan.text, "ExitTrace kept Restore Justice.");
+  assert.equal(opPlan.media.length, 0);
+  assert.equal(keepReplyText("", "plain-slug"), "ExitTrace kept plain slug.");
+  assert.equal(keepReplyText("https://example.com/people/plain-slug", "plain-slug"), "ExitTrace kept plain slug.");
+});
+
+test("fail_closed and ambiguous digs send no reply", async () => {
+  resetMentionQueue();
+  const cases = [
+    ["3400000000000000001", "fail_closed", "cites_floor"],
+    ["3400000000000000002", "fail_closed", "ambiguous_subject"],
+    ["3400000000000000005", "fail_closed", "dig_failed"],
+    ["3400000000000000006", "rejected", "rejected"],
+  ];
+  for (const [id, status, error_reason] of cases) {
+    await enqueueMention(mention({ referenced_json: null, mention_status_id: id }));
+    await stampMentionReply({ subject_status_id: id, kind: "soft" });
+    await finishMention(id, { status, error_reason });
+    const plan = await planMentionReply(id);
+    assert.equal(plan.reply, false, id);
+    assert.equal(plan.text, "");
+    assert.equal(plan.reason, "no_reply");
+  }
+  assert.deepEqual(await listUnrepliedMentions(), []);
+  assert.equal(
+    buildReplyPlan({ status: "kept", kept_person_slug: "quota-mention" }, { displayName: "Quota Mention" }).text,
+    "ExitTrace kept Quota Mention.",
+  );
+  assert.equal(buildReplyPlan({ status: "fail_closed", error_reason: "ambiguous_subject", reply_soft_at: "t" }).reply, false);
+});
+
+test("a later mentioner of the same subject and a shared KEEP slug stay silent", async () => {
+  resetMentionQueue();
+  const quoted = "2000000000000000070";
+  const first = await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000071",
+      author_id: "1110000000000000001",
+      author_handle: "firstauthor",
+      quoted_id: quoted,
+    }),
+    { now: new Date("2026-09-23T22:00:00.000Z") },
+  );
+  const secondMention = await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000079",
+      author_id: "2220000000000000002",
+      author_handle: "secondauthor",
+      quoted_id: quoted,
+    }),
+    { now: new Date("2026-09-23T22:01:00.000Z") },
+  );
+  assert.equal(secondMention.duplicate, true);
+  assert.equal(secondMention.row.subject_status_id, first.row.subject_status_id);
+  await finishMention(quoted, { status: "kept", kept_person_slug: "quota-mention" });
+
+  const otherSubject = "2000000000000000072";
+  await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000072",
+      author_id: "3330000000000000003",
+      author_handle: "othersubject",
+      quoted_id: otherSubject,
+    }),
+    { now: new Date("2026-09-23T22:05:00.000Z") },
+  );
+  await finishMention(otherSubject, { status: "kept", kept_person_slug: "quota-mention" });
+
+  const winner = await planMentionReply(quoted);
+  const later = await planMentionReply(otherSubject);
+  assert.equal(winner.reply, true);
+  assert.equal(winner.row.mention_status_id, first.row.mention_status_id);
+  assert.equal(later.reply, false);
+  assert.equal(later.reason, "first_mentioner");
+  assert.equal(later.text, "");
+  const unreplied = await listUnrepliedMentions();
+  assert.deepEqual(unreplied.map((row) => row.subject_status_id), [quoted]);
+
+  await stampMentionReply({ subject_status_id: quoted, kind: "final" });
+  const after = await planMentionReply(otherSubject);
+  assert.equal(after.reply, false);
+  assert.deepEqual(await listUnrepliedMentions(), []);
 });
 
 test("cadence clamps sit in the locked bands", () => {
@@ -702,7 +849,7 @@ test("worker reply failure does not send a second complete", async () => {
         ok: true,
         status: 200,
         async text() {
-          return JSON.stringify({ ok: true, reply: true, text: publicFailText("cites_floor"), reason: "fail_closed" });
+          return JSON.stringify({ ok: true, reply: true, text: "ExitTrace kept Quota Mention.", reason: "kept" });
         },
       };
     }
@@ -1380,7 +1527,7 @@ test("worker claim-next stops at five and a failed reply does not stop the batch
       return jsonResponse(200, {
         ok: true,
         reply: true,
-        text: "https://exittrace.example/people/quota-mention",
+        text: "ExitTrace kept Quota Mention.",
         reason: "kept",
       });
     }

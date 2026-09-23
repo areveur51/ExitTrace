@@ -128,6 +128,13 @@ function completeBody(row, dug, owner) {
   };
 }
 
+function plainFinalText(plan) {
+  if (!plan?.reply || plan.reason !== "kept") return "";
+  const text = String(plan.text || "").trim();
+  if (!text || /https?:\/\//i.test(text) || /\bwww\./i.test(text)) return "";
+  return text;
+}
+
 async function deliverFinal({ row, env, fetchImpl, token, base }) {
   const plan = await requestJson(
     fetchImpl,
@@ -135,10 +142,11 @@ async function deliverFinal({ row, env, fetchImpl, token, base }) {
     `${queueEndpoint(base, "/reply-plan")}?subject_status_id=${encodeURIComponent(row.subject_status_id)}`,
     token,
   );
-  if (!plan.reply || !plan.text) return { replied: false, reason: plan.reason || "" };
+  const text = plainFinalText(plan);
+  if (!text) return { replied: false, reason: plan.reason || "no_reply" };
   await postReply({
     inReplyTo: row.mention_status_id,
-    text: plan.text,
+    text,
     fetchImpl,
     env,
   });

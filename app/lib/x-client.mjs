@@ -115,6 +115,14 @@ export async function fetchMentions({
   return payload;
 }
 
+/** Text reply only. No media attachment fields. */
+export function replyBody({ inReplyTo, text } = {}) {
+  return {
+    text: String(text ?? ""),
+    reply: { in_reply_to_tweet_id: String(inReplyTo ?? "") },
+  };
+}
+
 export async function postReply({
   inReplyTo,
   text,
@@ -130,10 +138,7 @@ export async function postReply({
   const res = await fetchImpl(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      text,
-      reply: { in_reply_to_tweet_id: String(inReplyTo) },
-    }),
+    body: JSON.stringify(replyBody({ inReplyTo, text })),
   });
   if (!res.ok) {
     const error = new Error("X reply failed");

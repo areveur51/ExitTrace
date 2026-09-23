@@ -36,7 +36,6 @@ Environment names (values stay on the host, never in git):
   X_ACCESS_TOKEN
   X_ACCESS_TOKEN_SECRET
   X_USER_ID
-  EXITTRACE_PUBLIC_ORIGIN
 `;
 
 function sleep(ms) {

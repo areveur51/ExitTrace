@@ -5,7 +5,7 @@
  */
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { getPool } from "./store.mjs";
+import { getOperation, getPerson, getPool } from "./store.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import { buildReplyPlan } from "./mention-dig.mjs";
 import { isSnowflake, resolveSubjectStatusId, statusUrl } from "./x-mentions.mjs";
@@ -265,10 +265,24 @@ function claimable(row, now) {
 }
 
 function needsFinalReply(row) {
-  if (row.reply_final_at) return false;
-  if (row.status === "kept") return true;
-  if ((row.status === "fail_closed" || row.status === "rejected") && row.reply_soft_at) return true;
-  return false;
+  return row.status === "kept" && !row.reply_final_at;
+}
+
+function isEarlierSubject(sibling, row) {
+  const earlier = String(sibling.created_at || "");
+  const current = String(row.created_at || "");
+  if (earlier < current) return true;
+  if (earlier > current) return false;
+  return String(sibling.subject_status_id) < String(row.subject_status_id);
+}
+
+/** Later KEEP rows that share a slug stay silent. A stamped final blocks a second post. */
+export function siblingBlocksKeepReply(row, sibling) {
+  if (!row || !sibling) return false;
+  if (sibling.subject_status_id === row.subject_status_id) return false;
+  if (!row.kept_person_slug || sibling.kept_person_slug !== row.kept_person_slug) return false;
+  if (sibling.reply_final_at) return true;
+  return sibling.status === "kept" && isEarlierSubject(sibling, row);
 }
 
 export async function enqueueMention(input, { now = new Date() } = {}) {
@@ -407,20 +421,35 @@ export async function listUnrepliedMentions({ limit = 10 } = {}) {
   const p = await getPool();
   if (!p) {
     return memory
-      .filter(needsFinalReply)
+      .filter(
+        (row) =>
+          needsFinalReply(row) && !memory.some((sibling) => siblingBlocksKeepReply(row, sibling)),
+      )
       .slice()
       .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)))
       .slice(0, cap)
       .map(publicRow);
   }
   const q = await p.query(
-    `SELECT * FROM mention_queue
-      WHERE reply_final_at IS NULL
-        AND (
-          status = 'kept'
-          OR (status IN ('fail_closed', 'rejected') AND reply_soft_at IS NOT NULL)
+    `SELECT * FROM mention_queue q
+      WHERE q.reply_final_at IS NULL
+        AND q.status = 'kept'
+        AND NOT EXISTS (
+          SELECT 1 FROM mention_queue s
+           WHERE s.kept_person_slug = q.kept_person_slug
+             AND s.subject_status_id <> q.subject_status_id
+             AND (
+               s.reply_final_at IS NOT NULL
+               OR (
+                 s.status = 'kept'
+                 AND (
+                   s.created_at < q.created_at
+                   OR (s.created_at = q.created_at AND s.subject_status_id < q.subject_status_id)
+                 )
+               )
+             )
         )
-      ORDER BY updated_at ASC
+      ORDER BY q.updated_at ASC
       LIMIT $1`,
     [cap],
   );
@@ -652,30 +681,46 @@ export async function stampMentionReply({ subject_status_id, kind, now = new Dat
   return { ok: true, row: mapPg(updated.rows[0]) };
 }
 
-export async function planMentionReply(subjectStatusId, { origin, now = new Date() } = {}) {
+async function keptCatalogName(slug) {
+  const id = String(slug || "").trim();
+  if (!id) return "";
+  const person = await getPerson(id);
+  if (person?.name) return person.name;
+  const operation = await getOperation(id);
+  return operation?.name || "";
+}
+
+export async function planMentionReply(subjectStatusId, { now = new Date() } = {}) {
   const row = await getMention(subjectStatusId);
   if (!row) throw new MentionQueueError("not found", "not_found", 404);
   let priorFinal = Boolean(row.reply_final_at);
   if (row.status === "kept" && row.kept_person_slug && !priorFinal) {
     const p = await getPool();
-    const siblings = p
-      ? (
-          await p.query(
-            `SELECT subject_status_id, reply_final_at FROM mention_queue
-              WHERE kept_person_slug = $1 AND subject_status_id <> $2 AND reply_final_at IS NOT NULL
-              LIMIT 1`,
-            [row.kept_person_slug, row.subject_status_id],
-          )
-        ).rows
-      : memory.filter(
-          (item) =>
-            item.kept_person_slug === row.kept_person_slug &&
-            item.subject_status_id !== row.subject_status_id &&
-            item.reply_final_at,
-        );
-    priorFinal = siblings.length > 0;
+    if (p) {
+      const hit = await p.query(
+        `SELECT 1 FROM mention_queue s
+          WHERE s.kept_person_slug = $1
+            AND s.subject_status_id <> $2
+            AND (
+              s.reply_final_at IS NOT NULL
+              OR (
+                s.status = 'kept'
+                AND (
+                  s.created_at < $3::timestamptz
+                  OR (s.created_at = $3::timestamptz AND s.subject_status_id < $2)
+                )
+              )
+            )
+          LIMIT 1`,
+        [row.kept_person_slug, row.subject_status_id, row.created_at],
+      );
+      priorFinal = hit.rows.length > 0;
+    } else {
+      priorFinal = memory.some((item) => siblingBlocksKeepReply(row, item));
+    }
   }
   void now;
-  const publicOrigin = origin || process.env.EXITTRACE_PUBLIC_ORIGIN || "";
-  return { ok: true, row, ...buildReplyPlan(row, { origin: publicOrigin, priorFinal }) };
+  const displayName =
+    row.status === "kept" && !priorFinal ? await keptCatalogName(row.kept_person_slug) : "";
+  return { ok: true, row, ...buildReplyPlan(row, { priorFinal, displayName }) };
 }

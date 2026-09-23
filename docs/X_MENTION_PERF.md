@@ -6,7 +6,8 @@ Picard CLEAR ~6:16pm ET 2026-09-23 reinforces the Riker DESIGN LOCK ~2:05pm ET. 
 
 ## Pass behavior
 
-- Soft-ack defaults off (`MENTION_SOFT_ACK` unset). When it is on, the fixed line `Queued for ExitTrace review.` is sent only when enqueue returns `created: true`. Duplicates are not soft-acked.
+- Soft-ack defaults off (`MENTION_SOFT_ACK` unset). When it is on, the fixed line `Queued for ExitTrace review.` is sent only when enqueue returns `created: true`. Duplicates are not soft-acked. Leave it off.
+- A final reply is one plain-text confirmation to the first mentioner, and only when the dig status is `kept`. No URL and no media. Fail-closed, rejected, ambiguous, and dig failures stay silent. A later mention of that subject, or another KEEP that shares the slug, does not get a second final.
 - A failed soft-ack or final reply does not stop the rest of the pass. A successful enqueue advances `since_id` even when the soft-ack fails. The unreplied sweep and the claim loop each continue after one reply failure.
 - The worker uses one `GET /api/mention-queue/work` (`{ pending, unreplied }`). Zero pending rows means no claim and no dig. An empty unreplied list skips that final-reply sweep.
 - Claim-next POSTs an empty `subject_status_id` (`SKIP LOCKED`) until `claimed: false`, at most 5 claims per pass. Digs run one at a time. No dig is spawned when nothing was claimed.
