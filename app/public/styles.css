@@ -418,16 +418,6 @@ body.tui-home .home-stage {
   gap: 0.35rem;
   margin: 0 0 0.85rem;
 }
-.sense-badge {
-  display: inline-block;
-  margin-left: 0.35rem;
-  padding: 0.05rem 0.35rem;
-  border: 1px solid var(--rule);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  color: var(--amber);
-}
 .identity-filters-label,
 .person-tags-label {
   font-family: var(--font-ui);

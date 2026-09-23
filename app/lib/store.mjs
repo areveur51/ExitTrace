@@ -38,9 +38,8 @@ import {
   CENTRAL_CASTING_SCREENSHOT_KIND,
   CentralCastingClassifyError,
   assertCentralCastingClassification,
-  assertCentralCastingSense,
-  centralCastingSenseFilter,
   commsKind,
+  mediaSpec,
   normalizeCentralCasting,
   KIND_COMMS,
   KIND_COMM_IDS,
@@ -127,7 +126,7 @@ function normalizeKindSnapshot(raw, kind) {
   if (!raw || typeof raw !== "object") return {};
   const snap = { ...raw };
   if (!Array.isArray(raw.supporting)) return snap;
-  const spec = commsKind(kind);
+  const spec = mediaSpec(kind);
   snap.supporting = raw.supporting.map((item) => {
     if (!item || typeof item !== "object") return item;
     return {
@@ -330,18 +329,11 @@ export function loadFileStore(dataDir) {
 
 function normalizeCentralCastingClip(row = {}) {
   const role = String(row.role || "").trim();
-  if (role !== "evidence" && role !== "glossary") {
-    throw new CentralCastingClassifyError(
-      `invalid central casting role: ${role || "(empty)"}`,
-      "invalid_role",
-    );
+  if (role === "glossary") {
+    throw new CentralCastingClassifyError("glossary is not stored", "glossary_removed");
   }
-  const sense = assertCentralCastingSense(row.sense);
   const personRaw = row.person_id == null ? "" : String(row.person_id).trim();
-  if (role === "glossary" && personRaw) {
-    throw new CentralCastingClassifyError("glossary person_id must be null", "glossary_person");
-  }
-  if (role === "evidence" && !personRaw) {
+  if (!personRaw) {
     throw new CentralCastingClassifyError("evidence person_id is required", "evidence_person");
   }
   const id = String(row.id || "").trim();
@@ -350,9 +342,7 @@ function normalizeCentralCastingClip(row = {}) {
   if (!source_url) throw new CentralCastingClassifyError("cite required", "missing_cite");
   return {
     id,
-    role,
-    person_id: role === "glossary" ? null : personRaw,
-    sense,
+    person_id: personRaw,
     posted_at: asPostedAt(row.posted_at),
     handle: row.handle || "",
     account_name: row.account_name || "",
@@ -362,7 +352,7 @@ function normalizeCentralCastingClip(row = {}) {
     screenshot: normalizeScreenshotHref(row.screenshot, CENTRAL_CASTING_SCREENSHOT_KIND),
     screenshot_credit: normalizeScreenshotCredit(row.screenshot_credit),
     source_url,
-    snapshot: row.snapshot && typeof row.snapshot === "object" ? { ...row.snapshot } : {},
+    snapshot: normalizeKindSnapshot(row.snapshot, "central_casting"),
   };
 }
 
@@ -2283,45 +2273,26 @@ export async function countCatalog(category) {
 }
 
 function centralCastingPersonStats(people) {
-  const bySense = { looks_the_part: 0, replacement: 0 };
   let n = 0;
   for (const row of people) {
-    const senses = new Set((row.central_casting || []).map((item) => item.sense));
-    if (!senses.size) continue;
-    n += 1;
-    for (const sense of senses) {
-      if (Object.prototype.hasOwnProperty.call(bySense, sense)) bySense[sense] += 1;
-    }
+    if ((row.central_casting || []).length) n += 1;
   }
-  return { central_casting: n, central_casting_by_sense: bySense };
-}
-
-function personIncludesSense(row, sense) {
-  return (row.central_casting || []).some((item) => item.sense === sense);
+  return { central_casting: n };
 }
 
 export async function listCentralCastingPeople(opts = {}) {
-  const sense = centralCastingSenseFilter(opts.sense);
   const limit = finiteInt(opts.limit, null);
   const offset = finiteInt(opts.offset, 0);
   const p = await getPool();
   if (!p) {
-    let rows = getMemory().people.filter((row) => (row.central_casting || []).length);
-    if (sense) rows = rows.filter((row) => personIncludesSense(row, sense));
+    const rows = getMemory().people.filter((row) => (row.central_casting || []).length);
     return applyWindow(rows.slice().sort(comparePeople), limit, offset);
   }
   const params = [];
   let sql = `SELECT * FROM people
     WHERE jsonb_typeof(central_casting) = 'array'
-      AND jsonb_array_length(central_casting) > 0`;
-  if (sense) {
-    params.push(sense);
-    sql += ` AND EXISTS (
-      SELECT 1 FROM jsonb_array_elements(central_casting) el
-       WHERE el->>'sense' = $${params.length}
-    )`;
-  }
-  sql += ` ORDER BY event_date DESC NULLS LAST, name ASC`;
+      AND jsonb_array_length(central_casting) > 0
+    ORDER BY event_date DESC NULLS LAST, name ASC`;
   if (limit != null) {
     params.push(limit);
     sql += ` LIMIT $${params.length}`;
@@ -2332,30 +2303,12 @@ export async function listCentralCastingPeople(opts = {}) {
     sql += ` OFFSET $${params.length}`;
   }
   const q = await p.query(sql, params);
-  return q.rows.map(normalizePerson).filter((row) => {
-    if (!(row.central_casting || []).length) return false;
-    return sense ? personIncludesSense(row, sense) : true;
-  });
+  return q.rows.map(normalizePerson).filter((row) => (row.central_casting || []).length);
 }
 
-export async function countCentralCastingPeople(opts = {}) {
-  const rows = await listCentralCastingPeople({ sense: opts.sense });
+export async function countCentralCastingPeople() {
+  const rows = await listCentralCastingPeople();
   return rows.length;
-}
-
-export async function listCentralCastingGlossary() {
-  const p = await getPool();
-  if (!p) {
-    return (getMemory().central_casting_comms || []).filter(
-      (row) => row.role === "glossary" && !row.person_id,
-    );
-  }
-  const q = await p.query(
-    `SELECT * FROM central_casting_comms
-      WHERE role = 'glossary' AND person_id IS NULL
-      ORDER BY sense ASC, posted_at DESC`,
-  );
-  return q.rows.map((row) => normalizeCentralCastingClip(row));
 }
 
 export async function listCentralCastingEvidence(personId) {
@@ -2363,13 +2316,11 @@ export async function listCentralCastingEvidence(personId) {
   if (!id) return [];
   const p = await getPool();
   if (!p) {
-    return (getMemory().central_casting_comms || []).filter(
-      (row) => row.role === "evidence" && row.person_id === id,
-    );
+    return (getMemory().central_casting_comms || []).filter((row) => row.person_id === id);
   }
   const q = await p.query(
     `SELECT * FROM central_casting_comms
-      WHERE role = 'evidence' AND person_id = $1
+      WHERE person_id = $1
       ORDER BY posted_at DESC`,
     [id],
   );
@@ -2398,17 +2349,12 @@ export async function annotateCentralCasting(personId, classification) {
   return getPerson(id);
 }
 
-/** Evidence under a person, or a glossary row with person_id null. Not a parent-list card. */
+/** Harvest/evidence under an existing person. Not a parent-list card. */
 export async function insertCentralCastingClip(row) {
   const clip = normalizeCentralCastingClip(row);
-  if (clip.role === "evidence") {
-    const person = await getPerson(clip.person_id);
-    if (!person) {
-      throw new CentralCastingClassifyError(
-        `person not found: ${clip.person_id}`,
-        "missing_person",
-      );
-    }
+  const person = await getPerson(clip.person_id);
+  if (!person) {
+    throw new CentralCastingClassifyError(`person not found: ${clip.person_id}`, "missing_person");
   }
   const p = await getPool();
   if (!p) {
@@ -2422,9 +2368,9 @@ export async function insertCentralCastingClip(row) {
   await p.query(
     `INSERT INTO central_casting_comms (
        id, posted_at, handle, account_name, text, still, still_credit,
-       screenshot, screenshot_credit, source_url, snapshot, sense, person_id, role
+       screenshot, screenshot_credit, source_url, snapshot, person_id
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12
      )`,
     [
       clip.id,
@@ -2438,9 +2384,7 @@ export async function insertCentralCastingClip(row) {
       clip.screenshot_credit,
       clip.source_url,
       JSON.stringify(clip.snapshot || {}),
-      clip.sense,
       clip.person_id,
-      clip.role,
     ],
   );
   return clip;
@@ -2492,7 +2436,7 @@ export async function counts() {
     p.query("SELECT COUNT(*)::int AS n FROM people"),
     ...kindQueries,
   ]);
-  const [postCount, opCount, grouped, opTags, centralCount, senseRows] = await Promise.all([
+  const [postCount, opCount, grouped, opTags, centralCount] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
     p.query("SELECT COUNT(*)::int AS n FROM operations"),
     p.query(
@@ -2511,12 +2455,6 @@ export async function counts() {
         WHERE jsonb_typeof(central_casting) = 'array'
           AND jsonb_array_length(central_casting) > 0`,
     ),
-    p.query(
-      `SELECT el->>'sense' AS sense, COUNT(DISTINCT people.id)::int AS n
-         FROM people,
-              LATERAL jsonb_array_elements(COALESCE(central_casting, '[]'::jsonb)) el
-        GROUP BY el->>'sense'`,
-    ),
   ]);
   const byCategory = {};
   for (const row of grouped.rows) byCategory[row.category] = row.n;
@@ -2533,12 +2471,6 @@ export async function counts() {
     kindCounts[spec.memoryKey] = n;
     byCategory[spec.categoryId] = n;
   });
-  const centralBySense = { looks_the_part: 0, replacement: 0 };
-  for (const row of senseRows.rows) {
-    if (Object.prototype.hasOwnProperty.call(centralBySense, row.sense)) {
-      centralBySense[row.sense] = row.n;
-    }
-  }
   const centralCasting = centralCount.rows[0].n;
   byCategory.central_casting = centralCasting;
   byCategory.operations = opCount.rows[0].n;
@@ -2547,7 +2479,6 @@ export async function counts() {
     people: peopleCount.rows[0].n,
     ...kindCounts,
     central_casting: centralCasting,
-    central_casting_by_sense: centralBySense,
     operations: opCount.rows[0].n,
     source_posts: postCount.rows[0].n,
     byCategory,

@@ -146,7 +146,7 @@ Releases:
 | `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
 | `/red-folder-comms` | Stored official and news-org posts about a red folder (catalog, not a person) |
-| `/central-casting` | Central Casting unique-person cards. Senses: looks the part and replacement (`?sense=`). `/central-casting-comms` redirects here |
+| `/central-casting` | Central Casting unique-person cards. `/central-casting-comms` redirects here |
 | `/dashboard` | Live unique-person ranks, Counts by Age, and event-date trends |
 | `/dashboard/age` | Counts by Age — unique people in fixed bands (missing birth date is not guessed) |
 | `/dashboard/organization` | Ranked organizations (empty unless organization is stored) |
@@ -170,7 +170,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /health` | HTML health page (counts plus public `keep_up` stamps) |
 | `GET /api/health` | `{ ok, ready, backend, people, dog_comms, red_folder_comms, central_casting, operations, source_posts, keep_up }` |
 | `GET /search?q=` | Local catalog search (people keep person cards; operations keep operation cards; posted hits group under Unsorted) |
-| `GET /people/:id` | One person row. Central Casting badges and evidence clips render here when stored |
+| `GET /people/:id` | One person row. Central Casting cites and X media render here when stored |
 | `GET /operations/:id` | One operation row |
 | `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm detail |
@@ -184,7 +184,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /api/source-posts?category=` | Parked public posts |
 | `GET /api/dog-comms` | Stored official dog posts |
 | `GET /api/red-folder-comms` | Stored official red-folder posts |
-| `GET /api/central-casting` | Unique persons with a Central Casting classification (`?sense=looks_the_part` or `replacement`) |
+| `GET /api/central-casting` | Unique persons with a Central Casting membership |
 | `GET /media/...` | Files on disk. People list uses derived thumbs under `/media/thumbs/people/` (small CSS, denser srcset, lazy). Person detail / masonry / lightbox use the gold `/media/people/` still (WebP + JPEG fallback). Dog detail keeps the full `/media/dog-comms/` still. Red-folder detail keeps the full `/media/red-folder-comms/` still. |
 
 ## Configuration

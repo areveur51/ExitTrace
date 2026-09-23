@@ -221,16 +221,11 @@ ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 
 -- Central Casting parent list is unique-person KEEP cards, not this table.
--- Riker lock amend: sense NOT NULL, only looks_the_part | replacement.
--- role evidence requires person_id. role glossary requires person_id NULL.
--- No seed rows here. Seed after PLACE is two glossary rows (person_id NULL),
--- one sense each: replacement (Admiral-named park) and looks_the_part (harvest cite).
--- Classifications live on people.central_casting. Do not insert person-shaped
--- rows into this table to drive the list.
+-- Riker DESIGN LOCK AMEND: no sense column, no glossary rows, no seed.
+-- people.central_casting is a JSON array of cite URLs. Empty means not a member.
+-- central_casting_comms is harvest under person_id. It is not the parent list.
 -- Cite gate: ongoing KEEP is official/gov/news-org plus quote-chain standing.
--- All post media belongs on the person detail; screenshot omit is fail-closed.
--- Glossary seed may park on an Admiral-named cite only when the chain has no
--- official (death_unconfirmed-class, seed only).
+-- All X media belongs on the person detail; screenshot omit is fail-closed.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS central_casting JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS central_casting_comms (
@@ -245,15 +240,7 @@ CREATE TABLE IF NOT EXISTS central_casting_comms (
   screenshot_credit TEXT,
   source_url TEXT NOT NULL,
   snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
-  sense TEXT NOT NULL,
-  person_id TEXT,
-  role TEXT NOT NULL DEFAULT 'evidence',
-  CONSTRAINT central_casting_comms_sense_check CHECK (sense IN ('looks_the_part', 'replacement')),
-  CONSTRAINT central_casting_comms_role_check CHECK (role IN ('evidence', 'glossary')),
-  CONSTRAINT central_casting_comms_role_person_check CHECK (
-    (role = 'glossary' AND person_id IS NULL)
-    OR (role = 'evidence' AND person_id IS NOT NULL)
-  )
+  person_id TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS central_casting_comms_posted_at_idx ON central_casting_comms (posted_at DESC);
@@ -273,46 +260,77 @@ END $$;
 
 ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
+ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS person_id TEXT;
 
--- Idempotent sense column for a table created before the formal lock.
-ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS sense TEXT;
-ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_sense_check;
-ALTER TABLE central_casting_comms ADD CONSTRAINT central_casting_comms_sense_check
-  CHECK (sense IN ('looks_the_part', 'replacement'));
+-- Drop retired sense/glossary shape. Evidence with a person_id stays.
+-- Null person rows are unattached definitions, not gold people or stills.
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM central_casting_comms WHERE sense IS NULL) THEN
-    RAISE EXCEPTION 'central_casting_comms.sense is NOT NULL; backfill looks_the_part or replacement before boot';
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'central_casting_comms'
+       AND column_name = 'role'
+  ) THEN
+    DELETE FROM central_casting_comms
+     WHERE role = 'glossary' OR person_id IS NULL;
+  ELSIF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'central_casting_comms'
+       AND column_name = 'person_id'
+  ) THEN
+    DELETE FROM central_casting_comms WHERE person_id IS NULL;
   END IF;
 END $$;
-ALTER TABLE central_casting_comms ALTER COLUMN sense SET NOT NULL;
-CREATE INDEX IF NOT EXISTS central_casting_comms_sense_idx ON central_casting_comms (sense);
 
-ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS person_id TEXT;
-ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS role TEXT;
+ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_sense_check;
+DROP INDEX IF EXISTS central_casting_comms_sense_idx;
+ALTER TABLE central_casting_comms DROP COLUMN IF EXISTS sense;
+
+ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_role_check;
+ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_role_person_check;
+ALTER TABLE central_casting_comms DROP COLUMN IF EXISTS role;
+
 DO $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM central_casting_comms
-     WHERE role IS NULL
-        OR role NOT IN ('evidence', 'glossary')
-        OR (role = 'glossary' AND person_id IS NOT NULL)
-        OR (role = 'evidence' AND person_id IS NULL)
+     WHERE person_id IS NULL OR btrim(person_id) = ''
   ) THEN
-    RAISE EXCEPTION 'central_casting_comms role/person_id is fail-closed; glossary person_id stays NULL and evidence requires person_id';
+    RAISE EXCEPTION 'central_casting_comms.person_id is required';
   END IF;
 END $$;
-ALTER TABLE central_casting_comms ALTER COLUMN role SET NOT NULL;
-ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_role_check;
-ALTER TABLE central_casting_comms ADD CONSTRAINT central_casting_comms_role_check
-  CHECK (role IN ('evidence', 'glossary'));
-ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_role_person_check;
-ALTER TABLE central_casting_comms ADD CONSTRAINT central_casting_comms_role_person_check
-  CHECK (
-    (role = 'glossary' AND person_id IS NULL)
-    OR (role = 'evidence' AND person_id IS NOT NULL)
-  );
+ALTER TABLE central_casting_comms ALTER COLUMN person_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS central_casting_comms_person_idx ON central_casting_comms (person_id);
+
+-- Membership JSON: keep cite URLs, drop sense objects. Does not delete people.
+UPDATE people
+   SET central_casting = COALESCE((
+         SELECT jsonb_agg(DISTINCT url)
+           FROM (
+             SELECT jsonb_array_elements_text(
+               CASE
+                 WHEN jsonb_typeof(el) = 'string' THEN jsonb_build_array(el)
+                 WHEN jsonb_typeof(el->'sources') = 'array' THEN el->'sources'
+                 ELSE '[]'::jsonb
+               END
+             ) AS url
+               FROM jsonb_array_elements(
+                 CASE
+                   WHEN jsonb_typeof(central_casting) = 'array' THEN central_casting
+                   ELSE '[]'::jsonb
+                 END
+               ) el
+           ) s
+          WHERE btrim(url) <> ''
+       ), '[]'::jsonb)
+ WHERE jsonb_typeof(central_casting) = 'array'
+   AND EXISTS (
+     SELECT 1
+       FROM jsonb_array_elements(central_casting) el
+      WHERE jsonb_typeof(el) = 'object' AND el ? 'sense'
+   );
 
 -- Parked public posts (not identified people). Gold people stay in `people`.
 CREATE TABLE IF NOT EXISTS source_posts (

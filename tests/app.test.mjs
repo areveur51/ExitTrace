@@ -121,7 +121,7 @@ test("health is 200 on file backend", async () => {
   assert.equal(json.central_casting, 0);
   assert.equal(json.byCategory.central_casting, 0);
   assert.equal(json.central_casting_comms, undefined);
-  assert.deepEqual(json.central_casting_by_sense, { looks_the_part: 0, replacement: 0 });
+  assert.equal(json.central_casting_by_sense, undefined);
   assert.equal(json.operations, (seed.operations || []).length);
   assert.equal(json.keep_up.timezone, "America/New_York");
   assert.equal(json.keep_up.logical.stream_started, null);

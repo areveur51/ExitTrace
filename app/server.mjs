@@ -34,7 +34,6 @@ import {
   getPerson,
   getSourcePost,
   listCentralCastingEvidence,
-  listCentralCastingGlossary,
   listCentralCastingPeople,
   listKindComms,
   listOperations,
@@ -57,9 +56,6 @@ import {
   dashboardRankBody,
   kindDetail,
   kindList,
-  centralCastingGlossary,
-  centralCastingPeopleList,
-  centralCastingSenseNav,
   downloadsBody,
   healthBody,
   homeBody,
@@ -111,8 +107,6 @@ import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
 import {
   CENTRAL_CASTING_LEGACY_PATH,
   CENTRAL_CASTING_PATH,
-  CentralCastingSenseError,
-  centralCastingSenseFilter,
   commsHomeCountLabel,
   commsKind,
   commsKindByApiPath,
@@ -354,6 +348,14 @@ async function serveMedia(res, reqPath, req) {
   return serveFile(res, safeJoin(mediaDir, rel), req);
 }
 
+/** Drop a retired sense query. Other params (page) stay. */
+function centralCastingQuery(url) {
+  const next = new URLSearchParams(url.searchParams);
+  next.delete("sense");
+  const q = next.toString();
+  return q ? `?${q}` : "";
+}
+
 async function healthPayload() {
   const c = await counts();
   let keep_up = emptyKeepUp();
@@ -389,7 +391,6 @@ async function healthPayload() {
     dog_comms: c.dog_comms,
     red_folder_comms: c.red_folder_comms,
     central_casting: c.central_casting,
-    central_casting_by_sense: c.central_casting_by_sense,
     operations: c.operations,
     source_posts: c.source_posts,
     byCategory: c.byCategory,
@@ -520,20 +521,10 @@ async function handle(req, res) {
   }
   if (p === "/api/central-casting" || p === "/api/central-casting-comms") {
     if (p === "/api/central-casting-comms") {
-      send(res, 302, "", { Location: `/api${CENTRAL_CASTING_PATH}${url.search || ""}` });
+      send(res, 302, "", { Location: `/api${CENTRAL_CASTING_PATH}${centralCastingQuery(url)}` });
       return;
     }
-    let sense = "";
-    try {
-      sense = centralCastingSenseFilter(url.searchParams.get("sense"));
-    } catch (err) {
-      if (err instanceof CentralCastingSenseError) {
-        send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
-        return;
-      }
-      throw err;
-    }
-    const people = await listCentralCastingPeople({ sense });
+    const people = await listCentralCastingPeople();
     return sendJson(res, 200, { people, central_casting: people.length });
   }
   const apiSpec = commsKindByApiPath(p);
@@ -1048,34 +1039,21 @@ async function handle(req, res) {
     );
   }
   if (p === CENTRAL_CASTING_LEGACY_PATH || p.startsWith(`${CENTRAL_CASTING_LEGACY_PATH}/`)) {
-    send(res, 302, "", { Location: `${CENTRAL_CASTING_PATH}${url.search || ""}` });
+    send(res, 302, "", { Location: `${CENTRAL_CASTING_PATH}${centralCastingQuery(url)}` });
     return;
   }
   if (cat && cat.kind === "central_casting") {
-    let sense = "";
-    try {
-      sense = centralCastingSenseFilter(url.searchParams.get("sense"));
-    } catch (err) {
-      if (err instanceof CentralCastingSenseError) {
-        send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
-        return;
-      }
-      throw err;
-    }
     const pageSize = parseCookiePageSize(req.headers.cookie);
-    const total = await countCentralCastingPeople({ sense });
+    const total = await countCentralCastingPeople();
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
       pageSize,
     });
     const rows = await listCentralCastingPeople({
-      sense,
       limit: meta.limit,
       offset: meta.offset,
     });
-    const glossary = await listCentralCastingGlossary();
-    const listPath = sense ? `${cat.path}?sense=${encodeURIComponent(sense)}` : cat.path;
     return sendHtml(
       res,
       layout({
@@ -1086,16 +1064,16 @@ async function handle(req, res) {
         pageSize,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
-        body: `${centralCastingSenseNav(sense)}${centralCastingGlossary(glossary)}${listSection(
-          centralCastingPeopleList(rows),
-          pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+        body: listSection(
+          peopleList(rows),
+          pager(meta, { basePath: cat.path, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
-        )}`,
+        ),
       }),
     );
   }
