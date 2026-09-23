@@ -42,6 +42,7 @@ import {
 import {
   CENTRAL_CASTING_KEYMAP,
   CENTRAL_CASTING_PATH,
+  centralCastingStoredQuote,
   commsKind,
   commsKindByPath,
   isCommsKind,
@@ -1083,7 +1084,10 @@ function sectionCites(raw) {
     const url = String(typeof item === "string" ? item : item.url || "").trim();
     if (!url || seen.has(url)) continue;
     seen.add(url);
-    const snippet = typeof item === "string" ? "" : String(item.snippet || item.quote || "").trim();
+    const snippet =
+      typeof item === "string"
+        ? ""
+        : centralCastingStoredQuote({ text: item.snippet, quote: item.quote });
     const title = typeof item === "string" ? "" : String(item.title || "").trim();
     const source_label =
       typeof item === "string"
@@ -1095,7 +1099,7 @@ function sectionCites(raw) {
   return out;
 }
 
-function sectionCiteList(cites) {
+function sectionCiteList(cites, { pairSnippetBefore = false } = {}) {
   return `<ol class="sources cite-list">${cites
     .map((s) => {
       const label = s.source_label || s.title || s.url;
@@ -1105,7 +1109,10 @@ function sectionCiteList(cites) {
       const snippet = s.snippet
         ? `<blockquote class="event-snippet">${esc(s.snippet)}</blockquote>`
         : "";
-      return `<li><a class="source-link" href="${esc(s.url)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="${esc(s.title || "")}" data-date="${esc(s.date || "")}">${esc(label)}</a>${date}${snippet}</li>`;
+      const link = `<a class="source-link" href="${esc(s.url)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="${esc(s.title || "")}" data-date="${esc(s.date || "")}">${esc(label)}</a>`;
+      // Central Casting pairs each stored quote immediately before its own cite.
+      // Other event sections keep the cite, then the date, then the snippet.
+      return pairSnippetBefore ? `<li>${snippet}${link}${date}</li>` : `<li>${link}${date}${snippet}</li>`;
     })
     .join("")}</ol>`;
 }
@@ -1126,6 +1133,7 @@ export function personEventSection({
   className = "person-event-section",
   tag = "section",
   personId = "",
+  pairSnippetBefore = false,
 } = {}) {
   const heading = String(headingHtml || "").trim() || (String(title || "").trim() ? esc(String(title).trim()) : "");
   if (!heading) return "";
@@ -1136,7 +1144,7 @@ export function personEventSection({
   if (!items.length && !summaryText && !media && !body) return "";
   const el = tag === "article" ? "article" : "section";
   const summaryHtml = summaryText ? `<p class="event-summary">${esc(summaryText)}</p>` : "";
-  const citeHtml = items.length ? sectionCiteList(items) : "";
+  const citeHtml = items.length ? sectionCiteList(items, { pairSnippetBefore }) : "";
   const kindAttr = kind ? ` data-kind="${esc(kind)}"` : "";
   const personAttr = personId ? ` data-person-id="${esc(personId)}"` : "";
   return `<${el} class="${esc(className)}"${kindAttr}${personAttr} data-section="person-event">
@@ -1189,6 +1197,13 @@ function centralCastingClipsFor(row, clips) {
   });
 }
 
+function centralCastingSupportingSource(clip, entry) {
+  const raw = clip?.snapshot?.supporting;
+  if (!Array.isArray(raw)) return entry;
+  const url = String(entry?.source_url || "").trim();
+  return raw.find((item) => item && String(item.source_url || "").trim() === url) || entry;
+}
+
 /** One Central Casting section from evidence rows plus membership cites. Not a red-folder page. */
 export function centralCastingDetailHtml(row, clips = []) {
   const membership = (row?.central_casting || [])
@@ -1199,14 +1214,15 @@ export function centralCastingDetailHtml(row, clips = []) {
   for (const clip of own) {
     cites.push({
       url: clip.source_url,
-      snippet: clip.text || "",
+      snippet: centralCastingStoredQuote(clip),
       source_label: String(clip.account_name || clip.handle || "").trim(),
       date: clip.posted_at || "",
     });
     for (const entry of kindSupportingEntries(clip)) {
+      const source = centralCastingSupportingSource(clip, entry);
       cites.push({
         url: entry.source_url,
-        snippet: entry.text || "",
+        snippet: centralCastingStoredQuote(source),
         source_label: String(entry.account_name || entry.handle || "").trim(),
         date: entry.posted_at || "",
       });
@@ -1220,6 +1236,7 @@ export function centralCastingDetailHtml(row, clips = []) {
     cites,
     mediaHtml: centralCastingMediaHtml(own),
     personId: row?.id || "",
+    pairSnippetBefore: true,
   });
 }
 

@@ -38,6 +38,7 @@ import {
   CENTRAL_CASTING_SCREENSHOT_KIND,
   CentralCastingClassifyError,
   assertCentralCastingClassification,
+  centralCastingStoredQuote,
   commsKind,
   mediaSpec,
   normalizeCentralCasting,
@@ -346,7 +347,7 @@ function normalizeCentralCastingClip(row = {}) {
     posted_at: asPostedAt(row.posted_at),
     handle: row.handle || "",
     account_name: row.account_name || "",
-    text: row.text || "",
+    text: centralCastingStoredQuote(row),
     still: row.still || "",
     still_credit: row.still_credit || "",
     screenshot: normalizeScreenshotHref(row.screenshot, CENTRAL_CASTING_SCREENSHOT_KIND),
@@ -499,10 +500,17 @@ export function mergeGoldDogs(seedDogs, priorDogs) {
   return mergeGoldKindComms(seedDogs, priorDogs, "dog");
 }
 
+function backfillCentralCastingQuotes() {
+  for (const row of getMemory().central_casting_comms || []) {
+    const text = centralCastingStoredQuote(row, { archivedText: archivedPostText(row.source_url) });
+    if (text && row.text !== text) row.text = text;
+  }
+}
+
 export function hydrateFileMemory(dataDir, seed) {
   const prior = loadFileStore(dataDir);
   const seedClips = seed.central_casting_comms || [];
-  return setMemory({
+  const mem = setMemory({
     people: mergeGoldPeople(seed.people, prior.people),
     ...mergeKindMemory(seed, prior),
     central_casting_comms: seedClips.length ? seedClips : prior.central_casting_comms || [],
@@ -511,6 +519,8 @@ export function hydrateFileMemory(dataDir, seed) {
     add_requests: prior.add_requests || [],
     meta: seed.meta,
   });
+  backfillCentralCastingQuotes();
+  return mem;
 }
 
 export async function importSeed(p, seed) {
@@ -527,6 +537,7 @@ export async function importSeed(p, seed) {
       source_posts: incoming.length ? incoming : existing,
       meta: seed.meta,
     });
+    backfillCentralCastingQuotes();
     const mem = getMemory();
     const imported = {
       people: seed.people.length,
@@ -2311,20 +2322,63 @@ export async function countCentralCastingPeople() {
   return rows.length;
 }
 
+function archivedPostText(sourceUrl) {
+  const want = canonicalPublicUrl(sourceUrl);
+  if (!want) return "";
+  let best = "";
+  for (const post of getMemory().source_posts || []) {
+    const urls = [post.canonical_url, post.source_url]
+      .map((url) => canonicalPublicUrl(url))
+      .filter(Boolean);
+    if (!urls.includes(want)) continue;
+    const text = centralCastingStoredQuote({ text: post.text });
+    if (text.length > best.length) best = text;
+  }
+  return best;
+}
+
+/** Display quote for one evidence row. Writes a real backfill onto the in-memory row. */
+function presentCentralCastingClip(row, archivedText = "") {
+  const clip = normalizeCentralCastingClip(row);
+  const text = centralCastingStoredQuote(row, { archivedText });
+  if (text && row.text !== text) row.text = text;
+  return { ...clip, text };
+}
+
 export async function listCentralCastingEvidence(personId) {
   const id = String(personId || "").trim();
   if (!id) return [];
   const p = await getPool();
   if (!p) {
-    return (getMemory().central_casting_comms || []).filter((row) => row.person_id === id);
+    return (getMemory().central_casting_comms || [])
+      .filter((row) => row.person_id === id)
+      .map((row) => presentCentralCastingClip(row, archivedPostText(row.source_url)));
   }
   const q = await p.query(
-    `SELECT * FROM central_casting_comms
-      WHERE person_id = $1
-      ORDER BY posted_at DESC`,
+    `SELECT c.*,
+            (
+              SELECT sp.text
+                FROM source_posts sp
+               WHERE sp.canonical_url = c.source_url
+                  OR sp.source_url = c.source_url
+                  OR replace(sp.canonical_url, '://twitter.com/', '://x.com/')
+                     = replace(c.source_url, '://twitter.com/', '://x.com/')
+                  OR replace(sp.source_url, '://twitter.com/', '://x.com/')
+                     = replace(c.source_url, '://twitter.com/', '://x.com/')
+               ORDER BY
+                 CASE
+                   WHEN sp.canonical_url = c.source_url OR sp.source_url = c.source_url THEN 0
+                   ELSE 1
+                 END,
+                 length(btrim(sp.text)) DESC NULLS LAST
+               LIMIT 1
+            ) AS archived_text
+       FROM central_casting_comms c
+      WHERE c.person_id = $1
+      ORDER BY c.posted_at DESC`,
     [id],
   );
-  return q.rows.map((row) => normalizeCentralCastingClip(row));
+  return q.rows.map((row) => presentCentralCastingClip(row, row.archived_text));
 }
 
 /** Badge an existing person. Does not create a person or a KEEP event. */

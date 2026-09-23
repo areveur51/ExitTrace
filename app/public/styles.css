@@ -575,6 +575,9 @@ body.tui-home .home-stage {
   margin: 0.25rem 0 0.45rem;
   white-space: pre-wrap;
 }
+.person-event-section[data-kind="central_casting"] .cite-list > li > .event-snippet {
+  margin: 0 0 0.35rem;
+}
 .event-media { margin: 0.35rem 0 0; }
 .event-media img { display: block; width: min(100%, 320px); height: auto; }
 .career-history {

@@ -364,6 +364,79 @@ CREATE INDEX IF NOT EXISTS source_posts_category_idx ON source_posts (category);
 CREATE INDEX IF NOT EXISTS source_posts_posted_at_idx ON source_posts (posted_at DESC);
 CREATE INDEX IF NOT EXISTS source_posts_gold_idx ON source_posts (gold_person_id);
 
+-- Riker DESIGN LOCK AMEND (~6:49am ET): backfill empty Central Casting snippets.
+-- Writes real quote text onto central_casting_comms.text only when that row
+-- already has it in quote/body/snapshot, or an archived source_posts body
+-- shares the cite URL. Empty and the placeholder "0" are not quotes.
+-- Fail closed: no INSERT, no invented text, placeholder stays when nothing real is stored.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'central_casting_comms'
+       AND column_name = 'quote'
+  ) THEN
+    EXECUTE $cc_quote$
+      UPDATE central_casting_comms
+         SET text = btrim(quote)
+       WHERE (text IS NULL OR btrim(text) = '' OR btrim(text) = '0')
+         AND quote IS NOT NULL
+         AND btrim(quote) <> ''
+         AND btrim(quote) <> '0'
+    $cc_quote$;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'central_casting_comms'
+       AND column_name = 'body'
+  ) THEN
+    EXECUTE $cc_body$
+      UPDATE central_casting_comms
+         SET text = btrim(body)
+       WHERE (text IS NULL OR btrim(text) = '' OR btrim(text) = '0')
+         AND body IS NOT NULL
+         AND btrim(body) <> ''
+         AND btrim(body) <> '0'
+    $cc_body$;
+  END IF;
+END $$;
+
+UPDATE central_casting_comms AS c
+   SET text = picked.quote
+  FROM (
+    SELECT c2.id,
+           COALESCE(
+             NULLIF(NULLIF(btrim(c2.snapshot->>'quote'), ''), '0'),
+             NULLIF(NULLIF(btrim(c2.snapshot->>'body'), ''), '0'),
+             NULLIF(NULLIF(btrim(c2.snapshot->>'text'), ''), '0'),
+             NULLIF(NULLIF(btrim(c2.snapshot #>> '{quote,text}'), ''), '0'),
+             NULLIF(NULLIF(btrim(c2.snapshot #>> '{body,text}'), ''), '0'),
+             (
+               SELECT NULLIF(NULLIF(btrim(sp.text), ''), '0')
+                 FROM source_posts sp
+                WHERE sp.canonical_url = c2.source_url
+                   OR sp.source_url = c2.source_url
+                   OR replace(sp.canonical_url, '://twitter.com/', '://x.com/')
+                      = replace(c2.source_url, '://twitter.com/', '://x.com/')
+                   OR replace(sp.source_url, '://twitter.com/', '://x.com/')
+                      = replace(c2.source_url, '://twitter.com/', '://x.com/')
+                ORDER BY
+                  CASE
+                    WHEN sp.canonical_url = c2.source_url OR sp.source_url = c2.source_url THEN 0
+                    ELSE 1
+                  END,
+                  length(btrim(sp.text)) DESC NULLS LAST
+                LIMIT 1
+             )
+           ) AS quote
+      FROM central_casting_comms c2
+     WHERE c2.text IS NULL OR btrim(c2.text) = '' OR btrim(c2.text) = '0'
+  ) picked
+ WHERE c.id = picked.id
+   AND picked.quote IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS et_meta (
   k TEXT PRIMARY KEY,
   v JSONB NOT NULL
