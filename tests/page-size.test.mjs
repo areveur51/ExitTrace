@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
+import { DEATH_KEEP_IDS } from "../app/lib/categories.mjs";
 import { layout, pageSizeSelector, pager } from "../app/lib/html.mjs";
 import {
   DOG_PAGE_SIZE,
@@ -133,7 +134,7 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
   assert.doesNotMatch(dogs.body, /class="age-filter"/);
 
   const seed = goldSeed();
-  const deathCount = seed.people.filter((r) => String(r.category).startsWith("death_")).length;
+  const deathCount = seed.people.filter((r) => DEATH_KEEP_IDS.includes(r.category)).length;
   assert.ok(deathCount > PAGE_SIZE);
   assert.equal(countClass(deaths.body, "person-card"), PAGE_SIZE);
   assert.match(deaths.body, /href="\/deaths\?page=2"/);

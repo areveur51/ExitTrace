@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS people (
   category TEXT NOT NULL,
   name TEXT NOT NULL,
   role TEXT,
-  event_date DATE NOT NULL,
+  event_date DATE,
   death_date DATE,
   birth_date DATE,
   photo TEXT,
@@ -19,8 +19,19 @@ CREATE TABLE IF NOT EXISTS people (
   sources JSONB NOT NULL DEFAULT '[]'::jsonb,
   summary TEXT,
   CHECK (
-    (category LIKE 'death_%' AND death_date IS NOT NULL)
-    OR (category NOT LIKE 'death_%')
+    (
+      category IN ('death_celebrity', 'death_official', 'death_ceo')
+      AND death_date IS NOT NULL
+    )
+    OR (category = 'death_unconfirmed' AND death_date IS NULL)
+    OR (
+      category NOT IN (
+        'death_celebrity',
+        'death_official',
+        'death_ceo',
+        'death_unconfirmed'
+      )
+    )
   )
 );
 
@@ -44,7 +55,7 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 CREATE TABLE IF NOT EXISTS person_events (
   person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
   kind TEXT NOT NULL,
-  event_date DATE NOT NULL,
+  event_date DATE,
   sources JSONB NOT NULL DEFAULT '[]'::jsonb,
   PRIMARY KEY (person_id, kind)
 );
@@ -66,6 +77,54 @@ ALTER TABLE person_events ADD COLUMN IF NOT EXISTS unsealed BOOLEAN;
 
 CREATE INDEX IF NOT EXISTS person_events_kind_idx ON person_events (kind);
 CREATE INDEX IF NOT EXISTS person_events_event_date_idx ON person_events (event_date DESC);
+
+-- death_unconfirmed is not a confirmed death. death_date stays NULL.
+-- event_date may be NULL on that kind only. Cause and location are not columns.
+-- The asterisk is a UI label (Death* / Unconfirmed*), not a column.
+-- Existing databases keep their rows; this only relaxes the confirmed-death checks.
+DO $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN
+    SELECT conname
+      FROM pg_constraint
+     WHERE conrelid = 'people'::regclass
+       AND contype = 'c'
+       AND pg_get_constraintdef(oid) ILIKE '%death_date%'
+  LOOP
+    EXECUTE format('ALTER TABLE people DROP CONSTRAINT %I', r.conname);
+  END LOOP;
+END $$;
+
+ALTER TABLE people DROP CONSTRAINT IF EXISTS people_death_date_confirmed;
+ALTER TABLE people ADD CONSTRAINT people_death_date_confirmed CHECK (
+  (
+    category IN ('death_celebrity', 'death_official', 'death_ceo')
+    AND death_date IS NOT NULL
+  )
+  OR (category = 'death_unconfirmed' AND death_date IS NULL)
+  OR (
+    category NOT IN (
+      'death_celebrity',
+      'death_official',
+      'death_ceo',
+      'death_unconfirmed'
+    )
+  )
+);
+
+ALTER TABLE people ALTER COLUMN event_date DROP NOT NULL;
+ALTER TABLE people DROP CONSTRAINT IF EXISTS people_event_date_required;
+ALTER TABLE people ADD CONSTRAINT people_event_date_required CHECK (
+  event_date IS NOT NULL OR category = 'death_unconfirmed'
+);
+
+ALTER TABLE person_events ALTER COLUMN event_date DROP NOT NULL;
+ALTER TABLE person_events DROP CONSTRAINT IF EXISTS person_events_event_date_kind;
+ALTER TABLE person_events ADD CONSTRAINT person_events_event_date_kind CHECK (
+  event_date IS NOT NULL OR kind = 'death_unconfirmed'
+);
 
 UPDATE people
    SET events = jsonb_build_array(

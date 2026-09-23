@@ -2,6 +2,7 @@
 
 import {
   DEATH_KEEP_IDS,
+  DEATH_UNCONFIRMED_ID,
   PROMOTE_CATEGORY_IDS,
   isIndictmentKeepKind,
 } from "./categories.mjs";
@@ -267,13 +268,72 @@ export function resignKindFromRole({ tags } = {}) {
 }
 
 /**
+ * Cite gate (Admiral SIGNED+CLEARED). Documented here; this function does not write.
+ * death_unconfirmed may park on an Admiral-named claim cite.
+ * Upgrade to death_celebrity | death_official | death_ceo still needs
+ * ≥2 official/gov/news cites, a calendar YYYY-MM-DD, and explicit CLEAR.
+ * Leads are never auto-classified into death_unconfirmed.
+ * death_official, death_celebrity, and death_ceo are not used for unconfirmed claims.
+ */
+export function confirmedDeathUpgradeGate({
+  kind,
+  officialCites,
+  eventDate,
+  clear,
+} = {}) {
+  if (!DEATH_KEEP_IDS.includes(String(kind || "").trim())) return false;
+  if (clear !== true) return false;
+  if (!parseLeadDate(eventDate)) return false;
+  const n = Array.isArray(officialCites) ? officialCites.filter(Boolean).length : 0;
+  return n >= 2;
+}
+
+/**
+ * Park one death_unconfirmed event. Not a confirmed death and not a second person.
+ * event_date stays NULL unless the caller already has a calendar YYYY-MM-DD.
+ * death_date, cause, and location are not fields here and are not invented.
+ * comments is the footnote string (caller-supplied).
+ */
+export function deathUnconfirmedEvent({
+  comments = "",
+  sources = [],
+  event_date = null,
+} = {}) {
+  return {
+    kind: DEATH_UNCONFIRMED_ID,
+    event_date: parseLeadDate(event_date),
+    announced_date: "",
+    position: "",
+    organization: "",
+    country: "",
+    branch: "",
+    comments: String(comments ?? "").trim(),
+    sources: Array.isArray(sources) ? sources : [],
+    age_at_event: null,
+  };
+}
+
+/** Generic footnote the death_unconfirmed comments field can store. Not a column. */
+export const DEATH_UNCONFIRMED_FOOTNOTE =
+  "Trump Truth Social claim; no media confirmation yet.";
+
+/**
  * Map a lead Reason onto existing KEEP kinds only.
  * Unknown or unclassifiable Dead → no kind (do not insert).
+ * Never auto-classify a lead into death_unconfirmed.
  */
 export function mapLeadReason(reason, ctx = {}) {
+  const key = foldReason(reason);
+  if (
+    key === "death unconfirmed" ||
+    key === "unconfirmed" ||
+    key === "dead unconfirmed" ||
+    key === "unconfirmed death"
+  ) {
+    return null;
+  }
   const explicit = asPromoteKind(reason);
   if (explicit) return explicit;
-  const key = foldReason(reason);
   if (!key) return null;
   if (key === "fired") return "firings";
   if (key === "resigned" || key === "retired" || key === "term ended") {
@@ -285,7 +345,10 @@ export function mapLeadReason(reason, ctx = {}) {
   return null;
 }
 
-/** Shared harvest → event projection. Dashboard reads this same shape. */
+/**
+ * Shared harvest → event projection. Dashboard reads this same shape.
+ * Does not emit death_unconfirmed. Leads are never auto-classified into that kind.
+ */
 export function eventFromLead(lead = {}, extra = {}) {
   const calendar = resolveEventCalendar({ ...lead, ...extra });
   if (!calendar.event_date) return null;
