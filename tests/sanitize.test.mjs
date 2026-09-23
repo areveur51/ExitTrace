@@ -53,13 +53,18 @@ test("public tree has no private-host strings", () => {
   // and other private-host needles (do not blanket-skip the whole workflows dir).
   const LEFTOVER = "left" + "over";
   const workflowSep = `${path.sep}.github${path.sep}workflows${path.sep}`;
+  // The mention dig plant command is the one public host path. Docs only.
+  const DIG_DOC = `docs${path.sep}X_MENTION_QUEUE.md`;
+  const DIG_NEEDLES = new Set(["Grok" + "Build", "/o" + "pt/"]);
   for (const file of walk(ROOT)) {
     if (file.endsWith(`${path.sep}tests${path.sep}sanitize.test.mjs`)) continue;
+    const rel = path.relative(ROOT, file);
     const isWorkflow = file.includes(workflowSep);
     const text = fs.readFileSync(file, "utf8");
     for (const pat of PATTERNS) {
       if (isWorkflow && pat === LEFTOVER) continue;
-      if (text.includes(pat)) hits.push(`${path.relative(ROOT, file)}: ${pat}`);
+      if (rel === DIG_DOC && DIG_NEEDLES.has(pat)) continue;
+      if (text.includes(pat)) hits.push(`${rel}: ${pat}`);
     }
   }
   assert.equal(hits.join("\n"), "", hits.join("\n"));

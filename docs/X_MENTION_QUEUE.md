@@ -100,7 +100,7 @@ Worker host:
 - `MENTION_WORKER_DATABASE` — set to `lab` or the worker will not write
 - `DATABASE_URL` — lab database for `leadIngest` / `processAddRequest`
 - `MENTION_DIG_COMMAND` — host dig program; not a GitHub Actions workflow. On the worker host prefer `node scripts/x-mention-dig-call.mjs` so the long-lived helper stays warm
-- `MENTION_DIG_INNER` — one-shot dig program the warm helper runs after a call
+- `MENTION_DIG_INNER` — one-shot dig program the warm helper runs after a call. Recommended plant value and path template are below.
 - `MENTION_DIG_WARM_SOCKET` — host socket path for that helper
 - `MENTION_CLAIM_OWNER`
 - `MENTION_CLAIM_LEASE_MS`
@@ -111,7 +111,35 @@ Worker host:
 - `X_ACCESS_TOKEN_SECRET`
 - `X_USER_ID`
 
-X app keys for mentions and replies stay on that host. They are not Render env and they are not committed.
+X app keys for mentions and replies stay on that host. They are not Render env and they are not committed. The dig process does not receive them: the worker strips `MENTION_QUEUE_BOT_TOKEN`, `MENTION_QUEUE_WORKER_TOKEN`, `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, and `X_ACCESS_TOKEN_SECRET` from the child environment.
+
+## Dig command
+
+The worker spawns `MENTION_DIG_COMMAND` with `shell: true`. On the worker host that command is `node scripts/x-mention-dig-call.mjs`. `MENTION_DIG_INNER` is the one-shot dig. Stdin is one `mention_queue` JSON row (`subject_status_id`, `mention_status_id`, `subject_url`, `mention_url`, `author_handle`, `text`, `referenced_json`, `media_json`, and `author_display_name` when the row has it). Stdout is one JSON object. Exit 0 after that object, including fail-closed, so the worker can complete. A non-zero exit is `dig_failed` in the worker. The dig does not load `mention.env` and does not write KEEP rows to the lab or to Render. Soft-ack stays off unless `MENTION_SOFT_ACK` is set.
+
+Recommended plant value for `MENTION_DIG_INNER` on the GrokBuild checkout:
+
+```
+/opt/GrokBuild/tools/node/bin/node /opt/GrokBuild/projects/ExitTrace/scripts/x-mention-dig.mjs
+```
+
+Path template using the GrokBuild node and `MENTION_INSTALL_PREFIX` (that checkout prefix is `/opt/GrokBuild/projects/ExitTrace`):
+
+```
+/opt/GrokBuild/tools/node/bin/node $MENTION_INSTALL_PREFIX/scripts/x-mention-dig.mjs
+```
+
+Optional wrapper `scripts/x-mention-dig.sh` execs `GROKBUILD_NODE` and `MENTION_INSTALL_PREFIX` and does not embed a second copy of the path. Do not commit the filled unit or `mention.env`.
+
+The dig resolves the subject post from `subject_url`, then `subject_status_id`, and follows the quote/ref chain. A success envelope has `subject` and `cite_urls`. Optional fields the promote path already accepts may be present when the post text states them: `category`, `event_date`, `position`, `organization`, `reason`, `comments`. `event_date` is not copied from the post time. `author_display_name` is the mention submitter and is not the subject.
+
+Cites are official gov handles (including prior-POTUS), official news-org handles, `.gov` pages, and `OFFICIAL_NEWS_HOSTS` pages reached from the subject post or the chain. The mention URL and the subject status URL are removed. Fewer than two cites, or no single named subject, is fail-closed:
+
+```
+{ "outcome": "fail_closed", "error_reason": "cites_floor" }
+```
+
+`error_reason` is a short code such as `invalid_row`, `subject_unresolved`, `missing_subject`, `ambiguous_subject`, or `cites_floor`. Cites are not invented.
 
 ## Routes
 
