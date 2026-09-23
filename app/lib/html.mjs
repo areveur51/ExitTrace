@@ -39,7 +39,18 @@ import {
   PORTRAIT_CACHE,
   isCommsMediaHref,
 } from "./thumb.mjs";
-import { commsKind, commsKindByPath, isCommsKind } from "./kind-comms.mjs";
+import {
+  CENTRAL_CASTING_KEYMAP,
+  CENTRAL_CASTING_MEDIA_DIR,
+  CENTRAL_CASTING_PATH,
+  CENTRAL_CASTING_SCREENSHOT_KIND,
+  commsKind,
+  commsKindByPath,
+  isCommsKind,
+  KIND_COMMS,
+  KIND_COMM_IDS,
+  centralCastingSenseLabel,
+} from "./kind-comms.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
 import {
@@ -181,8 +192,11 @@ function keymapItems(activePath) {
     { key: "m", href: "/group-operations" },
     { key: "b", href: "/dashboard", label: "Dashboard" },
     { key: "u", href: "/unsorted" },
-    { key: "c", href: "/dog-comms", label: "Dog" },
-    { key: "e", href: "/red-folder-comms", label: "Red Folder" },
+    ...KIND_COMM_IDS.map((id) => {
+      const spec = KIND_COMMS[id];
+      return { key: spec.keymapKey, href: spec.path, label: spec.navLabel };
+    }),
+    { key: CENTRAL_CASTING_KEYMAP, href: CENTRAL_CASTING_PATH, label: "Central Casting" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ].map((item) => ({
     ...item,
@@ -288,7 +302,7 @@ export function keymapFooter(activePath) {
     .join("");
   return `<footer class="keymap" aria-label="Catalog">
     <div class="keymap-keys">${chips}</div>
-    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm and red-folder-comm stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
+    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm, red-folder-comm, and central-casting stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }
 
@@ -971,7 +985,7 @@ function kindLabel(row) {
   return cat ? cat.nav : row.category || "Person";
 }
 
-export function personRow(row, { selected, showDeath } = {}) {
+export function personRow(row, { selected, showDeath, badges = "" } = {}) {
   const href = `/people/${encodeURIComponent(row.id)}`;
   const previewDate =
     showDeath && row.death_date ? row.death_date : row.event_date;
@@ -979,7 +993,7 @@ export function personRow(row, { selected, showDeath } = {}) {
     ${thumb(row.photo, row.name)}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.name || "—")}</div>
-      <div class="tui-meta"><time datetime="${esc(previewDate || "")}">${esc(formatDate(previewDate))}</time> · ${esc(kindLabel(row))} · ${esc(formatUsd(row.net_worth_usd))}</div>
+      <div class="tui-meta">${badges}<time datetime="${esc(previewDate || "")}">${esc(formatDate(previewDate))}</time> · ${esc(kindLabel(row))} · ${esc(formatUsd(row.net_worth_usd))}</div>
     </div>
   </a>`;
 }
@@ -1060,6 +1074,106 @@ export function operationRow(row, { selected } = {}) {
       <div class="tui-meta"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(tagLabel)} · ${esc(agencies)} · victims ${esc(countCell(row.victim_count))} · arrests ${esc(countCell(row.arrest_count))}</div>
     </div>
   </a>`;
+}
+
+export function centralCastingSenseBadge(row) {
+  const sense = String(row?.sense || "");
+  const label = centralCastingSenseLabel(sense);
+  if (!label) return "";
+  return `<span class="sense-badge" data-sense="${esc(sense)}">${esc(label)}</span>`;
+}
+
+/** All | Looks the part | Replacement. Values are local paths so the shared filter select can navigate. */
+export function centralCastingSenseNav(activeSense = "") {
+  const current = String(activeSense || "");
+  const options = [
+    { sense: "", label: "All" },
+    { sense: "looks_the_part", label: "Looks the part" },
+    { sense: "replacement", label: "Replacement" },
+  ];
+  const opts = options
+    .map((o) => {
+      const href = o.sense
+        ? `${CENTRAL_CASTING_PATH}?sense=${encodeURIComponent(o.sense)}`
+        : CENTRAL_CASTING_PATH;
+      const on = current === o.sense;
+      return `<option value="${esc(href)}"${on ? " selected" : ""}>${esc(o.label)}</option>`;
+    })
+    .join("");
+  return `<nav class="identity-filters central-casting-sense" aria-label="Central Casting sense">
+    <label class="identity-filters-label" for="central-casting-sense">Sense</label>
+    <select class="identity-filter-select" id="central-casting-sense" data-filter-select>${opts}</select>
+  </nav>`;
+}
+
+export function centralCastingPersonRow(row, opts = {}) {
+  const badges = (row.central_casting || [])
+    .map((item) => centralCastingSenseBadge(item))
+    .filter(Boolean)
+    .join("");
+  return personRow(row, {
+    ...opts,
+    badges: badges ? `<span class="sense-badges">${badges}</span> ` : "",
+  });
+}
+
+export function centralCastingPeopleList(rows) {
+  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
+  return `<div class="tui-list central-casting-people">${rows
+    .map((row, i) => centralCastingPersonRow(row, { selected: i === 0 }))
+    .join("")}</div>`;
+}
+
+export function centralCastingGlossary(rows = []) {
+  const items = (rows || []).filter((row) => row && row.role === "glossary" && !row.person_id);
+  if (!items.length) return "";
+  const lis = items
+    .map(
+      (row) => `<li class="glossary-row" role="glossary" data-sense="${esc(row.sense)}" data-person-id="">
+      ${centralCastingSenseBadge(row)}
+      <a href="${esc(row.source_url)}" rel="noopener noreferrer">${esc(row.text || row.source_url)}</a>
+    </li>`,
+    )
+    .join("");
+  return `<section class="central-casting-glossary" role="glossary" aria-label="Glossary"><h2>Glossary</h2><ul>${lis}</ul></section>`;
+}
+
+function centralCastingStillHrefs(row) {
+  const primary = String(row?.still || "").trim();
+  const seen = new Set();
+  const out = [];
+  const push = (href) => {
+    const text = String(href || "").trim();
+    if (!text || seen.has(text) || !isCommsMediaHref(text, CENTRAL_CASTING_MEDIA_DIR)) return;
+    seen.add(text);
+    out.push(text);
+  };
+  push(primary);
+  for (const item of row?.snapshot?.stills || []) push(item);
+  return out;
+}
+
+export function centralCastingEvidenceHtml(clips = []) {
+  if (!clips.length) return "";
+  return clips
+    .map((row) => {
+      const stills = centralCastingStillHrefs(row)
+        .map(
+          (src) =>
+            `<img src="${esc(src)}" alt="${esc(`Post media for ${row.handle || "clip"}`)}">`,
+        )
+        .join("");
+      const shot = normalizeScreenshotHref(row.screenshot, CENTRAL_CASTING_SCREENSHOT_KIND);
+      const shotHtml = shot
+        ? `<img src="${esc(shot)}" alt="${esc(`X-post screenshot of ${row.handle || "clip"}`)}">`
+        : "";
+      return `<figure class="central-casting-evidence" data-clip-id="${esc(row.id)}" data-sense="${esc(row.sense)}" data-person-id="${esc(row.person_id || "")}">
+      ${centralCastingSenseBadge(row)}
+      ${stills}${shotHtml}
+      ${citeFromRow(row)}
+    </figure>`;
+    })
+    .join("");
 }
 
 export function kindListRow(kind, row, { selected } = {}) {
@@ -1227,7 +1341,7 @@ export function homeBody({ version }) {
     <form class="tui-search" action="/search" method="get" role="search">
       <label class="tui-search-label">
         <span class="chev" aria-hidden="true">〉</span>
-        <input type="search" name="q" placeholder="Search people, operations, dog comms, red-folder comms, and unsorted posts..." autocomplete="off" enterkeyhint="search">
+        <input type="search" name="q" placeholder="Search people, operations, dog comms, red-folder comms, central casting, and unsorted posts..." autocomplete="off" enterkeyhint="search">
       </label>
     </form>
     <p class="home-tag">Sourced public-role exits and official government dog-comms since 2017. A seed set, not a census.</p>`;
@@ -1354,13 +1468,23 @@ function personTagChips(row) {
   return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips}</p>`;
 }
 
-export function personDetail(row) {
+export function personDetail(row, { centralCastingClips = [] } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
+  const senses = filled.central_casting || [];
+  const clips = centralCastingClips || [];
+  const cc =
+    senses.length || clips.length
+      ? `<section class="central-casting-person" data-person-id="${esc(filled.id)}">
+      <h2>Central Casting</h2>
+      <p class="sense-badges">${senses.map((item) => centralCastingSenseBadge(item)).join(" ")}</p>
+      ${centralCastingEvidenceHtml(clips)}
+    </section>`
+      : "";
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled)}${cc}`,
       active: true,
       extraClass: "person-pane",
     })}
@@ -1503,13 +1627,11 @@ export function searchBody(items, q) {
   }
   const people = [];
   const operations = [];
-  const dogs = [];
-  const folders = [];
+  const comms = [];
   const sources = [];
   for (const item of items) {
     if (item.type === "source") sources.push(item);
-    else if (item.type === "dog") dogs.push(item);
-    else if (item.type === "red_folder") folders.push(item);
+    else if (isCommsKind(item.type)) comms.push(item);
     else if (item.type === "operation") operations.push(item);
     else people.push(item);
   }
@@ -1517,7 +1639,7 @@ export function searchBody(items, q) {
   const render = (item) => {
     const selected = first;
     first = false;
-    if (item.type === "dog" || item.type === "red_folder") {
+    if (isCommsKind(item.type)) {
       return kindListRow(item.type, item.row, { selected });
     }
     if (item.type === "source") return sourcePostRow(item.row, { selected });
@@ -1527,8 +1649,7 @@ export function searchBody(items, q) {
   const blocks = [];
   if (people.length) blocks.push(people.map(render).join(""));
   if (operations.length) blocks.push(operations.map(render).join(""));
-  if (dogs.length) blocks.push(dogs.map(render).join(""));
-  if (folders.length) blocks.push(folders.map(render).join(""));
+  if (comms.length) blocks.push(comms.map(render).join(""));
   if (sources.length) {
     blocks.push(
       `<section class="tui-group unsorted-group">

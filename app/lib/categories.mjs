@@ -192,6 +192,14 @@ export const CATEGORIES = [
     path: "/red-folder-comms",
     blurb: "Stored official and news-org posts about a red folder. Catalog page of posts, not a person row. Stored locally; the source URL is a citation only.",
   },
+  {
+    id: "central_casting",
+    kind: "central_casting",
+    title: "Central Casting",
+    nav: "Central Casting",
+    path: "/central-casting",
+    blurb: "One card per identified person, not a harvest clip. This catalog holds both Trump “looks the part / Hollywood ideal” and “replacement” claim senses; filter by sense. Classifications are cite-backed badges on the existing person KEEP. Stored locally; the source URL is a citation only.",
+  },
 ];
 
 export const PERSON_CATEGORIES = CATEGORIES.filter((c) => c.kind === "person");
@@ -205,7 +213,7 @@ export const IMPORT_CATEGORY_IDS = [
   "death_unspecified",
 ];
 
-/** Person categories a promote may write. dog_comms and red_folder_comms are catalog-only, not person rows. */
+/** Person categories a promote may write. dog_comms and red_folder_comms are post catalogs. central_casting annotates an existing person; it is not a new KEEP kind. */
 export const PROMOTE_CATEGORY_IDS = [
   "firings",
   "resignations",
@@ -287,6 +295,15 @@ export function mapImportCategory(raw) {
     key === "redfolder" ||
     key === "red_folder_comm" ||
     key === "redfoldercomms"
+  ) {
+    return null;
+  }
+  if (
+    key === "central_casting_comms" ||
+    key === "central_casting" ||
+    key === "centralcasting" ||
+    key === "central_casting_comm" ||
+    key === "centralcastingcomms"
   ) {
     return null;
   }

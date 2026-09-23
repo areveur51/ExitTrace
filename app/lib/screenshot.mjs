@@ -1,14 +1,21 @@
 /** Local X-post screenshot paths. Fail-closed: missing or invalid → empty. Never invent. */
 
+import { KIND_COMMS } from "./kind-comms.mjs";
+
 const PREFIXES = {
   people: "/media/screenshots/people/",
-  "dog-comms": "/media/screenshots/dog-comms/",
-  "red-folder-comms": "/media/screenshots/red-folder-comms/",
   operations: "/media/screenshots/operations/",
 };
+for (const spec of Object.values(KIND_COMMS)) {
+  PREFIXES[spec.screenshotKind] = `/media/screenshots/${spec.screenshotKind}/`;
+}
+PREFIXES["central-casting-comms"] = "/media/screenshots/central-casting-comms/";
 
-/** Kind-comm supporting shots: screenshots/{dog|red-folder}-comms/{id}/support/{n}/ */
-const SUPPORT_KINDS = new Set(["dog-comms", "red-folder-comms"]);
+/** Kind-comm supporting shots: screenshots/{kind}-comms/{id}/support/{n}/ */
+const SUPPORT_KINDS = new Set([
+  ...Object.values(KIND_COMMS).map((spec) => spec.screenshotKind),
+  "central-casting-comms",
+]);
 
 const LEAF = /^[a-z0-9][a-z0-9._-]*\.(jpe?g|png|webp|gif)$/i;
 const SUPPORT_REL =

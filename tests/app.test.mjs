@@ -118,6 +118,10 @@ test("health is 200 on file backend", async () => {
   assert.equal(json.dog_comms, seed.dog_comms.length);
   assert.equal(json.red_folder_comms, 0);
   assert.equal(json.byCategory.red_folder_comms, 0);
+  assert.equal(json.central_casting, 0);
+  assert.equal(json.byCategory.central_casting, 0);
+  assert.equal(json.central_casting_comms, undefined);
+  assert.deepEqual(json.central_casting_by_sense, { looks_the_part: 0, replacement: 0 });
   assert.equal(json.operations, (seed.operations || []).length);
   assert.equal(json.keep_up.timezone, "America/New_York");
   assert.equal(json.keep_up.logical.stream_started, null);
@@ -174,6 +178,7 @@ test("html pages render", async () => {
     "/unsorted",
     "/dog-comms",
     "/red-folder-comms",
+    "/central-casting",
     "/add",
     "/add?mode=dog",
     "/add?mode=operation",
@@ -299,6 +304,7 @@ test("every category list page ships a pager", async () => {
     "/unsorted",
     "/dog-comms",
     "/red-folder-comms",
+    "/central-casting",
   ];
   for (const p of paths) {
     const res = await get(p);
@@ -409,7 +415,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /data-key="u"/);
   assert.match(res.body, /class="keymap-keys"/);
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "e", "w"]);
+  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "e", "t", "w"]);
   assert.doesNotMatch(res.body, /data-key="n"/);
   assert.doesNotMatch(res.body, /data-key="s"/);
   assert.doesNotMatch(res.body, /\]<\/span> Add</);
@@ -516,6 +522,9 @@ test("list pages lock Glass only and keep catalog copy, not pin LARP", async () 
   assert.doesNotMatch(list.body, /href="\/search"/);
   assert.match(list.body, /href="\/dog-comms"/);
   assert.match(list.body, /href="\/red-folder-comms"/);
+  assert.match(list.body, /href="\/central-casting"/);
+  assert.match(list.body, /data-key="t"/);
+  assert.match(list.body, /\]<\/span> Central Casting</);
   assert.match(list.body, /data-key="f"/);
   assert.match(list.body, />Firings</);
   assert.doesNotMatch(

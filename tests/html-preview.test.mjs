@@ -124,8 +124,13 @@ test("public chrome keeps catalog labels and omits pin larp copy", () => {
   assert.doesNotMatch(html, /href: GROKIPEDIA_PATH|href: "\/grokipedia"/);
   assert.match(html, /href: "\/indictments"/);
   assert.match(html, /href: "\/unsorted"/);
-  assert.match(html, /href: "\/dog-comms"/);
-  assert.match(html, /href: "\/red-folder-comms"/);
+  const kinds = fs.readFileSync(path.join(ROOT, "app", "lib", "kind-comms.mjs"), "utf8");
+  assert.match(kinds, /path: "\/dog-comms"/);
+  assert.match(kinds, /path: "\/red-folder-comms"/);
+  assert.match(kinds, /CENTRAL_CASTING_PATH = "\/central-casting"/);
+  assert.match(kinds, /keymapKey: "c"/);
+  assert.match(kinds, /keymapKey: "e"/);
+  assert.match(kinds, /CENTRAL_CASTING_KEYMAP = "t"/);
   assert.doesNotMatch(html, /key: "n", href: "\/add"/);
   assert.doesNotMatch(html, /key: "s", href: "\/search"/);
   assert.doesNotMatch(

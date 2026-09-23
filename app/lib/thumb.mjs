@@ -1,7 +1,9 @@
 /** Derived local list thumbs. Never fetch X, Wikimedia, or news at view time.
- *  Never writes into media/people, media/dog-comms, or media/red-folder-comms.
+ *  Never writes into media/people or kind-comm still dirs (dog, red-folder, central-casting).
  *  Never deletes originals.
  */
+
+import { commsThumbKinds } from "./kind-comms.mjs";
 
 import fs from "fs";
 import path from "path";
@@ -43,12 +45,13 @@ export function isCommsMediaHref(raw, mediaDir) {
 }
 
 const PEOPLE = "/media/people/";
-const DOGS = "/media/dog-comms/";
-const RED_FOLDER = "/media/red-folder-comms/";
+const COMM_DIRS = commsThumbKinds();
 const THUMBS = "/media/thumbs/";
 const EXTS = [".jpg", ".jpeg", ".png", ".webp"];
-const THUMB_REL =
-  /^thumbs\/(people|dog-comms|red-folder-comms)\/([a-z0-9][a-z0-9_-]*)(\.(?:2x|hero))?\.(jpg|webp)$/i;
+const THUMB_REL = new RegExp(
+  `^thumbs/(people|${COMM_DIRS.join("|")})/([a-z0-9][a-z0-9_-]*)(\\.(?:2x|hero))?\\.(jpg|webp)$`,
+  "i",
+);
 const VARIANT_SIZE = {
   "": { w: LIST_THUMB_PX_W, h: LIST_THUMB_PX_H },
   ".2x": { w: LIST_THUMB_2X_W, h: LIST_THUMB_2X_H },
@@ -100,10 +103,10 @@ function catalogKind(src) {
   }
   const person = localLeaf(text, PEOPLE);
   if (person) return { kind: "people", stem: stemOf(person) };
-  const dog = localLeaf(text, DOGS);
-  if (dog) return { kind: "dog-comms", stem: stemOf(dog) };
-  const folder = localLeaf(text, RED_FOLDER);
-  if (folder) return { kind: "red-folder-comms", stem: stemOf(folder) };
+  for (const dir of COMM_DIRS) {
+    const leaf = localLeaf(text, `/media/${dir}/`);
+    if (leaf) return { kind: dir, stem: stemOf(leaf) };
+  }
   return null;
 }
 
@@ -141,10 +144,10 @@ export function sourceRelCandidates(thumbRel) {
   return EXTS.map((ext) => `${parsed.kind}/${parsed.stem}${ext}`);
 }
 
-/** Gold catalog still for people / dog-comms / red-folder-comms. Empty when the href is not local media. */
+/** Gold catalog still for people and kind-comm media dirs. Empty when the href is not local media. */
 export function goldMediaHref(src) {
   const text = String(src || "").trim();
-  if (localLeaf(text, PEOPLE) || isDogMediaHref(text) || isCommsMediaHref(text, "red-folder-comms")) {
+  if (localLeaf(text, PEOPLE) || COMM_DIRS.some((dir) => isCommsMediaHref(text, dir))) {
     return text;
   }
   return "";
@@ -442,7 +445,7 @@ export async function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = 
 export async function buildAllThumbs(mediaDir) {
   const root = path.resolve(mediaDir);
   const made = [];
-  for (const kind of ["people", "dog-comms", "red-folder-comms"]) {
+  for (const kind of ["people", ...COMM_DIRS]) {
     const dir = path.join(root, kind);
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
     for (const name of fs.readdirSync(dir)) {

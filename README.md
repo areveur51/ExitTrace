@@ -146,6 +146,7 @@ Releases:
 | `/unsorted` | Public source posts not yet identified (classify queue) |
 | `/dog-comms` | Official government X posts about dogs, stored locally |
 | `/red-folder-comms` | Stored official and news-org posts about a red folder (catalog, not a person) |
+| `/central-casting` | Central Casting unique-person cards. Senses: looks the part and replacement (`?sense=`). `/central-casting-comms` redirects here |
 | `/dashboard` | Live unique-person ranks, Counts by Age, and event-date trends |
 | `/dashboard/age` | Counts by Age — unique people in fixed bands (missing birth date is not guessed) |
 | `/dashboard/organization` | Ranked organizations (empty unless organization is stored) |
@@ -167,9 +168,9 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | | |
 |--|--|
 | `GET /health` | HTML health page (counts plus public `keep_up` stamps) |
-| `GET /api/health` | `{ ok, ready, backend, people, dog_comms, red_folder_comms, operations, source_posts, keep_up }` |
+| `GET /api/health` | `{ ok, ready, backend, people, dog_comms, red_folder_comms, central_casting, operations, source_posts, keep_up }` |
 | `GET /search?q=` | Local catalog search (people keep person cards; operations keep operation cards; posted hits group under Unsorted) |
-| `GET /people/:id` | One person row |
+| `GET /people/:id` | One person row. Central Casting badges and evidence clips render here when stored |
 | `GET /operations/:id` | One operation row |
 | `GET /posts/:id` | One parked source post |
 | `GET /dog-comms/:id` | One stored dog-comm detail |
@@ -183,6 +184,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /api/source-posts?category=` | Parked public posts |
 | `GET /api/dog-comms` | Stored official dog posts |
 | `GET /api/red-folder-comms` | Stored official red-folder posts |
+| `GET /api/central-casting` | Unique persons with a Central Casting classification (`?sense=looks_the_part` or `replacement`) |
 | `GET /media/...` | Files on disk. People list uses derived thumbs under `/media/thumbs/people/` (small CSS, denser srcset, lazy). Person detail / masonry / lightbox use the gold `/media/people/` still (WebP + JPEG fallback). Dog detail keeps the full `/media/dog-comms/` still. Red-folder detail keeps the full `/media/red-folder-comms/` still. |
 
 ## Configuration
@@ -205,10 +207,11 @@ app/lib/gap-upsert.mjs      idempotent published-table upsert plan
 app/lib/store.mjs           Postgres or file fallback
 data/seed.json              portable import
 media/                      portraits, dog-comm and red-folder-comm stills, derived 10:13 display JPEGs
-app/lib/kind-comms.mjs      shared dog / red-folder catalog kind
+app/lib/kind-comms.mjs      shared dog / red-folder catalog kind; Central Casting sense lock
 app/lib/thumb.mjs           list thumb + denser srcset pipeline (detail uses gold /media stills)
-scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events + red_folder_comms
+scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events + red_folder_comms + central_casting_comms
 scripts/add-red-folder-comms-publication.sql  lab publication ADD TABLE red_folder_comms
+scripts/add-central-casting-comms-publication.sql  lab publication ADD TABLE central_casting_comms
 scripts/stamp-keep-up.mjs   upsert one keep_up et_meta key (Postgres)
 scripts/logical-apply-heal.mjs  classify/heal logical apply (Postgres)
 scripts/gap-upsert-published.mjs  upsert published rows by id (Postgres)

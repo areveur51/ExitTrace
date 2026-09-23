@@ -163,6 +163,10 @@ test("detail pages link back through the parent catalog", () => {
       { href: "/red-folder-comms/flotus-2026-09-17-abc12345", label: "@FLOTUS" },
     ],
   );
+  assert.deepEqual(breadcrumbItems({ path: "/central-casting" }), [
+    { href: "/", label: "Home" },
+    { href: "/central-casting", label: "Central Casting" },
+  ]);
   assert.deepEqual(
     breadcrumbItems({ path: "/posts/abc-1", label: "Source post" }),
     [

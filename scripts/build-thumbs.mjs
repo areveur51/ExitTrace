@@ -2,7 +2,7 @@
 /**
  * Derive list thumbs from stored stills. Writes only under media/thumbs/.
  * Never deletes or overwrites originals in media/people, media/dog-comms,
- * or media/red-folder-comms.
+ * media/red-folder-comms, or media/central-casting-comms.
  *
  * Default list JPEG/WebP is 80×104 (2× of the 40×52 CSS box). A denser
  * 160×208 pair is also written for srcset. People get a ≥2× hero WebP
