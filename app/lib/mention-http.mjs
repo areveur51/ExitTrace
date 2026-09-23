@@ -59,6 +59,14 @@ export async function handleMentionApi({ method, pathname, searchParams, headers
     const rows = await listUnrepliedMentions({ limit: searchParams?.get("limit") });
     return { status: 200, body: { ok: true, rows } };
   }
+  if (pathname === "/api/mention-queue/work" && verb === "GET") {
+    requireRole(headers, "worker");
+    const [pending, unreplied] = await Promise.all([
+      listPendingMentions({ limit: searchParams?.get("pending_limit") || 5 }),
+      listUnrepliedMentions({ limit: searchParams?.get("unreplied_limit") }),
+    ]);
+    return { status: 200, body: { ok: true, pending, unreplied } };
+  }
   if (pathname === "/api/mention-queue/claim" && verb === "POST") {
     requireRole(headers, "worker");
     const result = await claimMention(jsonBody(body));

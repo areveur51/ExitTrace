@@ -9,10 +9,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("Home version is package.json only and does not fall back to 1.0.0", () => {
   const version = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
-  assert.equal(version, "1.1.0");
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  assert.notEqual(version, "1.0.0");
 
   const shown = homeBody({ version });
-  assert.match(shown, /class="ver">v1\.1\.0</);
+  const verLit = version.replace(/\./g, "\\.");
+  assert.match(shown, new RegExp(`class="ver">v${verLit}<`));
   assert.doesNotMatch(shown, /1\.0\.0/);
 
   const missing = homeBody({ version: "" });

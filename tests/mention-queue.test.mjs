@@ -24,8 +24,18 @@ import {
 } from "../app/lib/mention-queue.mjs";
 import { oauth1Authorization } from "../app/lib/x-oauth.mjs";
 import { mentionsFromApiPayload, resolveSubjectStatusId } from "../app/lib/x-mentions.mjs";
-import { pollOnce } from "../app/lib/x-mention-poll.mjs";
-import { COMPLETE_BODY_KEYS, parseDigEnvelope, scrubDigEnv, workerOnce } from "../app/lib/x-mention-worker.mjs";
+import { pollJournal, pollOnce, shouldSoftAck } from "../app/lib/x-mention-poll.mjs";
+import { xBackoffMs } from "../app/lib/x-client.mjs";
+import {
+  CLAIMS_PER_TICK,
+  COMPLETE_BODY_KEYS,
+  DIG_TIMEOUT_MS,
+  parseDigEnvelope,
+  scrubDigEnv,
+  workerJournal,
+  workerOnce,
+} from "../app/lib/x-mention-worker.mjs";
+import { callWarmDig, serveWarmDig } from "../app/lib/x-mention-dig-warm.mjs";
 import {
   ALL_UPSERT_TABLES,
   PUBLISHED_TABLES,
@@ -311,6 +321,13 @@ test("bot and worker tokens are separate and fail closed", async () => {
   const workerPending = await requestPage("/api/mention-queue/pending", { token: WORKER });
   assert.equal(workerPending.status, 200);
   assert.equal(JSON.parse(workerPending.body).rows.length, 1);
+  const botWork = await requestPage("/api/mention-queue/work", { token: BOT });
+  assert.equal(botWork.status, 401);
+  const workerWork = await requestPage("/api/mention-queue/work", { token: WORKER });
+  assert.equal(workerWork.status, 200);
+  const workBody = JSON.parse(workerWork.body);
+  assert.equal(workBody.pending.length, 1);
+  assert.ok(Array.isArray(workBody.unreplied));
 
   const savedBot = process.env.MENTION_QUEUE_BOT_TOKEN;
   process.env.MENTION_QUEUE_BOT_TOKEN = WORKER;
@@ -609,13 +626,27 @@ test("worker reply failure does not send a second complete", async () => {
   const fetchImpl = async (url, opts) => {
     calls.push({ url: String(url), method: opts.method, body: opts.body });
     const target = String(url);
-    if (target.endsWith("/unreplied")) {
-      return { ok: true, status: 200, async text() { return JSON.stringify({ ok: true, rows: [] }); } };
-    }
-    if (target.endsWith("/pending")) {
-      return { ok: true, status: 200, async text() { return JSON.stringify({ ok: true, rows: [row] }); } };
+    if (target.endsWith("/work")) {
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true, pending: [row], unreplied: [] });
+        },
+      };
     }
     if (target.endsWith("/claim")) {
+      const body = JSON.parse(opts.body);
+      assert.equal(body.subject_status_id, "");
+      if (calls.filter((call) => String(call.url).endsWith("/claim")).length > 1) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({ ok: true, claimed: false, row: null });
+          },
+        };
+      }
       return {
         ok: true,
         status: 200,
@@ -706,6 +737,418 @@ test("help and unit install do not print secrets", async () => {
   const unit = fs.readFileSync(path.join(dir, "exittrace-mention-poll.service"), "utf8");
   assert.match(unit, new RegExp(dir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.equal(unit.includes("__INSTALL_PREFIX__"), false);
+});
+
+const X_ENV = {
+  X_API_KEY: "k",
+  X_API_SECRET: "s",
+  X_ACCESS_TOKEN: "t",
+  X_ACCESS_TOKEN_SECRET: "ts",
+  X_USER_ID: "50",
+  MENTION_QUEUE_URL: "https://queue.example",
+  MENTION_QUEUE_BOT_TOKEN: BOT,
+  MENTION_POLL_MS: "",
+};
+
+function jsonResponse(status, body) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: () => "" },
+    async text() {
+      return JSON.stringify(body);
+    },
+  };
+}
+
+function mentionPayload(rows) {
+  return {
+    data: rows,
+    includes: { users: [{ id: "7", username: "reader", name: "Reader" }] },
+  };
+}
+
+test("soft-ack failure still advances since_id and continues the poll", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-ack-"));
+  const statePath = path.join(dir, "since.json");
+  fs.writeFileSync(statePath, `${JSON.stringify({ since_id: "1000000000000000000" })}\n`);
+  const calls = [];
+  let tweets = 0;
+  const env = { ...X_ENV, MENTION_SOFT_ACK: "1" };
+  const fetchImpl = async (url, opts) => {
+    calls.push({ url: String(url), body: opts?.body });
+    const target = String(url);
+    if (target.includes("/mentions")) {
+      return jsonResponse(200, mentionPayload([
+        {
+          id: "1000000000000000002",
+          author_id: "7",
+          text: "newer",
+          referenced_tweets: [{ type: "quoted", id: "2000000000000000004" }],
+        },
+        {
+          id: "1000000000000000001",
+          author_id: "7",
+          text: "older",
+          referenced_tweets: [{ type: "quoted", id: "2000000000000000003" }],
+        },
+      ]));
+    }
+    if (target.endsWith("/api/mention-queue")) {
+      const posted = JSON.parse(opts.body);
+      return jsonResponse(201, {
+        ok: true,
+        created: true,
+        duplicate: false,
+        row: { subject_status_id: posted.subject_status_id, reply_soft_at: null },
+      });
+    }
+    if (target.includes("/tweets")) {
+      tweets += 1;
+      if (tweets === 1) return jsonResponse(500, {});
+      return jsonResponse(201, {});
+    }
+    if (target.endsWith("/reply")) return jsonResponse(200, { ok: true });
+    throw new Error(`unexpected ${target}`);
+  };
+  const result = await pollOnce({ env, fetchImpl, statePath });
+  assert.equal(result.since_id, "1000000000000000002");
+  assert.equal(result.results.length, 2);
+  assert.equal(result.results[0].reply_error, "reply_failed");
+  assert.equal(result.results[0].mention_status_id, "1000000000000000001");
+  assert.equal(result.results[1].reply_error, "");
+  assert.equal(calls.filter((call) => call.url.endsWith("/api/mention-queue")).length, 2);
+  assert.equal(calls.filter((call) => call.url.includes("/mentions")).length, 1);
+  const mentionUrl = calls.find((call) => call.url.includes("/mentions")).url;
+  assert.match(mentionUrl, /since_id=/);
+  assert.match(mentionUrl, /max_results=10/);
+  assert.equal(calls.some((call) => /\/users\/\d+$/.test(String(call.url).split("?")[0])), false);
+  assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, "1000000000000000002");
+  assert.equal(result.poll_ms, 10 * 60 * 1000);
+});
+
+test("soft-ack is skipped for duplicates and when the flag is off", async () => {
+  assert.equal(shouldSoftAck({}, { created: true, duplicate: false }), false);
+  assert.equal(shouldSoftAck({ MENTION_SOFT_ACK: "1" }, { created: false, duplicate: true }), false);
+  assert.equal(
+    shouldSoftAck({ MENTION_SOFT_ACK: "1" }, { created: true, duplicate: false, row: { reply_soft_at: null } }),
+    true,
+  );
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-dup-"));
+  const statePath = path.join(dir, "since.json");
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push(String(url));
+    const target = String(url);
+    if (target.includes("/mentions")) {
+      return jsonResponse(200, mentionPayload([
+        { id: "1000000000000000011", author_id: "7", text: "again" },
+      ]));
+    }
+    if (target.endsWith("/api/mention-queue")) {
+      return jsonResponse(200, {
+        ok: true,
+        created: false,
+        duplicate: true,
+        row: { subject_status_id: "1000000000000000011", reply_soft_at: null },
+      });
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const result = await pollOnce({
+    env: { ...X_ENV, MENTION_SOFT_ACK: "1" },
+    fetchImpl,
+    statePath,
+  });
+  assert.equal(result.results[0].duplicate, true);
+  assert.equal(result.results[0].reply_error, "");
+  assert.equal(result.since_id, "1000000000000000011");
+  assert.equal(calls.some((url) => url.includes("/tweets")), false);
+  assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, "1000000000000000011");
+});
+
+test("429 backs off in-process and does not shrink the poll interval", async () => {
+  assert.equal(xBackoffMs(429, "2", 1), 2000);
+  assert.equal(xBackoffMs(402, "", 1), 1000);
+  assert.equal(xBackoffMs(500, "2", 1), 0);
+  assert.ok(xBackoffMs(429, "99999", 1) <= 60 * 1000);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-backoff-"));
+  const statePath = path.join(dir, "since.json");
+  fs.writeFileSync(statePath, `${JSON.stringify({ since_id: "1000000000000000090" })}\n`);
+  const sleeps = [];
+  const mentionUrls = [];
+  let hits = 0;
+  const fetchImpl = async (url) => {
+    const target = String(url);
+    if (target.includes("/mentions")) {
+      hits += 1;
+      mentionUrls.push(target);
+      if (hits === 1) {
+        return { ok: false, status: 429, headers: { get: () => "1" }, async text() { return ""; } };
+      }
+      if (hits === 2) {
+        return { ok: false, status: 429, headers: { get: () => "" }, async text() { return ""; } };
+      }
+      return { ok: false, status: 429, headers: { get: () => "1" }, async text() { return ""; } };
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const result = await pollOnce({
+    env: X_ENV,
+    fetchImpl,
+    statePath,
+    sleepImpl: async (ms) => {
+      sleeps.push(ms);
+    },
+  });
+  assert.equal(result.backoff, 429);
+  assert.equal(result.results.length, 0);
+  assert.equal(result.since_id, "1000000000000000090");
+  assert.equal(result.poll_ms, 10 * 60 * 1000);
+  assert.equal(hits, 1);
+  assert.deepEqual(sleeps, [1000]);
+  assert.match(mentionUrls[0], /max_results=10/);
+  assert.equal(mentionUrls.every((url) => url.includes("since_id=1000000000000000090")), true);
+  assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, "1000000000000000090");
+  assert.match(pollJournal(result), /^mention_poll backoff=429 /);
+  assert.equal(pollJournal({ since_id: "1000000000000000090", results: [] }), "");
+});
+
+test("empty mention queue skips dig, claim, and reply", async () => {
+  const urls = [];
+  let digs = 0;
+  const fetchImpl = async (url) => {
+    const target = String(url);
+    urls.push(target);
+    if (target.endsWith("/work")) {
+      return jsonResponse(200, { ok: true, pending: [], unreplied: [] });
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const result = await workerOnce({
+    env: {
+      MENTION_WORKER_DATABASE: "lab",
+      MENTION_QUEUE_URL: "https://queue.example",
+      MENTION_QUEUE_WORKER_TOKEN: WORKER,
+    },
+    fetchImpl,
+    digImpl: async () => {
+      digs += 1;
+      return { outcome: "fail_closed", error_reason: "missing_subject" };
+    },
+  });
+  assert.equal(result.results.length, 0);
+  assert.equal(digs, 0);
+  assert.equal(urls.filter((url) => url.endsWith("/work")).length, 1);
+  assert.equal(urls.some((url) => url.endsWith("/claim")), false);
+  assert.equal(urls.some((url) => url.includes("/reply")), false);
+  assert.equal(urls.some((url) => url.includes("/tweets")), false);
+  assert.equal(workerJournal(result), "");
+});
+
+test("worker claim-next stops at five and a failed reply does not stop the batch", async () => {
+  assert.equal(CLAIMS_PER_TICK, 5);
+  let claims = 0;
+  let digs = 0;
+  let active = 0;
+  let maxActive = 0;
+  let tweets = 0;
+  const fetchImpl = async (url, opts) => {
+    const target = String(url);
+    if (target.endsWith("/work")) {
+      return jsonResponse(200, {
+        ok: true,
+        pending: [{ subject_status_id: "pending-gate" }],
+        unreplied: [
+          {
+            subject_status_id: "7100000000000000001",
+            mention_status_id: "7100000000000000002",
+            status: "kept",
+          },
+          {
+            subject_status_id: "7100000000000000003",
+            mention_status_id: "7100000000000000004",
+            status: "fail_closed",
+          },
+        ],
+      });
+    }
+    if (target.includes("/reply-plan")) {
+      return jsonResponse(200, {
+        ok: true,
+        reply: true,
+        text: "https://exittrace.example/people/quota-mention",
+        reason: "kept",
+      });
+    }
+    if (target.includes("/tweets")) {
+      tweets += 1;
+      return jsonResponse(500, {});
+    }
+    if (target.endsWith("/reply")) return jsonResponse(200, { ok: true });
+    if (target.endsWith("/claim")) {
+      const body = JSON.parse(opts.body);
+      assert.equal(body.subject_status_id, "");
+      claims += 1;
+      const n = String(claims);
+      return jsonResponse(200, {
+        ok: true,
+        claimed: true,
+        row: {
+          subject_status_id: `720000000000000000${n}`,
+          mention_status_id: `730000000000000000${n}`,
+          status: "processing",
+          text: "lead",
+        },
+      });
+    }
+    if (target.endsWith("/complete")) {
+      return jsonResponse(200, {
+        ok: true,
+        row: { status: "fail_closed", error_reason: "missing_subject", reply_soft_at: null },
+      });
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const result = await workerOnce({
+    env: {
+      MENTION_WORKER_DATABASE: "lab",
+      MENTION_QUEUE_URL: "https://queue.example",
+      MENTION_QUEUE_WORKER_TOKEN: WORKER,
+      MENTION_DIG_COMMAND: "true",
+      ...X_ENV,
+    },
+    fetchImpl,
+    digImpl: async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      active -= 1;
+      digs += 1;
+      return { outcome: "fail_closed", error_reason: "missing_subject" };
+    },
+  });
+  assert.equal(claims, CLAIMS_PER_TICK);
+  assert.equal(digs, CLAIMS_PER_TICK);
+  assert.equal(maxActive, 1);
+  assert.equal(result.results.filter((row) => row.swept).length, 2);
+  assert.equal(result.results.filter((row) => row.swept && row.reply_error === "reply_failed").length, 2);
+  assert.equal(result.results.filter((row) => !row.swept).length, CLAIMS_PER_TICK);
+  assert.equal(result.results.filter((row) => !row.swept && row.reply_error === "reply_failed").length, CLAIMS_PER_TICK);
+  assert.ok(tweets >= 2);
+});
+
+test("quiet journal path and staggered 10 minute timers", () => {
+  assert.equal(pollJournal({ since_id: "1", results: [] }), "");
+  assert.equal(workerJournal({ results: [] }), "");
+  assert.match(pollJournal({ since_id: "1", results: [{}] }), /results=1/);
+  assert.match(workerJournal({ results: [{}] }), /results=1/);
+  const pollScript = fs.readFileSync(path.join(ROOT, "scripts/x-mention-poll.mjs"), "utf8");
+  const workerScript = fs.readFileSync(path.join(ROOT, "scripts/x-mention-worker.mjs"), "utf8");
+  assert.match(pollScript, /pollJournal/);
+  assert.match(workerScript, /workerJournal/);
+  assert.match(pollScript, /if \(line\) console\.log\(line\)/);
+  assert.match(workerScript, /if \(line\) console\.log\(line\)/);
+  const pollTimer = fs.readFileSync(path.join(ROOT, "ops/systemd/exittrace-mention-poll.timer"), "utf8");
+  const workerTimer = fs.readFileSync(path.join(ROOT, "ops/systemd/exittrace-mention-worker.timer"), "utf8");
+  assert.match(pollTimer, /OnBootSec=5min/);
+  assert.match(pollTimer, /OnUnitActiveSec=10min/);
+  assert.match(workerTimer, /OnBootSec=8min/);
+  assert.match(workerTimer, /OnUnitActiveSec=10min/);
+  assert.match(workerTimer, /3 minutes/);
+  const stamp = fs.readFileSync(path.join(ROOT, "docs/X_MENTION_PERF.md"), "utf8");
+  assert.match(stamp, /exittrace_lab_pub/);
+  assert.match(stamp, /at most 5 claims/);
+  assert.match(stamp, /OnUnitActiveSec=10min/);
+  const queueDoc = fs.readFileSync(path.join(ROOT, "docs/X_MENTION_QUEUE.md"), "utf8");
+  const queueSql = fs.readFileSync(path.join(ROOT, "app/lib/mention-queue.mjs"), "utf8");
+  assert.match(queueDoc, /Worf before merge/);
+  assert.match(queueDoc, /Hub runbook note/);
+  assert.match(queueDoc, /created: true/);
+  assert.match(queueDoc, /x-mention-dig-warm\.mjs/);
+  assert.match(queueSql, /FOR UPDATE SKIP LOCKED/);
+  assert.equal(DIG_TIMEOUT_MS, 9 * 60 * 1000);
+  assert.ok(DIG_TIMEOUT_MS < LEASE_MIN_MS);
+  assert.equal(POLL_MIN_MS, 5 * 60 * 1000);
+  assert.match(pollJournal({ since_id: "1", results: [{ error: "enqueue_failed" }] }), /errors=1/);
+  assert.match(workerJournal({ results: [{ reply_error: "reply_failed" }] }), /errors=1/);
+});
+
+test("zero pending skips claim and dig; an unreplied row still gets a reply sweep", async () => {
+  const urls = [];
+  let digs = 0;
+  const fetchImpl = async (url) => {
+    const target = String(url);
+    urls.push(target);
+    if (target.endsWith("/work")) {
+      return jsonResponse(200, {
+        ok: true,
+        pending: [],
+        unreplied: [
+          {
+            subject_status_id: "7400000000000000001",
+            mention_status_id: "7400000000000000002",
+            status: "kept",
+          },
+        ],
+      });
+    }
+    if (target.includes("/reply-plan")) {
+      return jsonResponse(200, { ok: true, reply: false, reason: "kept" });
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const result = await workerOnce({
+    env: {
+      MENTION_WORKER_DATABASE: "lab",
+      MENTION_QUEUE_URL: "https://queue.example",
+      MENTION_QUEUE_WORKER_TOKEN: WORKER,
+    },
+    fetchImpl,
+    digImpl: async () => {
+      digs += 1;
+      return { outcome: "fail_closed", error_reason: "missing_subject" };
+    },
+  });
+  assert.equal(digs, 0);
+  assert.equal(urls.some((url) => url.endsWith("/claim")), false);
+  assert.equal(urls.some((url) => url.includes("/reply-plan")), true);
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].swept, true);
+  assert.equal(result.results[0].reply_error, "");
+});
+
+test("warm helper stays idle until a row is sent and digs one at a time", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-warm-"));
+  const socketPath = path.join(dir, "dig.sock");
+  const log = path.join(dir, "log");
+  const inner = path.join(dir, "inner.mjs");
+  fs.writeFileSync(
+    inner,
+    `import fs from "fs";
+const log = ${JSON.stringify(log)};
+fs.appendFileSync(log, "start\\n");
+setTimeout(() => {
+  fs.appendFileSync(log, "end\\n");
+  process.stdout.write(JSON.stringify({ outcome: "fail_closed", error_reason: "missing_subject" }));
+  process.exit(0);
+}, 40);
+`,
+  );
+  const command = `${process.execPath} ${inner}`;
+  const helper = await serveWarmDig({ socketPath, command, timeoutMs: 5000 });
+  assert.equal(helper.started, 0);
+  assert.equal(fs.existsSync(log), false);
+  const [first, second] = await Promise.all([
+    callWarmDig({ socketPath, row: { subject_status_id: "1" } }),
+    callWarmDig({ socketPath, row: { subject_status_id: "2" } }),
+  ]);
+  assert.equal(first.error_reason, "missing_subject");
+  assert.equal(second.error_reason, "missing_subject");
+  assert.equal(helper.started, 2);
+  assert.equal(fs.readFileSync(log, "utf8"), "start\nend\nstart\nend\n");
+  await helper.close();
 });
 
 function runNode(script, args, env = {}) {

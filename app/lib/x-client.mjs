@@ -4,6 +4,9 @@ import { oauth1Authorization, oauthPercentEncode } from "./x-oauth.mjs";
 
 export const X_API_BASE_DEFAULT = "https://api.x.com/2";
 
+/** In-process wait after one failed mentions GET. This does not change the host timer. */
+export const X_BACKOFF_CAP_MS = 60 * 1000;
+
 const CREDENTIAL_NAMES = [
   "X_API_KEY",
   "X_API_SECRET",
@@ -48,7 +51,38 @@ function signedHeaders(method, url, params, creds) {
   };
 }
 
-export async function fetchMentions({ sinceId = "", fetchImpl = globalThis.fetch, env = process.env } = {}) {
+function headerValue(res, name) {
+  const headers = res?.headers;
+  if (!headers) return "";
+  if (typeof headers.get === "function") return String(headers.get(name) || "");
+  return String(headers[name] || headers[name.toLowerCase()] || "");
+}
+
+/**
+ * Retry-After is delta-seconds. Missing or non-numeric values use a short
+ * exponential wait. Both are capped so a oneshot does not outlive the timer band.
+ */
+export function xBackoffMs(status, retryAfter, attempt = 1) {
+  const code = Number(status);
+  if (code !== 402 && code !== 429) return 0;
+  const raw = String(retryAfter ?? "").trim();
+  const header = Number(raw);
+  if (raw && Number.isFinite(header) && header >= 0) {
+    return Math.min(X_BACKOFF_CAP_MS, Math.floor(header * 1000));
+  }
+  const exp = 1000 * 2 ** Math.max(0, Number(attempt) - 1);
+  return Math.min(X_BACKOFF_CAP_MS, exp);
+}
+
+/**
+ * One mentions GET. Author name and handle come from this payload's user expansion.
+ * Do not call /users/:id once per mention. A 402 or 429 stops the pass; the poller backs off.
+ */
+export async function fetchMentions({
+  sinceId = "",
+  fetchImpl = globalThis.fetch,
+  env = process.env,
+} = {}) {
   const creds = xCredentials(env);
   const url = `${xApiBase(env)}/users/${encodeURIComponent(creds.userId)}/mentions`;
   const params = {
@@ -74,7 +108,8 @@ export async function fetchMentions({ sinceId = "", fetchImpl = globalThis.fetch
   }
   if (!res.ok) {
     const error = new Error("X mentions fetch failed");
-    error.status = res.status;
+    error.status = Number(res.status) || 0;
+    error.retryAfter = headerValue(res, "retry-after");
     throw error;
   }
   return payload;

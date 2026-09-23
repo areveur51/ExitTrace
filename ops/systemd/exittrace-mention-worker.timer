@@ -1,10 +1,12 @@
 # Coarse queue pull. 10 minutes is inside the 5–15 minute band.
+# Stagger: OnBootSec is 3 minutes after the poll timer (poll OnBootSec=5min).
+# OnUnitActiveSec stays 10min. Do not tighten this interval for HTTP 402/429.
 # Claim lease default is 12 minutes (allowed band 10–15).
 [Unit]
 Description=ExitTrace X mention worker cadence
 
 [Timer]
-OnBootSec=5min
+OnBootSec=8min
 OnUnitActiveSec=10min
 AccuracySec=1min
 Persistent=true
