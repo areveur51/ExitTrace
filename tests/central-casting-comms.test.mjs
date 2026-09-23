@@ -255,11 +255,12 @@ test("live migration keeps 7 persons and drops only the JTitor and Warsh glossar
   assert.equal(personHrefs(page.body).length, 7);
   assert.doesNotMatch(page.body, /JTitor|Warsh|glossary|data-sense|sense-badge/i);
   const detail = await requestPage(`/people/${memberId}`);
+  assert.match(detail.body, /<h3 class="event-h">Central Casting<\/h3>/);
   assert.match(detail.body, /Evidence stays under the person/);
+  assert.match(detail.body, /class="event-snippet"/);
   assert.match(detail.body, /class="sources cite-list"/);
-  assert.match(detail.body, /class="post-text"/);
-  assert.match(detail.body, /class="supporting-group"/);
   assert.match(detail.body, /https:\/\/x\.com\/nytimes\/status\/2100603347044585925/);
+  assert.doesNotMatch(detail.body, /class="detail central-casting-detail"/);
   assert.doesNotMatch(detail.body, /JTitor|Warsh|glossary|data-sense/i);
   const health = await requestPage("/api/health");
   const counts = JSON.parse(health.body);
@@ -296,7 +297,7 @@ test("missing cite and glossary are rejected; annotation does not create a perso
   assert.equal(seed.people.length, before);
 });
 
-test("unique person cards, shared red-folder detail, no sense filter or glossary", async () => {
+test("unique person cards, one central casting section, no sense filter or glossary", async () => {
   setMemory(goldSeed());
   await insertCentralCastingClip(evidence());
   await insertCentralCastingClip(
@@ -381,23 +382,24 @@ test("unique person cards, shared red-folder detail, no sense filter or glossary
   assert.match(detail.body, /class="people-list"|class="sources cite-list"/);
   assert.match(detail.body, /class="sources cite-list"/);
   assert.match(detail.body, new RegExp(CITE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(detail.body, /class="detail central-casting-detail"/);
-  assert.match(detail.body, /class="cite-block"/);
-  assert.match(detail.body, /class="post-text">Stored central-casting snapshot/);
-  assert.match(detail.body, /Source ·/);
+  assert.equal((detail.body.match(/<h3 class="event-h">Central Casting<\/h3>/g) || []).length, 1);
+  assert.match(detail.body, /data-section="person-event"/);
+  assert.match(detail.body, /class="event-snippet">Stored central-casting snapshot/);
   assert.match(detail.body, /https:\/\/x\.com\/nytimes\/status\/2100603347044585925/);
-  assert.match(detail.body, /class="supporting-group"/);
-  assert.match(detail.body, /class="detail-media detail-media--masonry"/);
   assert.match(detail.body, /src="\/media\/central-casting-comms\/nytimes-2026-09-17\.jpg"/);
   assert.match(detail.body, /src="\/media\/central-casting-comms\/nytimes-2026-09-17-2\.jpg"/);
   assert.match(detail.body, /src="\/media\/central-casting-comms\/support-2026-09-17\.jpg"/);
   assert.match(detail.body, /src="\/media\/central-casting-comms\/support-2026-09-17-2\.jpg"/);
   assert.match(detail.body, new RegExp(shot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(detail.body, /Second harvest clip under the same person/);
+  assert.doesNotMatch(detail.body, /class="detail central-casting-detail"/);
   assert.doesNotMatch(detail.body, /nested\/nope\.jpg/);
   assert.doesNotMatch(detail.body, /data-sense|sense-badge|glossary|looks_the_part/i);
   assert.equal(detail.body.split('href="/people/james-comey"').length - 1, 0);
   assert.equal(detail.body.split('class="tui-row person-card').length - 1, 0);
+  const portraitAt = detail.body.indexOf('class="person-header"');
+  const castingAt = detail.body.indexOf(">Central Casting<");
+  assert.ok(portraitAt >= 0 && castingAt > portraitAt);
 
   const folder = kindDetail("red_folder", {
     ...evidence(),
@@ -432,8 +434,10 @@ test("unique person cards, shared red-folder detail, no sense filter or glossary
     centralCastingClips: [evidence({ screenshot: shot })],
   });
   assert.match(html, /class="sources cite-list"/);
-  assert.match(html, /class="detail central-casting-detail"/);
-  assert.match(html, /class="supporting-group"/);
+  assert.match(html, /<h3 class="event-h">Central Casting<\/h3>/);
+  assert.match(html, /class="event-snippet">Stored central-casting snapshot/);
+  assert.match(html, /data-section="person-event"/);
+  assert.doesNotMatch(html, /class="detail central-casting-detail"/);
   assert.doesNotMatch(html, /data-sense|glossary/i);
   assert.match(
     supportingScreenshotPrefix("central-casting-comms", "nytimes-2026-09-17-abc12345", 0),
@@ -452,4 +456,78 @@ test("unique person cards, shared red-folder detail, no sense filter or glossary
   assert.doesNotMatch(home.body, /central casting comms/);
   assert.match(home.body, /data-key="t"/);
   assert.match(home.body, /href="\/central-casting"/);
+});
+
+test("jim-mattis central casting section uses evidence cites and hides an empty corona section", async () => {
+  setMemory(goldSeed());
+  const quote = "He looks like he is out of central casting.";
+  const xUrl = "https://x.com/realDonaldTrump/status/1071495799875203073";
+  await annotateCentralCasting("jim-mattis", {
+    sources: ["https://www.nytimes.com/2018/12/20/us/politics/jim-mattis-defense-secretary-trump.html"],
+  });
+  await insertCentralCastingClip({
+    id: "mattis-central-casting",
+    person_id: "jim-mattis",
+    posted_at: "2018-12-20",
+    handle: "@realDonaldTrump",
+    account_name: "Donald J. Trump",
+    text: quote,
+    source_url: xUrl,
+    snapshot: {},
+  });
+
+  const page = await requestPage("/people/jim-mattis");
+  assert.equal(page.status, 200);
+  assert.match(page.body, /class="person-header"/);
+  assert.match(page.body, /<h3 class="event-h">Resignations<\/h3>/);
+  assert.equal((page.body.match(/<h3 class="event-h">Central Casting<\/h3>/g) || []).length, 1);
+  assert.match(page.body, /class="person-event-section"/);
+  assert.match(page.body, /data-section="person-event"/);
+  assert.match(page.body, new RegExp(xUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(page.body, /class="event-snippet">He looks like he is out of central casting\./);
+  assert.doesNotMatch(page.body, /<h3 class="event-h">Corona<\/h3>/);
+  assert.doesNotMatch(page.body, /class="detail central-casting-detail"/);
+  const headerAt = page.body.indexOf('class="person-header"');
+  const resignAt = page.body.indexOf('<h3 class="event-h">Resignations</h3>');
+  const castingAt = page.body.indexOf('<h3 class="event-h">Central Casting</h3>');
+  assert.ok(headerAt >= 0 && resignAt > headerAt && castingAt > resignAt);
+  const section = page.body.slice(castingAt, page.body.indexOf("</section>", castingAt));
+  assert.match(section, /He looks like he is out of central casting\./);
+  assert.doesNotMatch(page.body.slice(0, castingAt), /He looks like he is out of central casting\./);
+
+  const list = await requestPage("/central-casting");
+  assert.equal(list.status, 200);
+  assert.equal(personHrefs(list.body).filter((href) => href === "/people/jim-mattis").length, 1);
+
+  const bare = personDetail(await getPerson("rex-tillerson"));
+  assert.doesNotMatch(bare, /<h3 class="event-h">Central Casting<\/h3>/);
+  assert.doesNotMatch(bare, /<h3 class="event-h">Corona<\/h3>/);
+
+  const corona = personDetail({
+    id: "casey-corona",
+    name: "Casey Corona",
+    category: "corona_comms",
+    event_date: "2024-07-20",
+    sources: [
+      {
+        publisher: "BBC News",
+        title: "Corona note",
+        url: "https://www.bbc.com/news/casey-corona",
+        date: "2024-07-20",
+      },
+      {
+        publisher: "Reuters",
+        title: "Corona follow",
+        url: "https://www.reuters.com/world/casey-corona",
+        date: "2024-07-20",
+      },
+    ],
+  });
+  assert.match(corona, /<h3 class="event-h">Corona<\/h3>/);
+  assert.match(corona, /data-kind="corona_comms"/);
+  assert.match(corona, /data-section="person-event"/);
+  assert.match(corona, /https:\/\/www\.bbc\.com\/news\/casey-corona/);
+  assert.doesNotMatch(corona, /<h3 class="event-h">Corona Comms<\/h3>/);
+  assert.doesNotMatch(corona, /<h3 class="event-h">Central Casting<\/h3>/);
+  assert.match(corona, /class="event-tag-row"/);
 });

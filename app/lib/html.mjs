@@ -40,7 +40,6 @@ import {
   isCommsMediaHref,
 } from "./thumb.mjs";
 import {
-  CENTRAL_CASTING_DETAIL,
   CENTRAL_CASTING_KEYMAP,
   CENTRAL_CASTING_PATH,
   commsKind,
@@ -1075,16 +1074,153 @@ export function operationRow(row, { selected } = {}) {
   </a>`;
 }
 
-/** Membership cites plus one red-folder masonry per harvest clip. Not a list card. */
+/** PersonEventSection cites: url required, snippet only when stored. */
+function sectionCites(raw) {
+  const out = [];
+  const seen = new Set();
+  for (const item of Array.isArray(raw) ? raw : []) {
+    if (!item) continue;
+    const url = String(typeof item === "string" ? item : item.url || "").trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const snippet = typeof item === "string" ? "" : String(item.snippet || item.quote || "").trim();
+    const title = typeof item === "string" ? "" : String(item.title || "").trim();
+    const source_label =
+      typeof item === "string"
+        ? ""
+        : String(item.source_label || item.publisher || "").trim();
+    const date = typeof item === "string" ? "" : String(item.date || "").trim();
+    out.push({ url, snippet, source_label, title, date });
+  }
+  return out;
+}
+
+function sectionCiteList(cites) {
+  return `<ol class="sources cite-list">${cites
+    .map((s) => {
+      const label = s.source_label || s.title || s.url;
+      const date = s.date
+        ? ` <time datetime="${esc(s.date)}">${esc(formatDate(s.date))}</time>`
+        : "";
+      const snippet = s.snippet
+        ? `<blockquote class="event-snippet">${esc(s.snippet)}</blockquote>`
+        : "";
+      return `<li><a class="source-link" href="${esc(s.url)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="${esc(s.title || "")}" data-date="${esc(s.date || "")}">${esc(label)}</a>${date}${snippet}</li>`;
+    })
+    .join("")}</ol>`;
+}
+
+/**
+ * PersonEventSection. Shared person-detail event section.
+ * title, cites[{url, snippet, source_label?}], optional summary, optional media.
+ * Hidden when there is no body, summary, media, or cite.
+ */
+export function personEventSection({
+  title = "",
+  headingHtml = "",
+  kind = "",
+  cites = [],
+  summary = "",
+  mediaHtml = "",
+  bodyHtml = "",
+  className = "person-event-section",
+  tag = "section",
+  personId = "",
+} = {}) {
+  const heading = String(headingHtml || "").trim() || (String(title || "").trim() ? esc(String(title).trim()) : "");
+  if (!heading) return "";
+  const items = sectionCites(cites);
+  const summaryText = String(summary || "").trim();
+  const media = String(mediaHtml || "").trim();
+  const body = String(bodyHtml || "").trim();
+  if (!items.length && !summaryText && !media && !body) return "";
+  const el = tag === "article" ? "article" : "section";
+  const summaryHtml = summaryText ? `<p class="event-summary">${esc(summaryText)}</p>` : "";
+  const citeHtml = items.length ? sectionCiteList(items) : "";
+  const kindAttr = kind ? ` data-kind="${esc(kind)}"` : "";
+  const personAttr = personId ? ` data-person-id="${esc(personId)}"` : "";
+  return `<${el} class="${esc(className)}"${kindAttr}${personAttr} data-section="person-event">
+    <h3 class="event-h">${heading}</h3>
+    ${body}
+    ${summaryHtml}
+    ${citeHtml}
+    ${media}
+  </${el}>`;
+}
+
+function eventMediaFigure(src, alt) {
+  const href = String(src || "").trim();
+  if (!href) return "";
+  const img = `<img class="detail-photo still" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
+  return `<figure class="event-media">${lightboxButton(href, img, { alt })}</figure>`;
+}
+
+/** Allowlisted stills and screenshots only. A bad path is omitted. */
+function centralCastingMediaHtml(clips) {
+  const parts = [];
+  const seen = new Set();
+  const push = (href, alt) => {
+    const src = String(href || "").trim();
+    if (!src || seen.has(src)) return;
+    const shot = normalizeScreenshotHref(src, "central-casting-comms");
+    const still = isCommsMediaHref(src, "central-casting-comms") ? src : "";
+    const ok = shot || still;
+    if (!ok || seen.has(ok)) return;
+    seen.add(ok);
+    parts.push(eventMediaFigure(ok, alt));
+  };
+  for (const clip of clips || []) {
+    const alt = clip?.handle ? `Stored still for ${clip.handle}` : "Central Casting";
+    push(clip?.still, alt);
+    push(clip?.screenshot, clip?.handle ? `X-post screenshot of ${clip.handle}` : "X-post screenshot");
+    for (const href of kindExtraStills("central_casting", clip)) push(href, alt);
+    for (const entry of kindSupportingEntries(clip)) {
+      push(entry.screenshot, entry.handle ? `X-post screenshot of ${entry.handle}` : "X-post screenshot");
+    }
+  }
+  return parts.join("");
+}
+
+function centralCastingClipsFor(row, clips) {
+  const personId = String(row?.id || "").trim();
+  return (clips || []).filter((clip) => {
+    const id = String(clip?.person_id || "").trim();
+    return !personId || !id || id === personId;
+  });
+}
+
+/** One Central Casting section from evidence rows plus membership cites. Not a red-folder page. */
 export function centralCastingDetailHtml(row, clips = []) {
-  const sources = (row?.central_casting || [])
+  const membership = (row?.central_casting || [])
     .map((url) => String(url || "").trim())
-    .filter(Boolean)
-    .map((url) => ({ url, publisher: url, title: "", date: "" }));
-  const media = (clips || []).map((clip) => commsDetail(CENTRAL_CASTING_DETAIL, clip)).join("");
-  if (!sources.length && !media) return "";
-  const cites = sources.length ? citeList(sources) : "";
-  return `<section class="central-casting-person" data-person-id="${esc(row?.id || "")}">${cites}${media}</section>`;
+    .filter(Boolean);
+  const own = centralCastingClipsFor(row, clips);
+  const cites = [];
+  for (const clip of own) {
+    cites.push({
+      url: clip.source_url,
+      snippet: clip.text || "",
+      source_label: String(clip.account_name || clip.handle || "").trim(),
+      date: clip.posted_at || "",
+    });
+    for (const entry of kindSupportingEntries(clip)) {
+      cites.push({
+        url: entry.source_url,
+        snippet: entry.text || "",
+        source_label: String(entry.account_name || entry.handle || "").trim(),
+        date: entry.posted_at || "",
+      });
+    }
+  }
+  for (const url of membership) cites.push({ url });
+  if (!membership.length && !sectionCites(cites).length) return "";
+  return personEventSection({
+    title: "Central Casting",
+    kind: "central_casting",
+    cites,
+    mediaHtml: centralCastingMediaHtml(own),
+    personId: row?.id || "",
+  });
 }
 
 export function kindListRow(kind, row, { selected } = {}) {
@@ -1299,7 +1435,7 @@ export function grokipediaBlock(row, { filled = [], cite } = {}) {
 export function eventTagRow(ev, { birthDate } = {}) {
   const kind = String(ev?.kind || "").trim();
   if (!kind || !isDisplayedEventKind(kind)) return "";
-  const label = eventKindTitle(kind);
+  const label = kind === "corona_comms" ? categoryById(kind)?.nav || "Corona" : eventKindTitle(kind);
   const eventDate = String(ev.event_date || "").trim();
   const announcedRaw = String(ev.announced_date || "").trim();
   const announced =
@@ -1327,14 +1463,20 @@ export function eventTagRow(ev, { birthDate } = {}) {
   const eventLine = eventDate
     ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
     : `<p class="meta-line event-line">—</p>`;
-  return `<article class="event-tag-row" data-kind="${esc(kind)}">
-    <h3 class="event-h">${esc(label)}${unsealedBadge}</h3>
-    ${eventLine}
-    ${announced}
-    ${ageLine}
-    ${attrs}
-    ${citeList(ev.sources || [])}
-  </article>`;
+  return personEventSection({
+    headingHtml: `${esc(label)}${unsealedBadge}`,
+    kind,
+    cites: (ev.sources || []).map((source) => ({
+      url: source?.url || "",
+      snippet: source?.snippet || source?.quote || "",
+      source_label: source?.publisher || "",
+      title: source?.title || "",
+      date: source?.date || "",
+    })),
+    bodyHtml: `${eventLine}${announced}${ageLine}${attrs}`,
+    className: "event-tag-row",
+    tag: "article",
+  });
 }
 
 export function careerHistory(row) {
@@ -1351,16 +1493,17 @@ export function careerHistory(row) {
   </section>`;
 }
 
-function eventTimeline(row) {
+function eventTimeline(row, clips = []) {
   const events = personEvents(row).filter((ev) =>
     isDisplayedEventKind(String(ev.kind || "").trim()),
   );
-  if (!events.length) return "";
   const rows = events
     .map((ev) => eventTagRow(ev, { birthDate: row.birth_date }))
     .filter(Boolean)
     .join("");
-  return `<section class="event-timeline" aria-label="Event timeline">${rows}</section>`;
+  const centralCasting = centralCastingDetailHtml(row, clips);
+  if (!rows && !centralCasting) return "";
+  return `<section class="event-timeline" aria-label="Event timeline">${rows}${centralCasting}</section>`;
 }
 
 function personTagChips(row) {
@@ -1381,16 +1524,15 @@ function personTagChips(row) {
 
 export function personDetail(row, { centralCastingClips = [] } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
-  const cc = centralCastingDetailHtml(filled, centralCastingClips);
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips)}`,
       active: true,
       extraClass: "person-pane",
     })}
-  </article>${cc}`;
+  </article>`;
 }
 
 function sourceUrlItems(row) {

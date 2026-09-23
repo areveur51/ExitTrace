@@ -563,12 +563,20 @@ body.tui-home .home-stage {
 .grokipedia-cite {
   margin: 0.35rem 0 0;
 }
-.event-tag-row {
+.event-tag-row,
+.person-event-section {
   margin: 0;
   padding: 0.55rem 0 0;
   border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
 }
-.event-tag-row .cite-list { margin-top: 0.35rem; }
+.event-tag-row .cite-list,
+.person-event-section .cite-list { margin-top: 0.35rem; }
+.event-snippet {
+  margin: 0.25rem 0 0.45rem;
+  white-space: pre-wrap;
+}
+.event-media { margin: 0.35rem 0 0; }
+.event-media img { display: block; width: min(100%, 320px); height: auto; }
 .career-history {
   margin: 0.85rem 0 0;
   padding: 0.55rem 0 0;
