@@ -220,6 +220,61 @@ END $$;
 ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 
+-- Central Casting comms: twin of dog_comms / red_folder_comms. Not a person KEEP tag.
+-- Riker formal lock: sense NOT NULL, only looks_the_part | replacement. Both valid.
+-- No seed rows here (seed after MERGE+PLACE on lab).
+-- Cite gate (Admiral CLEAR): ongoing KEEP is official/gov/news-org plus quote-chain
+-- standing. All post media belongs on the detail page; screenshot omit is fail-closed.
+-- Definition seed may park on an Admiral-named cite only when the chain has no
+-- official (death_unconfirmed-class, seed only).
+CREATE TABLE IF NOT EXISTS central_casting_comms (
+  id TEXT PRIMARY KEY,
+  posted_at TEXT NOT NULL,
+  handle TEXT NOT NULL,
+  account_name TEXT,
+  text TEXT NOT NULL,
+  still TEXT,
+  still_credit TEXT,
+  screenshot TEXT,
+  screenshot_credit TEXT,
+  source_url TEXT NOT NULL,
+  snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  sense TEXT NOT NULL,
+  CONSTRAINT central_casting_comms_sense_check CHECK (sense IN ('looks_the_part', 'replacement'))
+);
+
+CREATE INDEX IF NOT EXISTS central_casting_comms_posted_at_idx ON central_casting_comms (posted_at DESC);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'central_casting_comms'
+       AND column_name = 'posted_at' AND data_type = 'date'
+  ) THEN
+    ALTER TABLE central_casting_comms
+      ALTER COLUMN posted_at TYPE TEXT
+      USING to_char(posted_at, 'YYYY-MM-DD');
+  END IF;
+END $$;
+
+ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
+ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
+
+-- Idempotent sense column for a table created before the formal lock.
+ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS sense TEXT;
+ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_sense_check;
+ALTER TABLE central_casting_comms ADD CONSTRAINT central_casting_comms_sense_check
+  CHECK (sense IN ('looks_the_part', 'replacement'));
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM central_casting_comms WHERE sense IS NULL) THEN
+    RAISE EXCEPTION 'central_casting_comms.sense is NOT NULL; backfill looks_the_part or replacement before boot';
+  END IF;
+END $$;
+ALTER TABLE central_casting_comms ALTER COLUMN sense SET NOT NULL;
+CREATE INDEX IF NOT EXISTS central_casting_comms_sense_idx ON central_casting_comms (sense);
+
 -- Parked public posts (not identified people). Gold people stay in `people`.
 CREATE TABLE IF NOT EXISTS source_posts (
   id TEXT PRIMARY KEY,

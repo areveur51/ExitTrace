@@ -34,7 +34,13 @@ import {
 import { mergeCareer, personCareer } from "./career.mjs";
 import { DEATH_KEEP_IDS, asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
-import { commsKind } from "./kind-comms.mjs";
+import {
+  assertCentralCastingSense,
+  centralCastingSenseFilter,
+  commsKind,
+  KIND_COMMS,
+  KIND_COMM_IDS,
+} from "./kind-comms.mjs";
 import {
   buildOperationRow,
   findOperationMatch,
@@ -130,7 +136,7 @@ function normalizeKindSnapshot(raw, kind) {
 
 function normalizeKindComm(row, kind = "dog") {
   const spec = commsKind(kind);
-  return {
+  const out = {
     id: row.id,
     posted_at: asPostedAt(row.posted_at),
     handle: row.handle,
@@ -143,6 +149,41 @@ function normalizeKindComm(row, kind = "dog") {
     source_url: row.source_url,
     snapshot: normalizeKindSnapshot(row.snapshot, spec.id),
   };
+  if (spec.id === "central_casting") out.sense = assertCentralCastingSense(row.sense);
+  return out;
+}
+
+function kindCommMemory(raw = {}) {
+  const out = {};
+  for (const id of KIND_COMM_IDS) {
+    const spec = KIND_COMMS[id];
+    out[spec.memoryKey] = (raw[spec.memoryKey] || []).map((row) => normalizeKindComm(row, id));
+  }
+  return out;
+}
+
+function mergeKindMemory(seed = {}, prior = {}) {
+  const out = {};
+  for (const id of KIND_COMM_IDS) {
+    const spec = KIND_COMMS[id];
+    out[spec.memoryKey] = mergeGoldKindComms(seed[spec.memoryKey], prior[spec.memoryKey], id);
+  }
+  return out;
+}
+
+/** Dog seed always replaces. Other kind catalogs keep live rows when the seed list is empty. */
+function importKindMemory(seed = {}) {
+  const out = {};
+  for (const id of KIND_COMM_IDS) {
+    const spec = KIND_COMMS[id];
+    if (id === "dog") {
+      out[spec.memoryKey] = seed.dog_comms;
+    } else {
+      const incoming = seed[spec.memoryKey];
+      out[spec.memoryKey] = incoming?.length ? incoming : getMemory()[spec.memoryKey];
+    }
+  }
+  return out;
 }
 
 function normalizeDog(row) {
@@ -259,10 +300,7 @@ export function loadSeedFile(seedPath) {
   const raw = JSON.parse(fs.readFileSync(seedPath, "utf8"));
   return {
     people: (raw.people || []).map(normalizePerson),
-    dog_comms: (raw.dog_comms || []).map((row) => normalizeKindComm(row, "dog")),
-    red_folder_comms: (raw.red_folder_comms || []).map((row) =>
-      normalizeKindComm(row, "red_folder"),
-    ),
+    ...kindCommMemory(raw),
     source_posts: (raw.source_posts || []).map(normalizeSourcePost),
     add_requests: (raw.add_requests || []).map(normalizeAddRequest),
     operations: (raw.operations || []).map(normalizeOperation),
@@ -276,10 +314,7 @@ export function loadFileStore(dataDir) {
   const raw = JSON.parse(fs.readFileSync(out, "utf8"));
   return {
     people: (raw.people || []).map(normalizePerson),
-    dog_comms: (raw.dog_comms || []).map((row) => normalizeKindComm(row, "dog")),
-    red_folder_comms: (raw.red_folder_comms || []).map((row) =>
-      normalizeKindComm(row, "red_folder"),
-    ),
+    ...kindCommMemory(raw),
     source_posts: (raw.source_posts || []).map(normalizeSourcePost),
     add_requests: (raw.add_requests || []).map(normalizeAddRequest),
     operations: (raw.operations || []).map(normalizeOperation),
@@ -290,8 +325,7 @@ export function loadFileStore(dataDir) {
 function emptyMemory() {
   return {
     people: [],
-    dog_comms: [],
-    red_folder_comms: [],
+    ...kindCommMemory({}),
     source_posts: [],
     add_requests: [],
     operations: [],
@@ -302,10 +336,7 @@ function emptyMemory() {
 export function setMemory(seed) {
   memory = {
     people: (seed.people || []).map(normalizePerson),
-    dog_comms: (seed.dog_comms || []).map((row) => normalizeKindComm(row, "dog")),
-    red_folder_comms: (seed.red_folder_comms || []).map((row) =>
-      normalizeKindComm(row, "red_folder"),
-    ),
+    ...kindCommMemory(seed),
     source_posts: (seed.source_posts || []).map(normalizeSourcePost),
     add_requests: (seed.add_requests || []).map(normalizeAddRequest),
     operations: (seed.operations || []).map(normalizeOperation),
@@ -424,12 +455,7 @@ export function hydrateFileMemory(dataDir, seed) {
   const prior = loadFileStore(dataDir);
   return setMemory({
     people: mergeGoldPeople(seed.people, prior.people),
-    dog_comms: mergeGoldDogs(seed.dog_comms, prior.dog_comms),
-    red_folder_comms: mergeGoldKindComms(
-      seed.red_folder_comms,
-      prior.red_folder_comms,
-      "red_folder",
-    ),
+    ...mergeKindMemory(seed, prior),
     operations: mergeGoldOperations(seed.operations, prior.operations),
     source_posts: prior.source_posts,
     add_requests: prior.add_requests || [],
@@ -443,21 +469,22 @@ export async function importSeed(p, seed) {
     const incoming = seed.source_posts || [];
     setMemory({
       people: seed.people,
-      dog_comms: seed.dog_comms,
-      red_folder_comms: seed.red_folder_comms?.length
-        ? seed.red_folder_comms
-        : getMemory().red_folder_comms,
+      ...importKindMemory(seed),
       operations: seed.operations,
       source_posts: incoming.length ? incoming : existing,
       meta: seed.meta,
     });
-    return {
+    const mem = getMemory();
+    const imported = {
       people: seed.people.length,
-      dog_comms: seed.dog_comms.length,
-      red_folder_comms: getMemory().red_folder_comms.length,
       operations: (seed.operations || []).length,
-      source_posts: getMemory().source_posts.length,
+      source_posts: mem.source_posts.length,
     };
+    for (const id of KIND_COMM_IDS) {
+      const spec = KIND_COMMS[id];
+      imported[spec.memoryKey] = (mem[spec.memoryKey] || []).length;
+    }
+    return imported;
   }
   const client = await p.connect();
   try {
@@ -1420,16 +1447,20 @@ export async function listKindComms(kind, opts = {}) {
   const spec = commsKind(kind);
   const limit = finiteInt(opts.limit, null);
   const offset = finiteInt(opts.offset, 0);
+  const sense = spec.id === "central_casting" ? centralCastingSenseFilter(opts.sense) : "";
   const p = await getPool();
   if (!p) {
-    return applyWindow(
-      (getMemory()[spec.memoryKey] || []).slice().sort(compareDogs),
-      limit,
-      offset,
-    );
+    let rows = (getMemory()[spec.memoryKey] || []).slice();
+    if (sense) rows = rows.filter((row) => row.sense === sense);
+    return applyWindow(rows.sort(compareDogs), limit, offset);
   }
   const params = [];
-  let sql = `SELECT * FROM ${spec.table} ORDER BY posted_at DESC, handle ASC`;
+  let sql = `SELECT * FROM ${spec.table}`;
+  if (sense) {
+    params.push(sense);
+    sql += ` WHERE sense = $${params.length}`;
+  }
+  sql += ` ORDER BY posted_at DESC, handle ASC`;
   if (limit != null) {
     params.push(limit);
     sql += ` LIMIT $${params.length}`;
@@ -1493,10 +1524,20 @@ export async function countPeople(categoryOrOpts) {
   return q.rows[0].n;
 }
 
-export async function countKindComms(kind) {
+export async function countKindComms(kind, opts = {}) {
   const spec = commsKind(kind);
+  const sense = spec.id === "central_casting" ? centralCastingSenseFilter(opts.sense) : "";
   const p = await getPool();
-  if (!p) return (getMemory()[spec.memoryKey] || []).length;
+  if (!p) {
+    const rows = getMemory()[spec.memoryKey] || [];
+    return sense ? rows.filter((row) => row.sense === sense).length : rows.length;
+  }
+  if (sense) {
+    const q = await p.query(`SELECT COUNT(*)::int AS n FROM ${spec.table} WHERE sense = $1`, [
+      sense,
+    ]);
+    return q.rows[0].n;
+  }
   const q = await p.query(`SELECT COUNT(*)::int AS n FROM ${spec.table}`);
   return q.rows[0].n;
 }
@@ -2198,8 +2239,6 @@ export async function counts() {
   const p = await getPool();
   if (!p) {
     const people = getMemory().people;
-    const dogs = getMemory().dog_comms;
-    const folders = getMemory().red_folder_comms || [];
     const byCategory = {};
     for (const row of people) {
       const kinds = new Set(
@@ -2211,8 +2250,21 @@ export async function counts() {
       }
     }
     const operations = getMemory().operations || [];
-    byCategory.dog_comms = dogs.length;
-    byCategory.red_folder_comms = folders.length;
+    const kindCounts = {};
+    const centralBySense = { looks_the_part: 0, replacement: 0 };
+    for (const id of KIND_COMM_IDS) {
+      const spec = KIND_COMMS[id];
+      const rows = getMemory()[spec.memoryKey] || [];
+      kindCounts[spec.memoryKey] = rows.length;
+      byCategory[spec.categoryId] = rows.length;
+      if (id === "central_casting") {
+        for (const row of rows) {
+          if (Object.prototype.hasOwnProperty.call(centralBySense, row.sense)) {
+            centralBySense[row.sense] += 1;
+          }
+        }
+      }
+    }
     byCategory.operations = operations.length;
     for (const row of operations) {
       for (const tag of row.tags || []) {
@@ -2221,17 +2273,21 @@ export async function counts() {
     }
     return {
       people: people.length,
-      dog_comms: dogs.length,
-      red_folder_comms: folders.length,
+      ...kindCounts,
+      central_casting_by_sense: centralBySense,
       operations: operations.length,
       source_posts: (getMemory().source_posts || []).length,
       byCategory,
     };
   }
-  const [peopleCount, dogCount, folderCount, postCount, opCount, grouped, opTags] = await Promise.all([
+  const kindQueries = KIND_COMM_IDS.map((id) =>
+    p.query(`SELECT COUNT(*)::int AS n FROM ${KIND_COMMS[id].table}`),
+  );
+  const [peopleCount, ...kindCountRows] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM people"),
-    p.query("SELECT COUNT(*)::int AS n FROM dog_comms"),
-    p.query("SELECT COUNT(*)::int AS n FROM red_folder_comms"),
+    ...kindQueries,
+  ]);
+  const [postCount, opCount, grouped, opTags, senseRows] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
     p.query("SELECT COUNT(*)::int AS n FROM operations"),
     p.query(
@@ -2245,6 +2301,9 @@ export async function counts() {
               LATERAL jsonb_array_elements_text(COALESCE(tags, '[]'::jsonb)) t
         GROUP BY t`,
     ),
+    p.query(
+      `SELECT sense, COUNT(*)::int AS n FROM central_casting_comms GROUP BY sense`,
+    ),
   ]);
   const byCategory = {};
   for (const row of grouped.rows) byCategory[row.category] = row.n;
@@ -2254,14 +2313,25 @@ export async function counts() {
     );
     for (const row of fallback.rows) byCategory[row.category] = row.n;
   }
-  byCategory.dog_comms = dogCount.rows[0].n;
-  byCategory.red_folder_comms = folderCount.rows[0].n;
+  const kindCounts = {};
+  KIND_COMM_IDS.forEach((id, i) => {
+    const spec = KIND_COMMS[id];
+    const n = kindCountRows[i].rows[0].n;
+    kindCounts[spec.memoryKey] = n;
+    byCategory[spec.categoryId] = n;
+  });
+  const centralBySense = { looks_the_part: 0, replacement: 0 };
+  for (const row of senseRows.rows) {
+    if (Object.prototype.hasOwnProperty.call(centralBySense, row.sense)) {
+      centralBySense[row.sense] = row.n;
+    }
+  }
   byCategory.operations = opCount.rows[0].n;
   for (const row of opTags.rows) byCategory[row.category] = row.n;
   return {
     people: peopleCount.rows[0].n,
-    dog_comms: dogCount.rows[0].n,
-    red_folder_comms: folderCount.rows[0].n,
+    ...kindCounts,
+    central_casting_by_sense: centralBySense,
     operations: opCount.rows[0].n,
     source_posts: postCount.rows[0].n,
     byCategory,
@@ -2348,26 +2418,30 @@ export async function insertKindComm(kind, row) {
     list.push(comm);
     return comm;
   }
+  const params = [
+    comm.id,
+    comm.posted_at,
+    comm.handle,
+    comm.account_name,
+    comm.text,
+    comm.still,
+    comm.still_credit,
+    comm.screenshot,
+    comm.screenshot_credit,
+    comm.source_url,
+    JSON.stringify(comm.snapshot || {}),
+  ];
+  let columns = `id, posted_at, handle, account_name, text, still, still_credit,
+       screenshot, screenshot_credit, source_url, snapshot`;
+  let values = `$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb`;
+  if (spec.id === "central_casting") {
+    params.push(comm.sense);
+    columns += `, sense`;
+    values += `, $${params.length}`;
+  }
   await p.query(
-    `INSERT INTO ${spec.table} (
-       id, posted_at, handle, account_name, text, still, still_credit,
-       screenshot, screenshot_credit, source_url, snapshot
-     ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb
-     )`,
-    [
-      comm.id,
-      comm.posted_at,
-      comm.handle,
-      comm.account_name,
-      comm.text,
-      comm.still,
-      comm.still_credit,
-      comm.screenshot,
-      comm.screenshot_credit,
-      comm.source_url,
-      JSON.stringify(comm.snapshot || {}),
-    ],
+    `INSERT INTO ${spec.table} (${columns}) VALUES (${values})`,
+    params,
   );
   return comm;
 }
@@ -2685,18 +2759,26 @@ export async function searchOperations(q) {
 }
 
 export async function searchCatalog(q) {
-  const [people, dogs, folders, posts, operations] = await Promise.all([
+  const kindHits = await Promise.all([
     searchPeople(q),
-    searchKindComms("dog", q),
-    searchKindComms("red_folder", q),
-    searchSourcePosts(q),
     searchOperations(q),
+    ...KIND_COMM_IDS.map((id) => searchKindComms(id, q)),
+    searchSourcePosts(q),
   ]);
+  const people = kindHits[0];
+  const operations = kindHits[1];
+  const posts = kindHits[kindHits.length - 1];
+  const comms = KIND_COMM_IDS.map((id, i) =>
+    kindHits[i + 2].map((row) => ({
+      type: KIND_COMMS[id].searchType,
+      date: row.posted_at || "",
+      row,
+    })),
+  ).flat();
   return [
     ...people.map((row) => ({ type: "person", date: row.event_date || "", row })),
     ...operations.map((row) => ({ type: "operation", date: row.event_date || "", row })),
-    ...dogs.map((row) => ({ type: "dog", date: row.posted_at || "", row })),
-    ...folders.map((row) => ({ type: "red_folder", date: row.posted_at || "", row })),
+    ...comms,
     ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),
   ];
 }

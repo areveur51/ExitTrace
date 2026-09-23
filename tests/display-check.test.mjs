@@ -59,6 +59,7 @@ test("list paths skip the /deaths index", () => {
   );
   assert.throws(() => listPathForPerson("dog_comms"), (err) => err instanceof DisplayError);
   assert.throws(() => listPathForPerson("red_folder_comms"), (err) => err instanceof DisplayError);
+  assert.throws(() => listPathForPerson("central_casting_comms"), (err) => err instanceof DisplayError);
 });
 
 test("after insert, list + detail HTML show the row; /deaths and health do not count", async () => {

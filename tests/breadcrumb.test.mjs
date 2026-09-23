@@ -164,6 +164,17 @@ test("detail pages link back through the parent catalog", () => {
     ],
   );
   assert.deepEqual(
+    breadcrumbItems({
+      path: "/central-casting-comms/desk-2026-09-17-abc12345",
+      label: "@Desk",
+    }),
+    [
+      { href: "/", label: "Home" },
+      { href: "/central-casting-comms", label: "Central Casting comms" },
+      { href: "/central-casting-comms/desk-2026-09-17-abc12345", label: "@Desk" },
+    ],
+  );
+  assert.deepEqual(
     breadcrumbItems({ path: "/posts/abc-1", label: "Source post" }),
     [
       { href: "/", label: "Home" },
