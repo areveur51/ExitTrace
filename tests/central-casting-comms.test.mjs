@@ -118,8 +118,10 @@ test("central casting kind registration mirrors dog and red folder", () => {
   const keys = Object.values(KIND_COMMS).map((row) => row.keymapKey);
   assert.equal(new Set(keys).size, keys.length);
   assert.equal(categoryByPath("/central-casting-comms").kind, "central_casting");
-  assert.match(categoryByPath("/central-casting-comms").blurb, /looks the part/i);
-  assert.match(categoryByPath("/central-casting-comms").blurb, /replacement/i);
+  const blurb = categoryByPath("/central-casting-comms").blurb;
+  assert.match(blurb, /Trump “looks the part \/ Hollywood ideal”/);
+  assert.match(blurb, /“replacement” claim senses/);
+  assert.match(blurb, /filter by sense/);
   assert.equal(PROMOTE_CATEGORY_IDS.includes("central_casting_comms"), false);
   assert.equal(DEATH_KEEP_IDS.includes("central_casting_comms"), false);
   assert.equal(mapImportCategory("central_casting"), null);
@@ -180,8 +182,10 @@ test("bootstrap sense is NOT NULL and publication adds the table without seeding
     path.join(ROOT, "scripts", "add-central-casting-comms-publication.sql"),
     "utf8",
   );
-  assert.match(sql, /CREATE TABLE IF NOT EXISTS central_casting_comms/);
-  assert.match(sql, /sense TEXT NOT NULL/);
+  const create = sql.slice(sql.indexOf("CREATE TABLE IF NOT EXISTS central_casting_comms"));
+  const table = create.slice(0, create.indexOf(");") + 2);
+  assert.match(table, /sense TEXT NOT NULL/);
+  assert.doesNotMatch(table, /\btags?\b/i);
   assert.match(sql, /CHECK \(sense IN \('looks_the_part', 'replacement'\)\)/);
   assert.doesNotMatch(sql, /INSERT INTO central_casting_comms/i);
   assert.match(pub, /ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms/);

@@ -198,7 +198,7 @@ export const CATEGORIES = [
     title: "Central Casting",
     nav: "Central Casting",
     path: "/central-casting-comms",
-    blurb: "Catalog of stored posts, not a person KEEP tag. Two senses share this surface: looks the part (Hollywood ideal) and replacement. Ongoing KEEP is official, government, or news-org, plus quote-chain standing. Stored locally; the source URL is a citation only.",
+    blurb: "Catalog of stored posts, not a person KEEP tag. This catalog holds both Trump “looks the part / Hollywood ideal” and “replacement” claim senses; filter by sense. Ongoing KEEP is official, government, or news-org, plus quote-chain standing. Stored locally; the source URL is a citation only.",
   },
 ];
 

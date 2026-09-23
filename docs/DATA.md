@@ -111,7 +111,7 @@ Never omit `copy_data = false`. Never `copy_data=true`. Media stills (`media/red
 
 ## Central Casting publication (lab)
 
-`central_casting_comms` is a twin of `dog_comms` / `red_folder_comms`. It is not a person KEEP tag. Column `sense` is `NOT NULL` and only `looks_the_part` or `replacement` (both valid: Hollywood-ideal / looks-the-part, and replacement). Fresh envs create it from `scripts/bootstrap-db.sql`. This repo does not seed rows (seed after MERGE+PLACE on lab).
+`central_casting_comms` is a twin of `dog_comms` / `red_folder_comms`. It is not a person KEEP tag. Column `sense` is text `NOT NULL` and only `looks_the_part` or `replacement` (not a `tag` or tags array). The catalog holds both Trump “looks the part / Hollywood ideal” and “replacement” claim senses; the list filters by sense. Fresh envs create it from `scripts/bootstrap-db.sql`. This repo does not seed rows. Seed after PLACE is two separate rows, one sense each.
 
 Cite gate: ongoing KEEP is official/gov/news-org plus quote-chain standing. All post media stays on the detail page; a screenshot that misses the local allowlist is omitted. A definition seed may park on an Admiral-named cite only when the chain has no official (death_unconfirmed-class, seed only).
 

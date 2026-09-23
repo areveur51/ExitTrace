@@ -3,7 +3,8 @@
  *
  *  Central Casting (Riker formal lock): one catalog, column `sense` NOT NULL,
  *  only `looks_the_part` | `replacement`. Both senses are valid. No child routes in v1.
- *  List filter is `?sense=`. No seed rows in this PR (seed after MERGE+PLACE on lab).
+ *  List filter is `?sense=`. No seed rows in this PR.
+ *  Seed after PLACE is two separate rows, one sense each.
  *
  *  Cite gate (Admiral CLEAR):
  *  - Ongoing KEEP: official / gov / news-org, plus quote-chain standing when the

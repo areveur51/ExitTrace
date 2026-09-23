@@ -222,7 +222,7 @@ ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 
 -- Central Casting comms: twin of dog_comms / red_folder_comms. Not a person KEEP tag.
 -- Riker formal lock: sense NOT NULL, only looks_the_part | replacement. Both valid.
--- No seed rows here (seed after MERGE+PLACE on lab).
+-- No seed rows here. Seed after PLACE is two separate rows, one sense each.
 -- Cite gate (Admiral CLEAR): ongoing KEEP is official/gov/news-org plus quote-chain
 -- standing. All post media belongs on the detail page; screenshot omit is fail-closed.
 -- Definition seed may park on an Admiral-named cite only when the chain has no
