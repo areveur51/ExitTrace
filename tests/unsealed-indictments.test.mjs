@@ -29,7 +29,12 @@ import {
   peopleUnsealedWhere,
   setMemory,
 } from "../app/lib/store.mjs";
-import { IDENTITY_TAG_IDS, parseTagFilter, parseUnsealedFilter } from "../app/lib/tags.mjs";
+import {
+  IDENTITY_TAG_IDS,
+  indictmentUnsealedSelectOptions,
+  parseTagFilter,
+  parseUnsealedFilter,
+} from "../app/lib/tags.mjs";
 import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -233,18 +238,55 @@ test("?tags=unsealed narrows existing indictment routes and does not add a route
   assert.equal(parseUnsealedFilter("tags=unsealed"), true);
   assert.deepEqual(parseTagFilter("tags=celebrity", "/firings"), ["celebrity"]);
 
-  for (const route of ["/indictments?tags=unsealed", "/indictments/civilians?tags=unsealed"]) {
+  assert.deepEqual(
+    indictmentUnsealedSelectOptions().map((opt) => [opt.label, opt.href]),
+    [
+      ["Unsealed", "/indictments?tags=unsealed"],
+      ["Unsealed·Civilians", "/indictments/civilians?tags=unsealed"],
+      ["Unsealed·Non-civilians", "/indictments/non-civilians?tags=unsealed"],
+    ],
+  );
+
+  const selectedByRoute = {
+    "/indictments?tags=unsealed": "/indictments?tags=unsealed",
+    "/indictments/civilians?tags=unsealed": "/indictments/civilians?tags=unsealed",
+    "/indictments?tags=civilian,unsealed": "/indictments/civilians?tags=unsealed",
+    "/indictments?tags=non_civilian,unsealed": "/indictments/non-civilians?tags=unsealed",
+  };
+  for (const [route, selected] of Object.entries(selectedByRoute)) {
     const page = await requestPage(route);
     assert.equal(page.status, 200, route);
-    assert.match(page.body, /class="keychip unsealed-filter"/);
-    assert.match(page.body, /aria-pressed="true"/);
-    assert.match(page.body, /Casey Vale/);
-    assert.doesNotMatch(page.body, /Mina Holt/);
-    assert.doesNotMatch(page.body, /Noah Peck/);
+    assert.match(page.body, /data-filter-select/);
+    assert.doesNotMatch(page.body, /unsealed-filter/);
+    assert.match(page.body, />All</);
+    assert.match(page.body, />Civilians</);
+    assert.match(page.body, />Non-civilians</);
+    assert.match(page.body, />Unsealed</);
+    assert.match(page.body, />Unsealed·Civilians</);
+    assert.match(page.body, />Unsealed·Non-civilians</);
+    assert.match(
+      page.body,
+      new RegExp(`value="${selected.replace(/[?]/g, "\\?")}" selected`),
+    );
+    const showsCasey =
+      route === "/indictments?tags=unsealed" ||
+      route === "/indictments/civilians?tags=unsealed" ||
+      route === "/indictments?tags=civilian,unsealed";
+    if (showsCasey) {
+      assert.match(page.body, /Casey Vale/);
+      assert.doesNotMatch(page.body, /Mina Holt/);
+      assert.doesNotMatch(page.body, /Noah Peck/);
+    }
+    if (route === "/indictments?tags=non_civilian,unsealed") {
+      assert.doesNotMatch(page.body, /Casey Vale/);
+      assert.doesNotMatch(page.body, /Mina Holt/);
+      assert.doesNotMatch(page.body, /Noah Peck/);
+    }
   }
   const nonCiv = await requestPage("/indictments/non-civilians?tags=unsealed");
   assert.equal(nonCiv.status, 200);
-  assert.match(nonCiv.body, /aria-pressed="true"/);
+  assert.match(nonCiv.body, /value="\/indictments\/non-civilians\?tags=unsealed" selected/);
+  assert.doesNotMatch(nonCiv.body, /unsealed-filter/);
   assert.doesNotMatch(nonCiv.body, /Casey Vale/);
   assert.doesNotMatch(nonCiv.body, /Mina Holt/);
   assert.doesNotMatch(nonCiv.body, /Noah Peck/);
@@ -253,8 +295,9 @@ test("?tags=unsealed narrows existing indictment routes and does not add a route
   assert.match(civilians.body, /Casey Vale/);
   assert.match(civilians.body, /Noah Peck/);
   assert.doesNotMatch(civilians.body, /Mina Holt/);
-  assert.match(civilians.body, /href="\/indictments\/civilians\?tags=unsealed"/);
-  assert.match(civilians.body, /aria-pressed="false"/);
+  assert.match(civilians.body, /value="\/indictments\/civilians" selected/);
+  assert.match(civilians.body, /value="\/indictments\/civilians\?tags=unsealed"/);
+  assert.doesNotMatch(civilians.body, /unsealed-filter/);
   assert.doesNotMatch(civilians.body, /href="\/indictments\/unsealed"/);
 
   const missing = await requestPage("/indictments/unsealed");
@@ -262,6 +305,7 @@ test("?tags=unsealed narrows existing indictment routes and does not add a route
 
   const firings = await requestPage("/firings");
   assert.doesNotMatch(firings.body, /unsealed-filter/);
+  assert.doesNotMatch(firings.body, />Unsealed</);
 });
 
 test("detail badge shows Unsealed only when the indictment event is true", async () => {

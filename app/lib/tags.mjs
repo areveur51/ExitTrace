@@ -180,6 +180,22 @@ export function pathForTagFilter(mainPath, tags) {
   return catalogMainPath(mainPath) || "/";
 }
 
+/**
+ * Indictment list dropdown rows for the event token. Same paths as the
+ * `?tags=unsealed` filter: identity stays on the civilian child route,
+ * unsealed stays a query token. Not a route and not an identity tag.
+ */
+export function indictmentUnsealedSelectOptions() {
+  return [
+    { tags: [], label: "Unsealed" },
+    { tags: ["civilian"], label: "Unsealed·Civilians" },
+    { tags: ["non_civilian"], label: "Unsealed·Non-civilians" },
+  ].map(({ tags, label }) => ({
+    label,
+    href: filterPath("/indictments", { tags, unsealed: true }),
+  }));
+}
+
 export function filterPath(basePath, filter) {
   const selected = normalizeTags(filter?.tags);
   const unsealed = filter?.unsealed === true;

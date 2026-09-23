@@ -48,6 +48,7 @@ import {
   IDENTITY_TAGS,
   catalogMainPath,
   filterPath,
+  indictmentUnsealedSelectOptions,
   normalizeTags,
   personTags,
 } from "./tags.mjs";
@@ -249,7 +250,14 @@ export function identityFilterNav(basePath, { tags = [], unsealed = false } = {}
       options.push({ href, label: tag.nav });
     }
   }
-  const currentHref = filterPath(basePath, { tags: selected });
+  if (main === "/indictments") {
+    const after = options.findIndex((o) => o.label === "Non-civilians");
+    options.splice(after < 0 ? options.length : after + 1, 0, ...indictmentUnsealedSelectOptions());
+  }
+  const currentHref = filterPath(basePath, {
+    tags: selected,
+    unsealed: main === "/indictments" && unsealed === true,
+  });
   const current = options.find((o) => o.href === currentHref) || options[0];
   const opts = options
     .map((o) => {
@@ -257,16 +265,9 @@ export function identityFilterNav(basePath, { tags = [], unsealed = false } = {}
       return `<option value="${esc(o.href)}"${on ? " selected" : ""}>${esc(o.label)}</option>`;
     })
     .join("");
-  const unsealedChip =
-    main === "/indictments"
-      ? `<a class="keychip unsealed-filter" href="${esc(
-          filterPath(basePath, { tags: selected, unsealed: !unsealed }),
-        )}" aria-pressed="${unsealed ? "true" : "false"}">Unsealed</a>`
-      : "";
   return `<nav class="identity-filters" aria-label="Identity filters">
     <label class="identity-filters-label" for="identity-filter">Filters</label>
     <select class="identity-filter-select" id="identity-filter" data-filter-select>${opts}</select>
-    ${unsealedChip}
   </nav>`;
 }
 
