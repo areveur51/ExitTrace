@@ -370,6 +370,12 @@ test("docs plant the absolute dig command and the prefix template", () => {
   assert.match(wrapper, /scripts\/x-mention-dig\.mjs/);
   assert.equal(wrapper.includes(PLANT_NODE), false);
   const cli = fs.readFileSync(path.join(ROOT, "scripts", "x-mention-dig.mjs"), "utf8");
+  assert.match(cli, /MENTION_DIG_INNER one-shot dig/);
+  assert.equal(cli.includes("MENTION_DIG_COMMAND"), false);
+  assert.match(doc, /Recommended plant value for `MENTION_DIG_INNER`/);
+  assert.match(doc, /node scripts\/x-mention-dig-call\.mjs/);
+  const call = fs.readFileSync(path.join(ROOT, "scripts", "x-mention-dig-call.mjs"), "utf8");
+  assert.match(call, /Use this as MENTION_DIG_COMMAND/);
   assert.equal(cli.includes("loadDotEnv"), false);
   assert.equal(cli.includes("queueAddRequest"), false);
   assert.equal(cli.includes("processAddRequest"), false);

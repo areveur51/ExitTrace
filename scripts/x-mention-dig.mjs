@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * MENTION_DIG_COMMAND entry. One mention_queue JSON object on stdin.
+ * MENTION_DIG_INNER one-shot dig. One mention_queue JSON object on stdin.
  * One JSON envelope on stdout. Exit 0, including fail-closed.
+ * The worker spawn is the warm client scripts/x-mention-dig-call.mjs, not this file.
  * Does not load an env file and does not read queue or X tokens.
  */
 import { readFileSync } from "node:fs";
@@ -9,8 +10,8 @@ import { digMentionEnvelope } from "../app/lib/x-mention-dig.mjs";
 
 const HELP = `Usage: node scripts/x-mention-dig.mjs
 
-Reads one mention_queue JSON row on stdin and writes one JSON envelope on
-stdout. Exit 0 when the envelope is printed, including fail-closed.
+MENTION_DIG_INNER. Reads one mention_queue JSON row on stdin and writes one
+JSON envelope on stdout. Exit 0 when the envelope is printed, including fail-closed.
 
 Does not read MENTION_QUEUE_* or X_API_* / X_ACCESS_* values. Does not write
 KEEP rows. Cite URLs come from the subject post and its quote/ref chain.
