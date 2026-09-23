@@ -30,17 +30,17 @@ Do not point the worker at a parked database. Do not wipe media.
 
 ## Attribution
 
-The poller fills `mention_queue.author_display_name` from the mention author's X display name (`user.fields` includes `name`). That column is Render-only. It is not published and it is not the display source.
+The poller fills `mention_queue.author_display_name` (`TEXT DEFAULT ''`) from the mention author's X display name (`user.fields` includes `name`). That column is Render-only. It is not published and it is not the display source.
 
-On lab KEEP success from the x_mention promote path only, submitter fields are copied from that queue row into lab `request_attributions` (`channel` = `x_mention`). Fail-closed and rejected rows do not write an attribution. The same `subject_status_id` does not insert a second row (first mention wins). A different subject kept onto the same target inserts another row.
+On lab KEEP success from the x_mention promote path only, the worker copies the winning queue row into lab `request_attributions` (`channel` defaults to `x_mention`). Fail-closed and rejected digs do not write a row. The partial unique `(channel, subject_status_id) WHERE subject_status_id IS NOT NULL` keeps the first subject. A different subject kept onto the same target inserts another row.
 
-`request_attributions` is on `exittrace_lab_pub`. Place order is lab schema, `ALTER PUBLICATION … ADD TABLE request_attributions`, then `REFRESH PUBLICATION WITH (copy_data = false)`, then gap-upsert if rows already exist. See [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md). Never `copy_data=true`. No dual-write of KEEP rows to Render. `mention_url` is meta only and is not a cite.
+`request_attributions` is on `exittrace_lab_pub`. Checklist B: schema on both sides, `ALTER PUBLICATION … ADD TABLE request_attributions`, `REFRESH PUBLICATION WITH (copy_data = false)`, empty backfill is OK, then prove. See [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md). Never `copy_data=true`. No dual-write of KEEP rows to Render. Attribution reaches Render only by logical replication. `mention_url` is meta only and is not a cite. Media-delta does not apply.
 
-Person, operation, dog comm, red-folder comm, and Central Casting comm detail pages show a muted line under the title and above cites when rows exist, oldest first:
+The shared `RequestAttribution` partial is a muted line under the title and above cites when rows exist, oldest first:
 
-`Requested via X by {name} @{handle} · {date ET}`
+`Requested via X by {display_name} @{handle} · {date ET}`
 
-Empty attributions hide the line. Multiple rows for one target all show, oldest first.
+Empty attributions hide the line. Multiple rows for one target all show, oldest first. Central Casting and Corona show that line on the person unless the dig kept a comms row. A kept comms row shows the line on that comm detail instead.
 
 ## Cadence, lease, limits
 

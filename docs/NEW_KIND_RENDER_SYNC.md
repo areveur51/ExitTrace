@@ -29,16 +29,17 @@ A new table is all of the following, in order:
 
 ## request_attributions
 
-`request_attributions` is a lab table on `exittrace_lab_pub`. It is not cites. It is not columns on `people`, `operations`, or comms. It is not Render-only `mention_queue`. Detail pages read this table. `mention_url` on the row is meta only.
+`request_attributions` is a lab table on `exittrace_lab_pub`. It is not cites. It is not columns on `people`, `operations`, or comms. It is not Render-only `mention_queue`. Detail pages read this table. `mention_url` on the row is meta only. Media-delta does not apply.
 
-Checklist (existing-table style). Never `copy_data=true`. No dual-write of KEEP rows to Render. Do not wipe media. Do not touch the parked database.
+Checklist B. Schema on both sides, then publication add, then refresh. Never `copy_data=true`. No dual-write of KEEP rows to Render. Do not wipe media. Do not touch the parked database.
 
-1. Place the lab schema. `scripts/bootstrap-db.sql` creates `request_attributions`. The Render server applies that file on boot so the subscriber relation exists before refresh.
+1. Schema both sides. `scripts/bootstrap-db.sql` creates `request_attributions` (`id` text primary key, partial unique on `(channel, subject_status_id)` where `subject_status_id` is not null). Lab place runs that file. The Render server applies it on boot so the subscriber relation exists before refresh.
 2. Lab: `scripts/add-request-attributions-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE request_attributions` when the table is missing).
 3. Render: `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)`. That refresh does not copy rows already stored.
-4. Gap-upsert when rows already exist on lab. Conflict is `(channel, subject_status_id)`. Export from lab, then `scripts/gap-upsert-published.mjs` onto Render.
+4. Empty backfill is OK. Gap-upsert conflicts on `id`. Export from lab, then `scripts/gap-upsert-published.mjs` onto Render. Zero rows is a valid proof.
+5. Prove: `pg_publication_tables` lists `request_attributions` on `exittrace_lab_pub`, `pg_subscription_rel` has the relation, and counts are non-decreasing.
 
-`mention_queue.author_display_name` stays on the Render queue only (`scripts/mention-queue.sql`). It is not in this publication.
+`mention_queue.author_display_name` (`TEXT DEFAULT ''`) stays on the Render queue only (`scripts/mention-queue.sql`). It is not in this publication.
 
 ## Render-only queue
 

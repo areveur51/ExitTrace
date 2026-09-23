@@ -186,6 +186,7 @@ export async function workerOnce({
       const reason = err?.message === "dig_timeout" ? "dig_timeout" : "dig_failed";
       envelope = { outcome: "fail_closed", error_reason: reason };
     }
+    // KEEP success copies this winning queue row into lab request_attributions.
     const dug = await digMention(claim.row, envelope);
     const body = completeBody(claim.row, dug, owner);
     const completed = await requestJson(

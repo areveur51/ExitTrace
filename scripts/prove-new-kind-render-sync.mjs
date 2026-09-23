@@ -24,8 +24,11 @@ Do not wipe media or datasets. Gap-upsert never DELETE / TRUNCATE / DROP / --cle
 5. Prove publication membership, subscription relation, LSN advance, row counts, and media-delta.
    people.central_casting rides the people upsert (json array, empty default, never invented).
    red_folder_comms and central_casting_comms (plus person_id) are in the gap-upsert table list.
-   request_attributions is in the gap-upsert table list. Conflict is (channel, subject_status_id).
+   request_attributions is in the gap-upsert table list. Conflict is id.
+   Partial unique is (channel, subject_status_id) WHERE subject_status_id IS NOT NULL.
+   Empty backfill is OK. Media-delta does not apply to request_attributions.
    REFRESH copy_data=false does not copy attribution rows already stored.
+   Prove publication membership, subscription relation, and non-decreasing counts.
 mention_queue is Render-only and is excluded from exittrace_lab_pub / publication SQL / NEW_KIND_RENDER_SYNC checklist. Do not gap-upsert mention_queue.
 `.trim();
 

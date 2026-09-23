@@ -1073,15 +1073,35 @@ function attributionLine(row) {
   const name = String(row.submitter_display_name || "").trim();
   const handle = String(row.submitter_handle || "").trim().replace(/^@/, "");
   const date = attributionDateEt(row.submitted_at);
-  const who = [name, handle ? `@${handle}` : ""].filter(Boolean).join(" ");
-  if (!who && !date) return "";
-  const by = who ? ` by ${who}` : "";
-  return `Requested via X${by} · ${date}`.trim();
+  if (!handle || !date) return "";
+  return `Requested via X by ${name} @${handle} · ${date}`.replace("by  @", "by @");
 }
 
-/** Muted lines under the title and above cites. Empty attributions render nothing. */
-export function requestAttributionHtml(rows) {
-  const lines = (Array.isArray(rows) ? rows : [])
+const PERSON_SURFACE = "person";
+const COMMS_SURFACES = new Set(["dog_comm", "red_folder_comm", "central_casting_comm"]);
+
+function rowsForSurface(rows, surface) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (surface === PERSON_SURFACE) {
+    return list.filter((row) => !row?.target_kind || row.target_kind === "person");
+  }
+  if (surface === "operation") {
+    return list.filter((row) => !row?.target_kind || row.target_kind === "operation");
+  }
+  if (COMMS_SURFACES.has(surface)) {
+    return list.filter((row) => !row?.target_kind || row.target_kind === surface);
+  }
+  return list;
+}
+
+/**
+ * Shared RequestAttribution partial.
+ * Muted meta under the title and above cites. Empty input renders nothing.
+ * Person surfaces (including Central Casting and Corona) show person rows only.
+ * A dig that kept a comms row is displayed on that comm, not on the person.
+ */
+export function RequestAttribution(rows, { surface = "" } = {}) {
+  const lines = rowsForSurface(rows, surface)
     .slice()
     .sort((a, b) => {
       const at = String(a?.submitted_at || "");
@@ -1098,9 +1118,13 @@ export function requestAttributionHtml(rows) {
     .join("");
 }
 
-function attributionFrom(row, attributions) {
-  if (attributions !== undefined) return requestAttributionHtml(attributions);
-  return requestAttributionHtml(row?.request_attributions);
+export function requestAttributionHtml(rows, options) {
+  return RequestAttribution(rows, options);
+}
+
+function attributionFrom(row, attributions, surface) {
+  const source = attributions !== undefined ? attributions : row?.request_attributions;
+  return RequestAttribution(source, { surface });
 }
 
 export function citeFromRow(row = {}) {
@@ -1518,7 +1542,7 @@ export function personHeader(row, extras = {}) {
         ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
         lines: [birth, origin, personTagChips(row), grokipediaBlock(row, extras)],
         citeHtml: citeFromRow(row),
-        attributionHtml: attributionFrom(row, extras.attributions),
+        attributionHtml: attributionFrom(row, extras.attributions, "person"),
       }),
     })}
   </header>`;
@@ -1710,7 +1734,7 @@ export function operationDetail(row, { attributions } = {}) {
             `<p class="meta-line">Arrests · ${esc(countCell(row.arrest_count))}</p>`,
           ],
           citeHtml: citeFromRow(row),
-          attributionHtml: attributionFrom(row, attributions),
+          attributionHtml: attributionFrom(row, attributions, "operation"),
           bodyTitle: "Summary",
           bodyHtml: `<p class="synopsis">${esc(row.summary || "—")}</p>`,
           sourceKind: "sources",
@@ -1749,7 +1773,17 @@ export function commsDetail(spec, row, { attributions } = {}) {
         extraMedia: extras,
         metaHtml: detailMetaBlock({
           citeHtml: citeFromRow(row),
-          attributionHtml: attributionFrom(row, attributions),
+          attributionHtml: attributionFrom(
+            row,
+            attributions,
+            spec.id === "dog"
+              ? "dog_comm"
+              : spec.id === "red_folder"
+                ? "red_folder_comm"
+                : spec.id === "central_casting"
+                  ? "central_casting_comm"
+                  : "",
+          ),
           sourceHtml: kindSourceHtml(row, { includeSupporting: !grouped }),
         }),
       }),

@@ -9,9 +9,11 @@ import {
   kindDetail,
   operationDetail,
   personDetail,
+  RequestAttribution,
   requestAttributionHtml,
 } from "../app/lib/html.mjs";
 import {
+  attributionTargetFromKeep,
   listRequestAttributions,
   recordRequestAttribution,
   recordXMentionKeepAttribution,
@@ -159,6 +161,7 @@ test("KEEP writes one attribution and a duplicate subject does not", async () =>
   assert.equal(lines[0].mention_status_id, row.mention_status_id);
   assert.equal(lines[0].mention_url, row.mention_url);
   assert.equal(lines[0].submitted_at, "2026-09-23T15:30:00.000Z");
+  assert.match(lines[0].id, /^ra-[a-f0-9]{16}$/);
   assert.equal(JSON.stringify(kept.person.sources).includes(row.mention_status_id), false);
   assert.equal(JSON.stringify(kept.person.sources).includes("x.com/ada/status"), false);
 
@@ -168,6 +171,7 @@ test("KEEP writes one attribution and a duplicate subject does not", async () =>
   );
   assert.equal(replay.created, false);
   assert.equal(replay.row.submitter_display_name, "Ada Lovelace");
+  assert.equal(replay.row.id, lines[0].id);
   assert.equal(
     (await listRequestAttributions({ target_kind: "person", target_id: slug })).length,
     1,
@@ -222,7 +226,7 @@ test("detail pages hide the attribution line when none are stored", () => {
   assert.equal(person.includes("request-attribution"), false);
   assert.equal(person.includes("Requested via X"), false);
   assert.equal(requestAttributionHtml([]), "");
-  assert.equal(requestAttributionHtml(undefined), "");
+  assert.equal(RequestAttribution(undefined), "");
 
   const operation = operationDetail({
     id: "op-1",
@@ -297,14 +301,77 @@ test("detail pages hide the attribution line when none are stored", () => {
   assert.equal(shown.includes("1100000000000000001"), false);
 });
 
+test("Central Casting and Corona stay on the person unless a comms row was kept", () => {
+  const personLine = attribution({
+    target_kind: "person",
+    target_id: "casey-vale",
+    submitter_display_name: "Ada Lovelace",
+    submitter_handle: "ada",
+  });
+  const commLine = attribution({
+    target_kind: "central_casting_comm",
+    target_id: "clip-9",
+    subject_status_id: "2100000000000000009",
+    mention_status_id: "1100000000000000009",
+    submitter_display_name: "Clip Submitter",
+    submitter_handle: "clip",
+    submitted_at: "2026-09-22T15:30:00.000Z",
+  });
+  const corona = personDetail(
+    {
+      id: "casey-vale",
+      name: "Casey Vale",
+      category: "corona_comms",
+      event_date: "2024-07-20",
+      sources: [],
+      events: [
+        {
+          kind: "corona_comms",
+          event_date: "2024-07-20",
+          sources: [{ url: CITES[0], publisher: "Example" }],
+        },
+      ],
+    },
+    { attributions: [personLine, commLine] },
+  );
+  assert.match(corona, /Requested via X by Ada Lovelace @ada · Sep 23, 2026 ET/);
+  assert.equal(corona.includes("Clip Submitter"), false);
+  const casting = personDetail(
+    {
+      id: "casey-vale",
+      name: "Casey Vale",
+      category: "firings",
+      event_date: "2017-05-09",
+      central_casting: [CITES[0]],
+      sources: [],
+      events: [],
+    },
+    { attributions: [commLine] },
+  );
+  assert.equal(casting.includes("Requested via X"), false);
+  assert.deepEqual(attributionTargetFromKeep({ person: { id: "casey-vale", category: "corona_comms" } }), {
+    target_kind: "person",
+    target_id: "casey-vale",
+  });
+  assert.deepEqual(
+    attributionTargetFromKeep({
+      person: { id: "casey-vale" },
+      central_casting: { id: "clip-9" },
+    }),
+    { target_kind: "central_casting_comm", target_id: "clip-9" },
+  );
+});
+
 test("request_attributions is published and mention_queue stays render-only", () => {
   assert.equal(PUBLISHED_TABLES.includes("request_attributions"), true);
   assert.equal(RENDER_ONLY_TABLES.includes("mention_queue"), true);
   assert.equal(PUBLISHED_TABLES.includes("mention_queue"), false);
 
-  const planned = buildUpsertSql("request_attributions", [attribution()]);
+  const planned = buildUpsertSql("request_attributions", [
+    { ...attribution(), id: "ra-0123456789abcdef" },
+  ]);
   assert.match(planned.sql, /INSERT INTO request_attributions/);
-  assert.match(planned.sql, /ON CONFLICT \(channel, subject_status_id\) DO UPDATE SET/);
+  assert.match(planned.sql, /ON CONFLICT \(id\) DO UPDATE SET/);
   assert.doesNotMatch(planned.sql, /DELETE|TRUNCATE|DROP /);
 
   const bootstrap = fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sql"), "utf8");
@@ -316,16 +383,24 @@ test("request_attributions is published and mention_queue stays render-only", ()
   const sync = fs.readFileSync(path.join(ROOT, "docs", "NEW_KIND_RENDER_SYNC.md"), "utf8");
   const mentionDoc = fs.readFileSync(path.join(ROOT, "docs", "X_MENTION_QUEUE.md"), "utf8");
   assert.match(bootstrap, /CREATE TABLE IF NOT EXISTS request_attributions/);
-  assert.match(bootstrap, /PRIMARY KEY \(channel, subject_status_id\)/);
+  assert.match(bootstrap, /id TEXT PRIMARY KEY/);
+  assert.match(
+    bootstrap,
+    /CREATE UNIQUE INDEX IF NOT EXISTS request_attributions_channel_subject_uidx[\s\S]*WHERE subject_status_id IS NOT NULL/,
+  );
+  assert.match(bootstrap, /request_attributions \(target_kind, target_id, submitted_at\)/);
+  assert.doesNotMatch(bootstrap, /PRIMARY KEY \(channel, subject_status_id\)/);
   assert.match(pub, /ALTER PUBLICATION exittrace_lab_pub ADD TABLE request_attributions/);
   assert.match(pub, /copy_data = false/);
   assert.doesNotMatch(pub, /copy_data = true/);
   assert.doesNotMatch(pub, /ADD TABLE mention_queue/);
-  assert.match(queue, /author_display_name TEXT NOT NULL DEFAULT ''/);
-  assert.match(queue, /ADD COLUMN IF NOT EXISTS author_display_name/);
+  assert.match(queue, /author_display_name TEXT DEFAULT ''/);
+  assert.match(queue, /ADD COLUMN IF NOT EXISTS author_display_name TEXT DEFAULT ''/);
   assert.match(sync, /ADD TABLE request_attributions/);
   assert.match(sync, /copy_data = false/);
   assert.match(mentionDoc, /author_display_name/);
   assert.match(mentionDoc, /request_attributions/);
-  assert.match(mentionDoc, /Requested via X by \{name\} @\{handle\}/);
+  assert.match(mentionDoc, /Requested via X by \{display_name\} @\{handle\}/);
+  assert.match(mentionDoc, /empty backfill is OK/i);
+  assert.match(sync, /Media-delta does not apply/);
 });
