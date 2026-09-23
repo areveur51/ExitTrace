@@ -1,7 +1,9 @@
 /** Shared catalog kinds that store official-post stills (dog / red-folder).
  *  Not person KEEP tags. Table names are allowlisted here — never interpolating caller input.
  *
- *  Central Casting (Riker DESIGN LOCK AMEND ~1:26am ET) supersedes sense and glossary.
+ *  Central Casting (Riker DESIGN LOCK AMEND ~1:26am ET, MIGRATION ~1:27am ET)
+ *  supersedes sense and glossary. Live a0a8470 keeps the 7 person memberships,
+ *  strips the retired field only, and deletes the JTitor + Warsh glossary rows.
  *  Parent `/central-casting` is one unique-person card (corona list pattern). Membership
  *  is cite URLs on the existing person — no sense split, no second person-kind, no
  *  clip cards. Harvest rows attach under that person as cites and X media. Detail

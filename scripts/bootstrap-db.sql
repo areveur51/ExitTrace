@@ -221,9 +221,14 @@ ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 
 -- Central Casting parent list is unique-person KEEP cards, not this table.
--- Riker DESIGN LOCK AMEND: no sense column, no glossary rows, no seed.
+-- Riker DESIGN LOCK AMEND (~1:26am ET) plus MIGRATION (~1:27am ET) on live a0a8470.
 -- people.central_casting is a JSON array of cite URLs. Empty means not a member.
 -- central_casting_comms is harvest under person_id. It is not the parent list.
+-- Migration keeps the 7 unique-person memberships and strips the retired field only.
+-- It does not delete people rows and does not clear media.
+-- The only row delete is the dual glossary pair (JTitor + Warsh):
+-- role glossary AND person_id NULL. Evidence with person_id stays.
+-- No glossary insert. No seed rows.
 -- Cite gate: ongoing KEEP is official/gov/news-org plus quote-chain standing.
 -- All X media belongs on the person detail; screenshot omit is fail-closed.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS central_casting JSONB NOT NULL DEFAULT '[]'::jsonb;
@@ -262,8 +267,8 @@ ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS person_id TEXT;
 
--- Drop retired sense/glossary shape. Evidence with a person_id stays.
--- Null person rows are unattached definitions, not gold people or stills.
+-- MIGRATION (~1:27am ET): delete the dual glossary rows only (JTitor + Warsh).
+-- Evidence rows with person_id stay. People rows stay. Media stays.
 DO $$
 BEGIN
   IF EXISTS (
@@ -273,14 +278,8 @@ BEGIN
        AND column_name = 'role'
   ) THEN
     DELETE FROM central_casting_comms
-     WHERE role = 'glossary' OR person_id IS NULL;
-  ELSIF EXISTS (
-    SELECT 1 FROM information_schema.columns
-     WHERE table_schema = 'public'
-       AND table_name = 'central_casting_comms'
-       AND column_name = 'person_id'
-  ) THEN
-    DELETE FROM central_casting_comms WHERE person_id IS NULL;
+     WHERE role = 'glossary'
+       AND person_id IS NULL;
   END IF;
 END $$;
 
@@ -304,33 +303,37 @@ END $$;
 ALTER TABLE central_casting_comms ALTER COLUMN person_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS central_casting_comms_person_idx ON central_casting_comms (person_id);
 
--- Membership JSON: keep cite URLs, drop sense objects. Does not delete people.
+-- Membership JSON: strip the retired field, keep cite URLs.
+-- Rewrite only when at least one cite remains, so a member is not blanked.
+-- People rows are not removed.
 UPDATE people
-   SET central_casting = COALESCE((
-         SELECT jsonb_agg(DISTINCT url)
-           FROM (
-             SELECT jsonb_array_elements_text(
-               CASE
-                 WHEN jsonb_typeof(el) = 'string' THEN jsonb_build_array(el)
-                 WHEN jsonb_typeof(el->'sources') = 'array' THEN el->'sources'
-                 ELSE '[]'::jsonb
-               END
-             ) AS url
-               FROM jsonb_array_elements(
-                 CASE
-                   WHEN jsonb_typeof(central_casting) = 'array' THEN central_casting
-                   ELSE '[]'::jsonb
-                 END
-               ) el
-           ) s
-          WHERE btrim(url) <> ''
-       ), '[]'::jsonb)
- WHERE jsonb_typeof(central_casting) = 'array'
-   AND EXISTS (
-     SELECT 1
-       FROM jsonb_array_elements(central_casting) el
-      WHERE jsonb_typeof(el) = 'object' AND el ? 'sense'
-   );
+   SET central_casting = migrated.urls
+  FROM (
+    SELECT people.id,
+           COALESCE((
+             SELECT jsonb_agg(DISTINCT url)
+               FROM (
+                 SELECT jsonb_array_elements_text(
+                   CASE
+                     WHEN jsonb_typeof(el) = 'string' THEN jsonb_build_array(el)
+                     WHEN jsonb_typeof(el->'sources') = 'array' THEN el->'sources'
+                     ELSE '[]'::jsonb
+                   END
+                 ) AS url
+                   FROM jsonb_array_elements(people.central_casting) el
+               ) s
+              WHERE btrim(url) <> ''
+           ), '[]'::jsonb) AS urls
+      FROM people
+     WHERE jsonb_typeof(people.central_casting) = 'array'
+       AND EXISTS (
+         SELECT 1
+           FROM jsonb_array_elements(people.central_casting) el
+          WHERE jsonb_typeof(el) = 'object' AND el ? 'sense'
+       )
+  ) migrated
+ WHERE people.id = migrated.id
+   AND jsonb_array_length(migrated.urls) > 0;
 
 -- Parked public posts (not identified people). Gold people stay in `people`.
 CREATE TABLE IF NOT EXISTS source_posts (

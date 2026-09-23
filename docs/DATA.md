@@ -111,7 +111,9 @@ Never omit `copy_data = false`. Never `copy_data=true`. Media stills (`media/red
 
 ## Central Casting publication (lab)
 
-`/central-casting` supersedes the KIND_COMMS clip list. It lists one card per existing person KEEP. Membership is `people.central_casting`, a JSON array of cite URLs, with no sense split. Harvest rows in `central_casting_comms` carry `person_id` and render on the person detail with the same masonry as red-folder comms: cite list, post summary, X link, and supportive media. Fresh envs create the table from `scripts/bootstrap-db.sql`. This repo does not seed rows.
+`/central-casting` supersedes the KIND_COMMS clip list. It lists one card per existing person KEEP. Membership is `people.central_casting`, a JSON array of cite URLs, with no sense split. Health counts those unique persons, not harvest rows. Harvest rows in `central_casting_comms` carry `person_id` and render on the person detail with the same masonry as red-folder comms: cite list, post summary, X link, and supportive media. Fresh envs create the table from `scripts/bootstrap-db.sql`. This repo does not seed rows.
+
+Migration on live `a0a8470` (Riker DESIGN LOCK AMEND MIGRATION, ~1:27am ET): the 7 unique-person memberships stay on `/central-casting`; only the retired field is stripped, and people rows are not deleted. The dual glossary rows (JTitor and Warsh, `role = glossary`, `person_id` NULL) are the only deletes. Evidence rows that already have `person_id` stay under that person after the retired column is dropped. No further glossary inserts. Media files are not cleared.
 
 Cite gate: ongoing KEEP is official/gov/news-org plus quote-chain standing. All X media stays on the detail page; a screenshot that misses the local allowlist is omitted.
 

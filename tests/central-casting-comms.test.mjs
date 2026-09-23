@@ -28,6 +28,7 @@ import {
   annotateCentralCasting,
   getPerson,
   insertCentralCastingClip,
+  listCentralCastingPeople,
   loadSeedFile,
   setMemory,
 } from "../app/lib/store.mjs";
@@ -184,14 +185,86 @@ test("bootstrap drops sense and glossary, and publication does not seed", () => 
   assert.match(sql, /DROP COLUMN IF EXISTS sense/);
   assert.match(sql, /DROP COLUMN IF EXISTS role/);
   assert.match(sql, /central_casting JSONB NOT NULL/);
+  assert.match(sql, /JTitor \+ Warsh/);
+  assert.match(sql, /role = 'glossary'\s+AND person_id IS NULL/);
+  assert.doesNotMatch(sql, /role = 'glossary' OR person_id IS NULL/);
+  assert.doesNotMatch(sql, /DELETE FROM people/i);
   assert.doesNotMatch(sql, /looks_the_part|replacement/);
   assert.doesNotMatch(sql, /INSERT INTO central_casting_comms/i);
   assert.doesNotMatch(sql, /INSERT INTO people/i);
+  assert.match(sql, /jsonb_array_length\(migrated\.urls\) > 0/);
   assert.match(pub, /ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms/);
   assert.match(pub, /copy_data = false/);
   assert.doesNotMatch(pub, /^\s*[^-\n]*copy_data\s*=\s*true/im);
   assert.doesNotMatch(pub, /INSERT INTO central_casting_comms/i);
   assert.doesNotMatch(pub, /glossary|looks_the_part|sense/i);
+});
+
+test("live migration keeps 7 persons and drops only the JTitor and Warsh glossary rows", async () => {
+  const seed = goldSeed();
+  const members = seed.people.slice(0, 7);
+  assert.equal(members.length, 7);
+  const before = seed.people.length;
+  for (const person of members) {
+    person.central_casting = [
+      { sense: "looks_the_part", sources: [CITE] },
+      { sense: "replacement", sources: [`https://example.com/cc/${person.id}`] },
+    ];
+  }
+  const memberId = members[0].id;
+  seed.central_casting_comms = [
+    {
+      id: "glossary-jtitor",
+      role: "glossary",
+      person_id: null,
+      sense: "replacement",
+      posted_at: "2026-09-01",
+      handle: "",
+      text: "JTitor",
+      source_url: "https://www.example.com/jtitor",
+    },
+    {
+      id: "glossary-warsh",
+      role: "glossary",
+      person_id: null,
+      sense: "looks_the_part",
+      posted_at: "2026-09-01",
+      handle: "",
+      text: "Warsh",
+      source_url: "https://www.example.com/warsh",
+    },
+    evidence({
+      id: "kept-evidence",
+      person_id: memberId,
+      role: "evidence",
+      sense: "looks_the_part",
+      text: "Evidence stays under the person.",
+    }),
+  ];
+  setMemory(seed);
+  assert.equal(seed.people.length, before);
+  const listed = (await listCentralCastingPeople()).map((row) => row.id).sort();
+  assert.deepEqual(listed, members.map((person) => person.id).sort());
+  for (const person of members) {
+    const row = await getPerson(person.id);
+    assert.deepEqual(row.central_casting, [CITE, `https://example.com/cc/${person.id}`]);
+    assert.equal(JSON.stringify(row.central_casting).includes("sense"), false);
+    assert.equal(row.events.some((ev) => ev.kind === "central_casting"), false);
+  }
+  const page = await requestPage("/central-casting");
+  assert.equal(personHrefs(page.body).length, 7);
+  assert.doesNotMatch(page.body, /JTitor|Warsh|glossary|data-sense|sense-badge/i);
+  const detail = await requestPage(`/people/${memberId}`);
+  assert.match(detail.body, /Evidence stays under the person/);
+  assert.match(detail.body, /class="sources cite-list"/);
+  assert.match(detail.body, /class="post-text"/);
+  assert.match(detail.body, /class="supporting-group"/);
+  assert.match(detail.body, /https:\/\/x\.com\/nytimes\/status\/2100603347044585925/);
+  assert.doesNotMatch(detail.body, /JTitor|Warsh|glossary|data-sense/i);
+  const health = await requestPage("/api/health");
+  const counts = JSON.parse(health.body);
+  assert.equal(counts.central_casting, 7);
+  assert.equal(counts.central_casting_comms, undefined);
 });
 
 test("missing cite and glossary are rejected; annotation does not create a person", async () => {
