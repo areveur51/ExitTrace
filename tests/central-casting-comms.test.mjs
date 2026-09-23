@@ -14,6 +14,7 @@ import {
   CentralCastingClassifyError,
   KIND_COMMS,
   centralCastingCiteStanding,
+  centralCastingStoredQuote,
   mergeCentralCasting,
   normalizeCentralCasting,
 } from "../app/lib/kind-comms.mjs";
@@ -26,6 +27,7 @@ import {
 import { supportingScreenshotPrefix } from "../app/lib/screenshot.mjs";
 import {
   annotateCentralCasting,
+  getMemory,
   getPerson,
   insertCentralCastingClip,
   listCentralCastingPeople,
@@ -198,6 +200,12 @@ test("bootstrap drops sense and glossary, and publication does not seed", () => 
   assert.doesNotMatch(pub, /^\s*[^-\n]*copy_data\s*=\s*true/im);
   assert.doesNotMatch(pub, /INSERT INTO central_casting_comms/i);
   assert.doesNotMatch(pub, /glossary|looks_the_part|sense/i);
+  assert.match(sql, /backfill empty Central Casting snippets/);
+  assert.match(sql, /SET text = btrim\(quote\)/);
+  assert.match(sql, /snapshot->>'quote'/);
+  assert.match(sql, /FROM source_posts sp/);
+  assert.match(sql, /btrim\(text\) = '0'/);
+  assert.doesNotMatch(sql, /INSERT INTO central_casting_comms/i);
 });
 
 test("live migration keeps 7 persons and drops only the JTitor and Warsh glossary rows", async () => {
@@ -484,7 +492,10 @@ test("jim-mattis central casting section uses evidence cites and hides an empty 
   assert.match(page.body, /class="person-event-section"/);
   assert.match(page.body, /data-section="person-event"/);
   assert.match(page.body, new RegExp(xUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(page.body, /class="event-snippet">He looks like he is out of central casting\./);
+  assert.match(
+    page.body,
+    /<blockquote class="event-snippet">He looks like he is out of central casting\.<\/blockquote><a class="source-link" href="https:\/\/x\.com\/realDonaldTrump\/status\/1071495799875203073"/,
+  );
   assert.doesNotMatch(page.body, /<h3 class="event-h">Corona<\/h3>/);
   assert.doesNotMatch(page.body, /class="detail central-casting-detail"/);
   const headerAt = page.body.indexOf('class="person-header"');
@@ -535,4 +546,148 @@ test("jim-mattis central casting section uses evidence cites and hides an empty 
   const coronaOnly = corona.match(/<article class="event-tag-row"[\s\S]*?<\/article>/g) || [];
   assert.equal(coronaOnly.length, 1);
   assert.match(coronaOnly[0], /data-kind="corona_comms"/);
+  assert.match(
+    coronaOnly[0],
+    /<a class="source-link"[\s\S]*<blockquote class="event-snippet">Corona note<\/blockquote>/,
+  );
+});
+
+test("central casting pairs each stored quote immediately before its cite", async () => {
+  assert.equal(centralCastingStoredQuote({ text: "0" }), "");
+  assert.equal(centralCastingStoredQuote({ text: "  " }), "");
+  assert.equal(
+    centralCastingStoredQuote({ text: "0", snapshot: { quote: "He looks like he is out of central casting." } }),
+    "He looks like he is out of central casting.",
+  );
+  assert.equal(centralCastingStoredQuote({ text: "", quote: "0", body: "0" }), "");
+
+  const xUrl = "https://x.com/realDonaldTrump/status/1071495799875203073";
+  const news = "https://www.nytimes.com/2018/12/20/us/politics/jim-mattis-defense-secretary-trump.html";
+  const other = "https://www.bbc.com/news/world-us-canada-46644841";
+  const secondUrl = "https://x.com/realDonaldTrump/status/1076663817831153664";
+  const quote = "He looks like he is out of central casting.";
+  const second = "When President Obama ingloriously fired Jim Mattis, I gave him a second chance.";
+  const html = personDetail(
+    {
+      id: "jim-mattis",
+      name: "Jim Mattis",
+      category: "resignations",
+      event_date: "2018-12-20",
+      sources: [
+        { publisher: "The New York Times", title: "Resigns", url: news, date: "2018-12-20" },
+        { publisher: "BBC News", title: "Resigns", url: other, date: "2018-12-21" },
+      ],
+      central_casting: [news, other],
+    },
+    {
+      centralCastingClips: [
+        {
+          id: "mattis-quote",
+          person_id: "jim-mattis",
+          posted_at: "2018-12-20",
+          handle: "@realDonaldTrump",
+          account_name: "Donald J. Trump",
+          text: "0",
+          source_url: xUrl,
+          snapshot: { quote },
+        },
+        {
+          id: "mattis-second",
+          person_id: "jim-mattis",
+          posted_at: "2018-12-23",
+          handle: "@realDonaldTrump",
+          account_name: "Donald J. Trump",
+          text: "",
+          source_url: secondUrl,
+          snapshot: { body: second },
+        },
+        {
+          id: "mattis-empty",
+          person_id: "jim-mattis",
+          posted_at: "2018-12-24",
+          handle: "@realDonaldTrump",
+          account_name: "Donald J. Trump",
+          text: "0",
+          source_url: "https://x.com/realDonaldTrump/status/1268344372648718337",
+          snapshot: {},
+        },
+      ],
+    },
+  );
+  const section = html.slice(
+    html.indexOf('<h3 class="event-h">Central Casting</h3>'),
+    html.indexOf("</section>", html.indexOf("data-kind=\"central_casting\"")),
+  );
+  assert.match(
+    section,
+    new RegExp(
+      `<blockquote class="event-snippet">${quote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</blockquote><a class="source-link" href="${xUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`,
+    ),
+  );
+  assert.match(
+    section,
+    new RegExp(
+      `<blockquote class="event-snippet">${second.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</blockquote><a class="source-link" href="${secondUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`,
+    ),
+  );
+  const items = section.match(/<li>[\s\S]*?<\/li>/g) || [];
+  assert.equal(items.length, 5);
+  const newsItem = items.find((item) => item.includes(news));
+  const emptyItem = items.find((item) => item.includes("1268344372648718337"));
+  assert.ok(newsItem);
+  assert.doesNotMatch(newsItem, /event-snippet|He looks like he is out of central casting/);
+  assert.match(emptyItem, new RegExp(String.raw`href="https://x\.com/realDonaldTrump/status/1268344372648718337"`));
+  assert.doesNotMatch(emptyItem, /event-snippet|>0</);
+  assert.equal((section.match(/He looks like he is out of central casting\./g) || []).length, 1);
+  assert.doesNotMatch(section.slice(0, section.indexOf("<ol")), /event-snippet|He looks like he is out of central casting/);
+  const firstQuoteAt = section.indexOf(quote);
+  const firstLinkAt = section.indexOf(xUrl);
+  const secondQuoteAt = section.indexOf(second);
+  const secondLinkAt = section.indexOf(secondUrl);
+  assert.ok(firstQuoteAt >= 0 && firstQuoteAt < firstLinkAt);
+  assert.ok(secondQuoteAt > firstLinkAt && secondQuoteAt < secondLinkAt);
+});
+
+test("empty central casting text backfills from the archived post with the same URL", async () => {
+  const seed = goldSeed();
+  const xUrl = "https://x.com/realDonaldTrump/status/1071495799875203073";
+  const quote = "He looks like he is out of central casting.";
+  seed.central_casting_comms = [
+    {
+      id: "mattis-archived",
+      person_id: "jim-mattis",
+      posted_at: "2018-12-20",
+      handle: "@realDonaldTrump",
+      account_name: "Donald J. Trump",
+      text: "0",
+      source_url: xUrl,
+      snapshot: {},
+    },
+  ];
+  seed.source_posts = [
+    {
+      id: "sp-mattis-casting",
+      category: "resignations",
+      source_url: "https://twitter.com/realDonaldTrump/status/1071495799875203073",
+      text: quote,
+      poster_handle: "realDonaldTrump",
+      posted_at: "2018-12-20",
+    },
+  ];
+  setMemory(seed);
+  await annotateCentralCasting("jim-mattis", {
+    sources: ["https://www.nytimes.com/2018/12/20/us/politics/jim-mattis-defense-secretary-trump.html"],
+  });
+  const page = await requestPage("/people/jim-mattis");
+  assert.ok(
+    page.body.includes(
+      `<blockquote class="event-snippet">${quote}</blockquote><a class="source-link" href="${xUrl}"`,
+    ),
+  );
+  const evidenceRow = getMemory().central_casting_comms.find((row) => row.id === "mattis-archived");
+  assert.equal(evidenceRow.text, quote);
+  const news = page.body.slice(page.body.indexOf("data-kind=\"central_casting\""));
+  const newsItem = (news.match(/<li>[\s\S]*?<\/li>/g) || []).find((item) => item.includes("nytimes.com"));
+  assert.ok(newsItem);
+  assert.doesNotMatch(newsItem, /event-snippet/);
 });

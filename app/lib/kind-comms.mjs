@@ -7,9 +7,10 @@
  *  Parent `/central-casting` is one unique-person card (corona list pattern). Membership
  *  is cite URLs on the existing person — no sense split, no second person-kind, no
  *  clip cards. Harvest rows attach under that person. Person detail renders one
- *  Central Casting section (PersonEventSection): cite links, stored quote
- *  snippets, and optional supportive media or X link. Not a second red-folder
- *  page. No glossary. No seed rows.
+ *  Central Casting section (PersonEventSection): each stored quote sits
+ *  immediately before its own cite link, plus optional supportive media or an
+ *  X link. Not a second red-folder page. Empty and placeholder "0" snippets
+ *  are omitted. No glossary. No seed rows. No invented quotes.
  *
  *  Cite gate (Admiral CLEAR):
  *  - Ongoing KEEP: official / gov / news-org, plus quote-chain standing when the
@@ -219,6 +220,29 @@ export function commsHomeCountLabel(counts = {}) {
     const n = Number(counts?.[spec.memoryKey]) || 0;
     return `${n} ${spec.countNoun}`;
   }).join(" · ");
+}
+
+/** Real stored quote. Empty and the placeholder "0" are not quotes. */
+export function centralCastingStoredQuote(row = {}, { archivedText = "" } = {}) {
+  const snap = row?.snapshot && typeof row.snapshot === "object" ? row.snapshot : {};
+  const candidates = [
+    row?.text,
+    row?.quote,
+    row?.body,
+    snap.quote,
+    snap.body,
+    snap.text,
+    snap.quote && typeof snap.quote === "object" ? snap.quote.text : "",
+    snap.body && typeof snap.body === "object" ? snap.body.text : "",
+    archivedText,
+  ];
+  for (const value of candidates) {
+    if (value == null) continue;
+    const text = String(value).trim();
+    if (!text || text === "0") continue;
+    return text;
+  }
+  return "";
 }
 
 /**
