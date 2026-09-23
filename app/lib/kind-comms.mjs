@@ -1,18 +1,21 @@
-/** Shared catalog kinds that store official-post stills (dog / red-folder / central casting).
+/** Shared catalog kinds that store official-post stills (dog / red-folder).
  *  Not person KEEP tags. Table names are allowlisted here — never interpolating caller input.
  *
- *  Central Casting (Riker formal lock): one catalog, column `sense` NOT NULL,
- *  only `looks_the_part` | `replacement`. Both senses are valid. No child routes in v1.
- *  List filter is `?sense=`. No seed rows in this PR.
- *  Seed after PLACE is two separate rows, one sense each.
+ *  Central Casting (Riker lock amend ~12:59am ET) supersedes the KIND_COMMS clip list.
+ *  Parent `/central-casting` is unique-person KEEP cards (corona pattern). Column `sense`
+ *  on evidence/glossary rows is text NOT NULL: only `looks_the_part` | `replacement`.
+ *  Classifications annotate an existing person. Harvest clips are evidence under that
+ *  person (`person_id` + `sense`), not parent cards. Glossary rows use role `glossary`
+ *  and `person_id` NULL. No child routes. No seed in this PR. Seed after PLACE is two
+ *  glossary rows (one sense each), not person cards.
  *
  *  Cite gate (Admiral CLEAR):
  *  - Ongoing KEEP: official / gov / news-org, plus quote-chain standing when the
- *    chain reaches one of those.
- *  - All post media paints on the detail page. A screenshot that misses the
+ *    chain reaches one of those. No invented sense; cite-backed only.
+ *  - All post media paints on the person detail. A screenshot that misses the
  *    local allowlist is omitted (fail-closed), never invented.
- *  - Definition seed only: when the chain has no official, an Admiral-named cite
- *    may park the row (death_unconfirmed-class). That exception is seed-only.
+ *  - Glossary seed only: when the chain has no official, an Admiral-named cite
+ *    may park the definition (death_unconfirmed-class). That exception is seed-only.
  */
 
 import { isOfficialCiteUrl } from "./official.mjs";
@@ -54,26 +57,16 @@ export const KIND_COMMS = Object.freeze({
     keymapKey: "e",
     supportingGroups: true,
   }),
-  central_casting: Object.freeze({
-    id: "central_casting",
-    categoryId: "central_casting_comms",
-    table: "central_casting_comms",
-    memoryKey: "central_casting_comms",
-    path: "/central-casting-comms",
-    mediaDir: "central-casting-comms",
-    screenshotKind: "central-casting-comms",
-    searchType: "central_casting",
-    cardClass: "central-casting-card",
-    detailClass: "central-casting-detail",
-    pageClass: "central-casting-page",
-    label: "Central Casting comms",
-    navLabel: "Central Casting",
-    countNoun: "central casting comms",
-    // c = Dog, e = Red Folder. t is free; do not steal those keys.
-    keymapKey: "t",
-    supportingGroups: true,
-  }),
 });
+
+/** Parent list. Legacy `/central-casting-comms` redirects here. Not a KIND_COMMS clip catalog. */
+export const CENTRAL_CASTING_PATH = "/central-casting";
+export const CENTRAL_CASTING_LEGACY_PATH = "/central-casting-comms";
+/** c = Dog, e = Red Folder. t is free. */
+export const CENTRAL_CASTING_KEYMAP = "t";
+export const CENTRAL_CASTING_MEDIA_DIR = "central-casting-comms";
+export const CENTRAL_CASTING_SCREENSHOT_KIND = "central-casting-comms";
+export const CENTRAL_CASTING_ROLES = Object.freeze(["evidence", "glossary"]);
 
 /** Documented Central Casting cite gate. Ongoing KEEP is not the seed exception. */
 export const CENTRAL_CASTING_CITE_GATE = Object.freeze({
@@ -119,6 +112,66 @@ export function centralCastingSenseFilter(raw) {
 
 export function centralCastingSenseLabel(sense) {
   return CENTRAL_CASTING_SENSE_LABELS[sense] || "";
+}
+
+export class CentralCastingClassifyError extends Error {
+  constructor(message, code = "invalid_classification") {
+    super(message);
+    this.name = "CentralCastingClassifyError";
+    this.code = code;
+  }
+}
+
+function citeUrls(raw) {
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const out = [];
+  for (const item of list) {
+    const url =
+      typeof item === "string"
+        ? item
+        : item && typeof item === "object"
+          ? item.url || item.href || ""
+          : "";
+    const text = String(url || "").trim();
+    if (text && !out.includes(text)) out.push(text);
+  }
+  return out;
+}
+
+/** Drop invalid or uncited senses. Does not invent a sense. */
+export function normalizeCentralCasting(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  const bySense = new Map();
+  for (const item of list) {
+    const sense = String(item?.sense || "").trim();
+    if (!CENTRAL_CASTING_SENSES.includes(sense)) continue;
+    const sources = citeUrls(item?.sources);
+    if (!sources.length) continue;
+    const prev = bySense.get(sense) || [];
+    bySense.set(sense, [...new Set([...prev, ...sources])]);
+  }
+  return CENTRAL_CASTING_SENSES.filter((sense) => bySense.has(sense)).map((sense) => ({
+    sense,
+    sources: bySense.get(sense),
+  }));
+}
+
+/** Cite-backed classification. Throws on a missing cite or an unlocked sense. */
+export function assertCentralCastingClassification({ sense, sources } = {}) {
+  const locked = assertCentralCastingSense(sense);
+  const cites = citeUrls(sources);
+  if (!cites.length) {
+    throw new CentralCastingClassifyError("central casting sense requires a cite", "missing_cite");
+  }
+  return { sense: locked, sources: cites };
+}
+
+/** Keep prior classifications when gold has none. Union cites per sense. */
+export function mergeCentralCasting(gold, prior) {
+  return normalizeCentralCasting([
+    ...(Array.isArray(prior) ? prior : []),
+    ...(Array.isArray(gold) ? gold : []),
+  ]);
 }
 
 export const KIND_COMM_IDS = Object.freeze(Object.keys(KIND_COMMS));
@@ -179,7 +232,7 @@ export function commsThumbKinds() {
   return KIND_COMM_IDS.map((id) => KIND_COMMS[id].mediaDir);
 }
 
-/** Home count segment: "N dog comms · N red-folder comms · N central casting comms". */
+/** Home count segment: "N dog comms · N red-folder comms". Central Casting is a person count, not a clip count. */
 export function commsHomeCountLabel(counts = {}) {
   return KIND_COMM_IDS.map((id) => {
     const spec = KIND_COMMS[id];

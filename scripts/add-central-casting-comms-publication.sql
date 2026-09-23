@@ -1,6 +1,8 @@
--- Add central_casting_comms to the lab publication so later inserts replicate.
--- Twin of red_folder_comms. Does not invent, delete, or rewrite rows.
--- No seed rows in this script. Seed after PLACE is two separate rows, one sense each.
+-- Add central_casting_comms to the lab publication so later evidence/glossary inserts replicate.
+-- Not the parent list. Parent /central-casting is unique-person KEEP cards.
+-- Does not invent, delete, or rewrite rows.
+-- No seed rows in this script. Seed after PLACE is two glossary rows (person_id NULL),
+-- one sense each: replacement and looks_the_part. Not person cards.
 -- sense is NOT NULL: looks_the_part | replacement. Both senses are valid.
 --
 -- Cite gate (Riker DESIGN LOCK, Admiral CLEAR): ongoing KEEP is official/gov/news-org

@@ -24,6 +24,7 @@ import {
   getPool,
   importSeed,
   migrateUniquePeople,
+  countCentralCastingPeople,
   countKindComms,
   countOperations,
   countPeople,
@@ -32,6 +33,9 @@ import {
   getOperation,
   getPerson,
   getSourcePost,
+  listCentralCastingEvidence,
+  listCentralCastingGlossary,
+  listCentralCastingPeople,
   listKindComms,
   listOperations,
   listPeople,
@@ -53,6 +57,8 @@ import {
   dashboardRankBody,
   kindDetail,
   kindList,
+  centralCastingGlossary,
+  centralCastingPeopleList,
   centralCastingSenseNav,
   downloadsBody,
   healthBody,
@@ -103,6 +109,8 @@ import {
 } from "./lib/dashboard.mjs";
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
 import {
+  CENTRAL_CASTING_LEGACY_PATH,
+  CENTRAL_CASTING_PATH,
   CentralCastingSenseError,
   centralCastingSenseFilter,
   commsHomeCountLabel,
@@ -380,7 +388,7 @@ async function healthPayload() {
     people: c.people,
     dog_comms: c.dog_comms,
     red_folder_comms: c.red_folder_comms,
-    central_casting_comms: c.central_casting_comms,
+    central_casting: c.central_casting,
     central_casting_by_sense: c.central_casting_by_sense,
     operations: c.operations,
     source_posts: c.source_posts,
@@ -510,24 +518,29 @@ async function handle(req, res) {
     }
     return sendJson(res, 200, { operations: await listOperations({ tags }) });
   }
+  if (p === "/api/central-casting" || p === "/api/central-casting-comms") {
+    if (p === "/api/central-casting-comms") {
+      send(res, 302, "", { Location: `/api${CENTRAL_CASTING_PATH}${url.search || ""}` });
+      return;
+    }
+    let sense = "";
+    try {
+      sense = centralCastingSenseFilter(url.searchParams.get("sense"));
+    } catch (err) {
+      if (err instanceof CentralCastingSenseError) {
+        send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
+        return;
+      }
+      throw err;
+    }
+    const people = await listCentralCastingPeople({ sense });
+    return sendJson(res, 200, { people, central_casting: people.length });
+  }
   const apiSpec = commsKindByApiPath(p);
   if (apiSpec) {
     const kind = apiSpec.id;
-    let sense = "";
-    if (kind === "central_casting") {
-      try {
-        sense = centralCastingSenseFilter(url.searchParams.get("sense"));
-      } catch (err) {
-        if (err instanceof CentralCastingSenseError) {
-          send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
-          return;
-        }
-        throw err;
-      }
-    }
-    const senseOpts = sense ? { sense } : {};
     if (url.searchParams.has("page")) {
-      const total = await countKindComms(kind, senseOpts);
+      const total = await countKindComms(kind);
       const meta = paginate({
         total,
         page: parsePage(url.searchParams),
@@ -535,7 +548,6 @@ async function handle(req, res) {
       });
       return sendJson(res, 200, {
         [apiSpec.memoryKey]: await listKindComms(kind, {
-          ...senseOpts,
           limit: meta.limit,
           offset: meta.offset,
         }),
@@ -543,7 +555,7 @@ async function handle(req, res) {
       });
     }
     return sendJson(res, 200, {
-      [apiSpec.memoryKey]: await listKindComms(kind, senseOpts),
+      [apiSpec.memoryKey]: await listKindComms(kind),
     });
   }
   if (p === "/api/source-posts") {
@@ -602,7 +614,7 @@ async function handle(req, res) {
         heading: "ExitTrace",
         mode: "home",
         query: "home",
-        countLabel: `${c.people} people · ${c.operations || 0} operations · ${commsHomeCountLabel(c)}`,
+        countLabel: `${c.people} people · ${c.operations || 0} operations · ${commsHomeCountLabel(c)} · ${c.central_casting || 0} central casting`,
         body: homeBody({ version: APP_VERSION }),
       }),
     );
@@ -831,7 +843,9 @@ async function handle(req, res) {
         categoryId: row.category,
         crumbLabel: row.name,
         countLabel: "detail",
-        body: personDetail(row),
+        body: personDetail(row, {
+          centralCastingClips: await listCentralCastingEvidence(row.id),
+        }),
       }),
     );
   }
@@ -1033,34 +1047,71 @@ async function handle(req, res) {
       }),
     );
   }
+  if (p === CENTRAL_CASTING_LEGACY_PATH || p.startsWith(`${CENTRAL_CASTING_LEGACY_PATH}/`)) {
+    send(res, 302, "", { Location: `${CENTRAL_CASTING_PATH}${url.search || ""}` });
+    return;
+  }
+  if (cat && cat.kind === "central_casting") {
+    let sense = "";
+    try {
+      sense = centralCastingSenseFilter(url.searchParams.get("sense"));
+    } catch (err) {
+      if (err instanceof CentralCastingSenseError) {
+        send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
+        return;
+      }
+      throw err;
+    }
+    const pageSize = parseCookiePageSize(req.headers.cookie);
+    const total = await countCentralCastingPeople({ sense });
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize,
+    });
+    const rows = await listCentralCastingPeople({
+      sense,
+      limit: meta.limit,
+      offset: meta.offset,
+    });
+    const glossary = await listCentralCastingGlossary();
+    const listPath = sense ? `${cat.path}?sense=${encodeURIComponent(sense)}` : cat.path;
+    return sendHtml(
+      res,
+      layout({
+        title: cat.title,
+        path: cat.path,
+        heading: cat.title,
+        query: cat.title,
+        pageSize,
+        countLabel: countText(cat.title, meta, rows.length),
+        lede: cat.blurb,
+        body: `${centralCastingSenseNav(sense)}${centralCastingGlossary(glossary)}${listSection(
+          centralCastingPeopleList(rows),
+          pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+          listHead({
+            title: cat.title,
+            total: meta.total,
+            index: 1,
+            of: rows.length,
+          }),
+        )}`,
+      }),
+    );
+  }
   if (cat && isCommsKind(cat.kind)) {
     const spec = commsKind(cat.kind);
-    let sense = "";
-    if (spec.id === "central_casting") {
-      try {
-        sense = centralCastingSenseFilter(url.searchParams.get("sense"));
-      } catch (err) {
-        if (err instanceof CentralCastingSenseError) {
-          send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
-          return;
-        }
-        throw err;
-      }
-    }
-    const senseOpts = sense ? { sense } : {};
-    const total = await countKindComms(spec.id, senseOpts);
+    const total = await countKindComms(spec.id);
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
       pageSize: DOG_PAGE_SIZE,
     });
     const rows = await listKindComms(spec.id, {
-      ...senseOpts,
       limit: meta.limit,
       offset: meta.offset,
     });
-    const listPath = sense ? `${cat.path}?sense=${encodeURIComponent(sense)}` : cat.path;
-    const senseNav = spec.id === "central_casting" ? centralCastingSenseNav(sense) : "";
+    const listPath = cat.path;
     return sendHtml(
       res,
       layout({
@@ -1070,7 +1121,7 @@ async function handle(req, res) {
         query: cat.title,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
-        body: `${senseNav}${listSection(
+        body: `${listSection(
           kindList(spec.id, rows),
           pager(meta, { basePath: listPath, noun: "posts" }),
           listHead({

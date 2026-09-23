@@ -40,6 +40,10 @@ import {
   isCommsMediaHref,
 } from "./thumb.mjs";
 import {
+  CENTRAL_CASTING_KEYMAP,
+  CENTRAL_CASTING_MEDIA_DIR,
+  CENTRAL_CASTING_PATH,
+  CENTRAL_CASTING_SCREENSHOT_KIND,
   commsKind,
   commsKindByPath,
   isCommsKind,
@@ -192,6 +196,7 @@ function keymapItems(activePath) {
       const spec = KIND_COMMS[id];
       return { key: spec.keymapKey, href: spec.path, label: spec.navLabel };
     }),
+    { key: CENTRAL_CASTING_KEYMAP, href: CENTRAL_CASTING_PATH, label: "Central Casting" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ].map((item) => ({
     ...item,
@@ -980,7 +985,7 @@ function kindLabel(row) {
   return cat ? cat.nav : row.category || "Person";
 }
 
-export function personRow(row, { selected, showDeath } = {}) {
+export function personRow(row, { selected, showDeath, badges = "" } = {}) {
   const href = `/people/${encodeURIComponent(row.id)}`;
   const previewDate =
     showDeath && row.death_date ? row.death_date : row.event_date;
@@ -988,7 +993,7 @@ export function personRow(row, { selected, showDeath } = {}) {
     ${thumb(row.photo, row.name)}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.name || "—")}</div>
-      <div class="tui-meta"><time datetime="${esc(previewDate || "")}">${esc(formatDate(previewDate))}</time> · ${esc(kindLabel(row))} · ${esc(formatUsd(row.net_worth_usd))}</div>
+      <div class="tui-meta">${badges}<time datetime="${esc(previewDate || "")}">${esc(formatDate(previewDate))}</time> · ${esc(kindLabel(row))} · ${esc(formatUsd(row.net_worth_usd))}</div>
     </div>
   </a>`;
 }
@@ -1089,8 +1094,8 @@ export function centralCastingSenseNav(activeSense = "") {
   const opts = options
     .map((o) => {
       const href = o.sense
-        ? `/central-casting-comms?sense=${encodeURIComponent(o.sense)}`
-        : "/central-casting-comms";
+        ? `${CENTRAL_CASTING_PATH}?sense=${encodeURIComponent(o.sense)}`
+        : CENTRAL_CASTING_PATH;
       const on = current === o.sense;
       return `<option value="${esc(href)}"${on ? " selected" : ""}>${esc(o.label)}</option>`;
     })
@@ -1101,15 +1106,84 @@ export function centralCastingSenseNav(activeSense = "") {
   </nav>`;
 }
 
+export function centralCastingPersonRow(row, opts = {}) {
+  const badges = (row.central_casting || [])
+    .map((item) => centralCastingSenseBadge(item))
+    .filter(Boolean)
+    .join("");
+  return personRow(row, {
+    ...opts,
+    badges: badges ? `<span class="sense-badges">${badges}</span> ` : "",
+  });
+}
+
+export function centralCastingPeopleList(rows) {
+  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
+  return `<div class="tui-list central-casting-people">${rows
+    .map((row, i) => centralCastingPersonRow(row, { selected: i === 0 }))
+    .join("")}</div>`;
+}
+
+export function centralCastingGlossary(rows = []) {
+  const items = (rows || []).filter((row) => row && row.role === "glossary" && !row.person_id);
+  if (!items.length) return "";
+  const lis = items
+    .map(
+      (row) => `<li class="glossary-row" role="glossary" data-sense="${esc(row.sense)}" data-person-id="">
+      ${centralCastingSenseBadge(row)}
+      <a href="${esc(row.source_url)}" rel="noopener noreferrer">${esc(row.text || row.source_url)}</a>
+    </li>`,
+    )
+    .join("");
+  return `<section class="central-casting-glossary" role="glossary" aria-label="Glossary"><h2>Glossary</h2><ul>${lis}</ul></section>`;
+}
+
+function centralCastingStillHrefs(row) {
+  const primary = String(row?.still || "").trim();
+  const seen = new Set();
+  const out = [];
+  const push = (href) => {
+    const text = String(href || "").trim();
+    if (!text || seen.has(text) || !isCommsMediaHref(text, CENTRAL_CASTING_MEDIA_DIR)) return;
+    seen.add(text);
+    out.push(text);
+  };
+  push(primary);
+  for (const item of row?.snapshot?.stills || []) push(item);
+  return out;
+}
+
+export function centralCastingEvidenceHtml(clips = []) {
+  if (!clips.length) return "";
+  return clips
+    .map((row) => {
+      const stills = centralCastingStillHrefs(row)
+        .map(
+          (src) =>
+            `<img src="${esc(src)}" alt="${esc(`Post media for ${row.handle || "clip"}`)}">`,
+        )
+        .join("");
+      const shot = normalizeScreenshotHref(row.screenshot, CENTRAL_CASTING_SCREENSHOT_KIND);
+      const shotHtml = shot
+        ? `<img src="${esc(shot)}" alt="${esc(`X-post screenshot of ${row.handle || "clip"}`)}">`
+        : "";
+      return `<figure class="central-casting-evidence" data-clip-id="${esc(row.id)}" data-sense="${esc(row.sense)}" data-person-id="${esc(row.person_id || "")}">
+      ${centralCastingSenseBadge(row)}
+      ${stills}${shotHtml}
+      ${citeFromRow(row)}
+    </figure>`;
+    })
+    .join("");
+}
+
 export function kindListRow(kind, row, { selected } = {}) {
   const spec = commsKind(kind);
   const href = `${spec.path}/${encodeURIComponent(row.id)}`;
-  const badge = spec.id === "central_casting" ? ` ${centralCastingSenseBadge(row)}` : "";
   return `<a class="tui-row ${spec.cardClass}${selected ? " is-selected" : ""}" href="${esc(href)}">
     ${thumb(row.still, row.handle, "still")}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.handle)}</div>
-      <div class="tui-meta"><time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · ${esc(spec.label)}${badge}</div>
+      <div class="tui-meta"><time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · ${esc(spec.label)}</div>
     </div>
   </a>`;
 }
@@ -1394,13 +1468,23 @@ function personTagChips(row) {
   return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips}</p>`;
 }
 
-export function personDetail(row) {
+export function personDetail(row, { centralCastingClips = [] } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
+  const senses = filled.central_casting || [];
+  const clips = centralCastingClips || [];
+  const cc =
+    senses.length || clips.length
+      ? `<section class="central-casting-person" data-person-id="${esc(filled.id)}">
+      <h2>Central Casting</h2>
+      <p class="sense-badges">${senses.map((item) => centralCastingSenseBadge(item)).join(" ")}</p>
+      ${centralCastingEvidenceHtml(clips)}
+    </section>`
+      : "";
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled)}${cc}`,
       active: true,
       extraClass: "person-pane",
     })}
@@ -1521,7 +1605,6 @@ export function kindDetail(kind, row) {
         extraMedia: extras,
         metaHtml: detailMetaBlock({
           citeHtml: citeFromRow(row),
-          lines: spec.id === "central_casting" ? [centralCastingSenseBadge(row)] : [],
           sourceHtml: kindSourceHtml(row, { includeSupporting: !grouped }),
         }),
       }),

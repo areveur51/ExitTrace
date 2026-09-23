@@ -118,7 +118,7 @@ Arm automatic catch-up from heal with repository variable `ET_AUTO_GAP_UPSERT=tr
 
 `red_folder_comms` is a `dog_comms` twin. Lab adds it with `scripts/add-red-folder-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE red_folder_comms` when missing). Subscriber then `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)` only if the relation is missing. Never `copy_data=true`. Media uses the existing media-delta rsync path. Do not gap-upsert the existing lab harvest rows from this restore.
 
-`central_casting_comms` is the same kind of twin (`sense` is `looks_the_part` or `replacement`, not a person KEEP tag). Lab adds it with `scripts/add-central-casting-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms` when missing). Same `copy_data = false` rule. No seed rows in this repo. Seed after PLACE is two separate rows, one sense each. Media: `media/central-casting-comms/` and `media/screenshots/central-casting-comms/`.
+`central_casting_comms` stores evidence and glossary rows (`sense` is `looks_the_part` or `replacement`). The parent list is `/central-casting`: one card per existing person KEEP, not a clip catalog. Lab adds the evidence table with `scripts/add-central-casting-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms` when missing). Same `copy_data = false` rule. No seed rows in this repo. Seed after PLACE is two glossary rows (`person_id` NULL), one sense each. Media: `media/central-casting-comms/` and `media/screenshots/central-casting-comms/`.
 
 ## Render code freshness
 

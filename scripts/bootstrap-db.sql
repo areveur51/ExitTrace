@@ -220,13 +220,19 @@ END $$;
 ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE red_folder_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 
--- Central Casting comms: twin of dog_comms / red_folder_comms. Not a person KEEP tag.
--- Riker formal lock: sense NOT NULL, only looks_the_part | replacement. Both valid.
--- No seed rows here. Seed after PLACE is two separate rows, one sense each.
--- Cite gate (Admiral CLEAR): ongoing KEEP is official/gov/news-org plus quote-chain
--- standing. All post media belongs on the detail page; screenshot omit is fail-closed.
--- Definition seed may park on an Admiral-named cite only when the chain has no
+-- Central Casting parent list is unique-person KEEP cards, not this table.
+-- Riker lock amend: sense NOT NULL, only looks_the_part | replacement.
+-- role evidence requires person_id. role glossary requires person_id NULL.
+-- No seed rows here. Seed after PLACE is two glossary rows (person_id NULL),
+-- one sense each: replacement (Admiral-named park) and looks_the_part (harvest cite).
+-- Classifications live on people.central_casting. Do not insert person-shaped
+-- rows into this table to drive the list.
+-- Cite gate: ongoing KEEP is official/gov/news-org plus quote-chain standing.
+-- All post media belongs on the person detail; screenshot omit is fail-closed.
+-- Glossary seed may park on an Admiral-named cite only when the chain has no
 -- official (death_unconfirmed-class, seed only).
+ALTER TABLE people ADD COLUMN IF NOT EXISTS central_casting JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 CREATE TABLE IF NOT EXISTS central_casting_comms (
   id TEXT PRIMARY KEY,
   posted_at TEXT NOT NULL,
@@ -240,7 +246,14 @@ CREATE TABLE IF NOT EXISTS central_casting_comms (
   source_url TEXT NOT NULL,
   snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
   sense TEXT NOT NULL,
-  CONSTRAINT central_casting_comms_sense_check CHECK (sense IN ('looks_the_part', 'replacement'))
+  person_id TEXT,
+  role TEXT NOT NULL DEFAULT 'evidence',
+  CONSTRAINT central_casting_comms_sense_check CHECK (sense IN ('looks_the_part', 'replacement')),
+  CONSTRAINT central_casting_comms_role_check CHECK (role IN ('evidence', 'glossary')),
+  CONSTRAINT central_casting_comms_role_person_check CHECK (
+    (role = 'glossary' AND person_id IS NULL)
+    OR (role = 'evidence' AND person_id IS NOT NULL)
+  )
 );
 
 CREATE INDEX IF NOT EXISTS central_casting_comms_posted_at_idx ON central_casting_comms (posted_at DESC);
@@ -274,6 +287,32 @@ BEGIN
 END $$;
 ALTER TABLE central_casting_comms ALTER COLUMN sense SET NOT NULL;
 CREATE INDEX IF NOT EXISTS central_casting_comms_sense_idx ON central_casting_comms (sense);
+
+ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS person_id TEXT;
+ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS role TEXT;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM central_casting_comms
+     WHERE role IS NULL
+        OR role NOT IN ('evidence', 'glossary')
+        OR (role = 'glossary' AND person_id IS NOT NULL)
+        OR (role = 'evidence' AND person_id IS NULL)
+  ) THEN
+    RAISE EXCEPTION 'central_casting_comms role/person_id is fail-closed; glossary person_id stays NULL and evidence requires person_id';
+  END IF;
+END $$;
+ALTER TABLE central_casting_comms ALTER COLUMN role SET NOT NULL;
+ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_role_check;
+ALTER TABLE central_casting_comms ADD CONSTRAINT central_casting_comms_role_check
+  CHECK (role IN ('evidence', 'glossary'));
+ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_role_person_check;
+ALTER TABLE central_casting_comms ADD CONSTRAINT central_casting_comms_role_person_check
+  CHECK (
+    (role = 'glossary' AND person_id IS NULL)
+    OR (role = 'evidence' AND person_id IS NOT NULL)
+  );
+CREATE INDEX IF NOT EXISTS central_casting_comms_person_idx ON central_casting_comms (person_id);
 
 -- Parked public posts (not identified people). Gold people stay in `people`.
 CREATE TABLE IF NOT EXISTS source_posts (

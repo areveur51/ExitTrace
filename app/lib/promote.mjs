@@ -19,6 +19,7 @@ import {
 } from "./event-attrs.mjs";
 import { personTags } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
+import { mergeCentralCasting } from "./kind-comms.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
@@ -504,6 +505,7 @@ export function mergePersonAnnotate(gold, prior) {
     events: [...eventsByKind.values()],
     career: mergeCareer(keep.career, extra.career),
     tags: [...(keep.tags || []), ...(extra.tags || [])],
+    central_casting: mergeCentralCasting(keep.central_casting, extra.central_casting),
   });
 }
 

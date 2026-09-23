@@ -118,8 +118,9 @@ test("health is 200 on file backend", async () => {
   assert.equal(json.dog_comms, seed.dog_comms.length);
   assert.equal(json.red_folder_comms, 0);
   assert.equal(json.byCategory.red_folder_comms, 0);
-  assert.equal(json.central_casting_comms, 0);
-  assert.equal(json.byCategory.central_casting_comms, 0);
+  assert.equal(json.central_casting, 0);
+  assert.equal(json.byCategory.central_casting, 0);
+  assert.equal(json.central_casting_comms, undefined);
   assert.deepEqual(json.central_casting_by_sense, { looks_the_part: 0, replacement: 0 });
   assert.equal(json.operations, (seed.operations || []).length);
   assert.equal(json.keep_up.timezone, "America/New_York");
@@ -177,7 +178,7 @@ test("html pages render", async () => {
     "/unsorted",
     "/dog-comms",
     "/red-folder-comms",
-    "/central-casting-comms",
+    "/central-casting",
     "/add",
     "/add?mode=dog",
     "/add?mode=operation",
@@ -303,7 +304,7 @@ test("every category list page ships a pager", async () => {
     "/unsorted",
     "/dog-comms",
     "/red-folder-comms",
-    "/central-casting-comms",
+    "/central-casting",
   ];
   for (const p of paths) {
     const res = await get(p);
@@ -521,7 +522,7 @@ test("list pages lock Glass only and keep catalog copy, not pin LARP", async () 
   assert.doesNotMatch(list.body, /href="\/search"/);
   assert.match(list.body, /href="\/dog-comms"/);
   assert.match(list.body, /href="\/red-folder-comms"/);
-  assert.match(list.body, /href="\/central-casting-comms"/);
+  assert.match(list.body, /href="\/central-casting"/);
   assert.match(list.body, /data-key="t"/);
   assert.match(list.body, /\]<\/span> Central Casting</);
   assert.match(list.body, /data-key="f"/);
