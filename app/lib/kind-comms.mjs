@@ -6,9 +6,10 @@
  *  strips the retired field only, and deletes the JTitor + Warsh glossary rows.
  *  Parent `/central-casting` is one unique-person card (corona list pattern). Membership
  *  is cite URLs on the existing person — no sense split, no second person-kind, no
- *  clip cards. Harvest rows attach under that person as cites and X media. Detail
- *  reuses the red-folder masonry (cites, post summary, X link, supportive media).
- *  No glossary. No seed rows.
+ *  clip cards. Harvest rows attach under that person. Person detail renders one
+ *  Central Casting section (PersonEventSection): cite links, stored quote
+ *  snippets, and optional supportive media or X link. Not a second red-folder
+ *  page. No glossary. No seed rows.
  *
  *  Cite gate (Admiral CLEAR):
  *  - Ongoing KEEP: official / gov / news-org, plus quote-chain standing when the
@@ -66,7 +67,7 @@ export const CENTRAL_CASTING_KEYMAP = "t";
 export const CENTRAL_CASTING_MEDIA_DIR = "central-casting-comms";
 export const CENTRAL_CASTING_SCREENSHOT_KIND = "central-casting-comms";
 
-/** Detail-only media spec. Not a KIND_COMMS parent list. Same masonry as red_folder. */
+/** Media allowlist for Central Casting stills. Person detail uses PersonEventSection, not a red-folder page. */
 export const CENTRAL_CASTING_DETAIL = Object.freeze({
   id: "central_casting",
   mediaDir: CENTRAL_CASTING_MEDIA_DIR,

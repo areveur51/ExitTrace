@@ -430,7 +430,7 @@ test("corona_comms skip-as-dup: tag lands on the existing card, never a second c
   const detail = await requestPage("/people/casey-vale");
   assert.equal(detail.status, 200);
   assert.match(detail.body, /Arrests/);
-  assert.match(detail.body, /Corona Comms/);
+  assert.match(detail.body, /<h3 class="event-h">Corona<\/h3>/);
   assert.match(detail.body, /datetime="2024-06-15"/);
   assert.match(detail.body, /datetime="2024-07-20"/);
   assert.equal((detail.body.match(/class="tui-row person-card/g) || []).length, 0);
