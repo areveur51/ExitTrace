@@ -490,6 +490,56 @@ ALTER TABLE add_requests DROP CONSTRAINT IF EXISTS add_requests_kind_check;
 ALTER TABLE add_requests ADD CONSTRAINT add_requests_kind_check
   CHECK (kind IN ('person', 'dog', 'operation'));
 
+-- X mention submitter attribution. Lab table, published on exittrace_lab_pub.
+-- Not a cite. Not a column on people, operations, or comms rows.
+-- Display reads this table. mention_url is meta only. No media. No seed rows.
+-- Partial unique: one row per channel + subject when subject_status_id is set.
+-- A null subject does not collide. Empty backfill is OK.
+-- The unpublished composite-key draft (no id column, no rows) is replaced.
+DO $$
+BEGIN
+  IF to_regclass('public.request_attributions') IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'request_attributions'
+          AND column_name = 'id'
+     )
+     AND NOT EXISTS (SELECT 1 FROM request_attributions LIMIT 1)
+  THEN
+    DROP TABLE request_attributions;
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS request_attributions (
+  id TEXT PRIMARY KEY,
+  target_kind TEXT NOT NULL CHECK (target_kind IN (
+    'person',
+    'operation',
+    'dog_comm',
+    'red_folder_comm',
+    'central_casting_comm'
+  )),
+  target_id TEXT NOT NULL,
+  channel TEXT NOT NULL DEFAULT 'x_mention',
+  submitter_display_name TEXT NOT NULL DEFAULT '',
+  submitter_handle TEXT NOT NULL,
+  submitter_author_id TEXT,
+  submitted_at TIMESTAMPTZ NOT NULL,
+  subject_status_id TEXT,
+  mention_status_id TEXT,
+  mention_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS request_attributions_channel_subject_uidx
+  ON request_attributions (channel, subject_status_id)
+  WHERE subject_status_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS request_attributions_target_idx
+  ON request_attributions (target_kind, target_id, submitted_at);
+
 -- mention_queue is not created in this file.
 -- Apply scripts/mention-queue.sql on the Render app database.
 -- The Render server also applies that file on boot.

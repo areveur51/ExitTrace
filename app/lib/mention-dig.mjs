@@ -4,6 +4,7 @@
  */
 
 import { AddError, leadRecordFields, processAddRequest, queueAddRequest } from "./add-request.mjs";
+import { recordXMentionKeepAttribution } from "./request-attributions.mjs";
 import { CITE_FLOOR } from "./promote.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
@@ -150,10 +151,11 @@ export async function digMention(row = {}, envelope) {
         cite_urls: cites,
       },
     });
-    const slug = result.person?.id || result.request?.result?.person_id || "";
+    const slug = result.person?.id || result.request?.result?.person_id || result.person_id || "";
     if (!slug) {
       return { status: "fail_closed", error_reason: "missing_slug", kept_person_slug: null, lead_id };
     }
+    await recordXMentionKeepAttribution(row, result);
     return {
       status: "kept",
       kept_person_slug: slug,

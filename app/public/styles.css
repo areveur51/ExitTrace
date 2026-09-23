@@ -1150,6 +1150,7 @@ img.still.thumb {
 .tui-toast[hidden] { display: none; }
 .rating .muted { color: var(--muted); font-size: 0.8rem; }
 .meta-line { margin: 0 0 0.35rem; color: var(--muted); }
+.request-attribution { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.01em; }
 .synopsis { margin: 0; }
 .nw { font-weight: 600; }
 .nw-note, .nw-src { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 400; }

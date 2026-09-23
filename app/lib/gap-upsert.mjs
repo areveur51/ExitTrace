@@ -2,7 +2,7 @@
  * Idempotent published-table gap upsert (lab → Render logical catch-up).
  * Upserts by id: people (including central_casting), dog_comms, operations,
  * optional categories, red_folder_comms, central_casting_comms,
- * plus person_events companion.
+ * request_attributions, plus person_events companion.
  * Never DELETE / TRUNCATE / DROP / --clean. Never invent cite URLs.
  */
 
@@ -13,6 +13,7 @@ export const PUBLISHED_TABLES = Object.freeze([
   "categories",
   "red_folder_comms",
   "central_casting_comms",
+  "request_attributions",
 ]);
 
 export const COMPANION_TABLES = Object.freeze(["person_events"]);
@@ -29,6 +30,7 @@ const TABLE_KEYS = Object.freeze({
   dog_comms: "id",
   red_folder_comms: "id",
   central_casting_comms: "id",
+  request_attributions: "id",
   operations: "id",
   categories: "id",
   person_events: ["person_id", "kind"],
@@ -117,11 +119,27 @@ const EVENT_COLS = Object.freeze([
 
 const CATEGORY_COLS = Object.freeze(["id", "kind", "title", "nav", "path", "blurb"]);
 
+const ATTRIBUTION_COLS = Object.freeze([
+  "id",
+  "target_kind",
+  "target_id",
+  "channel",
+  "submitter_display_name",
+  "submitter_handle",
+  "submitter_author_id",
+  "submitted_at",
+  "subject_status_id",
+  "mention_status_id",
+  "mention_url",
+  "created_at",
+]);
+
 const COLS = Object.freeze({
   people: PEOPLE_COLS,
   dog_comms: DOG_COLS,
   red_folder_comms: RED_FOLDER_COLS,
   central_casting_comms: CENTRAL_CASTING_COMMS_COLS,
+  request_attributions: ATTRIBUTION_COLS,
   operations: OP_COLS,
   person_events: EVENT_COLS,
   categories: CATEGORY_COLS,
@@ -193,6 +211,22 @@ function rowValue(table, col, row) {
     if (row?.person_id === undefined || row?.person_id === null) return null;
     const text = String(row.person_id).trim();
     return text || null;
+  }
+  if (table === "request_attributions") {
+    if (col === "channel") {
+      const channel = String(row?.channel || "x_mention").trim();
+      return channel || "x_mention";
+    }
+    if (
+      col === "submitter_author_id" ||
+      col === "subject_status_id" ||
+      col === "mention_status_id" ||
+      col === "mention_url"
+    ) {
+      if (row?.[col] == null) return null;
+      const text = String(row[col]).trim();
+      return text || null;
+    }
   }
   const v = row?.[col];
   if (v === undefined || v === null) return null;
@@ -295,5 +329,6 @@ SELECT
   (SELECT count(*)::int FROM operations) AS operations,
   (SELECT count(*)::int FROM person_events) AS person_events,
   (SELECT count(*)::int FROM red_folder_comms) AS red_folder_comms,
-  (SELECT count(*)::int FROM central_casting_comms) AS central_casting_comms
+  (SELECT count(*)::int FROM central_casting_comms) AS central_casting_comms,
+  (SELECT count(*)::int FROM request_attributions) AS request_attributions
 `.trim();

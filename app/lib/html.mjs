@@ -887,6 +887,7 @@ function detailMetaBlock({
   ratingHtml = "",
   lines = [],
   citeHtml = "",
+  attributionHtml = "",
   bodyTitle = "",
   bodyHtml = "",
   sourceKind = "source",
@@ -894,16 +895,29 @@ function detailMetaBlock({
   extraTiles = [],
 } = {}) {
   const tiles = [];
-  if (title != null || ratingHtml) {
+  const credit = String(attributionHtml || "");
+  const hasTitle = title != null || ratingHtml;
+  if (hasTitle) {
     tiles.push(
       detailMetaTile(
         "title",
-        `<h2 class="detail-title">${esc(title || "—")}</h2>${ratingHtml}`,
+        `<h2 class="detail-title">${esc(title || "—")}</h2>${ratingHtml}${credit}`,
       ),
     );
   }
   // ONE cite tile — do not split handle / account / posted / body into TUI line tiles.
-  if (citeHtml) tiles.push(detailMetaTile("cite", citeHtml));
+  // Comms have no title tile. The line sits under the cite head and above source cites.
+  if (citeHtml) {
+    let citeBody = citeHtml;
+    if (!hasTitle && credit) {
+      citeBody = citeHtml.includes("</header>")
+        ? citeHtml.replace("</header>", `</header>${credit}`)
+        : `${credit}${citeHtml}`;
+    }
+    tiles.push(detailMetaTile("cite", citeBody));
+  } else if (!hasTitle && credit) {
+    tiles.push(detailMetaTile("attribution", credit));
+  }
   for (const line of (lines || []).filter(Boolean)) {
     tiles.push(detailSectionTile(line));
   }
@@ -1054,6 +1068,79 @@ export function citeBlock({
 }
 
 /** Map dog / source-post / matching people-ops-corona fields onto the shared cite. */
+const ATTRIBUTION_TZ = "America/New_York";
+
+function attributionDateEt(iso) {
+  const parsed = new Date(iso);
+  if (!iso || Number.isNaN(parsed.getTime())) return "";
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: ATTRIBUTION_TZ,
+  }).format(parsed);
+  return `${formatted} ET`;
+}
+
+function attributionLine(row) {
+  if (!row || (row.channel && row.channel !== "x_mention")) return "";
+  const name = String(row.submitter_display_name || "").trim();
+  const handle = String(row.submitter_handle || "").trim().replace(/^@/, "");
+  const date = attributionDateEt(row.submitted_at);
+  if (!handle || !date) return "";
+  return `Requested via X by ${name} @${handle} · ${date}`.replace("by  @", "by @");
+}
+
+const PERSON_SURFACE = "person";
+const COMMS_SURFACES = new Set(["dog_comm", "red_folder_comm", "central_casting_comm"]);
+
+function rowsForSurface(rows, surface) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (surface === PERSON_SURFACE) {
+    return list.filter((row) => !row?.target_kind || row.target_kind === "person");
+  }
+  if (surface === "operation") {
+    return list.filter((row) => !row?.target_kind || row.target_kind === "operation");
+  }
+  if (COMMS_SURFACES.has(surface)) {
+    return list.filter((row) => !row?.target_kind || row.target_kind === surface);
+  }
+  return list;
+}
+
+/**
+ * Shared RequestAttribution partial.
+ * Muted meta under the title and above cites. Empty input renders nothing.
+ * Person surfaces (including Central Casting and Corona) show person rows only.
+ * A dig that kept a comms row is displayed on that comm, not on the person.
+ */
+export function RequestAttribution(rows, { surface = "" } = {}) {
+  const lines = rowsForSurface(rows, surface)
+    .slice()
+    .sort((a, b) => {
+      const at = String(a?.submitted_at || "");
+      const bt = String(b?.submitted_at || "");
+      if (at < bt) return -1;
+      if (at > bt) return 1;
+      return String(a?.subject_status_id || "").localeCompare(String(b?.subject_status_id || ""));
+    })
+    .map(attributionLine)
+    .filter(Boolean);
+  if (!lines.length) return "";
+  return lines
+    .map((line) => `<p class="meta-line request-attribution">${esc(line)}</p>`)
+    .join("");
+}
+
+export function requestAttributionHtml(rows, options) {
+  return RequestAttribution(rows, options);
+}
+
+function attributionFrom(row, attributions, surface) {
+  const source = attributions !== undefined ? attributions : row?.request_attributions;
+  return RequestAttribution(source, { surface });
+}
+
 export function citeFromRow(row = {}) {
   const snap = row.snapshot && typeof row.snapshot === "object" ? row.snapshot : {};
   const handle = String(row.handle || row.poster_handle || snap.handle || "").trim();
@@ -1469,6 +1556,7 @@ export function personHeader(row, extras = {}) {
         ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
         lines: [birth, origin, personTagChips(row), grokipediaBlock(row, extras)],
         citeHtml: citeFromRow(row),
+        attributionHtml: attributionFrom(row, extras.attributions, "person"),
       }),
     })}
   </header>`;
@@ -1571,12 +1659,12 @@ function personTagChips(row) {
   return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips}</p>`;
 }
 
-export function personDetail(row, { centralCastingClips = [] } = {}) {
+export function personDetail(row, { centralCastingClips = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
-      mediaHtml: personHeader(filled, { filled: keys, cite }),
+      mediaHtml: personHeader(filled, { filled: keys, cite, attributions }),
       afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips)}`,
       active: true,
       extraClass: "person-pane",
@@ -1628,7 +1716,7 @@ export function sourcePostDetail(row) {
   </article>`;
 }
 
-export function operationDetail(row) {
+export function operationDetail(row, { attributions } = {}) {
   const tags = normalizeOperationTags(row.tags);
   const tagLine = tags.length
     ? tags.map((id) => operationTagLabel(id)).join(", ")
@@ -1660,6 +1748,7 @@ export function operationDetail(row) {
             `<p class="meta-line">Arrests · ${esc(countCell(row.arrest_count))}</p>`,
           ],
           citeHtml: citeFromRow(row),
+          attributionHtml: attributionFrom(row, attributions, "operation"),
           bodyTitle: "Summary",
           bodyHtml: `<p class="synopsis">${esc(row.summary || "—")}</p>`,
           sourceKind: "sources",
@@ -1673,7 +1762,7 @@ export function operationDetail(row) {
 }
 
 /** Shared dog / red-folder / central-casting harvest detail: cite, post body, X link, supportive media. */
-export function commsDetail(spec, row) {
+export function commsDetail(spec, row, { attributions } = {}) {
   const grouped = !!spec.supportingGroups;
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
     commsKind: spec.id,
@@ -1698,6 +1787,17 @@ export function commsDetail(spec, row) {
         extraMedia: extras,
         metaHtml: detailMetaBlock({
           citeHtml: citeFromRow(row),
+          attributionHtml: attributionFrom(
+            row,
+            attributions,
+            spec.id === "dog"
+              ? "dog_comm"
+              : spec.id === "red_folder"
+                ? "red_folder_comm"
+                : spec.id === "central_casting"
+                  ? "central_casting_comm"
+                  : "",
+          ),
           sourceHtml: kindSourceHtml(row, { includeSupporting: !grouped }),
         }),
       }),
@@ -1707,12 +1807,12 @@ export function commsDetail(spec, row) {
   </article>`;
 }
 
-export function kindDetail(kind, row) {
-  return commsDetail(commsKind(kind), row);
+export function kindDetail(kind, row, options) {
+  return commsDetail(commsKind(kind), row, options);
 }
 
-export function dogDetail(row) {
-  return kindDetail("dog", row);
+export function dogDetail(row, options) {
+  return kindDetail("dog", row, options);
 }
 
 export function searchBody(items, q) {

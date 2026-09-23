@@ -28,6 +28,20 @@ Do not point the worker at a parked database. Do not wipe media.
 6. Complete sends only queue status fields (`subject_status_id`, `claim_owner`, `status`, `kept_person_slug`, `error_reason`). It does not insert a person.
 7. Soft-ack, when enabled, is exactly `Queued for ExitTrace review.` A final reply prefers one `https` URL `/people/{slug}` per KEEP. A fail-closed or rejected reason is sent only when that subject was soft-acked. Reply failure does not change queue status. The next worker pass retries unreplied rows.
 
+## Attribution
+
+The poller fills `mention_queue.author_display_name` (`TEXT DEFAULT ''`) from the mention author's X display name (`user.fields` includes `name`). That column is Render-only. It is not published and it is not the display source.
+
+On lab KEEP success from the x_mention promote path only, the worker copies the winning queue row into lab `request_attributions` (`channel` defaults to `x_mention`). Fail-closed and rejected digs do not write a row. The partial unique `(channel, subject_status_id) WHERE subject_status_id IS NOT NULL` keeps the first subject. A different subject kept onto the same target inserts another row.
+
+`request_attributions` is on `exittrace_lab_pub`. Checklist B: schema on both sides, `ALTER PUBLICATION … ADD TABLE request_attributions`, `REFRESH PUBLICATION WITH (copy_data = false)`, empty backfill is OK, then prove. See [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md). Never `copy_data=true`. No dual-write of KEEP rows to Render. Attribution reaches Render only by logical replication. `mention_url` is meta only and is not a cite. Media-delta does not apply.
+
+The shared `RequestAttribution` partial is a muted line under the title and above cites when rows exist, oldest first:
+
+`Requested via X by {display_name} @{handle} · {date ET}`
+
+Empty attributions hide the line. Multiple rows for one target all show, oldest first. Central Casting and Corona show that line on the person unless the dig kept a comms row. A kept comms row shows the line on that comm detail instead.
+
 ## Cadence, lease, limits
 
 | Knob | Default | Band |
