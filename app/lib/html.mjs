@@ -1520,7 +1520,7 @@ export function homeBody({ version }) {
     <div class="home-wordmark">
       <a class="pixel-link" href="/" aria-label="ExitTrace home">${pixelWordmark("EXITTRACE")}</a>
     </div>
-    <p class="ver">v${esc(version || "1.0.0")}</p>
+    <p class="ver">v${esc(version || "unknown")}</p>
     <form class="tui-search" action="/search" method="get" role="search">
       <label class="tui-search-label">
         <span class="chev" aria-hidden="true">〉</span>
