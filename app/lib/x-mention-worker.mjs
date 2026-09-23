@@ -22,10 +22,15 @@ export const COMPLETE_BODY_KEYS = Object.freeze([
 /** Claim-next calls per worker pass. Digs stay sequential inside this cap. */
 export const CLAIMS_PER_TICK = 5;
 
+/** Under the 10–15 minute claim lease (default 12). */
+export const DIG_TIMEOUT_MS = 9 * 60 * 1000;
+
 export function workerJournal(result) {
-  const count = Array.isArray(result?.results) ? result.results.length : 0;
-  if (!count) return "";
-  return `mention_worker results=${count}`;
+  const rows = Array.isArray(result?.results) ? result.results : [];
+  if (!rows.length) return "";
+  const errors = rows.filter((row) => row.reply_error || row.error).length;
+  if (errors) return `mention_worker results=${rows.length} errors=${errors}`;
+  return `mention_worker results=${rows.length}`;
 }
 
 const SCRUBBED = [
@@ -53,7 +58,7 @@ export function scrubDigEnv(env = process.env) {
   return next;
 }
 
-export function runDigCommand(row, { command, timeoutMs = 9 * 60 * 1000, env = process.env } = {}) {
+export function runDigCommand(row, { command, timeoutMs = DIG_TIMEOUT_MS, env = process.env } = {}) {
   if (!command) return Promise.reject(new Error("MENTION_DIG_COMMAND is unset"));
   return new Promise((resolve, reject) => {
     const child = spawn(command, {
@@ -168,27 +173,23 @@ export async function workerOnce({
   if (!token) throw new Error("MENTION_QUEUE_WORKER_TOKEN is unset");
   const pollMs = pollIntervalMs(env.MENTION_WORKER_POLL_MS || env.MENTION_POLL_MS);
   const results = [];
-  const unreplied = await requestJson(
-    fetchImpl,
-    "GET",
-    queueEndpoint(base, "/unreplied"),
-    token,
-  );
-  const pending = await requestJson(fetchImpl, "GET", queueEndpoint(base, "/pending"), token);
-  const unrepliedRows = unreplied.rows || [];
-  const pendingRows = pending.rows || [];
+  const work = await requestJson(fetchImpl, "GET", queueEndpoint(base, "/work"), token);
+  const unrepliedRows = work.unreplied || [];
+  const pendingRows = work.pending || [];
   if (!unrepliedRows.length && !pendingRows.length) {
     return { results, poll_ms: pollMs };
   }
   const ctx = { env, fetchImpl, token, base };
-  for (const row of unrepliedRows) {
-    const reply_error = await finishReply(row, ctx);
-    results.push({
-      subject_status_id: row.subject_status_id,
-      status: row.status,
-      reply_error,
-      swept: true,
-    });
+  if (unrepliedRows.length) {
+    for (const row of unrepliedRows) {
+      const reply_error = await finishReply(row, ctx);
+      results.push({
+        subject_status_id: row.subject_status_id,
+        status: row.status,
+        reply_error,
+        swept: true,
+      });
+    }
   }
   if (!pendingRows.length) return { results, poll_ms: pollMs };
   if (!digImpl && !env.MENTION_DIG_COMMAND) {

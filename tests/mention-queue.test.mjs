@@ -29,11 +29,13 @@ import { xBackoffMs } from "../app/lib/x-client.mjs";
 import {
   CLAIMS_PER_TICK,
   COMPLETE_BODY_KEYS,
+  DIG_TIMEOUT_MS,
   parseDigEnvelope,
   scrubDigEnv,
   workerJournal,
   workerOnce,
 } from "../app/lib/x-mention-worker.mjs";
+import { callWarmDig, serveWarmDig } from "../app/lib/x-mention-dig-warm.mjs";
 import {
   ALL_UPSERT_TABLES,
   PUBLISHED_TABLES,
@@ -319,6 +321,13 @@ test("bot and worker tokens are separate and fail closed", async () => {
   const workerPending = await requestPage("/api/mention-queue/pending", { token: WORKER });
   assert.equal(workerPending.status, 200);
   assert.equal(JSON.parse(workerPending.body).rows.length, 1);
+  const botWork = await requestPage("/api/mention-queue/work", { token: BOT });
+  assert.equal(botWork.status, 401);
+  const workerWork = await requestPage("/api/mention-queue/work", { token: WORKER });
+  assert.equal(workerWork.status, 200);
+  const workBody = JSON.parse(workerWork.body);
+  assert.equal(workBody.pending.length, 1);
+  assert.ok(Array.isArray(workBody.unreplied));
 
   const savedBot = process.env.MENTION_QUEUE_BOT_TOKEN;
   process.env.MENTION_QUEUE_BOT_TOKEN = WORKER;
@@ -617,11 +626,14 @@ test("worker reply failure does not send a second complete", async () => {
   const fetchImpl = async (url, opts) => {
     calls.push({ url: String(url), method: opts.method, body: opts.body });
     const target = String(url);
-    if (target.endsWith("/unreplied")) {
-      return { ok: true, status: 200, async text() { return JSON.stringify({ ok: true, rows: [] }); } };
-    }
-    if (target.endsWith("/pending")) {
-      return { ok: true, status: 200, async text() { return JSON.stringify({ ok: true, rows: [row] }); } };
+    if (target.endsWith("/work")) {
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true, pending: [row], unreplied: [] });
+        },
+      };
     }
     if (target.endsWith("/claim")) {
       const body = JSON.parse(opts.body);
@@ -807,7 +819,10 @@ test("soft-ack failure still advances since_id and continues the poll", async ()
   assert.equal(result.results[1].reply_error, "");
   assert.equal(calls.filter((call) => call.url.endsWith("/api/mention-queue")).length, 2);
   assert.equal(calls.filter((call) => call.url.includes("/mentions")).length, 1);
-  assert.match(calls.find((call) => call.url.includes("/mentions")).url, /since_id=/);
+  const mentionUrl = calls.find((call) => call.url.includes("/mentions")).url;
+  assert.match(mentionUrl, /since_id=/);
+  assert.match(mentionUrl, /max_results=10/);
+  assert.equal(calls.some((call) => /\/users\/\d+$/.test(String(call.url).split("?")[0])), false);
   assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, "1000000000000000002");
   assert.equal(result.poll_ms, 10 * 60 * 1000);
 });
@@ -892,8 +907,9 @@ test("429 backs off in-process and does not shrink the poll interval", async () 
   assert.equal(result.results.length, 0);
   assert.equal(result.since_id, "1000000000000000090");
   assert.equal(result.poll_ms, 10 * 60 * 1000);
-  assert.equal(hits, 3);
-  assert.deepEqual(sleeps, [1000, 2000]);
+  assert.equal(hits, 1);
+  assert.deepEqual(sleeps, [1000]);
+  assert.match(mentionUrls[0], /max_results=10/);
   assert.equal(mentionUrls.every((url) => url.includes("since_id=1000000000000000090")), true);
   assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, "1000000000000000090");
   assert.match(pollJournal(result), /^mention_poll backoff=429 /);
@@ -906,8 +922,8 @@ test("empty mention queue skips dig, claim, and reply", async () => {
   const fetchImpl = async (url) => {
     const target = String(url);
     urls.push(target);
-    if (target.endsWith("/unreplied") || target.endsWith("/pending")) {
-      return jsonResponse(200, { ok: true, rows: [] });
+    if (target.endsWith("/work")) {
+      return jsonResponse(200, { ok: true, pending: [], unreplied: [] });
     }
     throw new Error(`unexpected ${target}`);
   };
@@ -925,6 +941,7 @@ test("empty mention queue skips dig, claim, and reply", async () => {
   });
   assert.equal(result.results.length, 0);
   assert.equal(digs, 0);
+  assert.equal(urls.filter((url) => url.endsWith("/work")).length, 1);
   assert.equal(urls.some((url) => url.endsWith("/claim")), false);
   assert.equal(urls.some((url) => url.includes("/reply")), false);
   assert.equal(urls.some((url) => url.includes("/tweets")), false);
@@ -940,10 +957,11 @@ test("worker claim-next stops at five and a failed reply does not stop the batch
   let tweets = 0;
   const fetchImpl = async (url, opts) => {
     const target = String(url);
-    if (target.endsWith("/unreplied")) {
+    if (target.endsWith("/work")) {
       return jsonResponse(200, {
         ok: true,
-        rows: [
+        pending: [{ subject_status_id: "pending-gate" }],
+        unreplied: [
           {
             subject_status_id: "7100000000000000001",
             mention_status_id: "7100000000000000002",
@@ -956,9 +974,6 @@ test("worker claim-next stops at five and a failed reply does not stop the batch
           },
         ],
       });
-    }
-    if (target.endsWith("/pending")) {
-      return jsonResponse(200, { ok: true, rows: [{ subject_status_id: "pending-gate" }] });
     }
     if (target.includes("/reply-plan")) {
       return jsonResponse(200, {
@@ -1047,7 +1062,93 @@ test("quiet journal path and staggered 10 minute timers", () => {
   assert.match(stamp, /at most 5 claims/);
   assert.match(stamp, /OnUnitActiveSec=10min/);
   const queueDoc = fs.readFileSync(path.join(ROOT, "docs/X_MENTION_QUEUE.md"), "utf8");
+  const queueSql = fs.readFileSync(path.join(ROOT, "app/lib/mention-queue.mjs"), "utf8");
   assert.match(queueDoc, /Worf before merge/);
+  assert.match(queueDoc, /Hub runbook note/);
+  assert.match(queueDoc, /created: true/);
+  assert.match(queueDoc, /x-mention-dig-warm\.mjs/);
+  assert.match(queueSql, /FOR UPDATE SKIP LOCKED/);
+  assert.equal(DIG_TIMEOUT_MS, 9 * 60 * 1000);
+  assert.ok(DIG_TIMEOUT_MS < LEASE_MIN_MS);
+  assert.equal(POLL_MIN_MS, 5 * 60 * 1000);
+  assert.match(pollJournal({ since_id: "1", results: [{ error: "enqueue_failed" }] }), /errors=1/);
+  assert.match(workerJournal({ results: [{ reply_error: "reply_failed" }] }), /errors=1/);
+});
+
+test("zero pending skips claim and dig; an unreplied row still gets a reply sweep", async () => {
+  const urls = [];
+  let digs = 0;
+  const fetchImpl = async (url) => {
+    const target = String(url);
+    urls.push(target);
+    if (target.endsWith("/work")) {
+      return jsonResponse(200, {
+        ok: true,
+        pending: [],
+        unreplied: [
+          {
+            subject_status_id: "7400000000000000001",
+            mention_status_id: "7400000000000000002",
+            status: "kept",
+          },
+        ],
+      });
+    }
+    if (target.includes("/reply-plan")) {
+      return jsonResponse(200, { ok: true, reply: false, reason: "kept" });
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const result = await workerOnce({
+    env: {
+      MENTION_WORKER_DATABASE: "lab",
+      MENTION_QUEUE_URL: "https://queue.example",
+      MENTION_QUEUE_WORKER_TOKEN: WORKER,
+    },
+    fetchImpl,
+    digImpl: async () => {
+      digs += 1;
+      return { outcome: "fail_closed", error_reason: "missing_subject" };
+    },
+  });
+  assert.equal(digs, 0);
+  assert.equal(urls.some((url) => url.endsWith("/claim")), false);
+  assert.equal(urls.some((url) => url.includes("/reply-plan")), true);
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].swept, true);
+  assert.equal(result.results[0].reply_error, "");
+});
+
+test("warm helper stays idle until a row is sent and digs one at a time", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-warm-"));
+  const socketPath = path.join(dir, "dig.sock");
+  const log = path.join(dir, "log");
+  const inner = path.join(dir, "inner.mjs");
+  fs.writeFileSync(
+    inner,
+    `import fs from "fs";
+const log = ${JSON.stringify(log)};
+fs.appendFileSync(log, "start\\n");
+setTimeout(() => {
+  fs.appendFileSync(log, "end\\n");
+  process.stdout.write(JSON.stringify({ outcome: "fail_closed", error_reason: "missing_subject" }));
+  process.exit(0);
+}, 40);
+`,
+  );
+  const command = `${process.execPath} ${inner}`;
+  const helper = await serveWarmDig({ socketPath, command, timeoutMs: 5000 });
+  assert.equal(helper.started, 0);
+  assert.equal(fs.existsSync(log), false);
+  const [first, second] = await Promise.all([
+    callWarmDig({ socketPath, row: { subject_status_id: "1" } }),
+    callWarmDig({ socketPath, row: { subject_status_id: "2" } }),
+  ]);
+  assert.equal(first.error_reason, "missing_subject");
+  assert.equal(second.error_reason, "missing_subject");
+  assert.equal(helper.started, 2);
+  assert.equal(fs.readFileSync(log, "utf8"), "start\nend\nstart\nend\n");
+  await helper.close();
 });
 
 function runNode(script, args, env = {}) {

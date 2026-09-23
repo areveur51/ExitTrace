@@ -7,7 +7,7 @@ import fs from "fs";
 import path from "path";
 import { SOFT_ACK_TEXT } from "./mention-dig.mjs";
 import { pollIntervalMs } from "./mention-queue.mjs";
-import { fetchMentions, postReply } from "./x-client.mjs";
+import { fetchMentions, postReply, xBackoffMs } from "./x-client.mjs";
 import { compareSnowflake, mentionsFromApiPayload, sortMentionsOldestFirst } from "./x-mentions.mjs";
 
 export { SOFT_ACK_TEXT };
@@ -24,13 +24,15 @@ export function shouldSoftAck(env, body) {
   return true;
 }
 
-/** Empty passes stay out of the journal. A 402/429 backoff is one line, not a success line. */
+/** Empty success stays quiet. Non-empty work, errors, and 402/429 are logged. */
 export function pollJournal(result) {
   const since = result?.since_id || "";
   if (result?.backoff) return `mention_poll backoff=${result.backoff} since=${since}`;
-  const count = Array.isArray(result?.results) ? result.results.length : 0;
-  if (!count) return "";
-  return `mention_poll since=${since} results=${count}`;
+  const rows = Array.isArray(result?.results) ? result.results : [];
+  if (!rows.length) return "";
+  const errors = rows.filter((row) => row.reply_error || row.error).length;
+  if (errors) return `mention_poll since=${since} results=${rows.length} errors=${errors}`;
+  return `mention_poll since=${since} results=${rows.length}`;
 }
 
 export function queueEndpoint(base, suffix = "") {
@@ -94,9 +96,12 @@ export async function pollOnce({
   const pollMs = pollIntervalMs(env.MENTION_POLL_MS);
   let payload;
   try {
-    payload = await fetchMentions({ sinceId, fetchImpl, env, sleepImpl });
+    payload = await fetchMentions({ sinceId, fetchImpl, env });
   } catch (err) {
     if (err?.status === 402 || err?.status === 429) {
+      const wait = xBackoffMs(err.status, err.retryAfter, 1);
+      const sleep = sleepImpl || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+      if (wait > 0) await sleep(wait);
       return { since_id: sinceId, results: [], backoff: err.status, poll_ms: pollMs };
     }
     throw err;

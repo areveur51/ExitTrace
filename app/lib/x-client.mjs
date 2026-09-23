@@ -4,8 +4,7 @@ import { oauth1Authorization, oauthPercentEncode } from "./x-oauth.mjs";
 
 export const X_API_BASE_DEFAULT = "https://api.x.com/2";
 
-/** Same mentions GET is retried in-process. This does not change the host timer. */
-export const X_BACKOFF_ATTEMPTS = 3;
+/** In-process wait after one failed mentions GET. This does not change the host timer. */
 export const X_BACKOFF_CAP_MS = 60 * 1000;
 
 const CREDENTIAL_NAMES = [
@@ -52,10 +51,6 @@ function signedHeaders(method, url, params, creds) {
   };
 }
 
-function defaultSleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function headerValue(res, name) {
   const headers = res?.headers;
   if (!headers) return "";
@@ -79,12 +74,14 @@ export function xBackoffMs(status, retryAfter, attempt = 1) {
   return Math.min(X_BACKOFF_CAP_MS, exp);
 }
 
+/**
+ * One mentions GET. Author name and handle come from this payload's user expansion.
+ * Do not call /users/:id once per mention. A 402 or 429 stops the pass; the poller backs off.
+ */
 export async function fetchMentions({
   sinceId = "",
   fetchImpl = globalThis.fetch,
   env = process.env,
-  sleepImpl = defaultSleep,
-  maxAttempts = X_BACKOFF_ATTEMPTS,
 } = {}) {
   const creds = xCredentials(env);
   const url = `${xApiBase(env)}/users/${encodeURIComponent(creds.userId)}/mentions`;
@@ -101,32 +98,21 @@ export async function fetchMentions({
     .map((key) => `${oauthPercentEncode(key)}=${oauthPercentEncode(params[key])}`)
     .join("&");
   const headers = signedHeaders("GET", url, params, creds);
-  const attempts = Math.max(1, Number(maxAttempts) || X_BACKOFF_ATTEMPTS);
-  let lastStatus = 0;
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    const res = await fetchImpl(`${url}?${query}`, { method: "GET", headers });
-    const text = await res.text();
-    let payload = {};
-    try {
-      payload = text ? JSON.parse(text) : {};
-    } catch {
-      payload = {};
-    }
-    if (res.ok) return payload;
-    lastStatus = Number(res.status) || 0;
-    const retry = lastStatus === 402 || lastStatus === 429;
-    if (retry && attempt < attempts) {
-      const wait = xBackoffMs(lastStatus, headerValue(res, "retry-after"), attempt);
-      if (wait > 0) await sleepImpl(wait);
-      continue;
-    }
+  const res = await fetchImpl(`${url}?${query}`, { method: "GET", headers });
+  const text = await res.text();
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = {};
+  }
+  if (!res.ok) {
     const error = new Error("X mentions fetch failed");
-    error.status = lastStatus;
+    error.status = Number(res.status) || 0;
+    error.retryAfter = headerValue(res, "retry-after");
     throw error;
   }
-  const error = new Error("X mentions fetch failed");
-  error.status = lastStatus;
-  throw error;
+  return payload;
 }
 
 export async function postReply({
