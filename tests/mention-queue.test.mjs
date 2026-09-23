@@ -24,7 +24,15 @@ import {
 } from "../app/lib/mention-queue.mjs";
 import { oauth1Authorization } from "../app/lib/x-oauth.mjs";
 import { mentionsFromApiPayload, resolveSubjectStatusId } from "../app/lib/x-mentions.mjs";
-import { pollJournal, pollOnce, shouldSoftAck } from "../app/lib/x-mention-poll.mjs";
+import {
+  classifyQueueHttp,
+  isCfChallenge,
+  isEnqueueAck,
+  pollJournal,
+  pollOnce,
+  queueBackoffMs,
+  shouldSoftAck,
+} from "../app/lib/x-mention-poll.mjs";
 import { xBackoffMs } from "../app/lib/x-client.mjs";
 import {
   CLAIMS_PER_TICK,
@@ -282,6 +290,8 @@ test("bot and worker tokens are separate and fail closed", async () => {
   const body = JSON.stringify(mention());
   const missing = await requestPage("/api/mention-queue", { method: "POST", body });
   assert.equal(missing.status, 401);
+  assert.deepEqual(JSON.parse(missing.body), { ok: false, error: "unauthorized" });
+  assert.doesNotMatch(missing.body, /<!doctype html|<html|Just a moment/i);
 
   const botEnqueue = await requestPage("/api/mention-queue", {
     method: "POST",
@@ -325,6 +335,21 @@ test("bot and worker tokens are separate and fail closed", async () => {
   assert.equal(botWork.status, 401);
   const workerWork = await requestPage("/api/mention-queue/work", { token: WORKER });
   assert.equal(workerWork.status, 200);
+  const probe = await requestPage("/api/mention-queue/preflight", {
+    method: "POST",
+    token: BOT,
+    body: JSON.stringify({ probe: true }),
+  });
+  assert.equal(probe.status, 200);
+  assert.deepEqual(JSON.parse(probe.body), { ok: true, probe: true });
+  const workerProbe = await requestPage("/api/mention-queue/preflight", {
+    method: "POST",
+    token: WORKER,
+    body: "{}",
+  });
+  assert.equal(workerProbe.status, 401);
+  const pendingAfterProbe = await requestPage("/api/mention-queue/pending", { token: WORKER });
+  assert.equal(JSON.parse(pendingAfterProbe.body).rows.length, 1);
   const workBody = JSON.parse(workerWork.body);
   assert.equal(workBody.pending.length, 1);
   assert.ok(Array.isArray(workBody.unreplied));
@@ -562,6 +587,9 @@ test("poller posts the quoted subject and soft-acks with the fixed line", async 
   };
   const fetchImpl = async (url, opts) => {
     calls.push({ url: String(url), method: opts.method, body: opts.body, headers: opts.headers });
+    if (String(url).endsWith("/api/mention-queue/preflight")) {
+      return { ok: true, status: 200, async text() { return JSON.stringify({ ok: true, probe: true }); } };
+    }
     if (String(url).includes("/mentions")) {
       return {
         ok: true,
@@ -778,6 +806,7 @@ test("soft-ack failure still advances since_id and continues the poll", async ()
   const fetchImpl = async (url, opts) => {
     calls.push({ url: String(url), body: opts?.body });
     const target = String(url);
+    if (target.endsWith("/api/mention-queue/preflight")) return jsonResponse(200, { ok: true, probe: true });
     if (target.includes("/mentions")) {
       return jsonResponse(200, mentionPayload([
         {
@@ -841,6 +870,7 @@ test("soft-ack is skipped for duplicates and when the flag is off", async () => 
   const fetchImpl = async (url, opts) => {
     calls.push(String(url));
     const target = String(url);
+    if (target.endsWith("/api/mention-queue/preflight")) return jsonResponse(200, { ok: true, probe: true });
     if (target.includes("/mentions")) {
       return jsonResponse(200, mentionPayload([
         { id: "1000000000000000011", author_id: "7", text: "again" },
@@ -882,6 +912,7 @@ test("429 backs off in-process and does not shrink the poll interval", async () 
   let hits = 0;
   const fetchImpl = async (url) => {
     const target = String(url);
+    if (target.endsWith("/api/mention-queue/preflight")) return jsonResponse(200, { ok: true, probe: true });
     if (target.includes("/mentions")) {
       hits += 1;
       mentionUrls.push(target);
@@ -914,6 +945,376 @@ test("429 backs off in-process and does not shrink the poll interval", async () 
   assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, "1000000000000000090");
   assert.match(pollJournal(result), /^mention_poll backoff=429 /);
   assert.equal(pollJournal({ since_id: "1000000000000000090", results: [] }), "");
+});
+
+function htmlChallenge() {
+  return {
+    ok: false,
+    status: 403,
+    headers: {
+      get(name) {
+        const key = String(name || "").toLowerCase();
+        if (key === "content-type") return "text/html; charset=UTF-8";
+        if (key === "cf-mitigated") return "challenge";
+        return "";
+      },
+    },
+    async text() {
+      return "<!DOCTYPE html><html><title>Just a moment...</title><body>Cloudflare</body></html>";
+    },
+  };
+}
+
+test("queue preflight failure skips the X mentions GET", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-preflight-"));
+  const statePath = path.join(dir, "since.json");
+  const since = "1000000000000000091";
+  fs.writeFileSync(statePath, `${JSON.stringify({ since_id: since })}\n`);
+  let mentions = 0;
+  const fetchImpl = async (url) => {
+    const target = String(url);
+    if (target.endsWith("/api/mention-queue/preflight")) {
+      throw new Error("connect ECONNREFUSED");
+    }
+    if (target.includes("/mentions")) {
+      mentions += 1;
+      return jsonResponse(200, mentionPayload([]));
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const sleeps = [];
+  const result = await pollOnce({
+    env: X_ENV,
+    fetchImpl,
+    statePath,
+    sleepImpl: async (ms) => {
+      sleeps.push(ms);
+    },
+  });
+  assert.equal(mentions, 0);
+  assert.equal(result.preflight, "down");
+  assert.equal(result.backoff, "down");
+  assert.equal(result.since_id, since);
+  assert.equal(result.results.length, 0);
+  assert.equal(result.poll_ms, 10 * 60 * 1000);
+  assert.deepEqual(sleeps, [1000]);
+  assert.equal(queueBackoffMs(0, "", 1), 1000);
+  assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, since);
+  assert.match(pollJournal(result), new RegExp(`^mention_poll backoff=down since=${since}$`));
+});
+
+test("401 on the queue is fail-closed and does not advance since_id", async () => {
+  const since = "1000000000000000092";
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-401-"));
+  const statePath = path.join(dir, "since.json");
+  fs.writeFileSync(statePath, `${JSON.stringify({ since_id: since })}\n`);
+  let mentions = 0;
+  const sleeps = [];
+  const preflightDenied = async (url) => {
+    const target = String(url);
+    if (target.endsWith("/api/mention-queue/preflight")) {
+      return jsonResponse(401, { ok: false, error: "unauthorized" });
+    }
+    if (target.includes("/mentions")) {
+      mentions += 1;
+      return jsonResponse(200, mentionPayload([{ id: "1000000000000000093", author_id: "7", text: "lead" }]));
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const denied = await pollOnce({
+    env: X_ENV,
+    fetchImpl: preflightDenied,
+    statePath,
+    sleepImpl: async (ms) => {
+      sleeps.push(ms);
+    },
+  });
+  assert.equal(mentions, 0);
+  assert.equal(denied.fail_closed, 401);
+  assert.equal(denied.since_id, since);
+  assert.equal(denied.backoff, undefined);
+  assert.deepEqual(sleeps, []);
+  assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, since);
+  assert.match(pollJournal(denied), /fail_closed=401/);
+  assert.doesNotMatch(pollJournal(denied), /results=/);
+
+  const htmlDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-401-html-"));
+  const htmlState = path.join(htmlDir, "since.json");
+  fs.writeFileSync(htmlState, `${JSON.stringify({ since_id: since })}\n`);
+  const htmlSleeps = [];
+  let htmlMentions = 0;
+  const htmlDenied = await pollOnce({
+    env: X_ENV,
+    statePath: htmlState,
+    sleepImpl: async (ms) => {
+      htmlSleeps.push(ms);
+    },
+    fetchImpl: async (url) => {
+      const target = String(url);
+      if (target.endsWith("/api/mention-queue/preflight")) {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: (name) => (String(name).toLowerCase() === "content-type" ? "text/html" : "") },
+          async text() {
+            return "<!DOCTYPE html><html><title>Just a moment...</title></html>";
+          },
+        };
+      }
+      if (target.includes("/mentions")) {
+        htmlMentions += 1;
+        return jsonResponse(200, mentionPayload([]));
+      }
+      throw new Error(`unexpected ${target}`);
+    },
+  });
+  assert.equal(htmlMentions, 0);
+  assert.equal(htmlDenied.fail_closed, undefined);
+  assert.equal(htmlDenied.backoff, 401);
+  assert.equal(htmlDenied.since_id, since);
+  assert.deepEqual(htmlSleeps, [1000]);
+  assert.equal(JSON.parse(fs.readFileSync(htmlState, "utf8")).since_id, since);
+
+  const enqueueDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-401-enqueue-"));
+  const enqueueState = path.join(enqueueDir, "since.json");
+  fs.writeFileSync(enqueueState, `${JSON.stringify({ since_id: since })}\n`);
+  const calls = [];
+  const enqueueDenied = async (url) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.endsWith("/api/mention-queue/preflight")) return jsonResponse(200, { ok: true, probe: true });
+    if (target.includes("/mentions")) {
+      return jsonResponse(200, mentionPayload([{ id: "1000000000000000093", author_id: "7", text: "lead" }]));
+    }
+    if (target.endsWith("/api/mention-queue")) return jsonResponse(401, { ok: false, error: "unauthorized" });
+    throw new Error(`unexpected ${target}`);
+  };
+  const queued = await pollOnce({ env: X_ENV, fetchImpl: enqueueDenied, statePath: enqueueState });
+  assert.equal(queued.fail_closed, 401);
+  assert.equal(queued.since_id, since);
+  assert.equal(queued.results[0].error, "unauthorized");
+  assert.equal(JSON.parse(fs.readFileSync(enqueueState, "utf8")).since_id, since);
+  assert.equal(calls.some((url) => url.includes("/mentions")), true);
+  assert.equal(calls.some((url) => url.includes("/tweets")), false);
+  assert.ok(calls.findIndex((url) => url.endsWith("/preflight")) < calls.findIndex((url) => url.includes("/mentions")));
+});
+
+test("403 challenge and 5xx back off without advancing since_id", async () => {
+  assert.equal(queueBackoffMs(401, "2", 1), 0);
+  assert.equal(queueBackoffMs(403, "", 1), 1000);
+  assert.equal(queueBackoffMs(500, "2", 1), 2000);
+  assert.ok(queueBackoffMs(503, "99999", 1) <= 60 * 1000);
+  assert.equal(isCfChallenge(htmlChallenge()), true);
+  assert.equal(
+    isCfChallenge({ status: 403, text: "<html>Just a moment...</html>", body: {} }),
+    true,
+  );
+  assert.equal(
+    isCfChallenge({ status: 403, body: { ok: false, error: "blocked" }, text: "{\"ok\":false,\"error\":\"blocked\"}" }),
+    false,
+  );
+  assert.equal(
+    classifyQueueHttp({ status: 403, ok: false, body: { ok: false, error: "blocked" }, text: "{\"ok\":false,\"error\":\"blocked\"}" }),
+    "stop",
+  );
+  assert.equal(classifyQueueHttp(htmlChallenge()), "backoff");
+  assert.equal(classifyQueueHttp({ status: 500, ok: false, body: { ok: false, error: "error" }, text: "{}" }), "backoff");
+  assert.equal(classifyQueueHttp({ status: 401, ok: false, body: { ok: false, error: "unauthorized" }, text: "{\"ok\":false,\"error\":\"unauthorized\"}" }), "fail_closed");
+  assert.equal(
+    classifyQueueHttp({ status: 401, ok: false, body: {}, text: "<html>Just a moment...</html>" }),
+    "backoff",
+  );
+
+  const since = "1000000000000000094";
+  const challengeDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-cf-"));
+  const challengeState = path.join(challengeDir, "since.json");
+  fs.writeFileSync(challengeState, `${JSON.stringify({ since_id: since })}\n`);
+  const challengeSleeps = [];
+  let challengeMentions = 0;
+  const challenge = await pollOnce({
+    env: X_ENV,
+    statePath: challengeState,
+    sleepImpl: async (ms) => {
+      challengeSleeps.push(ms);
+    },
+    fetchImpl: async (url) => {
+      const target = String(url);
+      if (target.endsWith("/api/mention-queue/preflight")) return htmlChallenge();
+      if (target.includes("/mentions")) {
+        challengeMentions += 1;
+        return jsonResponse(200, mentionPayload([]));
+      }
+      throw new Error(`unexpected ${target}`);
+    },
+  });
+  assert.equal(challengeMentions, 0);
+  assert.equal(challenge.backoff, 403);
+  assert.equal(challenge.since_id, since);
+  assert.deepEqual(challengeSleeps, [1000]);
+  assert.equal(challenge.poll_ms, 10 * 60 * 1000);
+  assert.equal(JSON.parse(fs.readFileSync(challengeState, "utf8")).since_id, since);
+  assert.match(pollJournal(challenge), /^mention_poll backoff=403 /);
+
+  const serverDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-5xx-"));
+  const serverState = path.join(serverDir, "since.json");
+  fs.writeFileSync(serverState, `${JSON.stringify({ since_id: since })}\n`);
+  const serverSleeps = [];
+  let enqueues = 0;
+  const server = await pollOnce({
+    env: X_ENV,
+    statePath: serverState,
+    sleepImpl: async (ms) => {
+      serverSleeps.push(ms);
+    },
+    fetchImpl: async (url) => {
+      const target = String(url);
+      if (target.endsWith("/api/mention-queue/preflight")) return jsonResponse(200, { ok: true, probe: true });
+      if (target.includes("/mentions")) {
+        return jsonResponse(200, mentionPayload([
+          { id: "1000000000000000095", author_id: "7", text: "one" },
+          { id: "1000000000000000096", author_id: "7", text: "two" },
+        ]));
+      }
+      if (target.endsWith("/api/mention-queue")) {
+        enqueues += 1;
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: (name) => (String(name).toLowerCase() === "retry-after" ? "2" : "") },
+          async text() {
+            return JSON.stringify({ ok: false, error: "error" });
+          },
+        };
+      }
+      throw new Error(`unexpected ${target}`);
+    },
+  });
+  assert.equal(enqueues, 1);
+  assert.equal(server.backoff, 503);
+  assert.equal(server.since_id, since);
+  assert.deepEqual(serverSleeps, [2000]);
+  assert.equal(server.results[0].error, "error");
+  assert.equal(JSON.parse(fs.readFileSync(serverState, "utf8")).since_id, since);
+  assert.equal(isEnqueueAck({ ok: true }), false);
+
+  const partialDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-partial-"));
+  const partialState = path.join(partialDir, "since.json");
+  const partialSince = "1000000000000000080";
+  fs.writeFileSync(partialState, `${JSON.stringify({ since_id: partialSince })}\n`);
+  const enqueuedIds = [];
+  const partial = await pollOnce({
+    env: X_ENV,
+    statePath: partialState,
+    sleepImpl: async () => {},
+    fetchImpl: async (url, opts) => {
+      const target = String(url);
+      if (target.endsWith("/api/mention-queue/preflight")) return jsonResponse(200, { ok: true, probe: true });
+      if (target.includes("/mentions")) {
+        return jsonResponse(200, mentionPayload([
+          { id: "1000000000000000082", author_id: "7", text: "newer" },
+          { id: "1000000000000000081", author_id: "7", text: "older" },
+        ]));
+      }
+      if (target.endsWith("/api/mention-queue")) {
+        const posted = JSON.parse(opts.body);
+        enqueuedIds.push(posted.mention_status_id);
+        if (posted.mention_status_id === "1000000000000000081") {
+          return jsonResponse(201, {
+            ok: true,
+            created: true,
+            duplicate: false,
+            row: { subject_status_id: posted.subject_status_id, reply_soft_at: null },
+          });
+        }
+        return jsonResponse(503, { ok: false, error: "error" });
+      }
+      throw new Error(`unexpected ${target}`);
+    },
+  });
+  assert.deepEqual(enqueuedIds, ["1000000000000000081", "1000000000000000082"]);
+  assert.equal(partial.since_id, "1000000000000000081");
+  assert.equal(partial.backoff, 503);
+  assert.notEqual(partial.since_id, "1000000000000000082");
+  assert.equal(JSON.parse(fs.readFileSync(partialState, "utf8")).since_id, "1000000000000000081");
+  assert.equal(partial.results.filter((row) => row.error).length, 1);
+  assert.equal(partial.results.filter((row) => !row.error).length, 1);
+});
+
+test("since_id advances only after an ok enqueue ack", async () => {
+  const since = "1000000000000000097";
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-ack-only-"));
+  const statePath = path.join(dir, "since.json");
+  fs.writeFileSync(statePath, `${JSON.stringify({ since_id: since })}\n`);
+  let mode = "bare";
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.endsWith("/api/mention-queue/preflight")) return jsonResponse(200, { ok: true, probe: true });
+    if (target.includes("/mentions")) {
+      return jsonResponse(200, mentionPayload([
+        { id: "1000000000000000098", author_id: "7", text: "lead" },
+      ]));
+    }
+    if (target.endsWith("/api/mention-queue")) {
+      const posted = JSON.parse(opts.body);
+      assert.equal(posted.mention_status_id, "1000000000000000098");
+      if (mode === "bare") return jsonResponse(200, { ok: true });
+      if (mode === "created") {
+        return jsonResponse(201, {
+          ok: true,
+          created: true,
+          duplicate: false,
+          row: { subject_status_id: posted.subject_status_id, reply_soft_at: null },
+        });
+      }
+      return jsonResponse(200, {
+        ok: true,
+        created: false,
+        duplicate: true,
+        row: { subject_status_id: posted.subject_status_id, reply_soft_at: null },
+      });
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const bare = await pollOnce({ env: X_ENV, fetchImpl, statePath });
+  assert.equal(bare.since_id, since);
+  assert.equal(bare.results[0].error, "enqueue_failed");
+  assert.equal(bare.fail_closed, undefined);
+  assert.equal(bare.backoff, undefined);
+  assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, since);
+  assert.equal(calls.filter((url) => url.includes("/mentions")).length, 1);
+  assert.equal(calls.some((url) => url.includes("/tweets")), false);
+
+  mode = "created";
+  const created = await pollOnce({ env: X_ENV, fetchImpl, statePath });
+  assert.equal(created.since_id, "1000000000000000098");
+  assert.equal(created.results[0].error, undefined);
+  assert.equal(created.results[0].reply_error, "");
+  assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, "1000000000000000098");
+  assert.equal(calls.filter((url) => url.includes("/tweets")).length, 0);
+
+  mode = "duplicate";
+  const duplicate = await pollOnce({ env: X_ENV, fetchImpl, statePath });
+  assert.equal(duplicate.since_id, "1000000000000000098");
+  assert.equal(duplicate.results[0].duplicate, true);
+  assert.equal(duplicate.results[0].reply_error, "");
+  const perf = fs.readFileSync(path.join(ROOT, "docs/X_MENTION_PERF.md"), "utf8");
+  const queueDoc = fs.readFileSync(path.join(ROOT, "docs/X_MENTION_QUEUE.md"), "utf8");
+  assert.match(perf, /Ops checklist/);
+  assert.match(perf, /\/api\/mention-queue/);
+  assert.match(perf, /Soft-ack stays OFF/);
+  assert.match(perf, /preflight/i);
+  assert.match(queueDoc, /since_id/);
+  assert.match(queueDoc, /created: true/);
+  assert.match(queueDoc, /duplicate: true/);
+  assert.match(queueDoc, /## Ops checklist/);
+  assert.match(queueDoc, /CF Skip on `\/api\/mention-queue`/);
+  assert.match(queueDoc, /MENTION_QUEUE_BOT_TOKEN` ≠ `MENTION_QUEUE_WORKER_TOKEN/);
+  assert.match(queueDoc, /Soft-ack is `0`/);
+  assert.match(queueDoc, /MENTION_STATE_PATH` is a durable host file/);
+  assert.match(queueDoc, /x-mention-dig-warm\.mjs/);
+  assert.match(queueDoc, /401 is JSON/);
 });
 
 test("empty mention queue skips dig, claim, and reply", async () => {

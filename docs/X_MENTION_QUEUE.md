@@ -20,13 +20,13 @@ Do not point the worker at a parked database. Do not wipe media.
 
 ## Flow
 
-1. The poller reads mentions and resolves `subject_status_id`: a referenced post snowflake when one is present (quoted, then replied_to, then any other reference), otherwise the mention id.
-2. It POSTs JSON to the Render queue with `Authorization: Bearer` `MENTION_QUEUE_BOT_TOKEN`. The same `subject_status_id` is idempotent. The first row wins. A later mention of that subject is a duplicate (no second dig). Soft-ack defaults off. When `MENTION_SOFT_ACK` is on, it is sent only for an enqueue with `created: true`.
+1. The poller POSTs `/api/mention-queue/preflight` with the bot token before it calls X. If that probe is unreachable, an HTML challenge, or 5xx, the pass skips the mentions API and backs off in process. A JSON 401 is config fail-closed: log it, do not call X, do not advance `since_id`. On a probe ack it reads mentions and resolves `subject_status_id`: a referenced post snowflake when one is present (quoted, then replied_to, then any other reference), otherwise the mention id. `since_id` does not move past a mention that was not enqueued.
+2. It POSTs JSON to the Render queue with `Authorization: Bearer` `MENTION_QUEUE_BOT_TOKEN`. The same `subject_status_id` is idempotent. The first row wins. A later mention of that subject is a duplicate (no second dig). Soft-ack defaults off. When `MENTION_SOFT_ACK` is on, it is sent only for an enqueue with `created: true`. `since_id` advances only after that POST returns JSON `ok: true` with `created: true` or `duplicate: true`.
 3. The worker GETs `/api/mention-queue/work` with `MENTION_QUEUE_WORKER_TOKEN`. That body is `{ pending, unreplied }`. Zero pending rows means no claim and no dig. An empty unreplied list skips the final-reply sweep. Claim-next POSTs an empty `subject_status_id` (`SKIP LOCKED`) until `claimed: false`, at most 5 claims per pass. The claim lease defaults to 12 minutes and is clamped to 10–15 minutes. The dig timeout is 9 minutes, under that lease.
 4. The host dig command reads one mention JSON object on stdin and writes one JSON envelope on stdout. It does not receive queue tokens or X tokens. If it is unset, the worker refuses to claim.
 5. `digMention` parks a name lead with `source=x_mention` and empty cites, then calls `processAddRequest` only when the envelope already has a subject and at least two official cites that are not the mention or the subject status. Otherwise the queue row becomes `fail_closed` or `rejected`.
 6. Complete sends only queue status fields (`subject_status_id`, `claim_owner`, `status`, `kept_person_slug`, `error_reason`). It does not insert a person.
-7. Soft-ack, when enabled, is exactly `Queued for ExitTrace review.` A final reply prefers one `https` URL `/people/{slug}` per KEEP. A fail-closed or rejected reason is sent only when that subject was soft-acked. A failed soft-ack or final reply does not stop the rest of the pass and does not change queue status. A successful enqueue advances `since_id` even when the soft-ack fails. The next worker pass retries unreplied rows.
+7. Soft-ack, when enabled, is exactly `Queued for ExitTrace review.` A final reply prefers one `https` URL `/people/{slug}` per KEEP. A fail-closed or rejected reason is sent only when that subject was soft-acked. A failed soft-ack or final reply does not stop the rest of the pass and does not change queue status. A successful enqueue ack (`ok: true` with `created: true` or `duplicate: true`) advances `since_id` even when the soft-ack fails. A mentions GET without that ack does not. A queue 401 does not advance `since_id`. A 403 HTML challenge or a 5xx backs off in process and does not advance `since_id`. The next worker pass retries unreplied rows.
 
 ## Attribution
 
@@ -54,7 +54,7 @@ Empty attributions hide the line. Multiple rows for one target all show, oldest 
 | `MENTION_AUTHOR_WINDOW_MS` | 1 hour | rate-limit window |
 | `MENTION_BLOCKLIST` | empty | comma-separated handles or author ids |
 
-Values are milliseconds. Nothing in this band is under 5 minutes. Host timers in `ops/systemd/` use `OnUnitActiveSec=10min`. The poll `OnBootSec` is 5 minutes and the worker `OnBootSec` is 8 minutes, about 3 minutes later, so the passes stay staggered. HTTP 402 and 429 stop that poll pass and back off inside the process. They do not shorten either timer. Copy the templates with `MENTION_INSTALL_PREFIX` set to the host checkout. This repo change does not edit live systemd:
+Values are milliseconds. Nothing in this band is under 5 minutes. Host timers in `ops/systemd/` use `OnUnitActiveSec=10min`. The poll `OnBootSec` is 5 minutes and the worker `OnBootSec` is 8 minutes, about 3 minutes later, so the passes stay staggered. HTTP 402 and 429 on X, an unreachable queue, a queue HTML challenge, or a queue 5xx stop that poll pass and back off inside the process. They do not shorten either timer. A JSON 401 logs fail-closed and does not call X. Copy the templates with `MENTION_INSTALL_PREFIX` set to the host checkout. This repo change does not edit live systemd:
 
 ```bash
 MENTION_INSTALL_PREFIX=/path/to/ExitTrace node scripts/install-mention-units.mjs --out /tmp/mention-units
@@ -90,7 +90,7 @@ Poll host (mentions and replies for @ExitTrace):
 - `MENTION_QUEUE_BOT_TOKEN`
 - `MENTION_POLL_MS`
 - `MENTION_SOFT_ACK` — `1` enables the fixed soft-ack
-- `MENTION_STATE_PATH` — host-local since id file
+- `MENTION_STATE_PATH` — durable host file for the since id. It must survive reboot. Do not put it on an ephemeral disk.
 - `MENTION_INSTALL_PREFIX`
 
 Worker host:
@@ -117,6 +117,7 @@ X app keys for mentions and replies stay on that host. They are not Render env a
 
 | Method | Path | Token |
 |--|--|--|
+| `POST` | `/api/mention-queue/preflight` | bot |
 | `POST` | `/api/mention-queue` | bot |
 | `GET` | `/api/mention-queue/pending` | worker |
 | `GET` | `/api/mention-queue/unreplied` | worker |
@@ -132,18 +133,31 @@ Status values: `pending`, `processing`, `kept`, `fail_closed`, `rejected`.
 
 Picard CLEAR ~6:16pm ET 2026-09-23 reinforces the Riker DESIGN LOCK ~2:05pm ET. Poller and worker only. The dig program stays separate. `mention_queue` stays off `exittrace_lab_pub`.
 
+- `POST /api/mention-queue/preflight` runs before the mentions GET. A failed probe does not call X.
 - One mentions GET per poll, with `since_id` and `max_results=10`. Author fields ride that expansion. There is no per-mention user lookup.
 - `MENTION_SOFT_ACK` defaults off. Soft-ack runs only when enqueue returns `created: true`.
-- A failed soft-ack or final reply does not stop the pass. Enqueue advances `since_id` on a successful POST even if the soft-ack fails. The unreplied sweep and the pending claim loop each continue after one reply failure.
+- A failed soft-ack or final reply does not stop the pass. `since_id` advances only after enqueue JSON `ok: true` with `created: true` or `duplicate: true`, including when the soft-ack then fails. The mentions GET alone does not advance it. A queue 401 does not advance it. A 403 HTML challenge or a 5xx backs off in process and does not advance it. The unreplied sweep and the pending claim loop each continue after one reply failure.
 - `GET /api/mention-queue/work` returns `{ pending, unreplied }`. Zero pending rows: no claim and no dig. Empty unreplied: skip that `deliverFinal` sweep.
 - Claim-next uses an empty `subject_status_id` and `FOR UPDATE SKIP LOCKED` until `claimed: false`. Cap is 5 claims per pass. Lease is 10–15 minutes, default 12. Dig timeout is 9 minutes, under the lease. Digs are sequential. The worker does not spawn `MENTION_DIG_COMMAND` when nothing was claimed.
-- HTTP 402 and 429 stop that poll pass, back off in process, and do not tighten the 5–15 minute cadence.
-- A pass with no results does not write a success line. Non-empty work, errors, and 402/429 do.
+- HTTP 402 and 429 stop that poll pass, back off in process, and do not tighten the 5–15 minute cadence. A queue HTML 403 or 5xx does the same. A 401 is fail-closed for that pass with no `since_id` advance.
+- A pass with no results does not write a success line. Non-empty work, errors, 402/429, queue challenges, and preflight skips do.
+
+## Ops checklist
+
+- CF Skip on `/api/mention-queue` (the whole prefix). Bot Fight must not answer the poll host with an HTML challenge.
+- Bot and worker tokens differ: `MENTION_QUEUE_BOT_TOKEN` ≠ `MENTION_QUEUE_WORKER_TOKEN`. Unset or identical tokens fail closed.
+- Soft-ack is `0` (`MENTION_SOFT_ACK` unset). Leave it off.
+- `MENTION_STATE_PATH` is a durable host file. The since id must still be there after a reboot.
+- Warm dig helper: on the worker host run `node scripts/x-mention-dig-warm.mjs` and set `MENTION_DIG_COMMAND` to `node scripts/x-mention-dig-call.mjs`. Digs stay one at a time. This checklist does not change the dig program.
+- Prove a queue 401 is JSON `{"ok":false,"error":"unauthorized"}`, not an HTML page. An HTML 401 is a challenge, not a token mismatch.
+
+Out of this pass: turning soft-ack on, webhooks, parallel digs, publishing `mention_queue`, cite or attribution changes, and a poll interval under 5 minutes.
 
 ## Hub runbook note
 
 Copy this into the hub runbook. This PR does not edit a live hub runbook and does not change live systemd.
 
+- Cloudflare: skip Bot Fight and managed challenges for `/api/mention-queue`. Soft-ack stays OFF unless `MENTION_SOFT_ACK` is set. The poller preflights `POST /api/mention-queue/preflight` before the mentions GET. `since_id` moves only after enqueue JSON `ok: true` with `created: true` or `duplicate: true`.
 - Worker host: prefer the long-lived warm helper `node scripts/x-mention-dig-warm.mjs` (user service, `Type=simple`). Set `MENTION_DIG_INNER` to the one-shot dig program. Set `MENTION_DIG_COMMAND` to `node scripts/x-mention-dig-call.mjs`. The helper stays loaded and runs a dig only when that client is called, which is only after a claim. Digs stay one at a time. GitHub Actions does not run the dig.
 - Timers stay on a 10 minute band inside 5–15 minutes. Poll `OnBootSec=5min`, worker `OnBootSec=8min` (about 3 minutes later). Both `OnUnitActiveSec=10min`. No interval under 5 minutes. Install the templates on the host; do not tighten them for 402/429.
 - Mentions are leads, not cites. Fail closed. Do not invent cites. Do not publish `mention_queue`. Do not touch the parked database.
