@@ -6,9 +6,10 @@
  */
 
 import { spawn } from "node:child_process";
+import { capturePublicKeepPage } from "./keep-page-shot.mjs";
 import { digMention } from "./mention-dig.mjs";
 import { pollIntervalMs } from "./mention-queue.mjs";
-import { postReply } from "./x-client.mjs";
+import { postReply, uploadTweetImage } from "./x-client.mjs";
 import { queueEndpoint } from "./x-mention-poll.mjs";
 
 export const COMPLETE_BODY_KEYS = Object.freeze([
@@ -128,17 +129,34 @@ function completeBody(row, dug, owner) {
   };
 }
 
-async function deliverFinal({ row, env, fetchImpl, token, base }) {
+function plainFinalText(plan) {
+  if (!plan?.reply || plan.reason !== "kept") return "";
+  const text = String(plan.text || "").trim();
+  if (!text || /https?:\/\//i.test(text) || /\bwww\./i.test(text)) return "";
+  return text;
+}
+
+async function deliverFinal({ row, env, fetchImpl, token, base, captureImpl }) {
   const plan = await requestJson(
     fetchImpl,
     "GET",
     `${queueEndpoint(base, "/reply-plan")}?subject_status_id=${encodeURIComponent(row.subject_status_id)}`,
     token,
   );
-  if (!plan.reply || !plan.text) return { replied: false, reason: plan.reason || "" };
+  const text = plainFinalText(plan);
+  if (!text) return { replied: false, reason: plan.reason || "no_reply" };
+  const shot = await capturePublicKeepPage({
+    origin: env.EXITTRACE_PUBLIC_ORIGIN,
+    detailPath: plan.detail_path,
+    fetchImpl,
+    captureImpl,
+    env,
+  });
+  const mediaId = await uploadTweetImage({ bytes: shot.bytes, fetchImpl, env });
   await postReply({
     inReplyTo: row.mention_status_id,
-    text: plan.text,
+    text,
+    mediaIds: [mediaId],
     fetchImpl,
     env,
   });
@@ -163,6 +181,7 @@ export async function workerOnce({
   env = process.env,
   fetchImpl = globalThis.fetch,
   digImpl,
+  captureImpl,
 } = {}) {
   if (env.MENTION_WORKER_DATABASE !== "lab") {
     throw new Error("MENTION_WORKER_DATABASE=lab is required");
@@ -179,7 +198,7 @@ export async function workerOnce({
   if (!unrepliedRows.length && !pendingRows.length) {
     return { results, poll_ms: pollMs };
   }
-  const ctx = { env, fetchImpl, token, base };
+  const ctx = { env, fetchImpl, token, base, captureImpl };
   if (unrepliedRows.length) {
     for (const row of unrepliedRows) {
       const reply_error = await finishReply(row, ctx);

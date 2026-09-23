@@ -26,7 +26,7 @@ Do not point the worker at a parked database. Do not wipe media.
 4. The host dig command reads one mention JSON object on stdin and writes one JSON envelope on stdout. It does not receive queue tokens or X tokens. If it is unset, the worker refuses to claim.
 5. `digMention` parks a name lead with `source=x_mention` and empty cites, then calls `processAddRequest` only when the envelope already has a subject and at least two official cites that are not the mention or the subject status. Otherwise the queue row becomes `fail_closed` or `rejected`.
 6. Complete sends only queue status fields (`subject_status_id`, `claim_owner`, `status`, `kept_person_slug`, `error_reason`). It does not insert a person.
-7. Soft-ack, when enabled, is exactly `Queued for ExitTrace review.` A final reply prefers one `https` URL `/people/{slug}` per KEEP. A fail-closed or rejected reason is sent only when that subject was soft-acked. A failed soft-ack or final reply does not stop the rest of the pass and does not change queue status. A successful enqueue ack (`ok: true` with `created: true` or `duplicate: true`) advances `since_id` even when the soft-ack fails. A mentions GET without that ack does not. A queue 401 does not advance `since_id`. A 403 HTML challenge or a 5xx backs off in process and does not advance `since_id`. The next worker pass retries unreplied rows.
+7. Soft-ack, when enabled, is exactly `Queued for ExitTrace review.` Leave it off. A final reply is sent only when the dig status is `kept`, and only to the first mentioner for that subject (the row that won enqueue on `subject_status_id`). The text is `ExitTrace kept {name}.` using the person or operation display name, or the slug as plain words. That text has no `http` or `https`. The worker host then screenshots the public KEEP detail page and attaches the PNG on the X reply (`media.media_ids`). The page is `EXITTRACE_PUBLIC_ORIGIN` plus `/people/{slug}` or `/operations/{slug}`, served in the standing glass theme (the public dark chrome). The shot is not an X media download and is not a lab-auth, admin, localhost, or port 5220 session. Production capture opens that public https page. Tests may stub the browser. A local HTML file is not the source. `fail_closed`, `rejected`, `ambiguous_subject`, and dig failures get no reply. A later mention of the same subject is a duplicate and gets no second final. Another KEEP that shares the slug does not get a second final; later rows stay silent. A failed soft-ack or final reply does not stop the rest of the pass and does not change queue status. A successful enqueue ack (`ok: true` with `created: true` or `duplicate: true`) advances `since_id` even when the soft-ack fails. A mentions GET without that ack does not. A queue 401 does not advance `since_id`. A 403 HTML challenge or a 5xx backs off in process and does not advance `since_id`. The next worker pass retries unreplied KEEP rows that still owe that one final.
 
 ## Attribution
 
@@ -70,7 +70,6 @@ Render app:
 
 - `MENTION_QUEUE_BOT_TOKEN` — poller POST enqueue and soft-ack stamp only
 - `MENTION_QUEUE_WORKER_TOKEN` — pending, claim, complete, final reply stamp only
-- `EXITTRACE_PUBLIC_ORIGIN` — `https` origin used for the one KEEP URL
 - `MENTION_AUTHOR_MAX`
 - `MENTION_AUTHOR_WINDOW_MS`
 - `MENTION_BLOCKLIST`
@@ -110,8 +109,10 @@ Worker host:
 - `X_ACCESS_TOKEN`
 - `X_ACCESS_TOKEN_SECRET`
 - `X_USER_ID`
+- `EXITTRACE_PUBLIC_ORIGIN` — public `https` origin for the KEEP page screenshot. Not the reply text.
+- `MENTION_PAGE_SHOT_BIN` — optional chromium binary. Default is `chromium` or `google-chrome` on `PATH`.
 
-X app keys for mentions and replies stay on that host. They are not Render env and they are not committed. The dig process does not receive them: the worker strips `MENTION_QUEUE_BOT_TOKEN`, `MENTION_QUEUE_WORKER_TOKEN`, `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, and `X_ACCESS_TOKEN_SECRET` from the child environment.
+X app keys for mentions and replies stay on that host. They are not Render env and they are not committed. The dig process does not receive them: the worker strips `MENTION_QUEUE_BOT_TOKEN`, `MENTION_QUEUE_WORKER_TOKEN`, `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, and `X_ACCESS_TOKEN_SECRET` from the child environment. The KEEP screenshot runs in the worker after the public page returns the glass theme. It is not a lab session and it is not passed to the dig.
 
 ## Dig command
 
@@ -174,7 +175,8 @@ Picard CLEAR ~6:16pm ET 2026-09-23 reinforces the Riker DESIGN LOCK ~2:05pm ET. 
 
 - CF Skip on `/api/mention-queue` (the whole prefix). Bot Fight must not answer the poll host with an HTML challenge.
 - Bot and worker tokens differ: `MENTION_QUEUE_BOT_TOKEN` ≠ `MENTION_QUEUE_WORKER_TOKEN`. Unset or identical tokens fail closed.
-- Soft-ack is `0` (`MENTION_SOFT_ACK` unset). Leave it off.
+- Soft-ack is `0` (`MENTION_SOFT_ACK` unset). Leave it off. Do not enable it.
+- Final X reply (Riker DESIGN LOCK AMEND ~2026-09-23 6:16pm ET, Admiral AMEND CLEAR; supersedes the 6:06pm text-only closeout): only when dig status is `kept`. One reply to the first mentioner for that `subject_status_id`. Text is `ExitTrace kept {name}.` with the person or operation display name, or the slug as plain words. No `http` or `https` in the text. The same post attaches a host screenshot of the public KEEP detail page (glass theme on `EXITTRACE_PUBLIC_ORIGIN` + `/people/{slug}` or `/operations/{slug}`). Not an X media download. Not lab-auth, admin, localhost, or port 5220. Not a local HTML file. No reply on `fail_closed`, `rejected`, `ambiguous_subject`, or dig failure. No second final for a later mention of the same subject, and no second final when another KEEP shares the slug. Soft-ack stays off.
 - `MENTION_STATE_PATH` is a durable host file. The since id must still be there after a reboot.
 - Warm dig helper: on the worker host run `node scripts/x-mention-dig-warm.mjs` and set `MENTION_DIG_COMMAND` to `node scripts/x-mention-dig-call.mjs`. Digs stay one at a time. This checklist does not change the dig program.
 - Prove a queue 401 is JSON `{"ok":false,"error":"unauthorized"}`, not an HTML page. An HTML 401 is a challenge, not a token mismatch.
@@ -189,3 +191,4 @@ Copy this into the hub runbook. This PR does not edit a live hub runbook and doe
 - Worker host: prefer the long-lived warm helper `node scripts/x-mention-dig-warm.mjs` (user service, `Type=simple`). Set `MENTION_DIG_INNER` to the one-shot dig program. Set `MENTION_DIG_COMMAND` to `node scripts/x-mention-dig-call.mjs`. The helper stays loaded and runs a dig only when that client is called, which is only after a claim. Digs stay one at a time. GitHub Actions does not run the dig.
 - Timers stay on a 10 minute band inside 5–15 minutes. Poll `OnBootSec=5min`, worker `OnBootSec=8min` (about 3 minutes later). Both `OnUnitActiveSec=10min`. No interval under 5 minutes. Install the templates on the host; do not tighten them for 402/429.
 - Mentions are leads, not cites. Fail closed. Do not invent cites. Do not publish `mention_queue`. Do not touch the parked database.
+- Final reply (Riker DESIGN LOCK AMEND ~2026-09-23 6:16pm ET, Admiral AMEND CLEAR): `ExitTrace kept {name}.` plus a host screenshot of the public KEEP detail page, to the first mentioner only when the dig status is `kept`. The text has no URL. The page is the public glass theme (dark chrome the world sees), not lab-auth, admin, localhost, or port 5220, and not an X post screenshot or a local HTML file. No reply on fail-closed, rejected, ambiguous, or dig failure. No second final for a later mention of that subject or another KEEP that shares the slug. Soft-ack stays off.

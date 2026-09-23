@@ -36,7 +36,8 @@ Environment names (values stay on the host, never in git):
   X_ACCESS_TOKEN
   X_ACCESS_TOKEN_SECRET
   X_USER_ID
-  EXITTRACE_PUBLIC_ORIGIN
+  EXITTRACE_PUBLIC_ORIGIN   public https origin for the KEEP page screenshot (not the reply text)
+  MENTION_PAGE_SHOT_BIN     optional chromium binary for that screenshot
 `;
 
 function sleep(ms) {
