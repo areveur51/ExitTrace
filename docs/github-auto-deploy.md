@@ -120,6 +120,10 @@ Arm automatic catch-up from heal with repository variable `ET_AUTO_GAP_UPSERT=tr
 
 `central_casting_comms` stores harvest under an existing person (`person_id`). The parent list is `/central-casting`: one card per existing person KEEP, not a clip catalog. Membership cite URLs stay on `people.central_casting` and ride the `people` upsert. Lab adds the evidence table with `scripts/add-central-casting-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms` when missing). Same `copy_data = false` rule and the same gap-upsert backfill, because refresh does not copy existing rows. No seed rows in this repo. Media: `media/central-casting-comms/` and `media/screenshots/central-casting-comms/`.
 
+## Mention queue (Render-only)
+
+`mention_queue` is excluded from `exittrace_lab_pub` / publication SQL / the [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md) checklist. It is not in gap-upsert and not in the logical publication. X mention KEEP rows are written on the lab database, then lab to Render follows the existing logical replication and media-delta path. See [X_MENTION_QUEUE.md](X_MENTION_QUEUE.md).
+
 ## Render code freshness
 
 Render Git auto-deploy on `main` is the deploy plane (Dashboard → the existing web service → Settings → Auto-Deploy). This repo does not force redeploys.

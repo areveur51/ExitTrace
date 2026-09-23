@@ -88,7 +88,7 @@ export function requestFingerprint(row) {
       String(row.category || ""),
     ].join(":");
   }
-  return [
+  const parts = [
     "person",
     String(row.subject || "")
       .trim()
@@ -96,7 +96,36 @@ export function requestFingerprint(row) {
       .replace(/\s+/g, " "),
     canonicalPublicUrl(row.hint_url || row.source_url) || "",
     String(row.event_date || ""),
-  ].join(":");
+  ];
+  const source = String(row?.source || "").trim();
+  if (source) parts.push(source);
+  return parts.join(":");
+}
+
+export function normalizeLeadSource(raw) {
+  const source = String(raw || "").trim();
+  if (source !== "" && source !== "x_mention") {
+    throw new AddError("lead source is not allowed", "invalid_lead_source");
+  }
+  return source;
+}
+
+function optionalStatusId(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  if (!/^[0-9]{5,20}$/.test(text)) {
+    throw new AddError("status id must be a numeric snowflake", "invalid_status_id");
+  }
+  return text;
+}
+
+/** Lead metadata stored on the add-request payload. Cites stay empty at queue time. */
+export function leadRecordFields(input = {}) {
+  return {
+    source: normalizeLeadSource(input.source),
+    subject_status_id: optionalStatusId(input.subject_status_id),
+    mention_status_id: optionalStatusId(input.mention_status_id),
+  };
 }
 
 function optionalDate(raw, field) {
@@ -507,7 +536,10 @@ export function mergeProcessOverlay(request, overlay = {}) {
 }
 
 export async function queueAddRequest(input) {
-  const parsed = validateQueueInput(input);
+  const parsed = {
+    ...validateQueueInput(input),
+    ...leadRecordFields(input),
+  };
   const pending = await listAddRequests({ status: "pending" });
   const fingerprint = requestFingerprint(parsed);
   const existing = pending.find((row) => requestFingerprint(row) === fingerprint);

@@ -19,6 +19,9 @@ export const COMPANION_TABLES = Object.freeze(["person_events"]);
 
 export const ALL_UPSERT_TABLES = Object.freeze([...PUBLISHED_TABLES, ...COMPANION_TABLES]);
 
+/** Render app DB only. Never publication, gap-upsert, or export. */
+export const RENDER_ONLY_TABLES = Object.freeze(["mention_queue"]);
+
 const FORBIDDEN = /\b(TRUNCATE|DROP\s+|DELETE\s+FROM|--clean|COPY\s+.*FROM\s+PROGRAM)\b/i;
 
 const TABLE_KEYS = Object.freeze({

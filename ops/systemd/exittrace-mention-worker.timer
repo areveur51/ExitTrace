@@ -1,0 +1,14 @@
+# Coarse queue pull. 10 minutes is inside the 5–15 minute band.
+# Claim lease default is 12 minutes (allowed band 10–15).
+[Unit]
+Description=ExitTrace X mention worker cadence
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Persistent=true
+Unit=exittrace-mention-worker.service
+
+[Install]
+WantedBy=timers.target
