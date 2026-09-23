@@ -6,6 +6,7 @@ import { after, before, test } from "node:test";
 import { fileURLToPath } from "url";
 import { spawn } from "node:child_process";
 import jpeg from "jpeg-js";
+import { DEATH_KEEP_IDS } from "../app/lib/categories.mjs";
 import { DOG_PAGE_SIZE, PAGE_SIZE } from "../app/lib/paginate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -83,7 +84,7 @@ test("seed has 8-13 people per exit category and 7+ dog comms", () => {
     counts[row.category] = (counts[row.category] || 0) + 1;
     assert.ok(row.sources.length >= 2, `${row.id} needs two sources`);
     assert.equal(row.birth_date, undefined, `${row.id} gold birth_date stays unset`);
-    if (String(row.category).startsWith("death_")) {
+    if (DEATH_KEEP_IDS.includes(row.category)) {
       assert.ok(row.death_date, `${row.id} needs death_date`);
     } else {
       assert.equal(row.death_date, null, `${row.id} death_date must be null`);
@@ -161,6 +162,7 @@ test("html pages render", async () => {
     "/deaths/celebrities",
     "/deaths/officials",
     "/deaths/ceos",
+    "/deaths/unconfirmed",
     "/group-operations",
     "/group-operations/missing-kids",
     "/group-operations/human-smuggling",
@@ -218,7 +220,7 @@ function countClass(html, className) {
 
 test("people list pages paginate newest-first with shareable ?page=", async () => {
   const deaths = newestFirst(
-    seed.people.filter((r) => String(r.category).startsWith("death_")),
+    seed.people.filter((r) => DEATH_KEEP_IDS.includes(r.category)),
     "event_date",
   );
   const totalPages = Math.ceil(deaths.length / PAGE_SIZE);
@@ -285,6 +287,7 @@ test("every category list page ships a pager", async () => {
     "/deaths/celebrities",
     "/deaths/officials",
     "/deaths/ceos",
+    "/deaths/unconfirmed",
     "/group-operations",
     "/group-operations/missing-kids",
     "/group-operations/human-smuggling",

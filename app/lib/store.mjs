@@ -32,7 +32,7 @@ import {
   personTags,
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
-import { asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
+import { DEATH_KEEP_IDS, asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
 import { commsKind } from "./kind-comms.mjs";
 import {
@@ -1124,7 +1124,7 @@ function finiteInt(v, fallback = null) {
 }
 
 function comparePeople(a, b) {
-  const d = String(b.event_date).localeCompare(String(a.event_date));
+  const d = String(b.event_date || "").localeCompare(String(a.event_date || ""));
   if (d !== 0) return d;
   return String(a.name).localeCompare(String(b.name));
 }
@@ -1193,14 +1193,20 @@ function peopleKindWhere(categories, params) {
   )`;
 }
 
+function confirmedDeathKindSql() {
+  return DEATH_KEEP_IDS.map((id) => `'${id}'`).join(", ");
+}
+
+/** Confirmed DEATH_KEEP_IDS only. death_unconfirmed must not become a death_date. */
 function deathDateSql() {
+  const kinds = confirmedDeathKindSql();
   return `COALESCE(
     (SELECT MAX(e.event_date) FROM person_events e
-      WHERE e.person_id = people.id AND e.kind LIKE 'death_%'),
-    CASE WHEN people.category LIKE 'death_%' THEN COALESCE(people.death_date, people.event_date) END,
+      WHERE e.person_id = people.id AND e.kind IN (${kinds})),
+    CASE WHEN people.category IN (${kinds}) THEN COALESCE(people.death_date, people.event_date) END,
     (SELECT MAX((ev->>'event_date')::date)
        FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
-      WHERE ev->>'kind' LIKE 'death_%')
+      WHERE ev->>'kind' IN (${kinds}))
   )`;
 }
 
@@ -1348,7 +1354,7 @@ function peopleKindOrder(categories, params) {
       SELECT MAX(e.event_date) FROM person_events e WHERE e.person_id = people.id
     ), (
       SELECT MAX((ev->>'event_date')::date) FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
-    ), event_date) DESC, name ASC`;
+    ), event_date) DESC NULLS LAST, name ASC`;
   }
   params.push(categories);
   const n = params.length;
@@ -1358,7 +1364,7 @@ function peopleKindOrder(categories, params) {
   ), (
     SELECT MAX((ev->>'event_date')::date) FROM jsonb_array_elements(COALESCE(people.events, '[]'::jsonb)) ev
      WHERE ev->>'kind' = ANY($${n}::text[])
-  ), event_date) DESC, name ASC`;
+  ), event_date) DESC NULLS LAST, name ASC`;
 }
 
 function projectListed(rows, categories) {

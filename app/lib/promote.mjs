@@ -1,6 +1,7 @@
 import {
   PROMOTE_CATEGORY_IDS,
   isDeathCategory,
+  isDeathUnconfirmed,
   isGroupOpsCategory,
   isIndictmentKeepKind,
 } from "./categories.mjs";
@@ -144,9 +145,17 @@ export function asEventDate(raw) {
 export function normalizePersonEvent(raw, fallback = {}) {
   if (!raw || typeof raw !== "object") return null;
   const kind = String(raw.kind || raw.category || fallback.kind || fallback.category || "").trim();
-  const event_date = asEventDate(raw.event_date || fallback.event_date);
-  if (!kind || !event_date) return null;
-  if (isGroupOpsCategory(kind)) return null;
+  if (!kind || isGroupOpsCategory(kind)) return null;
+  // death_unconfirmed may omit event_date. Do not copy another event's date onto it.
+  const unconfirmed = isDeathUnconfirmed(kind);
+  const rawDate =
+    raw.event_date != null && String(raw.event_date).trim() !== ""
+      ? raw.event_date
+      : unconfirmed
+        ? null
+        : fallback.event_date;
+  const event_date = asEventDate(rawDate);
+  if (!event_date && !unconfirmed) return null;
   const sources = Array.isArray(raw.sources)
     ? raw.sources
     : Array.isArray(fallback.sources)
@@ -157,7 +166,7 @@ export function normalizePersonEvent(raw, fallback = {}) {
     parseStoredAge(raw.age_at_event) ?? parseStoredAge(fallback.age_at_event);
   const event = {
     kind,
-    event_date,
+    event_date: event_date || null,
     sources,
     ...attrs,
     age_at_event,
@@ -186,7 +195,7 @@ function uniqueEvents(events) {
     }
     const merged = {
       kind: prior.kind,
-      event_date: prior.event_date,
+      event_date: keptEventDate(prior, ev),
       sources: mergeCites(prior.sources, ev.sources).sources,
       ...mergeEventAttrs(prior, ev),
       age_at_event:
@@ -198,10 +207,16 @@ function uniqueEvents(events) {
     byKind.set(ev.kind, merged);
   }
   return [...byKind.values()].sort((a, b) => {
-    const d = String(b.event_date).localeCompare(String(a.event_date));
+    const d = String(b.event_date || "").localeCompare(String(a.event_date || ""));
     if (d !== 0) return d;
     return String(a.kind).localeCompare(String(b.kind));
   });
+}
+
+/** Keep a stored calendar date. Fill a null death_unconfirmed date only from an explicit one. */
+function keptEventDate(prior, incoming) {
+  if (!isDeathUnconfirmed(prior?.kind)) return prior.event_date;
+  return prior.event_date || incoming.event_date || null;
 }
 
 /** Lift legacy category/event_date/sources into events; keep one event per kind. */
@@ -330,7 +345,7 @@ export function attachPersonEvent(person, incoming) {
     const next = events.slice();
     next[i] = {
       kind: events[i].kind,
-      event_date: events[i].event_date,
+      event_date: keptEventDate(events[i], ev),
       sources: merged.sources,
       ...mergeEventAttrs(events[i], ev),
       age_at_event:

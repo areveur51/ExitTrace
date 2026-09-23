@@ -11,6 +11,7 @@ import {
 import {
   categoryById,
   isDeathCategory,
+  isDeathUnconfirmed,
   isIndictmentKeepKind,
   GROUP_OPS_KEEP_IDS,
   PROMOTE_CATEGORY_IDS,
@@ -366,6 +367,7 @@ export function eventDatesOf(people) {
   const dates = [];
   for (const row of people || []) {
     for (const ev of personEvents(row)) {
+      if (isDeathUnconfirmed(ev.kind)) continue;
       const day = asEventDate(ev.event_date);
       if (day) dates.push(day);
     }
@@ -655,6 +657,26 @@ export function operationStandingByTag(operations, range) {
   return { range: resolved, all, byTag };
 }
 
+/**
+ * People with a death_unconfirmed event. Not a confirmed death count.
+ * A bounded range includes the row only when that event's calendar date is in range.
+ * A null event_date counts on All only — the date is not invented.
+ */
+export function countDeathUnconfirmed(people, range) {
+  const resolved = resolveDashRange(range);
+  let n = 0;
+  for (const row of people || []) {
+    const ev = personEvents(row).find((item) => isDeathUnconfirmed(item.kind));
+    if (!ev) continue;
+    if (!resolved || resolved.id === "all") {
+      n += 1;
+      continue;
+    }
+    if (eventInDashRange(ev.event_date, resolved)) n += 1;
+  }
+  return n;
+}
+
 /** Indictment events with unsealed true. Null and false stay out of the count. */
 export function countUnsealedIndictments(people) {
   let n = 0;
@@ -683,6 +705,7 @@ export function buildDashboard(people, range, operations = []) {
     dimensions,
     operations: operationStandingByTag(operations, range),
     unsealed: countUnsealedIndictments(rows),
+    unconfirmed: countDeathUnconfirmed(people, range),
     age: ageStanding(people, range),
     missing: missingStanding(people, range),
     operationsMissing: operationMissingStanding(operations, range),

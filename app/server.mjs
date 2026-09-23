@@ -877,6 +877,8 @@ async function handle(req, res) {
 
   const cat = categoryByPath(p);
   if (cat && cat.kind === "person") {
+    // isDeathCategory excludes death_unconfirmed, so /deaths stays DEATH_KEEP_IDS
+    // and /deaths/unconfirmed lists that kind alone.
     const deaths = isDeathCategory(cat.id);
     const gov = cat.id === "government_stepdowns";
     const kinds = gov

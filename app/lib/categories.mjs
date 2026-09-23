@@ -88,6 +88,15 @@ export const CATEGORIES = [
     blurb: "Deaths of chief executives, chairs, and controlling founders of major firms.",
   },
   {
+    id: "death_unconfirmed",
+    kind: "person",
+    title: "Death*",
+    nav: "Unconfirmed*",
+    path: "/deaths/unconfirmed",
+    blurb:
+      "Unconfirmed death claims. Not a confirmed death. A calendar date is stored only when a cite states YYYY-MM-DD. Death date, cause, and location stay empty.",
+  },
+  {
     id: "death_unspecified",
     kind: "person",
     title: "Deaths",
@@ -210,12 +219,27 @@ export const PROMOTE_CATEGORY_IDS = [
   "indictment_non_civilian",
 ];
 
-/** KEEP kinds classify may write for identified death rows. */
+/**
+ * Confirmed death KEEP kinds. death_unconfirmed is not a member.
+ * Confirmed counts, /deaths, child celebrity/official/ceo lists, and death
+ * dashboard slices use this set only.
+ */
 export const DEATH_KEEP_IDS = [
   "death_celebrity",
   "death_official",
   "death_ceo",
 ];
+
+/**
+ * Unconfirmed death claim. Not a confirmed death.
+ * Asterisk is the UI label (Death* / Unconfirmed*), not a column.
+ * event_date may be NULL (this kind only) unless a cite states YYYY-MM-DD.
+ * death_date, cause, and location are never invented.
+ * Leads are never auto-classified here. Admiral-named claim cites may park it.
+ * Upgrade to a DEATH_KEEP_IDS kind still needs ≥2 official/gov/news cites,
+ * a calendar date, and CLEAR.
+ */
+export const DEATH_UNCONFIRMED_ID = "death_unconfirmed";
 
 /** KEEP kinds classify may write for identified indictment rows. */
 export const INDICTMENT_KEEP_IDS = [
@@ -277,8 +301,30 @@ export function categoryByPath(pathname) {
   return CATEGORIES.find((c) => c.path === pathname) || null;
 }
 
+export function isDeathUnconfirmed(id) {
+  return String(id) === DEATH_UNCONFIRMED_ID;
+}
+
+/**
+ * Confirmed death catalog ids and the /deaths parent index.
+ * death_unconfirmed is excluded so startsWith("death_") count paths
+ * do not treat an unconfirmed claim as a confirmed death.
+ */
 export function isDeathCategory(id) {
-  return String(id).startsWith("death_");
+  const key = String(id);
+  if (isDeathUnconfirmed(key)) return false;
+  return key.startsWith("death_");
+}
+
+/** Death trail: confirmed kinds, the /deaths parent, and Unconfirmed*. */
+export function isDeathFamily(id) {
+  return isDeathCategory(id) || isDeathUnconfirmed(id);
+}
+
+/** Person-detail event rows. death_unconfirmed is shown; it is not a promote kind. */
+export function isDisplayedEventKind(id) {
+  const key = String(id || "").trim();
+  return PROMOTE_CATEGORY_IDS.includes(key) || isDeathUnconfirmed(key);
 }
 
 export function isIndictmentKeepKind(id) {

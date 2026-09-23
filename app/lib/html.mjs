@@ -6,11 +6,13 @@ import {
   formatUsd,
   postedAtValue,
   initials,
+  DEATH_UNCONFIRMED_ID,
   isDeathCategory,
+  isDeathFamily,
+  isDisplayedEventKind,
   isGroupOpsCategory,
   isIndictmentCategory,
   GROUP_OPS_KEEP_IDS,
-  PROMOTE_CATEGORY_IDS,
   isIndictmentKeepKind,
 } from "./categories.mjs";
 import { normalizeOperationTags, operationTagLabel } from "./operation.mjs";
@@ -254,6 +256,10 @@ export function identityFilterNav(basePath, { tags = [], unsealed = false } = {}
     const after = options.findIndex((o) => o.label === "Non-civilians");
     options.splice(after < 0 ? options.length : after + 1, 0, ...indictmentUnsealedSelectOptions());
   }
+  if (main === "/deaths") {
+    const unconfirmed = categoryById(DEATH_UNCONFIRMED_ID);
+    if (unconfirmed) options.push({ href: unconfirmed.path, label: unconfirmed.nav });
+  }
   const currentHref = filterPath(basePath, {
     tags: selected,
     unsealed: main === "/indictments" && unsealed === true,
@@ -341,7 +347,7 @@ function chromeWidgets() {
 
 function categoryTrail(cat) {
   if (!cat) return [];
-  if (isDeathCategory(cat.id)) {
+  if (isDeathFamily(cat.id)) {
     if (cat.id === "death_unspecified") {
       return [{ href: "/deaths", label: "Deaths" }];
     }
@@ -1086,7 +1092,11 @@ function groupByYearItems(items, render) {
     if (!groups.has(y)) groups.set(y, []);
     groups.get(y).push(item);
   }
-  const years = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+  const years = [...groups.keys()].sort((a, b) => {
+    if (a === "Undated") return 1;
+    if (b === "Undated") return -1;
+    return b.localeCompare(a);
+  });
   let first = true;
   return years
     .map((y) => {
@@ -1263,7 +1273,7 @@ export function grokipediaBlock(row, { filled = [], cite } = {}) {
 
 export function eventTagRow(ev, { birthDate } = {}) {
   const kind = String(ev?.kind || "").trim();
-  if (!kind || !PROMOTE_CATEGORY_IDS.includes(kind)) return "";
+  if (!kind || !isDisplayedEventKind(kind)) return "";
   const label = eventKindTitle(kind);
   const eventDate = String(ev.event_date || "").trim();
   const announcedRaw = String(ev.announced_date || "").trim();
@@ -1279,16 +1289,22 @@ export function eventTagRow(ev, { birthDate } = {}) {
   const attrs = EVENT_ATTR_FIELDS.map((field) => {
     const value = String(ev[field] || "").trim();
     if (!value) return "";
-    const name = EVENT_ATTR_LABELS[field] || field;
+    const name =
+      kind === DEATH_UNCONFIRMED_ID && field === "comments"
+        ? "Footnote"
+        : EVENT_ATTR_LABELS[field] || field;
     return `<p class="meta-line">${esc(name)} · ${esc(value)}</p>`;
   }).join("");
   const unsealedBadge =
     isIndictmentKeepKind(kind) && ev.unsealed === true
       ? ` <span class="keychip event-badge" data-unsealed="true">Unsealed</span>`
       : "";
+  const eventLine = eventDate
+    ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
+    : `<p class="meta-line event-line">—</p>`;
   return `<article class="event-tag-row" data-kind="${esc(kind)}">
     <h3 class="event-h">${esc(label)}${unsealedBadge}</h3>
-    <p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>
+    ${eventLine}
     ${announced}
     ${ageLine}
     ${attrs}
@@ -1312,7 +1328,7 @@ export function careerHistory(row) {
 
 function eventTimeline(row) {
   const events = personEvents(row).filter((ev) =>
-    PROMOTE_CATEGORY_IDS.includes(String(ev.kind || "").trim()),
+    isDisplayedEventKind(String(ev.kind || "").trim()),
   );
   if (!events.length) return "";
   const rows = events
@@ -1751,6 +1767,7 @@ export function dashboardBody(model, { path = "/dashboard", range } = {}) {
       <p class="dash-stat"><span class="dash-stat-label">Victims</span> ${dashCount(model.operations?.all?.victims)}</p>
       <p class="dash-stat"><span class="dash-stat-label">Arrests</span> ${dashCount(model.operations?.all?.arrests)}</p>
       <a class="dash-stat" href="/indictments?tags=unsealed" data-unsealed-count="${Math.max(0, Number(model.unsealed) || 0)}"><span class="dash-stat-label">Unsealed</span> ${dashCount(model.unsealed ?? 0)}</a>
+      <a class="dash-stat" href="/deaths/unconfirmed" data-death-unconfirmed="${Math.max(0, Number(model.unconfirmed) || 0)}"><span class="dash-stat-label">Unconfirmed*</span> ${dashCount(model.unconfirmed ?? 0)}</a>
     </section>
     <div class="dash-standings">
       ${operationStandingBlock(model.operations)}

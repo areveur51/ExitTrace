@@ -73,6 +73,7 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
   assert.deepEqual(catalogListKinds("death_celebrity"), ["death_celebrity"]);
   assert.deepEqual(catalogListKinds("death_official"), ["death_official"]);
   assert.deepEqual(catalogListKinds("death_ceo"), ["death_ceo"]);
+  assert.deepEqual(catalogListKinds("death_unconfirmed"), ["death_unconfirmed"]);
   assert.deepEqual(catalogListKinds("indictment_civilian"), ["indictment_civilian"]);
   assert.deepEqual(catalogListKinds("indictment_non_civilian"), ["indictment_non_civilian"]);
   assert.deepEqual(catalogListKinds("missing_kids"), ["missing_kids"]);
@@ -84,6 +85,9 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
   assert.deepEqual(catalogListKinds("fraud"), ["fraud"]);
   assert.deepEqual(catalogListKinds("corona_comms"), ["corona_comms"]);
   assert.equal(categoryByPath("/deaths").id, "death_unspecified");
+  assert.equal(categoryByPath("/deaths/unconfirmed").id, "death_unconfirmed");
+  assert.equal(categoryByPath("/deaths/unconfirmed").nav, "Unconfirmed*");
+  assert.equal(categoryByPath("/deaths/unconfirmed").title, "Death*");
   assert.equal(categoryByPath("/indictments").id, "indictment_unspecified");
   assert.equal(categoryByPath("/group-operations").id, "group_ops_unspecified");
   assert.equal(categoryByPath("/group-operations/missing-kids").id, "missing_kids");
@@ -187,7 +191,9 @@ test("GET /deaths lists every death kind; child routes filter", async () => {
   assert.match(parent.body, /value="\/deaths\/celebrities"/);
   assert.match(parent.body, /value="\/deaths\/officials"/);
   assert.match(parent.body, /value="\/deaths\/ceos"/);
+  assert.match(parent.body, /value="\/deaths\/unconfirmed"/);
   assert.match(parent.body, />Executives</);
+  assert.match(parent.body, />Unconfirmed\*</);
   assert.doesNotMatch(parent.body, /source-card/);
   assert.doesNotMatch(parent.body, /CLOSE HACK|SAMURAI PROTOCOL|BREACH PROTOCOL/i);
   assert.match(parent.body, new RegExp(`${deaths.length} available`));

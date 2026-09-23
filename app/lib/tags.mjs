@@ -202,11 +202,13 @@ export function filterPath(basePath, filter) {
   const main = catalogMainPath(basePath);
   const here = String(basePath || "").split("?")[0];
   const path =
-    main === "/group-operations" &&
-    here.startsWith("/group-operations/") &&
-    !selected.length
+    here === "/deaths/unconfirmed" && !selected.length
       ? here
-      : pathForTagFilter(main, selected);
+      : main === "/group-operations" &&
+          here.startsWith("/group-operations/") &&
+          !selected.length
+        ? here
+        : pathForTagFilter(main, selected);
   const q = filterQuery({
     tags:
       PATH_TAGS[path] &&
