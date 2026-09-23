@@ -689,6 +689,38 @@ body.tui-home .home-stage {
   z-index: 1;
   min-width: 0;
 }
+/* One grid for every KEEP person result (category lists, dashboard slices, search).
+   The leading track is always the portrait box. No :has(img) margin shift. */
+.tui-row.person-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+}
+.tui-row.person-card > .row-media {
+  width: 40px;
+  height: 52px;
+  min-width: 0;
+  max-width: 40px;
+  overflow: hidden;
+  display: block;
+  position: relative;
+  z-index: 1;
+  line-height: 0;
+}
+.tui-row.person-card > .tui-row-text {
+  margin: 0;
+  padding: 0;
+}
+.tui-row.person-card .row-media img,
+.tui-row.person-card .row-media .thumb,
+.tui-row.person-card .row-media .row-media-spacer {
+  display: block;
+  width: 40px;
+  height: 52px;
+  max-width: 40px;
+  margin: 0;
+  box-sizing: border-box;
+}
 .tui-title {
   font-family: var(--font-ui);
   font-weight: 700;
