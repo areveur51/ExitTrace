@@ -1468,7 +1468,7 @@ export function eventTagRow(ev, { birthDate } = {}) {
     kind,
     cites: (ev.sources || []).map((source) => ({
       url: source?.url || "",
-      snippet: source?.snippet || source?.quote || "",
+      snippet: String(source?.snippet || source?.quote || source?.title || "").trim(),
       source_label: source?.publisher || "",
       title: source?.title || "",
       date: source?.date || "",
