@@ -9,6 +9,8 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-09-23
+
 ### Added
 
 - Empty-portrait default placeholder. Used only when a portrait is missing. Does not overwrite a gold portrait.

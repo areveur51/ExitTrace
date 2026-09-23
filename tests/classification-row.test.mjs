@@ -49,17 +49,21 @@ test("classification rows keep one leading media slot with and without a portrai
   const bareSlot = slotInner(bare);
   assert.match(portraitSlot, /<img class="portrait thumb"/);
   assert.match(portraitSlot, /width="40" height="52"/);
-  assert.match(bareSlot, /class="initials thumb"/);
-  assert.doesNotMatch(bareSlot, /<img[\s>]/);
+  assert.match(portraitSlot, /src="\/media\/thumbs\/people\/jordan-hale\.jpg\?p=3"/);
+  assert.doesNotMatch(portraitSlot, /src="\/empty-portrait\.jpg/);
+  assert.match(bareSlot, /class="portrait thumb empty-portrait"/);
+  assert.match(bareSlot, /src="\/empty-portrait\.jpg/);
+  assert.match(bareSlot, /width="40" height="52"/);
+  assert.doesNotMatch(bareSlot, /class="initials thumb"/);
   assert.doesNotMatch(bare, /row-media-spacer/);
 
   const external = personRow(person({ photo: "https://upload.wikimedia.org/wikipedia/commons/x.jpg" }));
   assert.equal(skeleton(external), skeleton(bare));
-  assert.match(slotInner(external), /class="initials thumb"/);
+  assert.match(slotInner(external), /src="\/empty-portrait\.jpg/);
   assert.doesNotMatch(external, /upload\.wikimedia\.org/);
 
   const emptyThumb = personRow(person({ photo: null, name: "" }));
-  assert.match(slotInner(emptyThumb), /class="initials thumb"|class="row-media-spacer"/);
+  assert.match(slotInner(emptyThumb), /src="\/empty-portrait\.jpg/);
   assert.match(emptyThumb, /<div class="row-media">[\s\S]*<\/div>\s*<div class="tui-row-text">/);
 });
 
@@ -78,8 +82,9 @@ test("category lists, dashboard slices, and search share that row", () => {
     const cards = html.match(/<a class="tui-row person-card[\s\S]*?<\/a>/g) || [];
     assert.equal(cards.length, 2);
     const inners = cards.map(slotInner);
-    assert.equal(inners.filter((inner) => /<img class="portrait thumb"/.test(inner)).length, 1);
-    assert.equal(inners.filter((inner) => /class="initials thumb"/.test(inner)).length, 1);
+    assert.equal(inners.filter((inner) => /src="\/media\/thumbs\//.test(inner)).length, 1);
+    assert.equal(inners.filter((inner) => /src="\/empty-portrait\.jpg/.test(inner)).length, 1);
+    assert.equal(inners.filter((inner) => /class="initials thumb"/.test(inner)).length, 0);
     assert.equal(new Set(cards.map(skeleton)).size, 1);
   }
 });

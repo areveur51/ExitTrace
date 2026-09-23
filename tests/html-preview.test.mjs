@@ -108,8 +108,8 @@ test("list thumbs drop external hrefs instead of hotlinking", () => {
     firing({ photo: "https://upload.wikimedia.org/wikipedia/commons/x.jpg" }),
   );
   assert.doesNotMatch(row, /upload\.wikimedia\.org/);
-  assert.doesNotMatch(row, /<img /);
-  assert.match(row, /class="initials thumb"/);
+  assert.match(row, /class="portrait thumb empty-portrait"/);
+  assert.match(row, /src="\/empty-portrait\.jpg/);
 });
 
 test("public chrome keeps catalog labels and omits pin larp copy", () => {

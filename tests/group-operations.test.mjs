@@ -579,7 +579,7 @@ test("operation is not a person KEEP annotation", async () => {
   assert.match(list.body, /Operation Restore Justice/);
 });
 
-test("operation cards use initials, not person thumbs", () => {
+test("operation cards use the empty portrait, not person thumbs", () => {
   const html = operationRow({
     id: "operation-restore-justice",
     name: "Operation Restore Justice",
@@ -590,7 +590,8 @@ test("operation cards use initials, not person thumbs", () => {
     arrest_count: null,
   });
   assert.match(html, /class="tui-row operation-card/);
-  assert.match(html, /class="initials thumb"/);
+  assert.match(html, /class="portrait thumb empty-portrait"/);
+  assert.match(html, /src="\/empty-portrait\.jpg/);
   assert.doesNotMatch(html, /person-card/);
   assert.doesNotMatch(html, /\/media\/thumbs\/people\//);
 });
