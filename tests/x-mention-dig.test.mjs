@@ -4,8 +4,12 @@ import fs from "fs";
 import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
-import { digMention } from "../app/lib/mention-dig.mjs";
+import { buildReplyPlan, digMention } from "../app/lib/mention-dig.mjs";
+import { keepDetailPath } from "../app/lib/keep-page-shot.mjs";
+import { CITE_FLOOR } from "../app/lib/promote.mjs";
+import { listRequestAttributions } from "../app/lib/request-attributions.mjs";
 import { countPeople, getAddRequest, loadSeedFile, setMemory } from "../app/lib/store.mjs";
+import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 import { parseDigEnvelope } from "../app/lib/x-mention-worker.mjs";
 import {
   digMentionEnvelope,
@@ -178,6 +182,7 @@ test("happy path keeps official chain cites and drops leads", async () => {
   assert.equal(blob.includes("trib.al"), false);
   assert.equal(blob.includes("Injected Name"), false);
   assert.equal(blob.includes("Riley Chen"), false);
+  assert.equal(parsed.subject_kind, "person");
   assert.equal(parsed.category, "resignations");
   assert.equal(parsed.event_date, "2024-06-15");
   assert.equal(parsed.event_date === "1999-05-05", false);
@@ -352,6 +357,7 @@ test("digMention accepts the envelope and still does not cite the mention", asyn
   assert.equal(await countPeople(), before);
   const lead = await getAddRequest(dug.lead_id);
   assert.equal(lead.source, "x_mention");
+  assert.equal(lead.kind, "person");
   assert.deepEqual(lead.cite_urls, []);
   assert.equal(lead.subject, "Casey Vale");
   setMemory(loadSeedFile(path.join(ROOT, "data", "seed.json")));
@@ -396,6 +402,233 @@ test("cli prints one envelope and exits 0 without secrets", async () => {
   assert.equal(envelope.outcome, "fail_closed");
   assert.equal(envelope.error_reason, "invalid_row");
   assert.equal(bad.stdout.includes(secret), false);
+});
+
+function quiet(plan) {
+  assert.equal(plan.reply, false);
+  assert.equal(plan.text, "");
+  assert.equal(plan.detail_path, "");
+  assert.equal(/https?:\/\//i.test(plan.text), false);
+}
+
+test("person, operation, and dog_comm KEEP; holiday stays silent", async () => {
+  assert.equal(CITE_FLOOR, 2);
+  setMemory(loadSeedFile(path.join(ROOT, "data", "seed.json")));
+
+  const personEnv = await digMentionEnvelope(row(), { fetchImpl: harness(happyPosts()).fetchImpl });
+  assert.equal(personEnv.subject_kind, "person");
+  assert.equal(personEnv.subject, "Casey Vale");
+  assert.ok(personEnv.cite_urls.length >= CITE_FLOOR);
+  const personKept = await digMention(row(), { ...NEW_PERSON_LOCK, ...personEnv });
+  assert.equal(personKept.status, "kept");
+  assert.equal(personKept.subject_kind, "person");
+  assert.equal(personKept.kept_person_slug, "casey-vale");
+  const personLead = await getAddRequest(personKept.lead_id);
+  assert.equal(personLead.kind, "person");
+  assert.ok(personLead.cite_urls.length >= CITE_FLOOR);
+  assert.equal(JSON.stringify(personLead.cite_urls).includes(MENTION), false);
+  assert.equal(JSON.stringify(personLead.cite_urls).includes(SUBJECT), false);
+  const personPlan = buildReplyPlan(
+    { status: "kept", kept_person_slug: personKept.kept_person_slug },
+    { displayName: personKept.person.name, detailPath: keepDetailPath(personKept.kept_person_slug, "person") },
+  );
+  assert.equal(personPlan.text, "ExitTrace kept Casey Vale.");
+  assert.equal(personPlan.detail_path, "/people/casey-vale");
+  assert.equal(personPlan.text.includes("http"), false);
+  assert.equal(/https?:\/\//i.test(personPlan.text), false);
+  const personAttr = await listRequestAttributions({
+    target_kind: "person",
+    target_id: personKept.kept_person_slug,
+  });
+  assert.equal(personAttr.length, 1);
+  assert.equal(personAttr[0].channel, "x_mention");
+
+  const opId = "2000000000000000101";
+  const opText =
+    "Operation Restore Justice is a missing kids operation announced by the Department of Justice on 2024-08-01.";
+  const opPosts = {
+    [opId]: tweet({
+      id: opId,
+      handle: "someone",
+      name: "Wire",
+      text: opText,
+      urls: [REUTERS, JUSTICE],
+    }),
+  };
+  const opRow = row({
+    subject_status_id: opId,
+    subject_url: statusUrl("someone", opId),
+    mention_status_id: "1000000000000000101",
+    referenced_json: null,
+  });
+  const opEnv = await digMentionEnvelope(opRow, {
+    fetchImpl: harness(opPosts).fetchImpl,
+  });
+  assert.equal(opEnv.subject_kind, "operation");
+  assert.equal(opEnv.subject, "Operation Restore Justice");
+  assert.equal(opEnv.category, "missing_kids");
+  assert.equal(opEnv.event_date, "2024-08-01");
+  assert.ok(opEnv.cite_urls.length >= CITE_FLOOR);
+  const opKept = await digMention(opRow, opEnv);
+  assert.equal(opKept.status, "kept", opKept.error_reason || "");
+  assert.equal(opKept.subject_kind, "operation");
+  assert.equal(opKept.kept_person_slug, "operation-restore-justice");
+  const opLead = await getAddRequest(opKept.lead_id);
+  assert.equal(opLead.kind, "operation");
+  assert.ok(opLead.cite_urls.length >= CITE_FLOOR);
+  assert.equal(JSON.stringify(opLead.cite_urls).includes(opId), false);
+  assert.equal(JSON.stringify(opLead.cite_urls).includes("1000000000000000101"), false);
+  const opPlan = buildReplyPlan(
+    { status: "kept", kept_person_slug: opKept.kept_person_slug },
+    {
+      displayName: opKept.operation.name,
+      detailPath: keepDetailPath(opKept.kept_person_slug, "operation"),
+    },
+  );
+  assert.equal(opPlan.text, "ExitTrace kept Operation Restore Justice.");
+  assert.equal(opPlan.detail_path, "/operations/operation-restore-justice");
+  assert.equal(/https?:\/\//i.test(opPlan.text), false);
+  const opAttr = await listRequestAttributions({
+    target_kind: "operation",
+    target_id: opKept.kept_person_slug,
+  });
+  assert.equal(opAttr.length, 1);
+
+  const dogId = "2000000000000000102";
+  const dogPosts = {
+    [dogId]: tweet({
+      id: dogId,
+      handle: "FBI",
+      name: "FBI",
+      text: "Military working dog honored on 2024-06-15.",
+      urls: [],
+      created_at: "1999-05-05T00:00:00.000Z",
+    }),
+  };
+  const dogRow = row({
+    subject_status_id: dogId,
+    subject_url: statusUrl("FBI", dogId),
+    mention_status_id: "1000000000000000102",
+    referenced_json: null,
+  });
+  const dogEnv = await digMentionEnvelope(dogRow, { fetchImpl: harness(dogPosts).fetchImpl });
+  assert.equal(dogEnv.subject_kind, "dog_comm");
+  assert.equal(dogEnv.subject, "FBI");
+  assert.equal(dogEnv.cite_urls, undefined);
+  assert.equal(dogEnv.posted_at, "2024-06-15");
+  assert.equal(dogEnv.posted_at === "1999-05-05", false);
+  assert.match(dogEnv.source_url, new RegExp(`/status/${dogId}$`));
+  const dogKept = await digMention(dogRow, dogEnv);
+  assert.equal(dogKept.status, "kept", dogKept.error_reason || "");
+  assert.equal(dogKept.subject_kind, "dog_comm");
+  assert.match(dogKept.kept_person_slug, /^fbi-2024-06-15-[a-f0-9]{8}$/);
+  const dogLead = await getAddRequest(dogKept.lead_id);
+  assert.equal(dogLead.kind, "dog");
+  assert.deepEqual(dogLead.cite_urls, []);
+  assert.equal(JSON.stringify(dogLead.cite_urls).includes(dogId), false);
+  const dogPlan = buildReplyPlan(
+    { status: "kept", kept_person_slug: dogKept.kept_person_slug },
+    {
+      displayName: dogKept.dog.account_name,
+      detailPath: keepDetailPath(dogKept.kept_person_slug, "dog_comm"),
+    },
+  );
+  assert.equal(dogPlan.text, "ExitTrace kept FBI.");
+  assert.equal(dogPlan.detail_path, `/dog-comms/${dogKept.kept_person_slug}`);
+  assert.equal(dogPlan.detail_path.includes("http"), false);
+  assert.equal(/https?:\/\//i.test(dogPlan.text), false);
+  const dogAttr = await listRequestAttributions({
+    target_kind: "dog_comm",
+    target_id: dogKept.kept_person_slug,
+  });
+  assert.equal(dogAttr.length, 1);
+  const dogAgain = await digMention(dogRow, dogEnv);
+  assert.equal(dogAgain.status, "kept");
+  const dogAttrAgain = await listRequestAttributions({
+    target_kind: "dog_comm",
+    target_id: dogKept.kept_person_slug,
+  });
+  assert.equal(dogAttrAgain.length, 1);
+
+  const holidayPosts = {
+    [SUBJECT]: tweet({
+      id: SUBJECT,
+      handle: "someone",
+      name: "Wire",
+      text: "Pumpkin Day is today.",
+      urls: [REUTERS, JUSTICE],
+    }),
+  };
+  const holiday = await digMentionEnvelope(row({ referenced_json: null }), {
+    fetchImpl: harness(holidayPosts).fetchImpl,
+  });
+  assert.deepEqual(holiday, { outcome: "fail_closed", error_reason: "missing_subject" });
+  const holidayDug = await digMention(row({ referenced_json: null }), holiday);
+  assert.equal(holidayDug.status, "fail_closed");
+  assert.equal(holidayDug.lead_id, null);
+  quiet(buildReplyPlan({ status: "fail_closed", error_reason: "missing_subject" }));
+
+  const castingPosts = {
+    [SUBJECT]: tweet({
+      id: SUBJECT,
+      handle: "someone",
+      name: "Wire",
+      text: "Central Casting is not a person card by itself.",
+      urls: [REUTERS, JUSTICE],
+    }),
+  };
+  const casting = await digMentionEnvelope(row({ referenced_json: null }), {
+    fetchImpl: harness(castingPosts).fetchImpl,
+  });
+  assert.deepEqual(casting, { outcome: "fail_closed", error_reason: "missing_subject" });
+  quiet(buildReplyPlan(casting && { status: "fail_closed", error_reason: casting.error_reason }));
+
+  const coronaId = "2000000000000000103";
+  const coronaPosts = {
+    [coronaId]: tweet({
+      id: coronaId,
+      handle: "someone",
+      name: "Wire",
+      text: "Casey Vale corona comms on 2024-07-01.",
+      urls: [REUTERS, JUSTICE],
+    }),
+  };
+  const corona = await digMentionEnvelope(
+    row({
+      subject_status_id: coronaId,
+      subject_url: statusUrl("someone", coronaId),
+      mention_status_id: "1000000000000000103",
+      referenced_json: null,
+    }),
+    { fetchImpl: harness(coronaPosts).fetchImpl },
+  );
+  assert.equal(corona.subject_kind, "person");
+  assert.equal(corona.subject, "Casey Vale");
+  assert.equal(corona.category, "corona_comms");
+  assert.equal(keepDetailPath("casey-vale", corona.category), "/people/casey-vale");
+
+  const unofficialDog = {
+    [SUBJECT]: tweet({
+      id: SUBJECT,
+      handle: "someone",
+      name: "Wire",
+      text: "Military working dog honored on 2024-06-15.",
+      urls: [REUTERS, JUSTICE],
+    }),
+  };
+  const unofficial = await digMentionEnvelope(row({ referenced_json: null }), {
+    fetchImpl: harness(unofficialDog).fetchImpl,
+  });
+  assert.deepEqual(unofficial, { outcome: "fail_closed", error_reason: "missing_subject" });
+
+  assert.equal(keepDetailPath("casey-vale", "person"), "/people/casey-vale");
+  assert.equal(keepDetailPath("casey-vale", "corona_comms"), "/people/casey-vale");
+  assert.equal(keepDetailPath("casey-vale", "central_casting"), "/people/casey-vale");
+  assert.equal(keepDetailPath("operation-restore-justice", "operation"), "/operations/operation-restore-justice");
+  assert.equal(keepDetailPath("fbi-k9", "dog_comm"), "/dog-comms/fbi-k9");
+  assert.equal(keepDetailPath("folder-note", "red_folder"), "/red-folder-comms/folder-note");
+
+  setMemory(loadSeedFile(path.join(ROOT, "data", "seed.json")));
 });
 
 function runDig(args, stdin, env = {}) {

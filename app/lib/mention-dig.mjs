@@ -4,13 +4,31 @@
  */
 
 import { AddError, leadRecordFields, processAddRequest, queueAddRequest } from "./add-request.mjs";
-import { recordXMentionKeepAttribution } from "./request-attributions.mjs";
-import { CITE_FLOOR } from "./promote.mjs";
 import { keepDetailPath } from "./keep-page-shot.mjs";
+import { normalizeOperationTag } from "./operation.mjs";
+import { CITE_FLOOR } from "./promote.mjs";
+import { recordXMentionKeepAttribution } from "./request-attributions.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 export const LEAD_SOURCE_X_MENTION = "x_mention";
 export const SOFT_ACK_TEXT = "Queued for ExitTrace review.";
+
+/** Dig subjects. dog_comm is the add-request kind `dog`. No parallel kind ids. */
+export function canonicalSubjectKind(raw) {
+  const key = String(raw || "").trim();
+  if (key === "person" || key === "operation" || key === "dog_comm") return key;
+  if (key === "dog" || key === "dog_comms") return "dog_comm";
+  return "";
+}
+
+/** add-request kind id the promote stack already queues. */
+export function addKindForSubject(subjectKind) {
+  const key = canonicalSubjectKind(subjectKind);
+  if (key === "person") return "person";
+  if (key === "operation") return "operation";
+  if (key === "dog_comm") return "dog";
+  return "";
+}
 
 export function normalizeErrorReason(raw, fallback) {
   const text = String(raw || "").trim();
@@ -73,6 +91,14 @@ export function stripMentionCites(cites, row = {}) {
   });
 }
 
+function explicitKind(input = {}) {
+  if (input.subject_kind != null && String(input.subject_kind).trim() !== "") {
+    return input.subject_kind;
+  }
+  if (input.kind != null && String(input.kind).trim() !== "") return input.kind;
+  return "";
+}
+
 export async function leadIngest(input = {}) {
   if (Array.isArray(input.cite_urls) && input.cite_urls.length) {
     throw new AddError("x mention lead cannot carry cites", "mention_not_cite");
@@ -85,8 +111,13 @@ export async function leadIngest(input = {}) {
   if (fields.source !== LEAD_SOURCE_X_MENTION) {
     throw new AddError("x mention lead source is required", "invalid_lead_source");
   }
+  const named = explicitKind(input);
+  const kind = named ? addKindForSubject(named) : "person";
+  if (!kind) {
+    throw new AddError("kind must be person, operation, or dog", "invalid_kind");
+  }
   return queueAddRequest({
-    kind: "person",
+    kind,
     subject: input.subject,
     category: input.category || "",
     event_date: input.event_date || "",
@@ -99,11 +130,29 @@ export async function leadIngest(input = {}) {
     reason: input.reason || "",
     branch: input.branch || "",
     military: input.military,
+    agencies: input.agencies || "",
+    summary: input.summary || input.comments || input.reason || "",
+    handle: input.handle || "",
+    source_url: input.source_url || "",
+    posted_at: input.posted_at || "",
+    account_name: input.account_name || "",
+    text: input.text || "",
     source: fields.source,
     subject_status_id: fields.subject_status_id,
     mention_status_id: fields.mention_status_id,
     cite_urls: [],
   });
+}
+
+function keptFromResult(result) {
+  const dog = result?.dog?.id || result?.dog_id || result?.request?.result?.dog_id || "";
+  const operation =
+    result?.operation?.id || result?.operation_id || result?.request?.result?.operation_id || "";
+  const person = result?.person?.id || result?.person_id || result?.request?.result?.person_id || "";
+  if (dog) return { slug: String(dog), subject_kind: "dog_comm" };
+  if (operation) return { slug: String(operation), subject_kind: "operation" };
+  if (person) return { slug: String(person), subject_kind: "person" };
+  return { slug: "", subject_kind: "" };
 }
 
 /**
@@ -113,27 +162,50 @@ export async function leadIngest(input = {}) {
 export async function digMention(row = {}, envelope) {
   const env = envelope && typeof envelope === "object" && !Array.isArray(envelope) ? envelope : null;
   const subject = String(env?.subject || "").trim();
+  const namedKind = env && explicitKind(env);
+  const subjectKind = namedKind ? canonicalSubjectKind(namedKind) : "person";
+  if (namedKind && !subjectKind) {
+    return { status: "fail_closed", error_reason: "invalid_kind", kept_person_slug: null, lead_id: null };
+  }
   let lead = null;
   if (subject) {
-    const ingested = await leadIngest({
-      subject,
-      category: env.category || "",
-      event_date: env.event_date || "",
-      hint_url: row.subject_url || row.mention_url || "",
-      subject_url: row.subject_url || "",
-      birth_date: env.birth_date || "",
-      country_of_origin: env.country_of_origin || "",
-      position: env.position || "",
-      organization: env.organization || "",
-      comments: env.comments || env.reason || "",
-      reason: env.reason || "",
-      branch: env.branch || "",
-      military: env.military,
-      subject_status_id: row.subject_status_id,
-      mention_status_id: row.mention_status_id,
-      cite_urls: [],
-    });
-    lead = ingested.request;
+    try {
+      const ingested = await leadIngest({
+        subject,
+        subject_kind: subjectKind,
+        category: env.category || "",
+        event_date: env.event_date || "",
+        hint_url: row.subject_url || row.mention_url || "",
+        subject_url: row.subject_url || "",
+        birth_date: env.birth_date || "",
+        country_of_origin: env.country_of_origin || "",
+        position: env.position || "",
+        organization: env.organization || "",
+        comments: env.comments || env.reason || "",
+        reason: env.reason || "",
+        branch: env.branch || "",
+        military: env.military,
+        agencies: env.agencies || "",
+        summary: env.summary || env.comments || env.reason || "",
+        handle: env.handle || "",
+        source_url: env.source_url || "",
+        posted_at: env.posted_at || "",
+        account_name: env.account_name || "",
+        text: env.text || "",
+        subject_status_id: row.subject_status_id,
+        mention_status_id: row.mention_status_id,
+        cite_urls: [],
+      });
+      lead = ingested.request;
+    } catch (err) {
+      const code = err instanceof AddError || err?.code ? err.code : "fail_closed";
+      return {
+        status: "fail_closed",
+        error_reason: normalizeErrorReason(code, "fail_closed"),
+        kept_person_slug: null,
+        lead_id: null,
+      };
+    }
   }
   const lead_id = lead?.id || null;
   if (!env || env.outcome === "fail_closed" || env.outcome === "rejected") {
@@ -150,10 +222,26 @@ export async function digMention(row = {}, envelope) {
     };
   }
   const cites = stripMentionCites(env.cite_urls, row);
-  if (!subject || cites.length < CITE_FLOOR) {
+  if (subjectKind !== "dog_comm" && (!subject || cites.length < CITE_FLOOR)) {
     return {
       status: "fail_closed",
       error_reason: subject ? "cites_floor" : "missing_subject",
+      kept_person_slug: null,
+      lead_id,
+    };
+  }
+  if (!subject) {
+    return {
+      status: "fail_closed",
+      error_reason: "missing_subject",
+      kept_person_slug: null,
+      lead_id,
+    };
+  }
+  if (subjectKind === "operation" && !normalizeOperationTag(env.category || env.tag || "")) {
+    return {
+      status: "fail_closed",
+      error_reason: "invalid_tag",
       kept_person_slug: null,
       lead_id,
     };
@@ -164,20 +252,23 @@ export async function digMention(row = {}, envelope) {
       overlay: {
         ...env,
         subject,
-        cite_urls: cites,
+        cite_urls: subjectKind === "dog_comm" ? [] : cites,
       },
     });
-    const slug = result.person?.id || result.request?.result?.person_id || result.person_id || "";
-    if (!slug) {
+    const kept = keptFromResult(result);
+    if (!kept.slug) {
       return { status: "fail_closed", error_reason: "missing_slug", kept_person_slug: null, lead_id };
     }
     await recordXMentionKeepAttribution(row, result);
     return {
       status: "kept",
-      kept_person_slug: slug,
+      kept_person_slug: kept.slug,
+      subject_kind: kept.subject_kind,
       error_reason: null,
       lead_id,
       person: result.person || null,
+      operation: result.operation || null,
+      dog: result.dog || null,
     };
   } catch (err) {
     const code = err instanceof AddError || err?.code ? err.code : "fail_closed";

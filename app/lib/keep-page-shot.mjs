@@ -12,7 +12,25 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const DETAIL_PATH = /^\/(?:people|operations)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const DETAIL_PATH = /^\/(?:people|operations|dog-comms|red-folder-comms)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Public detail roots the catalog already serves.
+ * corona_comms and central_casting are person cards at /people/{slug}.
+ * dog_comm is the dog catalog at /dog-comms/{id}. red_folder is the twin catalog.
+ */
+const DETAIL_ROOT = Object.freeze({
+  person: "people",
+  corona_comms: "people",
+  central_casting: "people",
+  operation: "operations",
+  dog: "dog-comms",
+  dog_comm: "dog-comms",
+  dog_comms: "dog-comms",
+  red_folder: "red-folder-comms",
+  red_folder_comm: "red-folder-comms",
+  red_folder_comms: "red-folder-comms",
+});
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const SCRUBBED = [
@@ -28,7 +46,8 @@ const SCRUBBED = [
 export function keepDetailPath(slug, kind = "person") {
   const id = String(slug || "").trim();
   if (!SLUG.test(id)) return "";
-  const root = kind === "operation" ? "operations" : "people";
+  const root = DETAIL_ROOT[String(kind || "person").trim()];
+  if (!root) return "";
   return `/${root}/${id}`;
 }
 
