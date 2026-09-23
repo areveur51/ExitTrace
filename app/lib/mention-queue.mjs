@@ -5,6 +5,7 @@
  */
 
 import { createHash, timingSafeEqual } from "node:crypto";
+import { keepDetailPath } from "./keep-page-shot.mjs";
 import { getOperation, getPerson, getPool } from "./store.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import { buildReplyPlan } from "./mention-dig.mjs";
@@ -681,13 +682,14 @@ export async function stampMentionReply({ subject_status_id, kind, now = new Dat
   return { ok: true, row: mapPg(updated.rows[0]) };
 }
 
-async function keptCatalogName(slug) {
+async function keptCatalog(slug) {
   const id = String(slug || "").trim();
-  if (!id) return "";
+  if (!id) return { name: "", kind: "person" };
   const person = await getPerson(id);
-  if (person?.name) return person.name;
+  if (person?.id) return { name: person.name || "", kind: "person" };
   const operation = await getOperation(id);
-  return operation?.name || "";
+  if (operation?.id) return { name: operation.name || "", kind: "operation" };
+  return { name: "", kind: "person" };
 }
 
 export async function planMentionReply(subjectStatusId, { now = new Date() } = {}) {
@@ -720,7 +722,17 @@ export async function planMentionReply(subjectStatusId, { now = new Date() } = {
     }
   }
   void now;
-  const displayName =
-    row.status === "kept" && !priorFinal ? await keptCatalogName(row.kept_person_slug) : "";
-  return { ok: true, row, ...buildReplyPlan(row, { priorFinal, displayName }) };
+  const catalog =
+    row.status === "kept" && !priorFinal
+      ? await keptCatalog(row.kept_person_slug)
+      : { name: "", kind: "person" };
+  return {
+    ok: true,
+    row,
+    ...buildReplyPlan(row, {
+      priorFinal,
+      displayName: catalog.name,
+      detailPath: keepDetailPath(row.kept_person_slug, catalog.kind),
+    }),
+  };
 }

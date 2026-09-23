@@ -6,6 +6,7 @@
 import { AddError, leadRecordFields, processAddRequest, queueAddRequest } from "./add-request.mjs";
 import { recordXMentionKeepAttribution } from "./request-attributions.mjs";
 import { CITE_FLOOR } from "./promote.mjs";
+import { keepDetailPath } from "./keep-page-shot.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 export const LEAD_SOURCE_X_MENTION = "x_mention";
@@ -190,19 +191,21 @@ export async function digMention(row = {}, envelope) {
 }
 
 function quietPlan(reason) {
-  return { reply: false, reason, text: "", media: [] };
+  return { reply: false, reason, text: "", detail_path: "" };
 }
 
 /**
- * Final X reply only for KEEP. One plain-text confirmation. No URL and no media.
+ * Final X reply only for KEEP. Plain-text confirmation plus a host screenshot
+ * of detail_path on the public origin. The path is not a URL and is not the reply text.
  * fail_closed, rejected, ambiguous_subject, and dig failures stay silent.
  * priorFinal is the earlier subject that already owns this KEEP slug.
  */
-export function buildReplyPlan(row, { priorFinal = false, displayName = "" } = {}) {
+export function buildReplyPlan(row, { priorFinal = false, displayName = "", detailPath = "" } = {}) {
   if (!row) return quietPlan("not_found");
   if (row.reply_final_at || priorFinal) return quietPlan("first_mentioner");
   if (row.status !== "kept") return quietPlan("no_reply");
   const text = keepReplyText(displayName, row.kept_person_slug);
-  if (!text) return quietPlan("missing_label");
-  return { reply: true, kind: "final", reason: "kept", text, media: [] };
+  const detail_path = detailPath || keepDetailPath(row.kept_person_slug, "person");
+  if (!text || !detail_path) return quietPlan("missing_label");
+  return { reply: true, kind: "final", reason: "kept", text, detail_path };
 }

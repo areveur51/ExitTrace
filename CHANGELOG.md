@@ -13,7 +13,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Changed
 
-- X mention finals reply once, in plain words, to the first mentioner, and only when the dig status is kept. Fail-closed, rejected, ambiguous, and dig failures stay silent. Soft-ack stays off. No URL and no media on that reply.
+- X mention finals reply once, in plain words, to the first mentioner, and only when the dig status is kept. The reply also attaches a host screenshot of the public KEEP detail page. The text has no URL. Fail-closed, rejected, ambiguous, and dig failures stay silent. Soft-ack stays off.
 
 ## [1.1.3] - 2026-09-23
 

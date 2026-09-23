@@ -6,6 +6,7 @@ import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { handle } from "../app/server.mjs";
+import { capturePublicKeepPage, publicKeepPageUrl } from "../app/lib/keep-page-shot.mjs";
 import { leadIngest, SOFT_ACK_TEXT, buildReplyPlan, digMention, keepReplyText } from "../app/lib/mention-dig.mjs";
 import {
   POLL_MAX_MS,
@@ -68,6 +69,29 @@ const CITES = [
   "https://www.example.com/news/quota-mention-held",
   "https://www.example.net/world/quota-mention-arrest",
 ];
+const PUBLIC_ORIGIN = "https://exittrace.example";
+const MEDIA_ID = "1880028106020515840";
+const SHOT_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function glassPage(url) {
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: () => "text/html; charset=utf-8" },
+    async text() {
+      return `<!DOCTYPE html><html lang="en" data-theme="glass"><body>${url}</body></html>`;
+    },
+  };
+}
+
+function mediaUploadResponse(target) {
+  if (String(target).endsWith("/media/upload/initialize")) {
+    return jsonResponse(200, { data: { id: MEDIA_ID, media_key: `3_${MEDIA_ID}` } });
+  }
+  if (/\/media\/upload\/\d+\/append$/.test(String(target))) return jsonResponse(200, { data: {} });
+  if (/\/media\/upload\/\d+\/finalize$/.test(String(target))) return jsonResponse(200, { data: { id: MEDIA_ID } });
+  return null;
+}
 
 function executableSql(sql) {
   return sql
@@ -446,6 +470,7 @@ test("KEEP final is one plain reply to the first mentioner", async () => {
   await finishMention(quoted, { status: "kept", kept_person_slug: "quota-mention" });
 
   const posts = [];
+  const shots = [];
   const fetchImpl = async (url, opts) => {
     const target = String(url);
     if (target.endsWith("/work")) {
@@ -455,6 +480,9 @@ test("KEEP final is one plain reply to the first mentioner", async () => {
       const id = new URL(target).searchParams.get("subject_status_id");
       return jsonResponse(200, await planMentionReply(id));
     }
+    if (target.startsWith(`${PUBLIC_ORIGIN}/`)) return glassPage(target);
+    const uploaded = mediaUploadResponse(target);
+    if (uploaded) return uploaded;
     if (target.includes("/tweets")) {
       posts.push(JSON.parse(opts.body));
       return jsonResponse(201, {});
@@ -471,24 +499,37 @@ test("KEEP final is one plain reply to the first mentioner", async () => {
     MENTION_WORKER_DATABASE: "lab",
     MENTION_QUEUE_URL: "https://queue.example",
     MENTION_QUEUE_WORKER_TOKEN: WORKER,
+    EXITTRACE_PUBLIC_ORIGIN: PUBLIC_ORIGIN,
     X_API_KEY: "k",
     X_API_SECRET: "s",
     X_ACCESS_TOKEN: "t",
     X_ACCESS_TOKEN_SECRET: "ts",
     X_USER_ID: "50",
   };
-  const once = await workerOnce({ env, fetchImpl });
+  const once = await workerOnce({
+    env,
+    fetchImpl,
+    captureImpl: async (pageUrl) => {
+      shots.push(pageUrl);
+      return SHOT_PNG;
+    },
+  });
   assert.equal(once.results.length, 1);
   assert.equal(once.results[0].reply_error, "");
   assert.equal(posts.length, 1);
+  assert.deepEqual(shots, [`${PUBLIC_ORIGIN}/people/quota-mention`]);
   assert.equal(posts[0].text, "ExitTrace kept Quota Mention.");
   assert.equal(posts[0].text.includes("http"), false);
   assert.equal(/https?:\/\//i.test(posts[0].text), false);
-  assert.deepEqual(Object.keys(posts[0]).sort(), ["reply", "text"]);
-  assert.equal(posts[0].media, undefined);
+  assert.equal(JSON.stringify(posts[0]).includes("http"), false);
+  assert.equal(JSON.stringify(posts[0]).includes("exittrace.example"), false);
+  assert.deepEqual(posts[0].media, { media_ids: [MEDIA_ID] });
   assert.equal(posts[0].attachments, undefined);
   assert.equal(posts[0].reply.in_reply_to_tweet_id, first.row.mention_status_id);
-  assert.deepEqual(posts[0], replyBody({ inReplyTo: first.row.mention_status_id, text: posts[0].text }));
+  assert.deepEqual(
+    posts[0],
+    replyBody({ inReplyTo: first.row.mention_status_id, text: posts[0].text, mediaIds: [MEDIA_ID] }),
+  );
 
   const again = await workerOnce({ env, fetchImpl });
   assert.equal(again.results.length, 0);
@@ -510,9 +551,31 @@ test("KEEP final is one plain reply to the first mentioner", async () => {
   await finishMention(opSubject, { status: "kept", kept_person_slug: "restore-justice" });
   const opPlan = await planMentionReply(opSubject);
   assert.equal(opPlan.text, "ExitTrace kept Restore Justice.");
-  assert.equal(opPlan.media.length, 0);
+  assert.equal(opPlan.detail_path, "/operations/restore-justice");
+  assert.equal(opPlan.detail_path.includes("http"), false);
   assert.equal(keepReplyText("", "plain-slug"), "ExitTrace kept plain slug.");
   assert.equal(keepReplyText("https://example.com/people/plain-slug", "plain-slug"), "ExitTrace kept plain slug.");
+  assert.equal(publicKeepPageUrl(PUBLIC_ORIGIN, "/people/quota-mention"), `${PUBLIC_ORIGIN}/people/quota-mention`);
+  assert.equal(publicKeepPageUrl("http://exittrace.example", "/people/quota-mention"), "");
+  assert.equal(publicKeepPageUrl("https://localhost", "/people/quota-mention"), "");
+  assert.equal(publicKeepPageUrl("https://127.0.0.1", "/people/quota-mention"), "");
+  assert.equal(publicKeepPageUrl("https://exittrace.example:5220", "/people/quota-mention"), "");
+  assert.equal(publicKeepPageUrl("https://lab-auth.example", "/people/quota-mention"), "");
+  assert.equal(publicKeepPageUrl("https://admin.example", "/people/quota-mention"), "");
+  assert.equal(publicKeepPageUrl("file:///tmp/keep.html", "/people/quota-mention"), "");
+  assert.equal(publicKeepPageUrl("https://user:secret@exittrace.example", "/people/quota-mention"), "");
+  await assert.rejects(
+    () =>
+      capturePublicKeepPage({
+        origin: "https://127.0.0.1:5220",
+        detailPath: "/people/quota-mention",
+        fetchImpl: async () => {
+          throw new Error("private page was fetched");
+        },
+        captureImpl: async () => SHOT_PNG,
+      }),
+    (err) => err.code === "public_page_required",
+  );
 });
 
 test("fail_closed and ambiguous digs send no reply", async () => {
@@ -533,10 +596,13 @@ test("fail_closed and ambiguous digs send no reply", async () => {
     assert.equal(plan.reason, "no_reply");
   }
   assert.deepEqual(await listUnrepliedMentions(), []);
-  assert.equal(
-    buildReplyPlan({ status: "kept", kept_person_slug: "quota-mention" }, { displayName: "Quota Mention" }).text,
-    "ExitTrace kept Quota Mention.",
+  const keptPlan = buildReplyPlan(
+    { status: "kept", kept_person_slug: "quota-mention" },
+    { displayName: "Quota Mention" },
   );
+  assert.equal(keptPlan.text, "ExitTrace kept Quota Mention.");
+  assert.equal(keptPlan.detail_path, "/people/quota-mention");
+  assert.equal(keptPlan.text.includes("http"), false);
   assert.equal(buildReplyPlan({ status: "fail_closed", error_reason: "ambiguous_subject", reply_soft_at: "t" }).reply, false);
 });
 
@@ -1529,8 +1595,12 @@ test("worker claim-next stops at five and a failed reply does not stop the batch
         reply: true,
         text: "ExitTrace kept Quota Mention.",
         reason: "kept",
+        detail_path: "/people/quota-mention",
       });
     }
+    if (target.startsWith(`${PUBLIC_ORIGIN}/`)) return glassPage(target);
+    const uploaded = mediaUploadResponse(target);
+    if (uploaded) return uploaded;
     if (target.includes("/tweets")) {
       tweets += 1;
       return jsonResponse(500, {});
@@ -1566,9 +1636,11 @@ test("worker claim-next stops at five and a failed reply does not stop the batch
       MENTION_QUEUE_URL: "https://queue.example",
       MENTION_QUEUE_WORKER_TOKEN: WORKER,
       MENTION_DIG_COMMAND: "true",
+      EXITTRACE_PUBLIC_ORIGIN: PUBLIC_ORIGIN,
       ...X_ENV,
     },
     fetchImpl,
+    captureImpl: async () => SHOT_PNG,
     digImpl: async () => {
       active += 1;
       maxActive = Math.max(maxActive, active);
