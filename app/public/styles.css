@@ -1123,6 +1123,14 @@ img.still.thumb {
 .nw-note, .nw-src { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 400; }
 .sources { margin: 0; padding-left: 1.15rem; }
 .sources time { color: var(--muted); font-size: 0.85rem; }
+a.source-link {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.cite-outlet {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
 .event-line { letter-spacing: 0.02em; }
 .event-cites { margin: 0 0 0.85rem; }
 .event-cites:last-child { margin-bottom: 0; }

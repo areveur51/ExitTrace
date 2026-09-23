@@ -953,13 +953,31 @@ function thumb(src, label, kind = "portrait") {
   return localMediaThumb(src, label, kind);
 }
 
+/**
+ * Shared cite link. One place decides the markup:
+ * URL → `<a class="source-link">` whose visible text is that URL
+ * (href and title stay the full URL; CSS may truncate the display).
+ * Optional muted outlet sits after the anchor so a leading snippet
+ * stays flush against the link. No URL → plain text, no anchor.
+ */
+export function citeLink(url, { label = "" } = {}) {
+  const href = String(url || "").trim();
+  const outlet = String(label || "").trim();
+  const outletHtml =
+    outlet && outlet !== href ? `<span class="cite-outlet">${esc(outlet)}</span>` : "";
+  if (!href) return outletHtml;
+  const anchor = `<a class="source-link" href="${esc(href)}" title="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(href)}</a>`;
+  return outletHtml ? `${anchor} ${outletHtml}` : anchor;
+}
+
 export function citeList(sources) {
   return `<ol class="sources cite-list">${(sources || [])
     .map((s) => {
-      const label = s.publisher || s.title || s.url;
-      return `<li><a class="source-link" href="${esc(s.url)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="${esc(s.title || "")}" data-date="${esc(s.date || "")}">${esc(label)}</a>${
-        s.date ? ` <time datetime="${esc(s.date)}">${esc(formatDate(s.date))}</time>` : ""
-      }</li>`;
+      const label = s.publisher || s.title || "";
+      const date = s.date
+        ? ` <time datetime="${esc(s.date)}">${esc(formatDate(s.date))}</time>`
+        : "";
+      return `<li>${citeLink(s.url, { label })}${date}</li>`;
     })
     .join("")}</ol>`;
 }
@@ -1040,7 +1058,7 @@ export function citeFromRow(row = {}) {
 export function detailSourceLine(url, { label = "Source" } = {}) {
   const href = String(url || "").trim();
   if (!href) return `<p class="meta-line">${esc(label)} · —</p>`;
-  return `<p class="meta-line">${esc(label)} · <a class="source-link" href="${esc(href)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="" data-date="">${esc(href)}</a></p>`;
+  return `<p class="meta-line">${esc(label)} · ${citeLink(href)}</p>`;
 }
 
 export function sourcePostRow(row, { selected } = {}) {
@@ -1102,14 +1120,14 @@ function sectionCites(raw) {
 function sectionCiteList(cites, { pairSnippetBefore = false } = {}) {
   return `<ol class="sources cite-list">${cites
     .map((s) => {
-      const label = s.source_label || s.title || s.url;
+      const label = s.source_label || s.title || "";
       const date = s.date
         ? ` <time datetime="${esc(s.date)}">${esc(formatDate(s.date))}</time>`
         : "";
       const snippet = s.snippet
         ? `<blockquote class="event-snippet">${esc(s.snippet)}</blockquote>`
         : "";
-      const link = `<a class="source-link" href="${esc(s.url)}" rel="noopener noreferrer" data-label="${esc(label)}" data-title="${esc(s.title || "")}" data-date="${esc(s.date || "")}">${esc(label)}</a>`;
+      const link = citeLink(s.url, { label });
       // Central Casting pairs each stored quote immediately before its own cite.
       // Other event sections keep the cite, then the date, then the snippet.
       return pairSnippetBefore ? `<li>${snippet}${link}${date}</li>` : `<li>${link}${date}${snippet}</li>`;
@@ -1446,7 +1464,7 @@ export function personHeader(row, extras = {}) {
 export function grokipediaBlock(row, { filled = [], cite } = {}) {
   const item = cite || grokipediaCite(row, { filled });
   if (!item) return "";
-  return `<p class="meta-line grokipedia-cite">Grokipedia · <a class="source-link" href="${esc(item.url)}" rel="noopener noreferrer" data-label="Grokipedia" data-title="Grokipedia">grokipedia.com</a></p>`;
+  return `<p class="meta-line grokipedia-cite">Grokipedia · ${citeLink(item.url)}</p>`;
 }
 
 export function eventTagRow(ev, { birthDate } = {}) {

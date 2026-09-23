@@ -70,7 +70,12 @@ test("shared person pieces stay local thumbs, event-attrs rows, and cite lists",
   );
   const cites = citeList([{ publisher: "BBC News", url: "https://www.bbc.com/news/x" }]);
   assert.match(cites, /class="sources cite-list"/);
-  assert.match(cites, /BBC News/);
+  assert.match(cites, /class="cite-outlet">BBC News</);
+  assert.match(
+    cites,
+    /<a class="source-link" href="https:\/\/www\.bbc\.com\/news\/x" title="https:\/\/www\.bbc\.com\/news\/x" target="_blank" rel="noopener noreferrer">https:\/\/www\.bbc\.com\/news\/x<\/a>/,
+  );
+  assert.doesNotMatch(cites, /<a[^>]*>BBC News<\/a>/);
   const row = eventTagRow(
     {
       kind: "firings",
