@@ -107,7 +107,7 @@ On the subscriber, only if the relation is missing after that ADD:
 ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false);
 ```
 
-Never omit `copy_data = false`. Never `copy_data=true`. Media stills (`media/red-folder-comms/` and screenshots under `media/screenshots/red-folder-comms/`, including `{id}/support/{n}/`) travel on the existing media-delta rsync path. Gap-upsert published tables stay `people`, `dog_comms`, `operations`, optional `categories` — this restore does not upsert harvest `red_folder_comms` rows.
+Never omit `copy_data = false`. Never `copy_data=true`. `REFRESH PUBLICATION WITH (copy_data = false)` does not copy rows already in the table. Backfill with gap-upsert (`scripts/export-published-tables.mjs` from lab, then `scripts/gap-upsert-published.mjs` against the Render `DATABASE_URL`). See [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md). Media stills (`media/red-folder-comms/` and screenshots under `media/screenshots/red-folder-comms/`, including `{id}/support/{n}/`) travel on the existing media-delta rsync path.
 
 ## Central Casting publication (lab)
 
@@ -121,7 +121,7 @@ Cite gate: ongoing KEEP is official/gov/news-org plus quote-chain standing. All 
 psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-central-casting-comms-publication.sql
 ```
 
-That is `ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms` when the table is not already in the publication. Subscriber refresh stays `WITH (copy_data = false)`. Never `copy_data=true`. Stills live under `media/central-casting-comms/` and screenshots under `media/screenshots/central-casting-comms/` (including `{id}/support/{n}/`) on the existing media-delta path. There is no `?sense=` filter and no child route. `/central-casting-comms` redirects to `/central-casting`.
+That is `ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms` when the table is not already in the publication. Subscriber refresh stays `WITH (copy_data = false)`. Never `copy_data=true`. That refresh does not copy existing harvest rows. Gap-upsert backfills `central_casting_comms`, and `people.central_casting` rides the `people` upsert (JSON array of cite URLs; empty array when absent; cite URLs are not invented). Stills live under `media/central-casting-comms/` and screenshots under `media/screenshots/central-casting-comms/` (including `{id}/support/{n}/`) on the existing media-delta path. There is no `?sense=` filter and no child route. `/central-casting-comms` redirects to `/central-casting`.
 
 GitHub Releases publish a zip of those two directories. The `/downloads` page describes the zip and does not fetch it.
 

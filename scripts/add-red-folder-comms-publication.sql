@@ -4,10 +4,11 @@
 -- Lab publisher:
 --   psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-red-folder-comms-publication.sql
 --
--- Subscriber (after the publisher ADD TABLE), only if the relation is missing:
+-- Subscriber (after the publisher ADD TABLE):
 --   ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false);
 -- Never omit WITH (copy_data = false). Never copy_data=true.
--- Media stills travel on the existing media-delta rsync path, not this publication.
+-- That refresh does not copy rows already stored. Backfill with gap-upsert
+-- (docs/NEW_KIND_RENDER_SYNC.md). Media stills travel on the media-delta path.
 
 DO $$
 BEGIN

@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 /**
  * Idempotent upsert of published tables by id (and person_events companion).
- * Never DELETE / TRUNCATE / DROP. Optional categories skipped if the table is absent.
+ * Includes red_folder_comms, central_casting_comms, and people.central_casting.
+ * Never DELETE / TRUNCATE / DROP. Absent tables are skipped, not created.
+ *
+ * Place order (no secrets in this file): lab add-*-publication.sql,
+ * then Render `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION
+ * WITH (copy_data = false)` — that refresh does not copy existing rows —
+ * then export from lab and run this script against Render DATABASE_URL.
+ * See docs/NEW_KIND_RENDER_SYNC.md.
  */
 import fs from "fs";
 import path from "path";
@@ -11,6 +18,7 @@ import {
   ALL_UPSERT_TABLES,
   COUNT_SQL,
   countProof,
+  countTableSql,
   planGapUpsert,
 } from "../app/lib/gap-upsert.mjs";
 import { closeStore, getPool } from "../app/lib/store.mjs";
@@ -66,34 +74,45 @@ async function existingTables() {
   return res.rows.map((r) => r.table_name);
 }
 
+async function countOne(table) {
+  try {
+    const res = await pool.query(countTableSql(table));
+    return Number(res.rows[0]?.n || 0);
+  } catch (err) {
+    if (err && err.code === "42P01") return 0;
+    throw err;
+  }
+}
+
 async function counts() {
+  const out = Object.fromEntries(ALL_UPSERT_TABLES.map((t) => [t, 0]));
   try {
     const res = await pool.query(COUNT_SQL);
     const row = res.rows[0] || {};
-    const out = { categories: 0 };
     for (const t of ALL_UPSERT_TABLES) {
       if (t === "categories") continue;
       out[t] = Number(row[t] || 0);
     }
-    try {
-      const cat = await pool.query("SELECT count(*)::int AS n FROM categories");
-      out.categories = Number(cat.rows[0]?.n || 0);
-    } catch {
-      out.categories = 0;
-    }
-    return out;
   } catch (err) {
-    throw err;
+    if (!err || err.code !== "42P01") throw err;
+    for (const t of ALL_UPSERT_TABLES) {
+      if (t === "categories") continue;
+      out[t] = await countOne(t);
+    }
   }
+  out.categories = await countOne("categories");
+  return out;
+}
+
+function formatCounts(row) {
+  return ALL_UPSERT_TABLES.map((t) => `${t}=${row[t] ?? 0}`).join(" ");
 }
 
 try {
   const have = await existingTables();
   const planned = planGapUpsert(payload, { existingTables: have });
   const before = await counts();
-  console.log(
-    `BEFORE people=${before.people} dog_comms=${before.dog_comms} operations=${before.operations} person_events=${before.person_events} categories=${before.categories}`,
-  );
+  console.log(`BEFORE ${formatCounts(before)}`);
   for (const skip of planned.skipped) {
     console.log(`SKIP table=${skip.table} reason=${skip.reason} rows=${skip.count}`);
   }
@@ -102,9 +121,7 @@ try {
     console.log(`UPSERT_OK table=${plan.table} rows=${plan.count}`);
   }
   const after = await counts();
-  console.log(
-    `AFTER people=${after.people} dog_comms=${after.dog_comms} operations=${after.operations} person_events=${after.person_events} categories=${after.categories}`,
-  );
+  console.log(`AFTER ${formatCounts(after)}`);
   const proof = countProof(before, after, planned.counts_in);
   for (const [table, row] of Object.entries(proof)) {
     console.log(

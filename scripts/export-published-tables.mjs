@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * Export published tables as JSON for gap-upsert. Reads DATABASE_URL (lab).
- * Does not print the URL. Does not pack media.
+ * Tables follow ALL_UPSERT_TABLES (people.central_casting, red_folder_comms,
+ * central_casting_comms, person_events, and the older published tables).
+ * Does not print the URL. Does not pack media. Does not write the database.
  */
 import fs from "fs";
 import path from "path";

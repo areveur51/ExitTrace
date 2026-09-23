@@ -216,6 +216,8 @@ scripts/stamp-keep-up.mjs   upsert one keep_up et_meta key (Postgres)
 scripts/logical-apply-heal.mjs  classify/heal logical apply (Postgres)
 scripts/gap-upsert-published.mjs  upsert published rows by id (Postgres)
 scripts/export-published-tables.mjs  export published tables as JSON
+scripts/prove-new-kind-render-sync.mjs  print new-table place steps (does not connect)
+docs/NEW_KIND_RENDER_SYNC.md  new-table checklist (logical pub/sub + gap-upsert)
 scripts/migrate-unique-people.mjs  collapse duplicate live person rows
 scripts/import-source-posts.mjs  JSONL upsert of public source posts
 scripts/seed-rss-digest.mjs host-side official RSS digest (name leads, not cites)

@@ -110,15 +110,15 @@ Path A / streaming: `et-sub-reconnect` retries ENABLE with the same backoff. `et
 
 ## Idempotent gap upsert
 
-[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people`, `dog_comms`, `operations`, optional `categories` (skipped if that table is absent), plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`).
+[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people` (including `central_casting`), `dog_comms`, `operations`, optional `categories` (skipped if that table is absent), `red_folder_comms`, `central_casting_comms`, plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`). New tables follow [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md).
 
 Arm automatic catch-up from heal with repository variable `ET_AUTO_GAP_UPSERT=true` (off by default).
 
 ## Red-folder comms publication
 
-`red_folder_comms` is a `dog_comms` twin. Lab adds it with `scripts/add-red-folder-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE red_folder_comms` when missing). Subscriber then `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)` only if the relation is missing. Never `copy_data=true`. Media uses the existing media-delta rsync path. Do not gap-upsert the existing lab harvest rows from this restore.
+`red_folder_comms` is a `dog_comms` twin. Lab adds it with `scripts/add-red-folder-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE red_folder_comms` when missing). Subscriber then `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)`. Never `copy_data=true`. That refresh does not copy rows already stored. Backfill them with gap-upsert. Media uses the existing media-delta rsync path.
 
-`central_casting_comms` stores harvest under an existing person (`person_id`). The parent list is `/central-casting`: one card per existing person KEEP, not a clip catalog. Lab adds the evidence table with `scripts/add-central-casting-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms` when missing). Same `copy_data = false` rule. No seed rows in this repo. Media: `media/central-casting-comms/` and `media/screenshots/central-casting-comms/`.
+`central_casting_comms` stores harvest under an existing person (`person_id`). The parent list is `/central-casting`: one card per existing person KEEP, not a clip catalog. Membership cite URLs stay on `people.central_casting` and ride the `people` upsert. Lab adds the evidence table with `scripts/add-central-casting-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE central_casting_comms` when missing). Same `copy_data = false` rule and the same gap-upsert backfill, because refresh does not copy existing rows. No seed rows in this repo. Media: `media/central-casting-comms/` and `media/screenshots/central-casting-comms/`.
 
 ## Render code freshness
 
