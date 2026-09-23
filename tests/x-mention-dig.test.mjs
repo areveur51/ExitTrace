@@ -8,7 +8,7 @@ import { buildReplyPlan, digMention } from "../app/lib/mention-dig.mjs";
 import { keepDetailPath } from "../app/lib/keep-page-shot.mjs";
 import { CITE_FLOOR } from "../app/lib/promote.mjs";
 import { listRequestAttributions } from "../app/lib/request-attributions.mjs";
-import { countPeople, getAddRequest, loadSeedFile, setMemory } from "../app/lib/store.mjs";
+import { countPeople, getAddRequest, getPerson, loadSeedFile, setMemory } from "../app/lib/store.mjs";
 import { NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 import { parseDigEnvelope } from "../app/lib/x-mention-worker.mjs";
 import {
@@ -411,7 +411,7 @@ function quiet(plan) {
   assert.equal(/https?:\/\//i.test(plan.text), false);
 }
 
-test("person, operation, and dog_comm KEEP; holiday stays silent", async () => {
+test("six catalog surfaces KEEP; holiday stays silent", async () => {
   assert.equal(CITE_FLOOR, 2);
   setMemory(loadSeedFile(path.join(ROOT, "data", "seed.json")));
 
@@ -550,6 +550,160 @@ test("person, operation, and dog_comm KEEP; holiday stays silent", async () => {
   });
   assert.equal(dogAttrAgain.length, 1);
 
+  const folderId = "2000000000000000104";
+  const folderPosts = {
+    [folderId]: tweet({
+      id: folderId,
+      handle: "Reuters",
+      name: "Reuters",
+      text: "Official red folder note on 2024-06-15.",
+      urls: [],
+      created_at: "1999-05-05T00:00:00.000Z",
+    }),
+  };
+  const folderRow = row({
+    subject_status_id: folderId,
+    subject_url: statusUrl("Reuters", folderId),
+    mention_status_id: "1000000000000000104",
+    referenced_json: null,
+  });
+  const folderEnv = await digMentionEnvelope(folderRow, { fetchImpl: harness(folderPosts).fetchImpl });
+  assert.equal(folderEnv.subject_kind, "red_folder");
+  assert.equal(folderEnv.subject, "Reuters");
+  assert.equal(folderEnv.cite_urls, undefined);
+  assert.equal(folderEnv.posted_at, "2024-06-15");
+  const folderKept = await digMention(folderRow, folderEnv);
+  assert.equal(folderKept.status, "kept", folderKept.error_reason || "");
+  assert.equal(folderKept.subject_kind, "red_folder");
+  assert.match(folderKept.kept_person_slug, /^reuters-2024-06-15-[a-f0-9]{8}$/);
+  const folderLead = await getAddRequest(folderKept.lead_id);
+  assert.equal(folderLead.kind, "red_folder");
+  assert.equal(folderLead.category, "red_folder_comms");
+  assert.deepEqual(folderLead.cite_urls, []);
+  const folderPlan = buildReplyPlan(
+    { status: "kept", kept_person_slug: folderKept.kept_person_slug },
+    {
+      displayName: folderKept.red_folder.account_name,
+      detailPath: keepDetailPath(folderKept.kept_person_slug, "red_folder"),
+    },
+  );
+  assert.equal(folderPlan.text, "ExitTrace kept Reuters.");
+  assert.equal(folderPlan.detail_path, `/red-folder-comms/${folderKept.kept_person_slug}`);
+  assert.equal(/https?:\/\//i.test(folderPlan.text), false);
+  const folderAttr = await listRequestAttributions({
+    target_kind: "red_folder_comm",
+    target_id: folderKept.kept_person_slug,
+  });
+  assert.equal(folderAttr.length, 1);
+  const folderAgain = await digMention(folderRow, folderEnv);
+  assert.equal(folderAgain.status, "kept");
+  const folderAttrAgain = await listRequestAttributions({
+    target_kind: "red_folder_comm",
+    target_id: folderKept.kept_person_slug,
+  });
+  assert.equal(folderAttrAgain.length, 1);
+
+  const beforeCatalog = await countPeople();
+  const coronaId = "2000000000000000103";
+  const coronaPosts = {
+    [coronaId]: tweet({
+      id: coronaId,
+      handle: "someone",
+      name: "Wire",
+      text: "James Comey corona comms on 2024-07-01.",
+      urls: [REUTERS, JUSTICE],
+    }),
+  };
+  const coronaRow = row({
+    subject_status_id: coronaId,
+    subject_url: statusUrl("someone", coronaId),
+    mention_status_id: "1000000000000000103",
+    referenced_json: null,
+  });
+  const corona = await digMentionEnvelope(coronaRow, { fetchImpl: harness(coronaPosts).fetchImpl });
+  assert.equal(corona.subject_kind, "corona_comms");
+  assert.equal(corona.subject, "James Comey");
+  assert.equal(corona.category, "corona_comms");
+  assert.equal(corona.event_date, "2024-07-01");
+  assert.ok(corona.cite_urls.length >= CITE_FLOOR);
+  const coronaKept = await digMention(coronaRow, corona);
+  assert.equal(coronaKept.status, "kept", coronaKept.error_reason || "");
+  assert.equal(coronaKept.subject_kind, "corona_comms");
+  assert.equal(coronaKept.kept_person_slug, "james-comey");
+  const coronaLead = await getAddRequest(coronaKept.lead_id);
+  assert.equal(coronaLead.kind, "person");
+  assert.equal(coronaLead.category, "corona_comms");
+  assert.ok(coronaLead.cite_urls.length >= CITE_FLOOR);
+  const coronaPerson = await getPerson("james-comey");
+  assert.ok((coronaPerson.events || []).some((ev) => ev.kind === "corona_comms"));
+  const coronaPlan = buildReplyPlan(
+    { status: "kept", kept_person_slug: coronaKept.kept_person_slug },
+    {
+      displayName: coronaKept.person.name,
+      detailPath: keepDetailPath(coronaKept.kept_person_slug, "corona_comms"),
+    },
+  );
+  assert.equal(coronaPlan.text, "ExitTrace kept James Comey.");
+  assert.equal(coronaPlan.detail_path, "/people/james-comey");
+  assert.equal(/https?:\/\//i.test(coronaPlan.text), false);
+  const coronaAttr = await listRequestAttributions({
+    target_kind: "person",
+    target_id: "james-comey",
+  });
+  assert.equal(coronaAttr.length, 1);
+
+  const castId = "2000000000000000105";
+  const castPosts = {
+    [castId]: tweet({
+      id: castId,
+      handle: "nytimes",
+      name: "The New York Times",
+      text: "James Comey central casting on 2024-05-09.",
+      urls: [REUTERS, JUSTICE],
+    }),
+  };
+  const castRow = row({
+    subject_status_id: castId,
+    subject_url: statusUrl("nytimes", castId),
+    mention_status_id: "1000000000000000105",
+    referenced_json: null,
+  });
+  const castEnv = await digMentionEnvelope(castRow, { fetchImpl: harness(castPosts).fetchImpl });
+  assert.equal(castEnv.subject_kind, "central_casting_comms");
+  assert.equal(castEnv.subject, "James Comey");
+  assert.ok(castEnv.cite_urls.length >= 1);
+  const castKept = await digMention(castRow, castEnv);
+  assert.equal(castKept.status, "kept", castKept.error_reason || "");
+  assert.equal(castKept.subject_kind, "central_casting_comms");
+  assert.equal(castKept.kept_person_slug, "james-comey");
+  const castLead = await getAddRequest(castKept.lead_id);
+  assert.equal(castLead.kind, "central_casting");
+  const castPerson = await getPerson("james-comey");
+  assert.ok((castPerson.central_casting || []).length >= 1);
+  const castPlan = buildReplyPlan(
+    { status: "kept", kept_person_slug: castKept.kept_person_slug },
+    {
+      displayName: castKept.person.name,
+      detailPath: keepDetailPath(castKept.kept_person_slug, "central_casting_comms"),
+    },
+  );
+  assert.equal(castPlan.text, "ExitTrace kept James Comey.");
+  assert.equal(castPlan.detail_path, "/people/james-comey");
+  assert.equal(/https?:\/\//i.test(castPlan.text), false);
+  const castAttr = await listRequestAttributions({
+    target_kind: "central_casting_comm",
+    target_id: castKept.central_casting.id,
+  });
+  assert.equal(castAttr.length, 1);
+  const castAgain = await digMention(castRow, castEnv);
+  assert.equal(castAgain.status, "kept");
+  const castAttrAgain = await listRequestAttributions({
+    target_kind: "central_casting_comm",
+    target_id: castKept.central_casting.id,
+  });
+  assert.equal(castAttrAgain.length, 1);
+  assert.equal(await countPeople(), beforeCatalog);
+
   const holidayPosts = {
     [SUBJECT]: tweet({
       id: SUBJECT,
@@ -583,30 +737,6 @@ test("person, operation, and dog_comm KEEP; holiday stays silent", async () => {
   assert.deepEqual(casting, { outcome: "fail_closed", error_reason: "missing_subject" });
   quiet(buildReplyPlan(casting && { status: "fail_closed", error_reason: casting.error_reason }));
 
-  const coronaId = "2000000000000000103";
-  const coronaPosts = {
-    [coronaId]: tweet({
-      id: coronaId,
-      handle: "someone",
-      name: "Wire",
-      text: "Casey Vale corona comms on 2024-07-01.",
-      urls: [REUTERS, JUSTICE],
-    }),
-  };
-  const corona = await digMentionEnvelope(
-    row({
-      subject_status_id: coronaId,
-      subject_url: statusUrl("someone", coronaId),
-      mention_status_id: "1000000000000000103",
-      referenced_json: null,
-    }),
-    { fetchImpl: harness(coronaPosts).fetchImpl },
-  );
-  assert.equal(corona.subject_kind, "person");
-  assert.equal(corona.subject, "Casey Vale");
-  assert.equal(corona.category, "corona_comms");
-  assert.equal(keepDetailPath("casey-vale", corona.category), "/people/casey-vale");
-
   const unofficialDog = {
     [SUBJECT]: tweet({
       id: SUBJECT,
@@ -621,12 +751,29 @@ test("person, operation, and dog_comm KEEP; holiday stays silent", async () => {
   });
   assert.deepEqual(unofficial, { outcome: "fail_closed", error_reason: "missing_subject" });
 
+  const unofficialFolder = {
+    [SUBJECT]: tweet({
+      id: SUBJECT,
+      handle: "someone",
+      name: "Wire",
+      text: "A red folder note on 2024-06-15.",
+      urls: [REUTERS, JUSTICE],
+    }),
+  };
+  const unofficialFolderEnv = await digMentionEnvelope(row({ referenced_json: null }), {
+    fetchImpl: harness(unofficialFolder).fetchImpl,
+  });
+  assert.deepEqual(unofficialFolderEnv, { outcome: "fail_closed", error_reason: "missing_subject" });
+
   assert.equal(keepDetailPath("casey-vale", "person"), "/people/casey-vale");
-  assert.equal(keepDetailPath("casey-vale", "corona_comms"), "/people/casey-vale");
-  assert.equal(keepDetailPath("casey-vale", "central_casting"), "/people/casey-vale");
+  assert.equal(keepDetailPath("james-comey", "corona_comms"), "/people/james-comey");
+  assert.equal(keepDetailPath("james-comey", "central_casting"), "/people/james-comey");
+  assert.equal(keepDetailPath("james-comey", "central_casting_comms"), "/people/james-comey");
   assert.equal(keepDetailPath("operation-restore-justice", "operation"), "/operations/operation-restore-justice");
   assert.equal(keepDetailPath("fbi-k9", "dog_comm"), "/dog-comms/fbi-k9");
+  assert.equal(keepDetailPath("fbi-k9", "dog_comms"), "/dog-comms/fbi-k9");
   assert.equal(keepDetailPath("folder-note", "red_folder"), "/red-folder-comms/folder-note");
+  assert.equal(keepDetailPath("folder-note", "red_folder_comms"), "/red-folder-comms/folder-note");
 
   setMemory(loadSeedFile(path.join(ROOT, "data", "seed.json")));
 });

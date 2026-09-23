@@ -16,13 +16,15 @@ const DETAIL_PATH = /^\/(?:people|operations|dog-comms|red-folder-comms)\/[a-z0-
 
 /**
  * Public detail roots the catalog already serves.
- * corona_comms and central_casting are person cards at /people/{slug}.
- * dog_comm is the dog catalog at /dog-comms/{id}. red_folder is the twin catalog.
+ * corona_comms and central casting render on the person card at /people/{slug}.
+ * dog_comms is /dog-comms/{id}. red_folder is the twin catalog at /red-folder-comms/{id}.
  */
 const DETAIL_ROOT = Object.freeze({
   person: "people",
   corona_comms: "people",
   central_casting: "people",
+  central_casting_comm: "people",
+  central_casting_comms: "people",
   operation: "operations",
   dog: "dog-comms",
   dog_comm: "dog-comms",

@@ -6,7 +6,7 @@ import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { handle } from "../app/server.mjs";
-import { capturePublicKeepPage, publicKeepPageUrl } from "../app/lib/keep-page-shot.mjs";
+import { capturePublicKeepPage, keepDetailPath, publicKeepPageUrl } from "../app/lib/keep-page-shot.mjs";
 import { leadIngest, SOFT_ACK_TEXT, buildReplyPlan, digMention, keepReplyText } from "../app/lib/mention-dig.mjs";
 import {
   POLL_MAX_MS,
@@ -455,6 +455,17 @@ test("KEEP final is one plain reply to the first mentioner", async () => {
         source_url: "https://x.com/fbi/status/4000000000000000099",
       },
     ],
+    red_folder_comms: [
+      ...(seed.red_folder_comms || []),
+      {
+        id: "reuters-folder",
+        posted_at: "2024-06-15",
+        handle: "@Reuters",
+        account_name: "Reuters",
+        text: "Official red folder note.",
+        source_url: "https://x.com/Reuters/status/4000000000000000104",
+      },
+    ],
   });
   const quoted = "2000000000000000099";
   const first = await enqueueMention(
@@ -583,6 +594,44 @@ test("KEEP final is one plain reply to the first mentioner", async () => {
   assert.equal(dogPlan.detail_path.includes("http"), false);
   assert.equal(/https?:\/\//i.test(dogPlan.text), false);
   assert.equal(publicKeepPageUrl(PUBLIC_ORIGIN, dogPlan.detail_path), `${PUBLIC_ORIGIN}/dog-comms/fbi-k9`);
+
+  const folderSubject = "2000000000000000090";
+  await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000090",
+      author_id: "3330000000000000005",
+      author_handle: "folderauthor",
+      quoted_id: folderSubject,
+    }),
+    { now: new Date("2026-09-23T22:04:00.000Z") },
+  );
+  await finishMention(folderSubject, { status: "kept", kept_person_slug: "reuters-folder" });
+  const folderPlan = await planMentionReply(folderSubject);
+  assert.equal(folderPlan.text, "ExitTrace kept Reuters.");
+  assert.equal(folderPlan.detail_path, "/red-folder-comms/reuters-folder");
+  assert.equal(/https?:\/\//i.test(folderPlan.text), false);
+  assert.equal(
+    publicKeepPageUrl(PUBLIC_ORIGIN, folderPlan.detail_path),
+    `${PUBLIC_ORIGIN}/red-folder-comms/reuters-folder`,
+  );
+
+  const castSubject = "2000000000000000091";
+  await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000091",
+      author_id: "3330000000000000006",
+      author_handle: "castauthor",
+      quoted_id: castSubject,
+    }),
+    { now: new Date("2026-09-23T22:05:00.000Z") },
+  );
+  await finishMention(castSubject, { status: "kept", kept_person_slug: "james-comey" });
+  const castPlan = await planMentionReply(castSubject);
+  assert.equal(castPlan.text, "ExitTrace kept James Comey.");
+  assert.equal(castPlan.detail_path, "/people/james-comey");
+  assert.equal(castPlan.detail_path, keepDetailPath("james-comey", "corona_comms"));
+  assert.equal(castPlan.detail_path, keepDetailPath("james-comey", "central_casting_comms"));
+  assert.equal(/https?:\/\//i.test(castPlan.text), false);
   assert.equal(keepReplyText("", "plain-slug"), "ExitTrace kept plain slug.");
   assert.equal(keepReplyText("https://example.com/people/plain-slug", "plain-slug"), "ExitTrace kept plain slug.");
   assert.equal(publicKeepPageUrl(PUBLIC_ORIGIN, "/people/quota-mention"), `${PUBLIC_ORIGIN}/people/quota-mention`);

@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-09-23
+
+### Changed
+
+- X mention dig classifies and can KEEP a person, an operation, a dog comm, a corona comm, a red folder comm, and a central casting comm. Each one uses the existing gate for that surface. The KEEP screenshot is that surface's public detail page: `/people/{slug}` for a person, a corona comm, and central casting; `/operations/{slug}` for an operation; `/dog-comms/{id}` for a dog comm; `/red-folder-comms/{id}` for a red folder comm. A holiday or other non-subject stays fail-closed and silent. Soft-ack stays off.
+
 ## [1.1.5] - 2026-09-23
 
 ### Changed

@@ -6,6 +6,7 @@
  */
 
 import { mapLeadReason } from "./event-attrs.mjs";
+import { centralCastingCiteStanding } from "./kind-comms.mjs";
 import { stripMentionCites } from "./mention-dig.mjs";
 import {
   handleKey,
@@ -424,11 +425,15 @@ const OP_TAG_PHRASES = Object.freeze([
 ]);
 
 const DOG_RE = /\b(?:dogs?|k-?9s?|canines?|working dogs?)\b/i;
+const RED_FOLDER_RE = /\bred\s+folders?\b/i;
+const CORONA_RE = /\bcorona\s+comms?\b/i;
+const CENTRAL_RE = /\bcentral\s+casting\b/i;
 
 function isObservanceName(name, text = "") {
   const label = String(name || "").trim();
   if (!label) return true;
   if (/^central casting$/i.test(label)) return true;
+  if (/^corona comms?$/i.test(label)) return true;
   const last = label.split(/\s+/).at(-1) || "";
   if (/^days?$/i.test(last) || /^weeks?$/i.test(last)) return true;
   if (!text) return false;
@@ -475,6 +480,11 @@ function isDogPost(post) {
   return isOfficialGovHandle(post.handle);
 }
 
+function isRedFolderPost(post) {
+  if (!post || !RED_FOLDER_RE.test(String(post.text || ""))) return false;
+  return isOfficialGovHandle(post.handle) || isOfficialNewsHandle(post.handle);
+}
+
 function agenciesIn(text) {
   const source = plainText(text);
   const out = [];
@@ -503,7 +513,7 @@ function dogSubject(post) {
   return String(post?.name || post?.handle || "").trim();
 }
 
-function signalsOf(post, { allowDog = true } = {}) {
+function signalsOf(post, { allowCatalog = true } = {}) {
   const text = String(post?.text || "");
   const operations = operationNames(text);
   return {
@@ -512,23 +522,36 @@ function signalsOf(post, { allowDog = true } = {}) {
     operations,
     people: personNames(text, operations),
     tags: operationTags(text),
-    dog: allowDog && isDogPost(post),
+    dog: allowCatalog && isDogPost(post),
+    redFolder: allowCatalog && isRedFolderPost(post),
+    corona: allowCatalog && CORONA_RE.test(text),
+    central: allowCatalog && CENTRAL_RE.test(text),
   };
 }
 
 function decideSignals(sig) {
+  if (sig.corona && sig.people.length > 1) return { ambiguous: true };
+  if (sig.central && sig.people.length > 1) return { ambiguous: true };
+  const corona = sig.corona && sig.people.length === 1;
+  const central = sig.central && sig.people.length === 1;
   const kinds = [];
   if (sig.dog) kinds.push("dog_comm");
+  if (sig.redFolder) kinds.push("red_folder");
+  if (corona) kinds.push("corona_comms");
+  if (central) kinds.push("central_casting_comms");
   if (sig.operations.length) kinds.push("operation");
-  if (sig.people.length) kinds.push("person");
-  if (kinds.length > 1 || sig.operations.length > 1 || sig.people.length > 1) {
+  if (sig.people.length && !corona && !central) kinds.push("person");
+  if (kinds.length > 1 || sig.operations.length > 1 || (sig.people.length > 1 && !corona && !central)) {
     return { ambiguous: true };
   }
   if (kinds.length === 0) return {};
-  if (kinds[0] === "dog_comm") {
+  if (kinds[0] === "dog_comm" || kinds[0] === "red_folder") {
     const subject = dogSubject(sig.post);
     if (!subject) return {};
-    return { hit: { subject_kind: "dog_comm", subject, post: sig.post } };
+    return { hit: { subject_kind: kinds[0], subject, post: sig.post } };
+  }
+  if (kinds[0] === "corona_comms" || kinds[0] === "central_casting_comms") {
+    return { hit: { subject_kind: kinds[0], subject: sig.people[0], post: sig.post } };
   }
   if (kinds[0] === "operation") {
     if (sig.tags.length !== 1) return { ambiguous: true };
@@ -551,12 +574,12 @@ function sameHit(a, b) {
 /** One subject kind, or ambiguous, or nothing. Holidays are not people. */
 export function classifySubject(posts) {
   const list = Array.isArray(posts) ? posts : [];
-  const primary = decideSignals(signalsOf(list[0], { allowDog: true }));
+  const primary = decideSignals(signalsOf(list[0], { allowCatalog: true }));
   if (primary.ambiguous) return { ambiguous: true };
   if (primary.hit) return primary.hit;
   const later = [];
   for (const post of list.slice(1)) {
-    const decided = decideSignals(signalsOf(post, { allowDog: false }));
+    const decided = decideSignals(signalsOf(post, { allowCatalog: false }));
     if (decided.ambiguous) return { ambiguous: true };
     if (decided.hit && !later.some((hit) => sameHit(hit, decided.hit))) later.push(decided.hit);
   }
@@ -675,19 +698,34 @@ export async function digMentionEnvelope(row, { fetchImpl = globalThis.fetch, ex
   if (picked.ambiguous) return fail("ambiguous_subject");
   const subject = picked.subject || "";
   if (!subject || !picked.subject_kind) return fail("missing_subject");
-  if (picked.subject_kind === "dog_comm") {
+  if (picked.subject_kind === "dog_comm" || picked.subject_kind === "red_folder") {
     return {
       subject,
-      subject_kind: "dog_comm",
+      subject_kind: picked.subject_kind,
       ...metaForDog(picked.post),
     };
   }
   const cite_urls = citeUrlsFromPosts(posts, row, subjectId);
+  if (picked.subject_kind === "central_casting_comms") {
+    const source_url = statusCiteUrl(picked.post?.handle, picked.post?.id);
+    const standing = centralCastingCiteStanding({ sourceUrl: source_url, quotedUrls: cite_urls });
+    if (!standing) return fail("missing_cite", { subject });
+    const meta = metaFromSubjectPost(picked.post, subject);
+    delete meta.category;
+    return {
+      subject,
+      subject_kind: "central_casting_comms",
+      cite_urls,
+      ...meta,
+      ...metaForDog(picked.post),
+    };
+  }
   if (cite_urls.length < CITE_FLOOR) return fail("cites_floor", { subject });
   const meta =
     picked.subject_kind === "operation"
       ? metaForOperation(picked.post, subject, picked.category)
       : metaFromSubjectPost(picked.post, subject);
+  if (picked.subject_kind === "corona_comms") meta.category = "corona_comms";
   return {
     subject,
     subject_kind: picked.subject_kind,
