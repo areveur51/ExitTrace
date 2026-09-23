@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS mention_queue (
   mention_url TEXT NOT NULL,
   author_id TEXT NOT NULL,
   author_handle TEXT NOT NULL DEFAULT '',
+  author_display_name TEXT NOT NULL DEFAULT '',
   text TEXT NOT NULL DEFAULT '',
   media_json JSONB,
   referenced_json JSONB,
@@ -26,6 +27,9 @@ CREATE TABLE IF NOT EXISTS mention_queue (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Existing Render databases already have the table. Add the author name column.
+ALTER TABLE mention_queue ADD COLUMN IF NOT EXISTS author_display_name TEXT NOT NULL DEFAULT '';
 
 -- uniqueness on subject_status_id is the primary key above.
 CREATE UNIQUE INDEX IF NOT EXISTS mention_queue_subject_status_id_uidx

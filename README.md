@@ -211,8 +211,9 @@ data/seed.json              portable import
 media/                      portraits, dog-comm and red-folder-comm stills, derived 10:13 display JPEGs
 app/lib/kind-comms.mjs      shared dog / red-folder catalog kind; Central Casting sense lock
 app/lib/thumb.mjs           list thumb + denser srcset pipeline (detail uses gold /media stills)
-scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events + red_folder_comms + central_casting_comms
-scripts/mention-queue.sql   Render-only mention_queue (not in exittrace_lab_pub)
+scripts/bootstrap-db.sql    CREATE TABLE IF NOT EXISTS + person_events + red_folder_comms + central_casting_comms + request_attributions
+scripts/mention-queue.sql   Render-only mention_queue (not in exittrace_lab_pub; author_display_name)
+scripts/add-request-attributions-publication.sql  lab publication ADD TABLE request_attributions
 scripts/x-mention-poll.mjs  poll mentions and POST the Render queue
 scripts/x-mention-worker.mjs  claim, lab lead ingest, complete the queue
 scripts/install-mention-units.mjs  fill host systemd units

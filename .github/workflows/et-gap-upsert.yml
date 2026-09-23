@@ -2,7 +2,7 @@ name: et-gap-upsert
 
 # Reusable idempotent upsert of published tables (people including
 # central_casting, dog_comms, operations, optional categories,
-# red_folder_comms, central_casting_comms) plus person_events.
+# red_folder_comms, central_casting_comms, request_attributions) plus person_events.
 # Lab export → Render upsert by id.
 # Never TRUNCATE / DROP / --clean. No media pack. No leftover touch.
 # Public dump default unchanged. REFRESH copy_data=false does not backfill;

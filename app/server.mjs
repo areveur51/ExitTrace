@@ -106,6 +106,10 @@ import {
 import { ensureThumbFile, thumbRelFromHref } from "./lib/thumb.mjs";
 import { dispatchMentionRoute } from "./lib/mention-http.mjs";
 import {
+  attributionKindForComms,
+  listRequestAttributions,
+} from "./lib/request-attributions.mjs";
+import {
   CENTRAL_CASTING_LEGACY_PATH,
   CENTRAL_CASTING_PATH,
   commsHomeCountLabel,
@@ -842,6 +846,10 @@ async function handle(req, res) {
         countLabel: "detail",
         body: personDetail(row, {
           centralCastingClips: await listCentralCastingEvidence(row.id),
+          attributions: await listRequestAttributions({
+            target_kind: "person",
+            target_id: row.id,
+          }),
         }),
       }),
     );
@@ -886,7 +894,12 @@ async function handle(req, res) {
         categoryId: tag,
         crumbLabel: row.name,
         countLabel: "detail",
-        body: operationDetail(row),
+        body: operationDetail(row, {
+          attributions: await listRequestAttributions({
+            target_kind: "operation",
+            target_id: row.id,
+          }),
+        }),
       }),
     );
   }
@@ -908,7 +921,12 @@ async function handle(req, res) {
         query: row.handle,
         crumbLabel: row.handle,
         countLabel: "detail",
-        body: kindDetail(commsDetail.id, row),
+        body: kindDetail(commsDetail.id, row, {
+          attributions: await listRequestAttributions({
+            target_kind: attributionKindForComms(commsDetail.id),
+            target_id: row.id,
+          }),
+        }),
       }),
     );
   }

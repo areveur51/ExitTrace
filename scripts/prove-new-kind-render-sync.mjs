@@ -15,6 +15,7 @@ Do not wipe media or datasets. Gap-upsert never DELETE / TRUNCATE / DROP / --cle
 2. Lab publisher:
    psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-red-folder-comms-publication.sql
    psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-central-casting-comms-publication.sql
+   psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-request-attributions-publication.sql
 3. Render subscriber. REFRESH does not copy rows already stored:
    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false);"
 4. Export from lab, then gap-upsert onto Render (second process DATABASE_URL is Render):
@@ -23,6 +24,8 @@ Do not wipe media or datasets. Gap-upsert never DELETE / TRUNCATE / DROP / --cle
 5. Prove publication membership, subscription relation, LSN advance, row counts, and media-delta.
    people.central_casting rides the people upsert (json array, empty default, never invented).
    red_folder_comms and central_casting_comms (plus person_id) are in the gap-upsert table list.
+   request_attributions is in the gap-upsert table list. Conflict is (channel, subject_status_id).
+   REFRESH copy_data=false does not copy attribution rows already stored.
 mention_queue is Render-only and is excluded from exittrace_lab_pub / publication SQL / NEW_KIND_RENDER_SYNC checklist. Do not gap-upsert mention_queue.
 `.trim();
 

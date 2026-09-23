@@ -490,6 +490,33 @@ ALTER TABLE add_requests DROP CONSTRAINT IF EXISTS add_requests_kind_check;
 ALTER TABLE add_requests ADD CONSTRAINT add_requests_kind_check
   CHECK (kind IN ('person', 'dog', 'operation'));
 
+-- X mention submitter attribution. Lab table, published on exittrace_lab_pub.
+-- Not a cite. Not a column on people, operations, or comms rows.
+-- Display reads this table. The same channel + subject_status_id does not insert twice.
+-- mention_url is meta only and is not a cite. No media. No seed rows.
+CREATE TABLE IF NOT EXISTS request_attributions (
+  target_kind TEXT NOT NULL CHECK (target_kind IN (
+    'person',
+    'operation',
+    'dog_comm',
+    'red_folder_comm',
+    'central_casting_comm'
+  )),
+  target_id TEXT NOT NULL,
+  channel TEXT NOT NULL CHECK (channel = 'x_mention'),
+  submitter_display_name TEXT NOT NULL DEFAULT '',
+  submitter_handle TEXT NOT NULL DEFAULT '',
+  submitter_author_id TEXT NOT NULL DEFAULT '',
+  submitted_at TIMESTAMPTZ NOT NULL,
+  subject_status_id TEXT NOT NULL,
+  mention_status_id TEXT NOT NULL,
+  mention_url TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (channel, subject_status_id)
+);
+
+CREATE INDEX IF NOT EXISTS request_attributions_target_idx
+  ON request_attributions (target_kind, target_id, submitted_at ASC);
+
 -- mention_queue is not created in this file.
 -- Apply scripts/mention-queue.sql on the Render app database.
 -- The Render server also applies that file on boot.

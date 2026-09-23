@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Idempotent upsert of published tables by id (and person_events companion).
- * Includes red_folder_comms, central_casting_comms, and people.central_casting.
+ * Includes red_folder_comms, central_casting_comms, request_attributions,
+ * and people.central_casting.
  * Never DELETE / TRUNCATE / DROP. Absent tables are skipped, not created.
  *
  * Place order (no secrets in this file): lab add-*-publication.sql,

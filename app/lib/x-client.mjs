@@ -55,7 +55,7 @@ export async function fetchMentions({ sinceId = "", fetchImpl = globalThis.fetch
     max_results: "10",
     "tweet.fields": "author_id,created_at,referenced_tweets,note_tweet,attachments",
     expansions: "author_id,referenced_tweets.id,attachments.media_keys",
-    "user.fields": "username",
+    "user.fields": "username,name",
     "media.fields": "url,preview_image_url,type",
   };
   if (sinceId) params.since_id = String(sinceId);

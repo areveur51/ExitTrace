@@ -28,6 +28,20 @@ Do not point the worker at a parked database. Do not wipe media.
 6. Complete sends only queue status fields (`subject_status_id`, `claim_owner`, `status`, `kept_person_slug`, `error_reason`). It does not insert a person.
 7. Soft-ack, when enabled, is exactly `Queued for ExitTrace review.` A final reply prefers one `https` URL `/people/{slug}` per KEEP. A fail-closed or rejected reason is sent only when that subject was soft-acked. Reply failure does not change queue status. The next worker pass retries unreplied rows.
 
+## Attribution
+
+The poller fills `mention_queue.author_display_name` from the mention author's X display name (`user.fields` includes `name`). That column is Render-only. It is not published and it is not the display source.
+
+On lab KEEP success from the x_mention promote path only, submitter fields are copied from that queue row into lab `request_attributions` (`channel` = `x_mention`). Fail-closed and rejected rows do not write an attribution. The same `subject_status_id` does not insert a second row (first mention wins). A different subject kept onto the same target inserts another row.
+
+`request_attributions` is on `exittrace_lab_pub`. Place order is lab schema, `ALTER PUBLICATION … ADD TABLE request_attributions`, then `REFRESH PUBLICATION WITH (copy_data = false)`, then gap-upsert if rows already exist. See [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md). Never `copy_data=true`. No dual-write of KEEP rows to Render. `mention_url` is meta only and is not a cite.
+
+Person, operation, dog comm, red-folder comm, and Central Casting comm detail pages show a muted line under the title and above cites when rows exist, oldest first:
+
+`Requested via X by {name} @{handle} · {date ET}`
+
+Empty attributions hide the line. Multiple rows for one target all show, oldest first.
+
 ## Cadence, lease, limits
 
 | Knob | Default | Band |

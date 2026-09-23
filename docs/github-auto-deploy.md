@@ -110,7 +110,7 @@ Path A / streaming: `et-sub-reconnect` retries ENABLE with the same backoff. `et
 
 ## Idempotent gap upsert
 
-[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people` (including `central_casting`), `dog_comms`, `operations`, optional `categories` (skipped if that table is absent), `red_folder_comms`, `central_casting_comms`, plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`). New tables follow [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md).
+[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people` (including `central_casting`), `dog_comms`, `operations`, optional `categories` (skipped if that table is absent), `red_folder_comms`, `central_casting_comms`, `request_attributions` (conflict on `channel, subject_status_id`), plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`). New tables follow [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md).
 
 Arm automatic catch-up from heal with repository variable `ET_AUTO_GAP_UPSERT=true` (off by default).
 

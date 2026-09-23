@@ -170,6 +170,10 @@ export function normalizeEnqueueInput(input = {}) {
   if (author_handle && !/^[A-Za-z0-9_]{1,15}$/.test(author_handle)) {
     throw new MentionQueueError("author_handle is invalid", "invalid_author", 400);
   }
+  const author_display_name = String(input.author_display_name || "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .trim()
+    .slice(0, 80);
   const text = String(input.text || "");
   if (text.length > 10_000) {
     throw new MentionQueueError("text is too long", "invalid_text", 400);
@@ -192,6 +196,7 @@ export function normalizeEnqueueInput(input = {}) {
     mention_url,
     author_id,
     author_handle,
+    author_display_name,
     text,
     media_json: jsonValue(input.media_json, "media_json"),
     referenced_json: jsonValue(
@@ -210,6 +215,7 @@ function publicRow(row) {
     mention_url: row.mention_url,
     author_id: row.author_id,
     author_handle: row.author_handle,
+    author_display_name: row.author_display_name || "",
     text: row.text,
     media_json: row.media_json,
     referenced_json: row.referenced_json,
@@ -240,6 +246,7 @@ function mapPg(row) {
     kept_person_slug: row.kept_person_slug || null,
     error_reason: row.error_reason || null,
     author_handle: row.author_handle || "",
+    author_display_name: row.author_display_name || "",
     text: row.text || "",
   });
 }
@@ -323,12 +330,12 @@ async function enqueuePg(p, row, now) {
       throw new MentionQueueError("rate limited", "rate_limited", 429);
     }
     const inserted = await client.query(
-      `INSERT INTO mention_queue (
+       `INSERT INTO mention_queue (
          subject_status_id, mention_status_id, subject_url, mention_url,
-         author_id, author_handle, text, media_json, referenced_json, status,
+         author_id, author_handle, author_display_name, text, media_json, referenced_json, status,
          created_at, updated_at
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,'pending',$10,$10
+         $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,'pending',$11,$11
        )
        ON CONFLICT (subject_status_id) DO NOTHING
        RETURNING *`,
@@ -339,6 +346,7 @@ async function enqueuePg(p, row, now) {
         row.mention_url,
         row.author_id,
         row.author_handle,
+        row.author_display_name,
         row.text,
         row.media_json == null ? null : JSON.stringify(row.media_json),
         row.referenced_json == null ? null : JSON.stringify(row.referenced_json),

@@ -27,6 +27,19 @@ A new table is all of the following, in order:
 - Counts: lab export row counts versus Render after gap-upsert (non-decreasing; `PROOF` lines from `scripts/gap-upsert-published.mjs`).
 - Media: media-delta stills for the new paths, separate from the logical stream.
 
+## request_attributions
+
+`request_attributions` is a lab table on `exittrace_lab_pub`. It is not cites. It is not columns on `people`, `operations`, or comms. It is not Render-only `mention_queue`. Detail pages read this table. `mention_url` on the row is meta only.
+
+Checklist (existing-table style). Never `copy_data=true`. No dual-write of KEEP rows to Render. Do not wipe media. Do not touch the parked database.
+
+1. Place the lab schema. `scripts/bootstrap-db.sql` creates `request_attributions`. The Render server applies that file on boot so the subscriber relation exists before refresh.
+2. Lab: `scripts/add-request-attributions-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE request_attributions` when the table is missing).
+3. Render: `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)`. That refresh does not copy rows already stored.
+4. Gap-upsert when rows already exist on lab. Conflict is `(channel, subject_status_id)`. Export from lab, then `scripts/gap-upsert-published.mjs` onto Render.
+
+`mention_queue.author_display_name` stays on the Render queue only (`scripts/mention-queue.sql`). It is not in this publication.
+
 ## Render-only queue
 
 `mention_queue` is excluded from exittrace_lab_pub / publication SQL / NEW_KIND_RENDER_SYNC checklist.
@@ -64,6 +77,7 @@ Lab publisher (table must already exist):
 ```bash
 psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-red-folder-comms-publication.sql
 psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-central-casting-comms-publication.sql
+psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-request-attributions-publication.sql
 ```
 
 Render subscriber. This does not copy existing rows:

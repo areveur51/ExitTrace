@@ -56,7 +56,12 @@ export function resolveSubjectStatusId(input = {}) {
 export function mentionsFromApiPayload(payload = {}) {
   const users = new Map();
   for (const user of payload?.includes?.users || []) {
-    if (user?.id) users.set(String(user.id), String(user.username || ""));
+    if (user?.id) {
+      users.set(String(user.id), {
+        username: String(user.username || ""),
+        name: String(user.name || "").trim(),
+      });
+    }
   }
   const media = new Map();
   for (const item of payload?.includes?.media || []) {
@@ -69,7 +74,8 @@ export function mentionsFromApiPayload(payload = {}) {
       referenced_tweets: tweet?.referenced_tweets,
     });
     if (!resolved.ok) continue;
-    const handle = users.get(String(tweet.author_id || "")) || "";
+    const author = users.get(String(tweet.author_id || "")) || { username: "", name: "" };
+    const handle = author.username || "";
     const mediaItems = [];
     for (const key of tweet?.attachments?.media_keys || []) {
       const item = media.get(String(key));
@@ -83,6 +89,7 @@ export function mentionsFromApiPayload(payload = {}) {
       subject_from: resolved.subject_from,
       author_id: String(tweet?.author_id || ""),
       author_handle: handle.replace(/^@/, ""),
+      author_display_name: author.name || "",
       text: String(tweet?.note_tweet?.text || tweet?.text || ""),
       mention_url: statusUrl(resolved.mention_status_id, handle),
       subject_url: statusUrl(
