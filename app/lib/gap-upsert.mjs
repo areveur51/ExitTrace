@@ -1,7 +1,9 @@
 /**
- * Idempotent published-table gap upsert (lab → Render).
- * Upserts by id (people, dog_comms, operations, optional categories)
- * plus person_events companion. Never DELETE / TRUNCATE / DROP / --clean.
+ * Idempotent published-table gap upsert (lab → Render logical catch-up).
+ * Upserts by id: people (including central_casting), dog_comms, operations,
+ * optional categories, red_folder_comms, central_casting_comms,
+ * plus person_events companion.
+ * Never DELETE / TRUNCATE / DROP / --clean. Never invent cite URLs.
  */
 
 export const PUBLISHED_TABLES = Object.freeze([
@@ -9,6 +11,8 @@ export const PUBLISHED_TABLES = Object.freeze([
   "dog_comms",
   "operations",
   "categories",
+  "red_folder_comms",
+  "central_casting_comms",
 ]);
 
 export const COMPANION_TABLES = Object.freeze(["person_events"]);
@@ -20,14 +24,18 @@ const FORBIDDEN = /\b(TRUNCATE|DROP\s+|DELETE\s+FROM|--clean|COPY\s+.*FROM\s+PRO
 const TABLE_KEYS = Object.freeze({
   people: "id",
   dog_comms: "id",
+  red_folder_comms: "id",
+  central_casting_comms: "id",
   operations: "id",
   categories: "id",
   person_events: ["person_id", "kind"],
 });
 
 const JSONB_COLS = Object.freeze({
-  people: ["sources", "events", "tags", "career"],
+  people: ["sources", "events", "tags", "career", "central_casting"],
   dog_comms: ["snapshot"],
+  red_folder_comms: ["snapshot"],
+  central_casting_comms: ["snapshot"],
   operations: ["agencies", "tags", "sources"],
   categories: [],
   person_events: ["sources"],
@@ -54,6 +62,7 @@ const PEOPLE_COLS = Object.freeze([
   "events",
   "tags",
   "career",
+  "central_casting",
 ]);
 
 const DOG_COLS = Object.freeze([
@@ -69,6 +78,10 @@ const DOG_COLS = Object.freeze([
   "source_url",
   "snapshot",
 ]);
+
+const RED_FOLDER_COLS = DOG_COLS;
+
+const CENTRAL_CASTING_COMMS_COLS = Object.freeze([...DOG_COLS, "person_id"]);
 
 const OP_COLS = Object.freeze([
   "id",
@@ -104,6 +117,8 @@ const CATEGORY_COLS = Object.freeze(["id", "kind", "title", "nav", "path", "blur
 const COLS = Object.freeze({
   people: PEOPLE_COLS,
   dog_comms: DOG_COLS,
+  red_folder_comms: RED_FOLDER_COLS,
+  central_casting_comms: CENTRAL_CASTING_COMMS_COLS,
   operations: OP_COLS,
   person_events: EVENT_COLS,
   categories: CATEGORY_COLS,
@@ -148,9 +163,33 @@ function updateSet(table, cols) {
     .join(",\n  ");
 }
 
+function centralCastingJson(row) {
+  const v = row?.central_casting;
+  if (v === undefined || v === null) return "[]";
+  if (typeof v === "string") {
+    const text = v.trim();
+    if (!text) return "[]";
+    try {
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? JSON.stringify(parsed) : "[]";
+    } catch {
+      return "[]";
+    }
+  }
+  return Array.isArray(v) ? JSON.stringify(v) : "[]";
+}
+
 function rowValue(table, col, row) {
   if (table === "person_events" && col === "unsealed") {
     return row?.unsealed === true ? true : null;
+  }
+  if (table === "people" && col === "central_casting") {
+    return centralCastingJson(row);
+  }
+  if (table === "central_casting_comms" && col === "person_id") {
+    if (row?.person_id === undefined || row?.person_id === null) return null;
+    const text = String(row.person_id).trim();
+    return text || null;
   }
   const v = row?.[col];
   if (v === undefined || v === null) return null;
@@ -241,10 +280,17 @@ export function countProof(before, after, expectedIn) {
   return out;
 }
 
+export function countTableSql(table) {
+  if (!isPublishedTable(table)) throw new Error("unknown published table");
+  return assertSafeSql(`SELECT count(*)::int AS n FROM ${quoteIdent(table)}`);
+}
+
 export const COUNT_SQL = `
 SELECT
   (SELECT count(*)::int FROM people) AS people,
   (SELECT count(*)::int FROM dog_comms) AS dog_comms,
   (SELECT count(*)::int FROM operations) AS operations,
-  (SELECT count(*)::int FROM person_events) AS person_events
+  (SELECT count(*)::int FROM person_events) AS person_events,
+  (SELECT count(*)::int FROM red_folder_comms) AS red_folder_comms,
+  (SELECT count(*)::int FROM central_casting_comms) AS central_casting_comms
 `.trim();
