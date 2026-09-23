@@ -20,6 +20,7 @@ import {
   parseHttpUrl,
   xStatusParts,
 } from "./official.mjs";
+import { OPERATION_TAG_IDS } from "./operation.mjs";
 import { CITE_FLOOR, parseEventDate } from "./promote.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import { isSnowflake } from "./x-mentions.mjs";
@@ -412,18 +413,155 @@ function namesAroundVerb(text) {
   return namesIn(source.slice(match.index + match[0].length));
 }
 
-function pickSubject(posts) {
-  const primary = posts[0] ? namesAroundVerb(posts[0].text) : [];
-  if (primary.length === 1) return { subject: primary[0] };
-  if (primary.length > 1) return { ambiguous: true };
-  const later = [];
-  for (const post of posts.slice(1)) {
-    for (const name of namesAroundVerb(post.text)) {
-      if (!later.includes(name)) later.push(name);
-    }
+const OP_TAG_PHRASES = Object.freeze([
+  ["missing_kids", /\bmissing\s+(?:kids|children)\b/i],
+  ["human_smuggling", /\bhuman\s+smuggling\b/i],
+  ["fugitives", /\bfugitives?\b/i],
+  ["cybercrime", /\bcyber\s*crime\b/i],
+  ["drug_trafficking", /\bdrug\s+trafficking\b/i],
+  ["violent_crime", /\bviolent\s+crime\b/i],
+  ["fraud", /\bfraud\b/i],
+]);
+
+const DOG_RE = /\b(?:dogs?|k-?9s?|canines?|working dogs?)\b/i;
+
+function isObservanceName(name, text = "") {
+  const label = String(name || "").trim();
+  if (!label) return true;
+  if (/^central casting$/i.test(label)) return true;
+  const last = label.split(/\s+/).at(-1) || "";
+  if (/^days?$/i.test(last) || /^weeks?$/i.test(last)) return true;
+  if (!text) return false;
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\s+(?:days?|weeks?)\\b`, "i").test(text);
+}
+
+function operationNames(text) {
+  const source = plainText(text);
+  const out = [];
+  const prefixed = /\bOperation\s+(\p{Lu}[\p{L}'’.-]*(?:\s+\p{Lu}[\p{L}'’.-]*){0,4})\b/gu;
+  for (const match of source.matchAll(prefixed)) {
+    const name = `Operation ${String(match[1] || "").replace(/\s+/g, " ").trim()}`;
+    if (name !== "Operation" && !out.includes(name)) out.push(name);
   }
-  if (later.length === 1) return { subject: later[0] };
+  const trailing = /\b(\p{Lu}[\p{L}'’.-]*(?:\s+\p{Lu}[\p{L}'’.-]*){1,4}\s+Operation)\b/gu;
+  for (const match of source.matchAll(trailing)) {
+    const name = String(match[1] || "").replace(/\s+/g, " ").trim();
+    if (name && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
+function operationTags(text) {
+  const hits = [];
+  for (const [id, re] of OP_TAG_PHRASES) {
+    if (!OPERATION_TAG_IDS.includes(id)) continue;
+    if (re.test(text)) hits.push(id);
+  }
+  return hits;
+}
+
+function personNames(text, operations) {
+  const blocked = (operations || []).map((name) => name.toLowerCase());
+  return namesAroundVerb(text).filter((name) => {
+    if (isObservanceName(name, text) || /^operation\b/i.test(name)) return false;
+    const lower = name.toLowerCase();
+    return !blocked.some((op) => op === lower || op.includes(lower));
+  });
+}
+
+function isDogPost(post) {
+  if (!post || !DOG_RE.test(String(post.text || ""))) return false;
+  return isOfficialGovHandle(post.handle);
+}
+
+function agenciesIn(text) {
+  const source = plainText(text);
+  const out = [];
+  const re =
+    /\b(?:(?:U\.S\.|United States)\s+)?Department of (?:Justice|Defense|Homeland Security|State|the Treasury)\b/gi;
+  for (const match of source.matchAll(re)) {
+    const agency = match[0].replace(/\s+/g, " ").trim();
+    if (!out.some((item) => item.toLowerCase() === agency.toLowerCase())) out.push(agency);
+  }
+  if (/\bFederal Bureau of Investigation\b/i.test(source)) out.push("Federal Bureau of Investigation");
+  else if (/\bFBI\b/.test(source)) out.push("FBI");
+  return out;
+}
+
+function calendarDay(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const iso = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso && parseEventDate(iso[1])) return iso[1];
+  const ms = Date.parse(text);
+  if (Number.isNaN(ms)) return "";
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function dogSubject(post) {
+  return String(post?.name || post?.handle || "").trim();
+}
+
+function signalsOf(post, { allowDog = true } = {}) {
+  const text = String(post?.text || "");
+  const operations = operationNames(text);
+  return {
+    post,
+    text,
+    operations,
+    people: personNames(text, operations),
+    tags: operationTags(text),
+    dog: allowDog && isDogPost(post),
+  };
+}
+
+function decideSignals(sig) {
+  const kinds = [];
+  if (sig.dog) kinds.push("dog_comm");
+  if (sig.operations.length) kinds.push("operation");
+  if (sig.people.length) kinds.push("person");
+  if (kinds.length > 1 || sig.operations.length > 1 || sig.people.length > 1) {
+    return { ambiguous: true };
+  }
+  if (kinds.length === 0) return {};
+  if (kinds[0] === "dog_comm") {
+    const subject = dogSubject(sig.post);
+    if (!subject) return {};
+    return { hit: { subject_kind: "dog_comm", subject, post: sig.post } };
+  }
+  if (kinds[0] === "operation") {
+    if (sig.tags.length !== 1) return { ambiguous: true };
+    return {
+      hit: {
+        subject_kind: "operation",
+        subject: sig.operations[0],
+        post: sig.post,
+        category: sig.tags[0],
+      },
+    };
+  }
+  return { hit: { subject_kind: "person", subject: sig.people[0], post: sig.post } };
+}
+
+function sameHit(a, b) {
+  return a.subject_kind === b.subject_kind && a.subject === b.subject;
+}
+
+/** One subject kind, or ambiguous, or nothing. Holidays are not people. */
+export function classifySubject(posts) {
+  const list = Array.isArray(posts) ? posts : [];
+  const primary = decideSignals(signalsOf(list[0], { allowDog: true }));
+  if (primary.ambiguous) return { ambiguous: true };
+  if (primary.hit) return primary.hit;
+  const later = [];
+  for (const post of list.slice(1)) {
+    const decided = decideSignals(signalsOf(post, { allowDog: false }));
+    if (decided.ambiguous) return { ambiguous: true };
+    if (decided.hit && !later.some((hit) => sameHit(hit, decided.hit))) later.push(decided.hit);
+  }
   if (later.length > 1) return { ambiguous: true };
+  if (later.length === 1) return later[0];
   return {};
 }
 
@@ -485,6 +623,7 @@ function metaFromSubjectPost(post, subject) {
   const reason = verbKey(post.text);
   const category = reason ? mapLeadReason(reason) : "";
   if (category) out.category = category;
+  else if (/\bcorona\s+comms?\b/i.test(plainText(post.text))) out.category = "corona_comms";
   if (reason) out.reason = reason;
   const dates = datesInText(post.text);
   if (dates.length === 1) out.event_date = dates[0];
@@ -496,6 +635,35 @@ function metaFromSubjectPost(post, subject) {
   return out;
 }
 
+function metaForOperation(post, subject, category) {
+  const out = { category };
+  const dates = datesInText(post?.text);
+  if (dates.length === 1) out.event_date = dates[0];
+  const agencies = agenciesIn(post?.text);
+  if (agencies.length) out.agencies = agencies;
+  const comments = sentenceFor(post?.text, subject);
+  if (comments) {
+    out.comments = comments;
+    out.summary = comments;
+  }
+  return out;
+}
+
+function metaForDog(post) {
+  const stated = datesInText(post?.text);
+  const posted_at = stated.length === 1 ? stated[0] : calendarDay(post?.created_at);
+  // Catalog identity of the official post. Not placed in cite_urls.
+  const source_url = statusCiteUrl(post?.handle, post?.id);
+  const out = {
+    handle: post?.handle || "",
+    account_name: post?.name || "",
+    text: String(post?.text || "").trim(),
+  };
+  if (source_url) out.source_url = source_url;
+  if (posted_at) out.posted_at = posted_at;
+  return out;
+}
+
 export async function digMentionEnvelope(row, { fetchImpl = globalThis.fetch, expandImpl } = {}) {
   if (!row || typeof row !== "object" || Array.isArray(row)) return fail("invalid_row");
   const subjectId = subjectIdFromRow(row);
@@ -503,15 +671,27 @@ export async function digMentionEnvelope(row, { fetchImpl = globalThis.fetch, ex
   const subjectPost = await fetchStatus(subjectId, fetchImpl);
   if (!subjectPost) return fail("subject_unresolved");
   const posts = await loadChain(subjectPost, row, fetchImpl, expandImpl);
-  const picked = pickSubject(posts);
+  const picked = classifySubject(posts);
   if (picked.ambiguous) return fail("ambiguous_subject");
   const subject = picked.subject || "";
-  if (!subject) return fail("missing_subject");
+  if (!subject || !picked.subject_kind) return fail("missing_subject");
+  if (picked.subject_kind === "dog_comm") {
+    return {
+      subject,
+      subject_kind: "dog_comm",
+      ...metaForDog(picked.post),
+    };
+  }
   const cite_urls = citeUrlsFromPosts(posts, row, subjectId);
   if (cite_urls.length < CITE_FLOOR) return fail("cites_floor", { subject });
+  const meta =
+    picked.subject_kind === "operation"
+      ? metaForOperation(picked.post, subject, picked.category)
+      : metaFromSubjectPost(picked.post, subject);
   return {
     subject,
+    subject_kind: picked.subject_kind,
     cite_urls,
-    ...metaFromSubjectPost(posts[0], subject),
+    ...meta,
   };
 }

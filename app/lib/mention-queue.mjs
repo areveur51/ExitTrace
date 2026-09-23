@@ -6,7 +6,7 @@
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import { keepDetailPath } from "./keep-page-shot.mjs";
-import { getOperation, getPerson, getPool } from "./store.mjs";
+import { getDogComm, getOperation, getPerson, getPool, getRedFolderComm } from "./store.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import { buildReplyPlan } from "./mention-dig.mjs";
 import { isSnowflake, resolveSubjectStatusId, statusUrl } from "./x-mentions.mjs";
@@ -689,6 +689,10 @@ async function keptCatalog(slug) {
   if (person?.id) return { name: person.name || "", kind: "person" };
   const operation = await getOperation(id);
   if (operation?.id) return { name: operation.name || "", kind: "operation" };
+  const dog = await getDogComm(id);
+  if (dog?.id) return { name: dog.account_name || dog.handle || "", kind: "dog" };
+  const folder = await getRedFolderComm(id);
+  if (folder?.id) return { name: folder.account_name || folder.handle || "", kind: "red_folder" };
   return { name: "", kind: "person" };
 }
 

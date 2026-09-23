@@ -444,6 +444,17 @@ test("KEEP final is one plain reply to the first mentioner", async () => {
         summary: "A federal operation.",
       },
     ],
+    dog_comms: [
+      ...(seed.dog_comms || []),
+      {
+        id: "fbi-k9",
+        posted_at: "2024-06-15",
+        handle: "@FBI",
+        account_name: "FBI",
+        text: "Military working dog.",
+        source_url: "https://x.com/fbi/status/4000000000000000099",
+      },
+    ],
   });
   const quoted = "2000000000000000099";
   const first = await enqueueMention(
@@ -553,6 +564,25 @@ test("KEEP final is one plain reply to the first mentioner", async () => {
   assert.equal(opPlan.text, "ExitTrace kept Restore Justice.");
   assert.equal(opPlan.detail_path, "/operations/restore-justice");
   assert.equal(opPlan.detail_path.includes("http"), false);
+  assert.equal(/https?:\/\//i.test(opPlan.text), false);
+
+  const dogSubject = "2000000000000000089";
+  await enqueueMention(
+    mention({
+      mention_status_id: "3400000000000000089",
+      author_id: "3330000000000000004",
+      author_handle: "dogauthor",
+      quoted_id: dogSubject,
+    }),
+    { now: new Date("2026-09-23T22:03:00.000Z") },
+  );
+  await finishMention(dogSubject, { status: "kept", kept_person_slug: "fbi-k9" });
+  const dogPlan = await planMentionReply(dogSubject);
+  assert.equal(dogPlan.text, "ExitTrace kept FBI.");
+  assert.equal(dogPlan.detail_path, "/dog-comms/fbi-k9");
+  assert.equal(dogPlan.detail_path.includes("http"), false);
+  assert.equal(/https?:\/\//i.test(dogPlan.text), false);
+  assert.equal(publicKeepPageUrl(PUBLIC_ORIGIN, dogPlan.detail_path), `${PUBLIC_ORIGIN}/dog-comms/fbi-k9`);
   assert.equal(keepReplyText("", "plain-slug"), "ExitTrace kept plain slug.");
   assert.equal(keepReplyText("https://example.com/people/plain-slug", "plain-slug"), "ExitTrace kept plain slug.");
   assert.equal(publicKeepPageUrl(PUBLIC_ORIGIN, "/people/quota-mention"), `${PUBLIC_ORIGIN}/people/quota-mention`);
