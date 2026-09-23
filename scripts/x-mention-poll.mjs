@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Poll @ExitTrace mentions and POST them to the Render mention queue.
- * Optional soft-ack is the fixed line from mention-dig. Does not write KEEP.
+ * Probes the queue before the X GET. Optional soft-ack stays off unless MENTION_SOFT_ACK is set.
+ * Does not write KEEP.
  */
 import path from "path";
 import { fileURLToPath } from "url";
@@ -15,6 +16,7 @@ loadDotEnv(path.join(ROOT, ".env"));
 const HELP = `Usage: node scripts/x-mention-poll.mjs [--once] [--loop]
 
 Reads mentions for the configured X user and POSTs them to the Render queue.
+Probes POST /api/mention-queue/preflight before that X GET.
 --once is the default (one pass, for a timer). --loop sleeps between passes.
 
 Environment names (values stay on the host, never in git):

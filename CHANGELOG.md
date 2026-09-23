@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-09-23
+
+### Fixed
+
+- X mention poller probes the Render queue before the mentions GET, backs off on a Cloudflare challenge or 5xx, and advances since_id only after a real enqueue ack. Soft-ack stays off unless enabled.
+
 ## [1.1.2] - 2026-09-23
 
 ### Added

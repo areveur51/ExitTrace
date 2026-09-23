@@ -11,7 +11,10 @@ Picard CLEAR ~6:16pm ET 2026-09-23 reinforces the Riker DESIGN LOCK ~2:05pm ET. 
 - The worker uses one `GET /api/mention-queue/work` (`{ pending, unreplied }`). Zero pending rows means no claim and no dig. An empty unreplied list skips that final-reply sweep.
 - Claim-next POSTs an empty `subject_status_id` (`SKIP LOCKED`) until `claimed: false`, at most 5 claims per pass. Digs run one at a time. No dig is spawned when nothing was claimed.
 - The claim lease stays in the 10–15 minute band (default 12 minutes). The dig timeout is 9 minutes, under that lease.
+- The poller POSTs `/api/mention-queue/preflight` before the mentions GET. A down origin, 401, HTML challenge, or 5xx skips that X GET. The host timer stays on its band.
 - Mentions are one GET with `since_id` and `max_results=10`. Author name comes from that expansion. There is no per-mention user lookup and no pagination. HTTP 402 and 429 stop that pass and back off inside the process. They do not issue a second mentions GET and they do not shorten the timer.
+- A queue 401 is fail-closed for that pass: `since_id` does not advance and the pass is not a success. A 403 HTML challenge (Bot Fight, "Just a moment", `cf-mitigated`) or a 5xx backs off inside the process, does not advance `since_id`, and is not a successful enqueue.
+- `since_id` advances only after an enqueue returns JSON `ok: true` with `created: true` or `duplicate: true`. The mentions GET alone does not move it. A failed soft-ack does not move it back.
 
 ## Warm helper
 
@@ -21,4 +24,12 @@ On the worker host, prefer a long-lived helper so the dig runtime is already up 
 
 Host units stay on a 10 minute band (`OnUnitActiveSec=10min`, inside 5–15 minutes, nothing under 5). The worker `OnBootSec` is 8 minutes, about 3 minutes after the poll `OnBootSec` of 5 minutes. Do not install a tighter interval from this note. Live host units change only when an operator installs the templates.
 
-A pass with `results=0` does not write a success line to the journal. Non-empty work and errors do. A 402/429 writes one `mention_poll backoff=` line.
+A pass with `results=0` does not write a success line to the journal. Non-empty work and errors do. A 402/429, a queue challenge, or a queue 5xx writes one `mention_poll backoff=` line. A skipped preflight or a 401 writes one line and leaves the timer alone.
+
+## Ops checklist
+
+- Cloudflare: skip Bot Fight and managed challenges for `/api/mention-queue` (the whole prefix). A 403 HTML page ("Just a moment") or a `cf-mitigated` response is not a successful enqueue.
+- Soft-ack stays OFF (`MENTION_SOFT_ACK` unset). When it is on, the fixed line is sent only for `created: true`.
+- Preflight: `POST /api/mention-queue/preflight` with the bot token runs before the X mentions GET. If the probe is down, unauthorized, challenged, or 5xx, that pass does not call X.
+- `since_id` advances only after enqueue JSON `ok: true` with `created: true` or `duplicate: true`. An X GET alone does not move it. A failed soft-ack does not undo it.
+- `mention_queue` stays on the Render app database. It is not on `exittrace_lab_pub` and it is not gap-upserted.

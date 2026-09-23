@@ -44,6 +44,10 @@ function requireRole(headers, role) {
 
 export async function handleMentionApi({ method, pathname, searchParams, headers, body }) {
   const verb = String(method || "GET").toUpperCase();
+  if (pathname === "/api/mention-queue/preflight" && verb === "POST") {
+    requireRole(headers, "bot");
+    return { status: 200, body: { ok: true, probe: true } };
+  }
   if (pathname === "/api/mention-queue" && verb === "POST") {
     requireRole(headers, "bot");
     const result = await enqueueMention(jsonBody(body));
