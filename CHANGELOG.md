@@ -13,7 +13,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Fixed
 
-- X mention poller probes the Render queue before the mentions GET, backs off on a Cloudflare challenge or 5xx, and advances since_id only after a real enqueue ack. Soft-ack stays off unless enabled.
+- X mention poller probes the Render queue before the mentions GET. Unreachable, HTML challenge, and 5xx skip that GET and back off. A JSON 401 is config fail-closed and does not call X. since_id advances only after a real enqueue ack, and not past an unenqueued mention. Soft-ack stays off.
 
 ## [1.1.2] - 2026-09-23
 

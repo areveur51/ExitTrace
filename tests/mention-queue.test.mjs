@@ -290,6 +290,8 @@ test("bot and worker tokens are separate and fail closed", async () => {
   const body = JSON.stringify(mention());
   const missing = await requestPage("/api/mention-queue", { method: "POST", body });
   assert.equal(missing.status, 401);
+  assert.deepEqual(JSON.parse(missing.body), { ok: false, error: "unauthorized" });
+  assert.doesNotMatch(missing.body, /<!doctype html|<html|Just a moment/i);
 
   const botEnqueue = await requestPage("/api/mention-queue", {
     method: "POST",
@@ -980,15 +982,25 @@ test("queue preflight failure skips the X mentions GET", async () => {
     }
     throw new Error(`unexpected ${target}`);
   };
-  const result = await pollOnce({ env: X_ENV, fetchImpl, statePath });
+  const sleeps = [];
+  const result = await pollOnce({
+    env: X_ENV,
+    fetchImpl,
+    statePath,
+    sleepImpl: async (ms) => {
+      sleeps.push(ms);
+    },
+  });
   assert.equal(mentions, 0);
   assert.equal(result.preflight, "down");
+  assert.equal(result.backoff, "down");
   assert.equal(result.since_id, since);
   assert.equal(result.results.length, 0);
   assert.equal(result.poll_ms, 10 * 60 * 1000);
-  assert.equal(result.backoff, undefined);
+  assert.deepEqual(sleeps, [1000]);
+  assert.equal(queueBackoffMs(0, "", 1), 1000);
   assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, since);
-  assert.match(pollJournal(result), new RegExp(`^mention_poll preflight=down since=${since}$`));
+  assert.match(pollJournal(result), new RegExp(`^mention_poll backoff=down since=${since}$`));
 });
 
 test("401 on the queue is fail-closed and does not advance since_id", async () => {
@@ -997,6 +1009,7 @@ test("401 on the queue is fail-closed and does not advance since_id", async () =
   const statePath = path.join(dir, "since.json");
   fs.writeFileSync(statePath, `${JSON.stringify({ since_id: since })}\n`);
   let mentions = 0;
+  const sleeps = [];
   const preflightDenied = async (url) => {
     const target = String(url);
     if (target.endsWith("/api/mention-queue/preflight")) {
@@ -1008,14 +1021,59 @@ test("401 on the queue is fail-closed and does not advance since_id", async () =
     }
     throw new Error(`unexpected ${target}`);
   };
-  const denied = await pollOnce({ env: X_ENV, fetchImpl: preflightDenied, statePath });
+  const denied = await pollOnce({
+    env: X_ENV,
+    fetchImpl: preflightDenied,
+    statePath,
+    sleepImpl: async (ms) => {
+      sleeps.push(ms);
+    },
+  });
   assert.equal(mentions, 0);
   assert.equal(denied.fail_closed, 401);
   assert.equal(denied.since_id, since);
   assert.equal(denied.backoff, undefined);
+  assert.deepEqual(sleeps, []);
   assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).since_id, since);
   assert.match(pollJournal(denied), /fail_closed=401/);
   assert.doesNotMatch(pollJournal(denied), /results=/);
+
+  const htmlDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-401-html-"));
+  const htmlState = path.join(htmlDir, "since.json");
+  fs.writeFileSync(htmlState, `${JSON.stringify({ since_id: since })}\n`);
+  const htmlSleeps = [];
+  let htmlMentions = 0;
+  const htmlDenied = await pollOnce({
+    env: X_ENV,
+    statePath: htmlState,
+    sleepImpl: async (ms) => {
+      htmlSleeps.push(ms);
+    },
+    fetchImpl: async (url) => {
+      const target = String(url);
+      if (target.endsWith("/api/mention-queue/preflight")) {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: (name) => (String(name).toLowerCase() === "content-type" ? "text/html" : "") },
+          async text() {
+            return "<!DOCTYPE html><html><title>Just a moment...</title></html>";
+          },
+        };
+      }
+      if (target.includes("/mentions")) {
+        htmlMentions += 1;
+        return jsonResponse(200, mentionPayload([]));
+      }
+      throw new Error(`unexpected ${target}`);
+    },
+  });
+  assert.equal(htmlMentions, 0);
+  assert.equal(htmlDenied.fail_closed, undefined);
+  assert.equal(htmlDenied.backoff, 401);
+  assert.equal(htmlDenied.since_id, since);
+  assert.deepEqual(htmlSleeps, [1000]);
+  assert.equal(JSON.parse(fs.readFileSync(htmlState, "utf8")).since_id, since);
 
   const enqueueDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-401-enqueue-"));
   const enqueueState = path.join(enqueueDir, "since.json");
@@ -1061,7 +1119,11 @@ test("403 challenge and 5xx back off without advancing since_id", async () => {
   );
   assert.equal(classifyQueueHttp(htmlChallenge()), "backoff");
   assert.equal(classifyQueueHttp({ status: 500, ok: false, body: { ok: false, error: "error" }, text: "{}" }), "backoff");
-  assert.equal(classifyQueueHttp({ status: 401, ok: false, body: { ok: false, error: "unauthorized" }, text: "{}" }), "fail_closed");
+  assert.equal(classifyQueueHttp({ status: 401, ok: false, body: { ok: false, error: "unauthorized" }, text: "{\"ok\":false,\"error\":\"unauthorized\"}" }), "fail_closed");
+  assert.equal(
+    classifyQueueHttp({ status: 401, ok: false, body: {}, text: "<html>Just a moment...</html>" }),
+    "backoff",
+  );
 
   const since = "1000000000000000094";
   const challengeDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-cf-"));
@@ -1134,6 +1196,48 @@ test("403 challenge and 5xx back off without advancing since_id", async () => {
   assert.equal(server.results[0].error, "error");
   assert.equal(JSON.parse(fs.readFileSync(serverState, "utf8")).since_id, since);
   assert.equal(isEnqueueAck({ ok: true }), false);
+
+  const partialDir = fs.mkdtempSync(path.join(os.tmpdir(), "mention-poll-partial-"));
+  const partialState = path.join(partialDir, "since.json");
+  const partialSince = "1000000000000000080";
+  fs.writeFileSync(partialState, `${JSON.stringify({ since_id: partialSince })}\n`);
+  const enqueuedIds = [];
+  const partial = await pollOnce({
+    env: X_ENV,
+    statePath: partialState,
+    sleepImpl: async () => {},
+    fetchImpl: async (url, opts) => {
+      const target = String(url);
+      if (target.endsWith("/api/mention-queue/preflight")) return jsonResponse(200, { ok: true, probe: true });
+      if (target.includes("/mentions")) {
+        return jsonResponse(200, mentionPayload([
+          { id: "1000000000000000082", author_id: "7", text: "newer" },
+          { id: "1000000000000000081", author_id: "7", text: "older" },
+        ]));
+      }
+      if (target.endsWith("/api/mention-queue")) {
+        const posted = JSON.parse(opts.body);
+        enqueuedIds.push(posted.mention_status_id);
+        if (posted.mention_status_id === "1000000000000000081") {
+          return jsonResponse(201, {
+            ok: true,
+            created: true,
+            duplicate: false,
+            row: { subject_status_id: posted.subject_status_id, reply_soft_at: null },
+          });
+        }
+        return jsonResponse(503, { ok: false, error: "error" });
+      }
+      throw new Error(`unexpected ${target}`);
+    },
+  });
+  assert.deepEqual(enqueuedIds, ["1000000000000000081", "1000000000000000082"]);
+  assert.equal(partial.since_id, "1000000000000000081");
+  assert.equal(partial.backoff, 503);
+  assert.notEqual(partial.since_id, "1000000000000000082");
+  assert.equal(JSON.parse(fs.readFileSync(partialState, "utf8")).since_id, "1000000000000000081");
+  assert.equal(partial.results.filter((row) => row.error).length, 1);
+  assert.equal(partial.results.filter((row) => !row.error).length, 1);
 });
 
 test("since_id advances only after an ok enqueue ack", async () => {
@@ -1204,6 +1308,13 @@ test("since_id advances only after an ok enqueue ack", async () => {
   assert.match(queueDoc, /since_id/);
   assert.match(queueDoc, /created: true/);
   assert.match(queueDoc, /duplicate: true/);
+  assert.match(queueDoc, /## Ops checklist/);
+  assert.match(queueDoc, /CF Skip on `\/api\/mention-queue`/);
+  assert.match(queueDoc, /MENTION_QUEUE_BOT_TOKEN` ≠ `MENTION_QUEUE_WORKER_TOKEN/);
+  assert.match(queueDoc, /Soft-ack is `0`/);
+  assert.match(queueDoc, /MENTION_STATE_PATH` is a durable host file/);
+  assert.match(queueDoc, /x-mention-dig-warm\.mjs/);
+  assert.match(queueDoc, /401 is JSON/);
 });
 
 test("empty mention queue skips dig, claim, and reply", async () => {

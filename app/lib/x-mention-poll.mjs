@@ -76,12 +76,18 @@ function headerValue(headers, name) {
   return String(headers[name] || headers[lower] || "");
 }
 
+function looksLikeHtml(res) {
+  const text = String(res?.text || "");
+  if (/just a moment/i.test(text)) return true;
+  const type = headerValue(res?.headers, "content-type");
+  return /text\/html/i.test(type) || /<!doctype html/i.test(text) || /<html[\s>]/i.test(text);
+}
+
 function isJsonApiError(res) {
   const body = res?.body;
   if (!body || typeof body !== "object" || Array.isArray(body)) return false;
   if (!body.error && body.ok !== false) return false;
-  const text = String(res.text || "");
-  if (/<html[\s>]/i.test(text) || /just a moment/i.test(text)) return false;
+  if (looksLikeHtml(res)) return false;
   return true;
 }
 
@@ -89,8 +95,7 @@ function isJsonApiError(res) {
 export function isCfChallenge(res = {}) {
   if (Number(res.status) !== 403) return false;
   if (headerValue(res.headers, "cf-mitigated")) return true;
-  const text = String(res.text || "");
-  if (/just a moment/i.test(text)) return true;
+  if (looksLikeHtml(res)) return true;
   if (isJsonApiError(res)) return false;
   return true;
 }
@@ -109,23 +114,27 @@ export function isPreflightAck(body) {
 
 /**
  * ok — JSON ack for this role.
- * fail_closed — 401; do not advance since_id and do not treat the pass as success.
- * backoff — HTML 403 challenge or 5xx.
+ * fail_closed — JSON 401 (token/config). Log it. Do not call X and do not advance since_id.
+ * backoff — unreachable, HTML challenge (including an HTML 401), or 5xx.
  * stop — any other non-ack. Do not advance since_id.
  */
 export function classifyQueueHttp(res, role = "enqueue") {
   const status = Number(res?.status) || 0;
-  if (status === 401) return "fail_closed";
+  if (status === 401) {
+    if (headerValue(res?.headers, "cf-mitigated") || looksLikeHtml(res)) return "backoff";
+    return "fail_closed";
+  }
   if (isCfChallenge(res) || (status >= 500 && status <= 599)) return "backoff";
   const ack = role === "preflight" ? isPreflightAck(res?.body) : isEnqueueAck(res?.body);
   if (res?.ok && ack) return "ok";
   return "stop";
 }
 
-/** In-process wait for a queue challenge or 5xx. Same cap as the X 402/429 helper. */
+/** In-process wait for an unreachable queue, an HTML challenge, or a 5xx. Same cap as the X 402/429 helper. */
 export function queueBackoffMs(status, retryAfter, attempt = 1) {
   const code = Number(status);
-  if (code !== 403 && !(code >= 500 && code <= 599)) return 0;
+  const down = code === 0;
+  if (!down && code !== 403 && !(code >= 500 && code <= 599)) return 0;
   const raw = String(retryAfter ?? "").trim();
   const header = Number(raw);
   if (raw && Number.isFinite(header) && header >= 0) {
@@ -174,6 +183,14 @@ async function pause(sleepImpl, ms) {
   await sleep(ms);
 }
 
+function passBackoffMs(res) {
+  if (res?.thrown || Number(res?.status) === 0) return queueBackoffMs(0, "", 1);
+  const code = Number(res?.status) || 0;
+  if (code === 403 || (code >= 500 && code <= 599)) return queueBackoffMs(code, res.retryAfter, 1);
+  if (headerValue(res?.headers, "cf-mitigated") || looksLikeHtml(res)) return queueBackoffMs(403, res.retryAfter, 1);
+  return 0;
+}
+
 export async function pollOnce({
   env = process.env,
   fetchImpl = globalThis.fetch,
@@ -194,12 +211,13 @@ export async function pollOnce({
     { probe: true },
   );
   if (probed.thrown || probed.status === 0) {
-    return { since_id: sinceId, results: [], preflight: "down", poll_ms: pollMs };
+    await pause(sleepImpl, passBackoffMs(probed));
+    return { since_id: sinceId, results: [], backoff: "down", preflight: "down", poll_ms: pollMs };
   }
   const preKind = classifyQueueHttp(probed, "preflight");
   if (preKind !== "ok") {
     if (preKind === "backoff") {
-      await pause(sleepImpl, queueBackoffMs(probed.status, probed.retryAfter, 1));
+      await pause(sleepImpl, passBackoffMs(probed));
       return {
         since_id: sinceId,
         results: [],
@@ -254,9 +272,9 @@ export async function pollOnce({
         status: queued.status,
         error: kind === "fail_closed" ? "unauthorized" : queued.body?.error || "enqueue_failed",
       });
-      if (kind === "backoff") {
-        await pause(sleepImpl, queueBackoffMs(queued.status, queued.retryAfter, 1));
-        return done({ backoff: queued.status });
+      if (kind === "backoff" || kind === "down") {
+        await pause(sleepImpl, passBackoffMs(queued));
+        return done({ backoff: kind === "down" ? "down" : queued.status });
       }
       if (kind === "fail_closed") return done({ fail_closed: queued.status || 401 });
       break;
