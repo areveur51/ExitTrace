@@ -402,6 +402,8 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /class="home-stage"/);
   assert.match(res.body, /pixel-wordmark/);
   assert.match(res.body, /EXITTRACE|ExitTrace/);
+  assert.match(res.body, /class="ver">v1\.1\.0</);
+  assert.doesNotMatch(res.body, /class="ver">v1\.0\.0</);
   assert.match(res.body, /action="\/search"/);
   assert.match(res.body, /class="keymap"/);
   assert.match(res.body, /class="keychip"/);
