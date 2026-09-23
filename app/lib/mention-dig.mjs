@@ -5,6 +5,7 @@
 
 import { AddError, leadRecordFields, processAddRequest, queueAddRequest } from "./add-request.mjs";
 import { keepDetailPath } from "./keep-page-shot.mjs";
+import { centralCastingCiteStanding } from "./kind-comms.mjs";
 import { normalizeOperationTag } from "./operation.mjs";
 import { CITE_FLOOR } from "./promote.mjs";
 import { recordXMentionKeepAttribution } from "./request-attributions.mjs";
@@ -13,20 +14,38 @@ import { canonicalPublicUrl } from "./urls.mjs";
 export const LEAD_SOURCE_X_MENTION = "x_mention";
 export const SOFT_ACK_TEXT = "Queued for ExitTrace review.";
 
-/** Dig subjects. dog_comm is the add-request kind `dog`. No parallel kind ids. */
+/**
+ * Dig subjects. Mapped onto existing add-request and catalog ids.
+ * dog_comms → add kind `dog`. corona_comms → person category `corona_comms`.
+ * red_folder → catalog kind `red_folder`. central_casting_comms → `central_casting`.
+ */
+const SUBJECT_KIND = Object.freeze({
+  person: "person",
+  operation: "operation",
+  dog: "dog_comm",
+  dog_comm: "dog_comm",
+  dog_comms: "dog_comm",
+  corona_comms: "corona_comms",
+  red_folder: "red_folder",
+  red_folder_comm: "red_folder",
+  red_folder_comms: "red_folder",
+  central_casting: "central_casting_comms",
+  central_casting_comm: "central_casting_comms",
+  central_casting_comms: "central_casting_comms",
+});
+
 export function canonicalSubjectKind(raw) {
-  const key = String(raw || "").trim();
-  if (key === "person" || key === "operation" || key === "dog_comm") return key;
-  if (key === "dog" || key === "dog_comms") return "dog_comm";
-  return "";
+  return SUBJECT_KIND[String(raw || "").trim()] || "";
 }
 
 /** add-request kind id the promote stack already queues. */
 export function addKindForSubject(subjectKind) {
   const key = canonicalSubjectKind(subjectKind);
-  if (key === "person") return "person";
+  if (key === "person" || key === "corona_comms") return "person";
   if (key === "operation") return "operation";
   if (key === "dog_comm") return "dog";
+  if (key === "red_folder") return "red_folder";
+  if (key === "central_casting_comms") return "central_casting";
   return "";
 }
 
@@ -112,14 +131,20 @@ export async function leadIngest(input = {}) {
     throw new AddError("x mention lead source is required", "invalid_lead_source");
   }
   const named = explicitKind(input);
+  const subjectKind = named ? canonicalSubjectKind(named) : "person";
   const kind = named ? addKindForSubject(named) : "person";
   if (!kind) {
-    throw new AddError("kind must be person, operation, or dog", "invalid_kind");
+    throw new AddError(
+      "kind must be person, operation, dog, red_folder, or central_casting",
+      "invalid_kind",
+    );
   }
+  const category =
+    subjectKind === "corona_comms" ? "corona_comms" : input.category || "";
   return queueAddRequest({
     kind,
     subject: input.subject,
-    category: input.category || "",
+    category,
     event_date: input.event_date || "",
     hint_url: input.hint_url || input.subject_url || "",
     birth_date: input.birth_date || "",
@@ -144,11 +169,40 @@ export async function leadIngest(input = {}) {
   });
 }
 
+function firstKeptId(...values) {
+  for (const value of values) {
+    if (value == null || Array.isArray(value)) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return "";
+}
+
 function keptFromResult(result) {
-  const dog = result?.dog?.id || result?.dog_id || result?.request?.result?.dog_id || "";
-  const operation =
-    result?.operation?.id || result?.operation_id || result?.request?.result?.operation_id || "";
-  const person = result?.person?.id || result?.person_id || result?.request?.result?.person_id || "";
+  const clip = firstKeptId(
+    result?.central_casting?.id,
+    result?.central_casting_id,
+    result?.request?.result?.central_casting_id,
+  );
+  const folder = firstKeptId(
+    result?.red_folder?.id,
+    result?.red_folder_id,
+    result?.request?.result?.red_folder_id,
+  );
+  const dog = firstKeptId(result?.dog?.id, result?.dog_id, result?.request?.result?.dog_id);
+  const operation = firstKeptId(
+    result?.operation?.id,
+    result?.operation_id,
+    result?.request?.result?.operation_id,
+  );
+  const person = firstKeptId(
+    result?.person?.id,
+    result?.person_id,
+    result?.request?.result?.person_id,
+    result?.central_casting?.person_id,
+  );
+  if (clip) return { slug: String(person), subject_kind: "central_casting_comms" };
+  if (folder) return { slug: String(folder), subject_kind: "red_folder" };
   if (dog) return { slug: String(dog), subject_kind: "dog_comm" };
   if (operation) return { slug: String(operation), subject_kind: "operation" };
   if (person) return { slug: String(person), subject_kind: "person" };
@@ -222,7 +276,9 @@ export async function digMention(row = {}, envelope) {
     };
   }
   const cites = stripMentionCites(env.cite_urls, row);
-  if (subjectKind !== "dog_comm" && (!subject || cites.length < CITE_FLOOR)) {
+  const postCatalog = subjectKind === "dog_comm" || subjectKind === "red_folder";
+  const casting = subjectKind === "central_casting_comms";
+  if (!postCatalog && !casting && (!subject || cites.length < CITE_FLOOR)) {
     return {
       status: "fail_closed",
       error_reason: subject ? "cites_floor" : "missing_subject",
@@ -238,6 +294,20 @@ export async function digMention(row = {}, envelope) {
       lead_id,
     };
   }
+  if (casting) {
+    const standing = centralCastingCiteStanding({
+      sourceUrl: env.source_url || row.subject_url || "",
+      quotedUrls: cites,
+    });
+    if (!standing) {
+      return {
+        status: "fail_closed",
+        error_reason: "missing_cite",
+        kept_person_slug: null,
+        lead_id,
+      };
+    }
+  }
   if (subjectKind === "operation" && !normalizeOperationTag(env.category || env.tag || "")) {
     return {
       status: "fail_closed",
@@ -252,23 +322,30 @@ export async function digMention(row = {}, envelope) {
       overlay: {
         ...env,
         subject,
-        cite_urls: subjectKind === "dog_comm" ? [] : cites,
+        category: subjectKind === "corona_comms" ? "corona_comms" : env.category || "",
+        cite_urls: postCatalog ? [] : cites,
       },
     });
     const kept = keptFromResult(result);
     if (!kept.slug) {
       return { status: "fail_closed", error_reason: "missing_slug", kept_person_slug: null, lead_id };
     }
+    const surfaced =
+      subjectKind === "corona_comms" && kept.subject_kind === "person"
+        ? "corona_comms"
+        : kept.subject_kind;
     await recordXMentionKeepAttribution(row, result);
     return {
       status: "kept",
       kept_person_slug: kept.slug,
-      subject_kind: kept.subject_kind,
+      subject_kind: surfaced,
       error_reason: null,
       lead_id,
       person: result.person || null,
       operation: result.operation || null,
       dog: result.dog || null,
+      red_folder: result.red_folder || null,
+      central_casting: Array.isArray(result.central_casting) ? null : result.central_casting || null,
     };
   } catch (err) {
     const code = err instanceof AddError || err?.code ? err.code : "fail_closed";

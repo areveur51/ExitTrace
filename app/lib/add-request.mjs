@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { PROMOTE_CATEGORY_IDS } from "./categories.mjs";
 import { isMilitaryInput } from "./event-attrs.mjs";
+import { centralCastingCiteStanding } from "./kind-comms.mjs";
 import {
   handleFromUrl,
   handleKey,
@@ -9,6 +10,8 @@ import {
   isOfficialGovAccountOrUrl,
   isOfficialGovHandle,
   isOfficialGovPostUrl,
+  isOfficialNewsHandle,
+  isOfficialPublisherUrl,
   isSocialHost,
   normalizeHandle,
   parseHttpUrl,
@@ -29,15 +32,23 @@ import {
 import { isEligiblePortraitUrl, isPeopleMediaHref } from "./portrait.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import {
+  annotateCentralCasting,
   applyIdentifiedOperation,
   applyIdentifiedPerson,
   countDogComms,
+  countRedFolderComms,
   createAddRequest,
   findDogMatch,
+  findKindCommMatch,
   getAddRequest,
+  getPerson,
+  insertCentralCastingClip,
   insertDogComm,
+  insertKindComm,
   listAddRequests,
+  listCentralCastingEvidence,
   listDogComms,
+  listRedFolderComms,
   listSourcePosts,
   lookupSourcePost,
   nextPendingAddRequest,
@@ -54,7 +65,7 @@ export class AddError extends Error {
   }
 }
 
-export const ADD_KINDS = ["person", "dog", "operation"];
+export const ADD_KINDS = ["person", "dog", "operation", "red_folder", "central_casting"];
 export const ADD_STATUSES = ["pending", "applied", "rejected"];
 
 export function newAddRequestId(seed = "") {
@@ -67,14 +78,24 @@ export function newAddRequestId(seed = "") {
 }
 
 export function requestFingerprint(row) {
-  const kind =
-    row?.kind === "dog" ? "dog" : row?.kind === "operation" ? "operation" : "person";
-  if (kind === "dog") {
+  const kind = ADD_KINDS.includes(row?.kind) ? row.kind : "person";
+  if (kind === "dog" || kind === "red_folder") {
     return [
-      "dog",
+      kind,
       handleKey(row.handle),
       canonicalPublicUrl(row.source_url) || "",
       String(row.posted_at || ""),
+    ].join(":");
+  }
+  if (kind === "central_casting") {
+    return [
+      "central_casting",
+      String(row.subject || row.name || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " "),
+      canonicalPublicUrl(row.hint_url || row.source_url) || "",
+      String(row.event_date || ""),
     ].join(":");
   }
   if (kind === "operation") {
@@ -202,10 +223,78 @@ function optionalNetWorth(input = {}) {
   };
 }
 
+function catalogAccountOk(kind, { handle, source_url } = {}) {
+  if (kind === "dog") return isOfficialGovAccountOrUrl({ handle, source_url });
+  if (isOfficialGovAccountOrUrl({ handle, source_url })) return true;
+  const resolved = normalizeHandle(handle) || handleFromUrl(source_url);
+  if (resolved && isOfficialNewsHandle(resolved)) return true;
+  if (!source_url) return false;
+  const parsed = parseHttpUrl(source_url);
+  if (!parsed || isSocialHost(hostOf(parsed))) return false;
+  return isOfficialPublisherUrl(source_url);
+}
+
+function queueCatalogPost(input, kind) {
+  const handle = normalizeHandle(input.handle);
+  const source_url = optionalUrl(input.source_url || input.post_url, "source_url");
+  const posted_at = optionalDate(input.posted_at || input.event_date, "posted_at");
+  const label = kind === "dog" ? "dog comms" : "red folder comms";
+  if (!handle && !source_url) {
+    throw new AddError(
+      kind === "dog"
+        ? "official government handle or official post URL is required"
+        : "official government or news-org handle or post URL is required",
+      kind === "dog" ? "missing_dog_identity" : "missing_source_url",
+    );
+  }
+  if (!catalogAccountOk(kind, { handle, source_url })) {
+    throw new AddError(
+      `${label} accept official ${kind === "dog" ? "government accounts only" : "government or news-org posts"}; unofficial social is rejected`,
+      "unofficial_social",
+    );
+  }
+  return {
+    kind,
+    subject: "",
+    category: kind === "dog" ? "dog_comms" : "red_folder_comms",
+    event_date: posted_at,
+    hint_url: source_url,
+    handle,
+    source_url,
+    posted_at,
+    cite_urls: [],
+  };
+}
+
 export function validateQueueInput(input = {}) {
   const kind = String(input.kind || "person").trim();
   if (!ADD_KINDS.includes(kind)) {
-    throw new AddError("kind must be person, operation, or dog", "invalid_kind");
+    throw new AddError(
+      "kind must be person, operation, dog, red_folder, or central_casting",
+      "invalid_kind",
+    );
+  }
+  if (kind === "red_folder") {
+    return queueCatalogPost(input, "red_folder");
+  }
+  if (kind === "central_casting") {
+    const subject = String(input.subject || input.name || "").trim();
+    if (!subject) {
+      throw new AddError("name is required", "missing_subject");
+    }
+    const event_date = optionalDate(input.event_date, "event_date");
+    const hint_url = optionalUrl(input.hint_url || input.source_url, "hint_url");
+    return {
+      kind,
+      subject,
+      category: "central_casting",
+      event_date,
+      hint_url,
+      handle: normalizeHandle(input.handle),
+      source_url: hint_url,
+      posted_at: optionalDate(input.posted_at, "posted_at"),
+      cite_urls: [],
+    };
   }
   if (kind === "operation") {
     const subject = String(input.subject || input.name || "").trim();
@@ -278,32 +367,7 @@ export function validateQueueInput(input = {}) {
     };
   }
 
-  const handle = normalizeHandle(input.handle);
-  const source_url = optionalUrl(input.source_url || input.post_url, "source_url");
-  const posted_at = optionalDate(input.posted_at || input.event_date, "posted_at");
-  if (!handle && !source_url) {
-    throw new AddError(
-      "official government handle or official post URL is required",
-      "missing_dog_identity",
-    );
-  }
-  if (!isOfficialGovAccountOrUrl({ handle, source_url })) {
-    throw new AddError(
-      "dog comms accept official government accounts only; unofficial social is rejected",
-      "unofficial_social",
-    );
-  }
-  return {
-    kind,
-    subject: "",
-    category: "dog_comms",
-    event_date: posted_at,
-    hint_url: source_url,
-    handle,
-    source_url,
-    posted_at,
-    cite_urls: [],
-  };
+  return queueCatalogPost(input, "dog");
 }
 
 export function officialCiteUrls(raw) {
@@ -433,6 +497,37 @@ export function validateProcessDogInput(input = {}) {
       "posted_at is required as YYYY-MM-DD",
       "missing_event_date",
     );
+  }
+  return {
+    handle,
+    source_url,
+    posted_at,
+    account_name: String(input.account_name || "").trim(),
+    text: String(input.text || "").trim(),
+    still: String(input.still || "").trim(),
+    still_credit: String(input.still_credit || "").trim(),
+  };
+}
+
+export function validateProcessRedFolderInput(input = {}) {
+  const source_url = String(input.source_url || input.hint_url || "").trim();
+  if (!source_url || !canonicalPublicUrl(source_url)) {
+    throw new AddError("official or news-org post URL is required", "missing_source_url");
+  }
+  const parsed = parseHttpUrl(source_url);
+  if (!parsed) {
+    throw new AddError("source_url is not an http(s) URL", "invalid_url");
+  }
+  const handle = normalizeHandle(input.handle) || handleFromUrl(source_url);
+  if (!catalogAccountOk("red_folder", { handle, source_url })) {
+    throw new AddError(
+      "red folder comms accept official government or news-org posts; unofficial social is rejected",
+      "unofficial_social",
+    );
+  }
+  const posted_at = parseEventDate(input.posted_at || input.event_date);
+  if (!posted_at) {
+    throw new AddError("posted_at is required as YYYY-MM-DD", "missing_event_date");
   }
   return {
     handle,
@@ -688,6 +783,122 @@ async function applyQueuedDog(merged) {
   };
 }
 
+async function snapshotForKind(kind, sourceUrl) {
+  const canonical = canonicalPublicUrl(sourceUrl);
+  const rows = kind === "red_folder" ? await listRedFolderComms() : await listDogComms();
+  const existing = rows.find((row) => canonicalPublicUrl(row.source_url) === canonical);
+  if (existing) {
+    return {
+      account_name: existing.account_name || "",
+      text: existing.text || "",
+      still: existing.still || "",
+      still_credit: existing.still_credit || "",
+      snapshot: existing.snapshot || {},
+    };
+  }
+  const posts = await listSourcePosts({});
+  const post = posts.find(
+    (row) => row.canonical_url === canonical || canonicalPublicUrl(row.source_url) === canonical,
+  );
+  if (!post) {
+    return { account_name: "", text: "", still: "", still_credit: "", snapshot: {} };
+  }
+  return {
+    account_name: post.poster_name || "",
+    text: post.text || "",
+    still: "",
+    still_credit: "",
+    snapshot: {
+      handle: post.poster_handle || "",
+      posted_at: post.posted_at || "",
+      text: post.text || "",
+    },
+  };
+}
+
+async function applyQueuedRedFolder(merged) {
+  const parsed = validateProcessRedFolderInput(merged);
+  const existing = await findKindCommMatch("red_folder", {
+    handle: parsed.handle,
+    source_url: parsed.source_url,
+    posted_at: parsed.posted_at,
+  });
+  if (existing) {
+    return {
+      action: "annotated",
+      red_folder: existing,
+      added_cites: 0,
+      red_folder_comms: await countRedFolderComms(),
+    };
+  }
+  const stored = await snapshotForKind("red_folder", parsed.source_url);
+  const red_folder = await insertKindComm("red_folder", {
+    id: dogRowId(parsed.handle, parsed.posted_at, parsed.source_url),
+    posted_at: parsed.posted_at,
+    handle: parsed.handle,
+    account_name: parsed.account_name || stored.account_name || parsed.handle,
+    text: parsed.text || stored.text || "",
+    still: parsed.still || stored.still || "",
+    still_credit: parsed.still_credit || stored.still_credit || "",
+    source_url: parsed.source_url,
+    snapshot:
+      Object.keys(stored.snapshot || {}).length > 0
+        ? stored.snapshot
+        : {
+            handle: parsed.handle,
+            posted_at: parsed.posted_at,
+            text: parsed.text || stored.text || "",
+          },
+  });
+  return {
+    action: "created",
+    red_folder,
+    added_cites: 0,
+    red_folder_comms: await countRedFolderComms(),
+  };
+}
+
+async function applyQueuedCentralCasting(merged) {
+  const subject = String(merged.subject || "").trim();
+  const person = subject ? await getPerson(personSlug(subject)) : null;
+  if (!person?.id) {
+    throw new AddError("central casting annotates an existing person", "missing_person");
+  }
+  const cites = citeUrlList(
+    Array.isArray(merged.cite_urls) ? merged.cite_urls : [],
+  );
+  const source_url = String(merged.source_url || merged.hint_url || cites[0] || "").trim();
+  const standing = centralCastingCiteStanding({ sourceUrl: source_url, quotedUrls: cites });
+  if (!standing) {
+    throw new AddError("central casting membership requires cite standing", "missing_cite");
+  }
+  const sources = cites.length ? cites : [source_url];
+  const updated = await annotateCentralCasting(person.id, { sources });
+  const posted_at = parseEventDate(merged.posted_at || merged.event_date) || "";
+  const handle = normalizeHandle(merged.handle) || handleFromUrl(source_url);
+  const id = dogRowId(handle || person.id, posted_at || "undated", source_url);
+  const prior = (await listCentralCastingEvidence(person.id)).find(
+    (row) => row.id === id || canonicalPublicUrl(row.source_url) === canonicalPublicUrl(source_url),
+  );
+  const clip =
+    prior ||
+    (await insertCentralCastingClip({
+      id,
+      person_id: person.id,
+      posted_at,
+      handle,
+      account_name: String(merged.account_name || "").trim(),
+      text: String(merged.text || merged.comments || "").trim(),
+      source_url,
+    }));
+  return {
+    action: prior ? "annotated" : "created",
+    person: updated,
+    central_casting: clip,
+    added_cites: sources.length,
+  };
+}
+
 export async function processAddRequest({ id, next, overlay } = {}) {
   let request = null;
   if (id) request = await getAddRequest(id);
@@ -706,9 +917,13 @@ export async function processAddRequest({ id, next, overlay } = {}) {
     const result =
       request.kind === "dog"
         ? await applyQueuedDog(merged)
-        : request.kind === "operation"
-          ? await applyQueuedOperation(merged)
-          : await applyQueuedPerson(merged);
+        : request.kind === "red_folder"
+          ? await applyQueuedRedFolder(merged)
+          : request.kind === "central_casting"
+            ? await applyQueuedCentralCasting(merged)
+            : request.kind === "operation"
+              ? await applyQueuedOperation(merged)
+              : await applyQueuedPerson(merged);
     const updated = await updateAddRequest(request.id, {
       ...merged,
       extra_urls: result.extra_urls || merged.extra_urls || [],
@@ -719,10 +934,13 @@ export async function processAddRequest({ id, next, overlay } = {}) {
         person_id: result.person?.id || "",
         dog_id: result.dog?.id || "",
         operation_id: result.operation?.id || "",
+        red_folder_id: result.red_folder?.id || "",
+        central_casting_id: result.central_casting?.id || "",
         added_cites: result.added_cites || 0,
         extra_urls: result.extra_urls || [],
         people: result.people,
         dog_comms: result.dog_comms,
+        red_folder_comms: result.red_folder_comms,
         operations: result.operations,
       },
       processed_at: new Date().toISOString(),

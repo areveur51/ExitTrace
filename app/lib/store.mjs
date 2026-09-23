@@ -212,6 +212,19 @@ function normalizeSourcePost(row) {
   };
 }
 
+function addRequestKind(raw) {
+  const kind = String(raw || "").trim();
+  if (
+    kind === "dog" ||
+    kind === "operation" ||
+    kind === "red_folder" ||
+    kind === "central_casting"
+  ) {
+    return kind;
+  }
+  return "person";
+}
+
 function normalizeAddRequest(row) {
   const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
   const created =
@@ -222,7 +235,7 @@ function normalizeAddRequest(row) {
       : row.processed_at || "";
   return {
     id: row.id,
-    kind: row.kind === "dog" ? "dog" : row.kind === "operation" ? "operation" : "person",
+    kind: addRequestKind(row.kind),
     status: row.status || "pending",
     source: String(row.source || payload.source || "").trim(),
     subject_status_id: String(row.subject_status_id || payload.subject_status_id || "").trim(),
@@ -2567,7 +2580,8 @@ export async function getRedFolderComm(id) {
   return getKindComm("red_folder", id);
 }
 
-export async function findDogMatch({ id, source_url, handle, posted_at } = {}) {
+export async function findKindCommMatch(kind, { id, source_url, handle, posted_at } = {}) {
+  const spec = commsKind(kind);
   const canonical = source_url ? canonicalPublicUrl(source_url) : "";
   const handleKey = String(handle || "")
     .trim()
@@ -2587,26 +2601,27 @@ export async function findDogMatch({ id, source_url, handle, posted_at } = {}) {
     return false;
   };
   const p = await getPool();
-  if (!p) return (getMemory().dog_comms || []).find(match) || null;
+  if (!p) return (getMemory()[spec.memoryKey] || []).find(match) || null;
   if (id) {
-    const byId = await getDogComm(id);
+    const byId = await getKindComm(spec.id, id);
     if (byId) return byId;
   }
   if (canonical) {
-    const q = await p.query(
-      "SELECT * FROM dog_comms WHERE source_url = $1",
-      [source_url],
-    );
-    if (q.rows[0]) return normalizeDog(q.rows[0]);
+    const q = await p.query(`SELECT * FROM ${spec.table} WHERE source_url = $1`, [source_url]);
+    if (q.rows[0]) return normalizeKindComm(q.rows[0], spec.id);
   }
   if (handleKey && date) {
     const q = await p.query(
-      "SELECT * FROM dog_comms WHERE lower(regexp_replace(handle, '^@', '')) = $1 AND left(posted_at::text, 10) = $2",
+      `SELECT * FROM ${spec.table} WHERE lower(regexp_replace(handle, '^@', '')) = $1 AND left(posted_at::text, 10) = $2`,
       [handleKey, date],
     );
-    if (q.rows[0]) return normalizeDog(q.rows[0]);
+    if (q.rows[0]) return normalizeKindComm(q.rows[0], spec.id);
   }
   return null;
+}
+
+export async function findDogMatch(query) {
+  return findKindCommMatch("dog", query);
 }
 
 export async function insertKindComm(kind, row) {
