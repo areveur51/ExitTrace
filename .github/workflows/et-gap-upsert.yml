@@ -126,5 +126,18 @@ jobs:
           set -euo pipefail
           set +x
           test -s gap/published.json
+          # Render Postgres requires TLS; node-pg needs sslmode on the URL (match lab-to-render-sync).
+          ensure_ssl() {
+            local u="${1:-}"
+            if [[ "$u" == *sslmode=* ]]; then
+              printf '%s' "$u"
+            elif [[ "$u" == *\?* ]]; then
+              printf '%s&sslmode=require' "$u"
+            else
+              printf '%s?sslmode=require' "$u"
+            fi
+          }
+          export DATABASE_URL="$(ensure_ssl "${DATABASE_URL}")"
+          export PGSSLMODE=require
           node scripts/gap-upsert-published.mjs --from gap/published.json
           echo "GAP_UPSERT_OK"
