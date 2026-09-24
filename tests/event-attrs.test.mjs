@@ -25,10 +25,13 @@ test("event attr fields stay one shared list", () => {
     "country",
     "branch",
     "comments",
+    "notable_group",
+    "title_note",
+    "status",
   ]);
   assert.deepEqual(
     EVENT_ATTR_FIELDS.map((field) => EVENT_ATTR_LABELS[field]),
-    ["Position", "Organization", "Country", "Branch", "Comments"],
+    ["Position", "Organization", "Country", "Branch", "Comments", "Notable group", "Title note", "Status"],
   );
   assert.ok(!CAREER_FIELDS.includes("comments"));
   assert.ok(!CAREER_FIELDS.includes("country"));
@@ -104,6 +107,9 @@ test("eventFromLead is the harvest shape dashboard ranks", () => {
     country: "USA",
     branch: "News",
     comments: "lead note",
+    notable_group: "",
+    title_note: "",
+    status: "",
   });
   assert.equal(eventFromLead({ Reason: "Fired" }), null);
   assert.equal(eventFromLead({ last_day: "2024-07-02", reason: "Dead" }), null);

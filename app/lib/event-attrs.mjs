@@ -7,6 +7,7 @@ import {
   isIndictmentKeepKind,
 } from "./categories.mjs";
 import { normalizeTags } from "./tags.mjs";
+import { coronaStatusLabel, normalizeCoronaStatus } from "./corona-status.mjs";
 
 function parseLeadDate(raw) {
   const text = String(raw || "").trim();
@@ -17,13 +18,16 @@ function parseLeadDate(raw) {
   return text;
 }
 
-/** Nullable resignation.info fields stored on the event/tag. */
+/** Nullable resignation.info / corona fields stored on the event/tag. */
 export const EVENT_ATTR_FIELDS = [
   "position",
   "organization",
   "country",
   "branch",
   "comments",
+  "notable_group",
+  "title_note",
+  "status",
 ];
 
 /** Display labels for event-tag-row. Reason on the dashboard stays KEEP kinds. */
@@ -33,6 +37,9 @@ export const EVENT_ATTR_LABELS = {
   country: "Country",
   branch: "Branch",
   comments: "Comments",
+  notable_group: "Notable group",
+  title_note: "Title note",
+  status: "Status",
 };
 
 const ATTR_ALIASES = {
@@ -42,6 +49,9 @@ const ATTR_ALIASES = {
   branch: ["branch", "Branch"],
   // Reason of event maps onto comments. Reason→KEEP kind stays separate.
   comments: ["comments", "Comments", "comment", "reason", "Reason"],
+  notable_group: ["notable_group", "Notable Group", "group", "Group"],
+  title_note: ["title_note", "Title Note", "title", "Title"],
+  status: ["status", "Status"],
 };
 
 const ORIGIN_ALIASES = [
@@ -65,8 +75,11 @@ export function normalizeEventAttrs(raw = {}) {
   for (const field of EVENT_ATTR_FIELDS) {
     out[field] = firstText(raw, ATTR_ALIASES[field] || [field]);
   }
+  if (out.status) out.status = normalizeCoronaStatus(out.status) || "";
   return out;
 }
+
+export { coronaStatusLabel, normalizeCoronaStatus };
 
 /**
  * Person-level origin. Never event.country, name, or role.

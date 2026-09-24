@@ -1915,10 +1915,11 @@ async function syncPersonEvents(client, row) {
     await client.query(
       `INSERT INTO person_events (
          person_id, kind, event_date, sources, announced_date,
-         position, organization, country, branch, comments, age_at_event,
-         unsealed
+         position, organization, country, branch, comments,
+         notable_group, title_note, status,
+         age_at_event, unsealed
        )
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (person_id, kind) DO UPDATE SET
          event_date = person_events.event_date,
          sources = EXCLUDED.sources,
@@ -1928,6 +1929,9 @@ async function syncPersonEvents(client, row) {
          country = COALESCE(NULLIF(person_events.country, ''), EXCLUDED.country),
          branch = COALESCE(NULLIF(person_events.branch, ''), EXCLUDED.branch),
          comments = COALESCE(NULLIF(person_events.comments, ''), EXCLUDED.comments),
+         notable_group = COALESCE(NULLIF(person_events.notable_group, ''), EXCLUDED.notable_group),
+         title_note = COALESCE(NULLIF(person_events.title_note, ''), EXCLUDED.title_note),
+         status = COALESCE(NULLIF(person_events.status, ''), EXCLUDED.status),
          age_at_event = COALESCE(person_events.age_at_event, EXCLUDED.age_at_event),
          unsealed = CASE
            WHEN person_events.unsealed IS TRUE THEN TRUE
@@ -1944,6 +1948,9 @@ async function syncPersonEvents(client, row) {
         ev.country || null,
         ev.branch || null,
         ev.comments || null,
+        ev.notable_group || null,
+        ev.title_note || null,
+        ev.status || null,
         ev.age_at_event ?? null,
         ev.unsealed === true ? true : null,
       ],
@@ -3027,4 +3034,31 @@ export async function closeStore() {
     await pool.end();
     pool = null;
   }
+}
+
+
+/** Epstein legs for person detail. Empty → section hidden. */
+export async function listEpsteinLegsForPerson(personId) {
+  const id = String(personId || "").trim();
+  if (!id) return [];
+  const p = await getPool();
+  if (!p) {
+    const mem = getMemory();
+    return (mem.epstein_flight_legs || []).filter((row) => row.person_id === id);
+  }
+  const q = await p.query(
+    `SELECT * FROM epstein_flight_legs
+      WHERE person_id = $1
+      ORDER BY flight_date ASC NULLS LAST, id ASC`,
+    [id],
+  );
+  return q.rows.map((row) => {
+    let flight_date = "";
+    if (row.flight_date instanceof Date) {
+      flight_date = row.flight_date.toISOString().slice(0, 10);
+    } else if (row.flight_date) {
+      flight_date = String(row.flight_date).slice(0, 10);
+    }
+    return { ...row, flight_date };
+  });
 }

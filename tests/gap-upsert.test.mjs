@@ -28,6 +28,7 @@ test("published tables include the new comms tables and person_events", () => {
     "red_folder_comms",
     "central_casting_comms",
     "request_attributions",
+    "epstein_flight_legs",
   ]);
   assert.deepEqual(
     [...ALL_UPSERT_TABLES],

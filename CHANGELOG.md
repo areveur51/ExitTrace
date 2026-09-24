@@ -9,6 +9,17 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-23
+
+### Added
+
+- Epstein Flight Log (`epstein_flight_legs`) with person-detail section (hidden when empty). Lab→Render checklist B publication + gap-upsert.
+- Corona PersonEventSection attrs: `notable_group`, `title_note`, `status` (`tested_positive` | `died` | `self_quarantine`). Died stays corona-only — no auto death KEEP.
+
+### Changed
+
+- Corona Notable pack under Admiral REVERT: Phase A annotate matches; Phase B USA+Politicians/MSM/Police after second-cite hunt; Phase C HOLD. Cite floor ≥2 restored. Soft-ack stays off.
+
 ## [1.1.7] - 2026-09-23
 
 ### Fixed
