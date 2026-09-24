@@ -207,6 +207,19 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
     css,
     /@media \(min-width: 1280px\)[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 13\.25rem;/,
   );
+  assert.match(css, /wide >=1400/);
+  assert.match(
+    css,
+    /@media \(min-width: 1400px\)[\s\S]*\.detail \{[\s\S]*max-width:\s*min\(72rem, 100%\)/,
+  );
+  assert.match(
+    css,
+    /@media \(min-width: 1400px\)[\s\S]*\.hud-stage \{[\s\S]*max-width:\s*none/,
+  );
+  assert.match(
+    css,
+    /@media \(min-width: 1400px\)[\s\S]*max-width:\s*90ch/,
+  );
   assert.match(css, /\.home-stage \{[^}]*justify-content:\s*center/);
   assert.match(css, /\.home-stage \{[^}]*align-items:\s*center/);
   assert.match(css, /body\.tui-home \{[^}]*min-height:\s*100vh/);

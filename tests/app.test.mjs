@@ -575,6 +575,7 @@ test("HUD palette uses red/black/gold tokens and documents phone/iPad/desktop la
   assert.match(css, /phone ~390/);
   assert.match(css, /iPad ~768/);
   assert.match(css, /desktop >=1280/);
+  assert.match(css, /wide >=1400/);
   assert.match(css, /@media \(max-width: 720px\)/);
   assert.match(css, /@media \(min-width: 721px\) and \(max-width: 1100px\)/);
   assert.match(css, /@media \(min-width: 1280px\)/);

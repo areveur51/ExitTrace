@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-09-23
+
+### Fixed
+
+- Wide desktop (≥1400) density for the shared detailShell: kill left-clump and empty mid-gap before the hotkey rail. Detail frost centers as a readable column in the band left of the rail; prose stays ≤90ch. Rail stays right, dense, and fixed-width. Glass frost, gold schematic, and map/wireframe background are unchanged. Soft-ack stays off.
+
 ## [1.1.6] - 2026-09-23
 
 ### Changed

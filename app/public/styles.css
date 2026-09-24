@@ -1883,6 +1883,7 @@ html[data-theme="glass"] .dash-stats {
   - phone ~390px (max-width: 720px): stacked cards like the pin; footer nav; no hover-only actions.
   - iPad ~768–1024 (721px–1100px): nav + list two-column; tap-friendly.
   - desktop >=1280: HUD frames spread; denser lists; full width (not a stranded phone mock).
+  - wide >=1400: detailShell band — kill left-clump/mid-gap; rail stays right+dense.
 */
 
 /* Dense masonry columns — shared by all detail pages. */
@@ -2154,5 +2155,56 @@ html[data-theme="glass"] .dash-stats {
     align-self: stretch;
     min-height: calc(100vh - 4.75rem);
     min-height: calc(100dvh - 4.75rem);
+  }
+}
+
+
+/* Wide desktop (≥1400): shared detailShell density.
+   Vestigial .detail 2-col from ≥1280 left-clumps the single frost shell and
+   leaves an empty mid-gap before the keymap rail. Override only here so
+   ~1024–1399 stays unchanged. Center a readable column in the band left of
+   the rail; keep prose ≤90ch. Rail stays viewport-right, dense, fixed width.
+   Glass frost / gold schematic / map bg unchanged. */
+@media (min-width: 1400px) {
+  .hud-stage {
+    max-width: none;
+    margin: 0;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) 13.25rem;
+  }
+  .tui-main {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+  /* ONE DRY shell: kill mid-gap; center readable frost in the content band. */
+  .detail {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: min(72rem, 100%);
+    margin-inline: auto;
+  }
+  .detail .box-pane,
+  .detail .supporting-group {
+    width: 100%;
+    max-width: 100%;
+  }
+  /* Typography stays readable — do not stretch prose to full 1920. */
+  .detail .detail-copy,
+  .detail .facts,
+  .detail .cite-list,
+  .detail .detail-tile--meta .detail-copy {
+    max-width: 90ch;
+  }
+  .keymap {
+    gap: 0.08rem;
+    padding: 0.45rem 0.4rem 0.55rem;
+  }
+  .keymap-keys {
+    gap: 0.08rem;
+  }
+  .keymap .keychip {
+    padding: 0.12rem 0.35rem;
   }
 }
