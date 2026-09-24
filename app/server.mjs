@@ -34,6 +34,7 @@ import {
   getPerson,
   getSourcePost,
   listCentralCastingEvidence,
+  listEpsteinLegsForPerson,
   listCentralCastingPeople,
   listKindComms,
   listOperations,
@@ -851,6 +852,7 @@ async function handle(req, res) {
         countLabel: "detail",
         body: personDetail(row, {
           centralCastingClips: await listCentralCastingEvidence(row.id),
+          epsteinLegs: await listEpsteinLegsForPerson(row.id),
           attributions: await listRequestAttributions({
             target_kind: "person",
             target_id: row.id,

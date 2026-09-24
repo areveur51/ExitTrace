@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { EVENT_ATTR_FIELDS } from "../app/lib/event-attrs.mjs";
+import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS } from "../app/lib/event-attrs.mjs";
 import {
   careerHistory,
   citeList,
@@ -86,6 +86,9 @@ test("shared person pieces stay local thumbs, event-attrs rows, and cite lists",
       country: "USA",
       branch: "News",
       comments: "lead note",
+      notable_group: "MSM",
+      title_note: "Anchor",
+      status: "tested_positive",
       age_at_event: 39,
       sources: [{ publisher: "One", url: CITES[0] }, { publisher: "Two", url: CITES[1] }],
     },
@@ -98,8 +101,12 @@ test("shared person pieces stay local thumbs, event-attrs rows, and cite lists",
   assert.match(row, /datetime="2024-06-15"/);
   assert.match(row, /Age at event · 39/);
   for (const field of EVENT_ATTR_FIELDS) {
-    assert.match(row, new RegExp(field === "comments" ? "Comments" : field, "i"));
+    const label = EVENT_ATTR_LABELS[field] || field;
+    assert.match(row, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
   }
+  assert.match(row, /Notable group · MSM/);
+  assert.match(row, /Title note · Anchor/);
+  assert.match(row, /Status · Tested positive/);
   assert.match(row, /lead note/);
   assert.match(row, /cite-list/);
   assert.doesNotMatch(row, /Casey Vale/);

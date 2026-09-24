@@ -14,6 +14,7 @@ export const PUBLISHED_TABLES = Object.freeze([
   "red_folder_comms",
   "central_casting_comms",
   "request_attributions",
+  "epstein_flight_legs",
 ]);
 
 export const COMPANION_TABLES = Object.freeze(["person_events"]);
@@ -34,6 +35,7 @@ const TABLE_KEYS = Object.freeze({
   operations: "id",
   categories: "id",
   person_events: ["person_id", "kind"],
+  epstein_flight_legs: ["passenger_name_raw", "flight_date", "dep", "arr", "aircraft"],
 });
 
 const JSONB_COLS = Object.freeze({
@@ -113,8 +115,34 @@ const EVENT_COLS = Object.freeze([
   "country",
   "branch",
   "comments",
+  "notable_group",
+  "title_note",
+  "status",
   "age_at_event",
   "unsealed",
+]);
+
+const EPSTEIN_LEG_COLS = Object.freeze([
+  "passenger_name_raw",
+  "passenger_first",
+  "passenger_last",
+  "passenger_first_last",
+  "flight_date",
+  "dep_code",
+  "arr_code",
+  "dep",
+  "arr",
+  "aircraft_model",
+  "aircraft_tail",
+  "aircraft_type",
+  "aircraft",
+  "flight_no",
+  "pass_no",
+  "unique_key",
+  "comment",
+  "data_source",
+  "source_url",
+  "person_id",
 ]);
 
 const CATEGORY_COLS = Object.freeze(["id", "kind", "title", "nav", "path", "blurb"]);
@@ -143,6 +171,7 @@ const COLS = Object.freeze({
   operations: OP_COLS,
   person_events: EVENT_COLS,
   categories: CATEGORY_COLS,
+  epstein_flight_legs: EPSTEIN_LEG_COLS,
 });
 
 export function isPublishedTable(name) {
@@ -330,5 +359,6 @@ SELECT
   (SELECT count(*)::int FROM person_events) AS person_events,
   (SELECT count(*)::int FROM red_folder_comms) AS red_folder_comms,
   (SELECT count(*)::int FROM central_casting_comms) AS central_casting_comms,
-  (SELECT count(*)::int FROM request_attributions) AS request_attributions
+  (SELECT count(*)::int FROM request_attributions) AS request_attributions,
+  (SELECT count(*)::int FROM epstein_flight_legs) AS epstein_flight_legs
 `.trim();

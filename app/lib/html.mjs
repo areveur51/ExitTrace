@@ -17,6 +17,7 @@ import {
 import { normalizeOperationTags, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
 import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS } from "./event-attrs.mjs";
+import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
 import { personEvents } from "./promote.mjs";
 import {
@@ -1601,8 +1602,9 @@ export function eventTagRow(ev, { birthDate } = {}) {
       ? `<p class="meta-line">Age at event · ${esc(String(age))}</p>`
       : "";
   const attrs = EVENT_ATTR_FIELDS.map((field) => {
-    const value = String(ev[field] || "").trim();
+    let value = String(ev[field] || "").trim();
     if (!value) return "";
+    if (field === "status") value = coronaStatusLabel(value) || value;
     const name =
       kind === DEATH_UNCONFIRMED_ID && field === "comments"
         ? "Footnote"
@@ -1646,7 +1648,36 @@ export function careerHistory(row) {
   </section>`;
 }
 
-function eventTimeline(row, clips = []) {
+
+/** Epstein Flight Log. Hidden when legs is empty. */
+export function epsteinFlightLogSection(legs = []) {
+  const rows = Array.isArray(legs) ? legs.filter(Boolean) : [];
+  if (!rows.length) return "";
+  const items = rows
+    .map((leg) => {
+      const rawDate = leg.flight_date;
+      const date =
+        rawDate instanceof Date
+          ? rawDate.toISOString().slice(0, 10)
+          : String(rawDate || "").slice(0, 10).trim();
+      const route = [leg.dep || leg.dep_code || "?", leg.arr || leg.arr_code || "?"].join(" → ");
+      const craft = String(leg.aircraft_tail || leg.aircraft || leg.aircraft_model || "").trim();
+      const when = date
+        ? `<time datetime="${esc(date)}">${esc(formatDate(date))}</time>`
+        : "—";
+      const craftBit = craft ? ` · ${esc(craft)}` : "";
+      return `<li class="epstein-leg">${when} · ${esc(route)}${craftBit}</li>`;
+    })
+    .join("");
+  return personEventSection({
+    title: "Epstein Flight Log",
+    kind: "epstein_flight_log",
+    bodyHtml: `<ol class="epstein-flight-log">${items}</ol>`,
+  });
+}
+
+
+function eventTimeline(row, clips = [], epsteinLegs = []) {
   const events = personEvents(row).filter((ev) =>
     isDisplayedEventKind(String(ev.kind || "").trim()),
   );
@@ -1655,8 +1686,9 @@ function eventTimeline(row, clips = []) {
     .filter(Boolean)
     .join("");
   const centralCasting = centralCastingDetailHtml(row, clips);
-  if (!rows && !centralCasting) return "";
-  return `<section class="event-timeline" aria-label="Event timeline">${rows}${centralCasting}</section>`;
+  const epstein = epsteinFlightLogSection(epsteinLegs);
+  if (!rows && !centralCasting && !epstein) return "";
+  return `<section class="event-timeline" aria-label="Event timeline">${rows}${centralCasting}${epstein}</section>`;
 }
 
 function personTagChips(row) {
@@ -1675,13 +1707,13 @@ function personTagChips(row) {
   return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips}</p>`;
 }
 
-export function personDetail(row, { centralCastingClips = [], attributions } = {}) {
+export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs)}`,
       active: true,
       extraClass: "person-pane",
     })}
