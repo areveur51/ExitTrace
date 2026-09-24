@@ -4,7 +4,7 @@
  * Phase A: match existing → annotate; corona_comms tag only with ≥2 official cites.
  * Phase B: USA + Politicians/MSM/Police after second-cite hunt (fail-closed here; curated cites are Phase A).
  * Phase C HOLD. Died → corona section only. Resignations → lead annotate only.
- * Soft-ack OFF. leftover/:5434 NEVER. Writer :5433 only.
+ * Soft-ack OFF.
  *
  *   node scripts/import-corona-epstein-pack.mjs [--apply]
  */
@@ -63,8 +63,8 @@ function isAggregate(name) {
 }
 
 async function main() {
-  const tsv = arg("tsv", "/opt/GrokBuild/packs/corona-epstein-20260923/corona-notable-mapped.tsv");
-  const secondPath = arg("second-cites", path.join(ROOT, "var/corona-phase-a-second-cites.tsv"));
+  const tsv = arg("tsv", path.join(ROOT, "data/corona-epstein-20260923/corona-notable-mapped.tsv"));
+  const secondPath = arg("second-cites", path.join(ROOT, "data/corona-epstein-20260923/corona-phase-a-second-cites.tsv"));
   const legsPath = arg("epstein-json", path.join(ROOT, "data/corona-epstein-20260923/epstein-seed-legs.json"));
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL required");
 
