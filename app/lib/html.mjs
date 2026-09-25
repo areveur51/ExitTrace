@@ -1366,10 +1366,12 @@ export function centralCastingDetailHtml(row, clips = []) {
   }
   for (const url of membership) cites.push({ url });
   if (!membership.length && !sectionCites(cites).length) return "";
+  const summary = String(row.summary || "").trim();
   return personEventSection({
     title: "Central Casting",
     kind: "central_casting",
     cites,
+    summary,
     mediaHtml: centralCastingMediaHtml(own),
     personId: row?.id || "",
     pairSnippetBefore: true,
