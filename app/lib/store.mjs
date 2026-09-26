@@ -2182,7 +2182,7 @@ export async function applyIdentifiedPerson(input) {
   let person = await attachPersonPortrait(created, extras);
   if (!person.photo) {
     console.warn(
-      `[exittrace] KEEP insert blank portrait id=${person.id} — supply --photo (gov/Commons/news) on first pass`,
+      `[exittrace] KEEP insert blank portrait id=${person.id} — not recommended; supply an eligible portrait (gov/Commons/news or a supplied photo) on first pass`,
     );
   }
   person = await attachPersonNetWorth(person, extras);

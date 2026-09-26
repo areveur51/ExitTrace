@@ -132,7 +132,7 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   assert.match(person.body, /name="branch"/);
   assert.match(person.body, /name="hint_url"/);
   assert.match(person.body, /name="photo"/);
-  assert.match(person.body, /Wikimedia Commons or official \.gov/);
+  assert.match(person.body, /Leaving it blank is not recommended/);
   assert.match(person.body, /do not invent a photo/i);
   assert.match(person.body, /Existing gold photos are not overwritten/);
   assert.match(person.body, /name="net_worth_usd"/);
