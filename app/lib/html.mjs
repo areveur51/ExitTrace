@@ -16,7 +16,7 @@ import {
 } from "./categories.mjs";
 import { normalizeOperationTags, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
-import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS } from "./event-attrs.mjs";
+import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
 import { personEvents } from "./promote.mjs";
@@ -1603,6 +1603,11 @@ export function eventTagRow(ev, { birthDate } = {}) {
     age != null
       ? `<p class="meta-line">Age at event · ${esc(String(age))}</p>`
       : "";
+  const groupSize = eventHeadcount(ev);
+  const groupLine =
+    groupSize > 1
+      ? `<p class="meta-line">Group size · ${esc(String(groupSize))}</p>`
+      : "";
   const attrs = EVENT_ATTR_FIELDS.map((field) => {
     let value = String(ev[field] || "").trim();
     if (!value) return "";
@@ -1630,7 +1635,7 @@ export function eventTagRow(ev, { birthDate } = {}) {
       title: source?.title || "",
       date: source?.date || "",
     })),
-    bodyHtml: `${eventLine}${announced}${ageLine}${attrs}`,
+    bodyHtml: `${eventLine}${announced}${ageLine}${groupLine}${attrs}`,
     className: "event-tag-row",
     tag: "article",
   });

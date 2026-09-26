@@ -16,7 +16,7 @@ import {
   GROUP_OPS_KEEP_IDS,
   PROMOTE_CATEGORY_IDS,
 } from "./categories.mjs";
-import { EVENT_ATTR_FIELDS } from "./event-attrs.mjs";
+import { EVENT_ATTR_FIELDS, eventHeadcount, personHeadcount } from "./event-attrs.mjs";
 import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { deathPersonEvent, personEvents } from "./promote.mjs";
@@ -190,7 +190,7 @@ export function rankDimension(people, dimId, range) {
         const kind = String(ev.kind || "").trim();
         if (!kind || seen.has(kind)) continue;
         seen.add(kind);
-        counts.set(kind, (counts.get(kind) || 0) + 1);
+        counts.set(kind, (counts.get(kind) || 0) + eventHeadcount(ev));
         if (!meta.has(kind)) {
           meta.set(kind, { label: reasonLabel(kind), href: reasonHref(kind) });
         }
@@ -699,7 +699,7 @@ export function buildDashboard(people, range, operations = []) {
     };
   });
   return {
-    people: rows.length,
+    people: rows.reduce((n, row) => n + personHeadcount(row), 0),
     range: resolveDashRange(range),
     trends: trendSeries(rows),
     dimensions,

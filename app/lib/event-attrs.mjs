@@ -382,6 +382,35 @@ export function eventFromLead(lead = {}, extra = {}) {
   };
 }
 
+/** Stored group size. 1 is the default card and is not stored. Above 100000 is rejected. */
+export function parseHeadcount(raw) {
+  if (typeof raw === "number") {
+    if (!Number.isInteger(raw) || raw < 2 || raw > 100000) return null;
+    return raw;
+  }
+  const text = String(raw ?? "").trim();
+  if (!/^[0-9]+$/.test(text)) return null;
+  const n = Number(text);
+  if (!Number.isInteger(n) || n < 2 || n > 100000) return null;
+  return n;
+}
+
+/** One card counts as this many people. Missing headcount stays 1. */
+export function eventHeadcount(ev) {
+  return parseHeadcount(ev?.headcount) ?? 1;
+}
+
+/** A person counts once, at the largest stored group size among their events. */
+export function personHeadcount(row) {
+  const events = Array.isArray(row?.events) ? row.events : [];
+  let n = 1;
+  for (const ev of events) {
+    const weight = eventHeadcount(ev);
+    if (weight > n) n = weight;
+  }
+  return n;
+}
+
 export function mergeEventAttrs(prior = {}, incoming = {}) {
   const a = normalizeEventAttrs(prior);
   const b = normalizeEventAttrs(incoming);
