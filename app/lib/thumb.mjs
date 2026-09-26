@@ -245,9 +245,54 @@ function coverResize(src, dw, dh) {
   return bilinearResize(src, dw, dh, { sx, sy, cw, ch });
 }
 
+/** Stored portrait cap. Larger files are rewritten as JPEG. List thumbs stay separate. */
+export const PORTRAIT_MAX_EDGE = 1600;
+export const PORTRAIT_MAX_BYTES = 400 * 1024;
+export const PORTRAIT_JPEG_QUALITY = 82;
+
+function flattenOpaque(src) {
+  const data = Buffer.from(src.data);
+  const n = src.width * src.height;
+  for (let i = 0; i < n; i++) {
+    const o = i * 4;
+    const a = data[o + 3];
+    if (a >= 255) continue;
+    const t = a / 255;
+    data[o] = Math.round(data[o] * t + TUI_BG.r * (1 - t));
+    data[o + 1] = Math.round(data[o + 1] * t + TUI_BG.g * (1 - t));
+    data[o + 2] = Math.round(data[o + 2] * t + TUI_BG.b * (1 - t));
+    data[o + 3] = 255;
+  }
+  return { width: src.width, height: src.height, data };
+}
+
+/**
+ * JPEG bytes when the still is over the edge or byte cap. Null means keep the original.
+ * WebP and other undecoded types are left alone.
+ */
+export function compressPortraitBuffer(buf) {
+  if (!buf || buf.length < 24) return null;
+  const decoded = decodeStill(buf);
+  if (!decoded?.width || !decoded?.height) return null;
+  const edge = Math.max(decoded.width, decoded.height);
+  const tooWide = edge > PORTRAIT_MAX_EDGE;
+  const tooHeavy = buf.length > PORTRAIT_MAX_BYTES;
+  if (!tooWide && !tooHeavy) return null;
+  const fitted = tooWide ? heroFrame(decoded) : decoded;
+  try {
+    const encoded = jpeg.encode(flattenOpaque(fitted), PORTRAIT_JPEG_QUALITY);
+    if (!encoded?.data?.length) return null;
+    const bytes = Buffer.from(encoded.data);
+    if (!tooWide && bytes.length >= buf.length) return null;
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
 /** Keep gold composition. Downscale only when a side exceeds maxEdge. */
 function heroFrame(src) {
-  const maxEdge = 1600;
+  const maxEdge = PORTRAIT_MAX_EDGE;
   const m = Math.max(src.width, src.height);
   if (m <= maxEdge) return src;
   const scale = maxEdge / m;

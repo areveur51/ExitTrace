@@ -6,6 +6,7 @@ import path from "path";
 import { hostOf, isGovHost, parseHttpUrl } from "./official.mjs";
 import { personSlug } from "./promote.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
+import { compressPortraitBuffer } from "./thumb.mjs";
 
 const UA = "ExitTrace/1.0 (https://github.com/areveur51/ExitTrace; media archive)";
 const EXTS = [".jpg", ".jpeg", ".png", ".webp"];
@@ -166,13 +167,17 @@ function copyIntoPeople(mediaDir, personId, srcPath, srcName) {
   if (!id || !srcPath || !fs.existsSync(srcPath) || fs.statSync(srcPath).size <= 0) {
     return null;
   }
-  const ext = extOf(srcName || srcPath);
+  const raw = fs.readFileSync(srcPath);
+  const packed = compressPortraitBuffer(raw);
+  const ext = packed ? ".jpg" : extOf(srcName || srcPath);
   const dest = path.join(peopleMediaDir(mediaDir), `${id}${ext}`);
   const href = `/media/people/${id}${ext}`;
   const already = existingDest(dest, href);
-  if (already) return already;
+  if (already && !packed) return already;
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  if (path.resolve(srcPath) !== path.resolve(dest)) {
+  if (packed) {
+    fs.writeFileSync(dest, packed);
+  } else if (path.resolve(srcPath) !== path.resolve(dest)) {
     fs.copyFileSync(srcPath, dest);
   }
   return existingDest(dest, href);
@@ -221,16 +226,17 @@ async function storeEligibleUrl(mediaDir, personId, url) {
   const canonical = canonicalPublicUrl(url);
   if (!isEligiblePortraitUrl(canonical)) return null;
   const id = personSlug(personId) || String(personId || "").trim();
-  const ext = extOf(new URL(canonical).pathname);
-  const dest = path.join(peopleMediaDir(mediaDir), `${id}${ext}`);
-  const href = `/media/people/${id}${ext}`;
-  const already = existingDest(dest, href, creditForSource(canonical));
-  if (already) return already;
   try {
     const buf = await fetchEligiblePortrait(canonical);
     if (!buf || buf.length < 800) return null;
+    const packed = compressPortraitBuffer(buf);
+    const ext = packed ? ".jpg" : extOf(new URL(canonical).pathname);
+    const dest = path.join(peopleMediaDir(mediaDir), `${id}${ext}`);
+    const href = `/media/people/${id}${ext}`;
+    const already = existingDest(dest, href, creditForSource(canonical));
+    if (already) return already;
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, buf);
+    fs.writeFileSync(dest, packed || buf);
     return existingDest(dest, href, creditForSource(canonical));
   } catch {
     return null;
