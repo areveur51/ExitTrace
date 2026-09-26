@@ -270,9 +270,33 @@ function flattenOpaque(src) {
  * JPEG bytes when the still is over the edge or byte cap. Null means keep the original.
  * WebP and other undecoded types are left alone.
  */
+function decodePortrait(buf) {
+  if (!buf || buf.length < 24) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    try {
+      const png = PNG.sync.read(buf);
+      return { width: png.width, height: png.height, data: png.data };
+    } catch {
+      return null;
+    }
+  }
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    try {
+      return jpeg.decode(buf, {
+        useTArray: true,
+        formatAsRGBA: true,
+        maxMemoryUsageInMB: 2048,
+      });
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export function compressPortraitBuffer(buf) {
   if (!buf || buf.length < 24) return null;
-  const decoded = decodeStill(buf);
+  const decoded = decodePortrait(buf);
   if (!decoded?.width || !decoded?.height) return null;
   const edge = Math.max(decoded.width, decoded.height);
   const tooWide = edge > PORTRAIT_MAX_EDGE;
