@@ -13,6 +13,7 @@ import {
   mapLeadReason,
   mergeEventAttrs,
   normalizeEventAttrs,
+  parseHeadcount,
   parseOriginCountry,
   resolveEventCalendar,
   unsealedFromEvidence,
@@ -172,6 +173,8 @@ export function normalizePersonEvent(raw, fallback = {}) {
     ...attrs,
     age_at_event,
   };
+  const headcount = parseHeadcount(raw.headcount) ?? parseHeadcount(fallback.headcount);
+  if (headcount != null) event.headcount = headcount;
   if (isIndictmentKeepKind(kind)) {
     event.unsealed =
       raw.unsealed === true || fallback.unsealed === true ? true : null;
@@ -202,6 +205,8 @@ function uniqueEvents(events) {
       age_at_event:
         parseStoredAge(prior.age_at_event) ?? parseStoredAge(ev.age_at_event),
     };
+    const headcount = parseHeadcount(prior.headcount) ?? parseHeadcount(ev.headcount);
+    if (headcount != null) merged.headcount = headcount;
     if (isIndictmentKeepKind(prior.kind)) {
       merged.unsealed = mergedUnsealed(prior.kind, prior.unsealed, ev.unsealed);
     }
@@ -352,6 +357,8 @@ export function attachPersonEvent(person, incoming) {
       age_at_event:
         parseStoredAge(events[i].age_at_event) ?? parseStoredAge(ev.age_at_event),
     };
+    const headcount = parseHeadcount(events[i].headcount) ?? parseHeadcount(ev.headcount);
+    if (headcount != null) next[i].headcount = headcount;
     if (isIndictmentKeepKind(events[i].kind)) {
       next[i].unsealed = mergedUnsealed(
         events[i].kind,
@@ -455,6 +462,7 @@ export function mergePersonAnnotate(gold, prior) {
       ...mergeEventAttrs(ev, {}),
       age_at_event: parseStoredAge(ev.age_at_event),
     };
+    if (parseHeadcount(ev.headcount) != null) row.headcount = parseHeadcount(ev.headcount);
     if (isIndictmentKeepKind(ev.kind)) {
       row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
     }
@@ -470,6 +478,7 @@ export function mergePersonAnnotate(gold, prior) {
         ...mergeEventAttrs(ev, {}),
         age_at_event: parseStoredAge(ev.age_at_event),
       };
+      if (parseHeadcount(ev.headcount) != null) row.headcount = parseHeadcount(ev.headcount);
       if (isIndictmentKeepKind(ev.kind)) {
         row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
       }
@@ -478,6 +487,8 @@ export function mergePersonAnnotate(gold, prior) {
     }
     existing.sources = mergeCites(existing.sources, ev.sources).sources;
     Object.assign(existing, mergeEventAttrs(existing, ev));
+    const headcount = parseHeadcount(existing.headcount) ?? parseHeadcount(ev.headcount);
+    if (headcount != null) existing.headcount = headcount;
     if (existing.age_at_event == null) {
       existing.age_at_event = parseStoredAge(ev.age_at_event);
     }

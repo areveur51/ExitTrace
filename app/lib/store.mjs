@@ -33,6 +33,7 @@ import {
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { DEATH_KEEP_IDS, asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
+import { eventHeadcount, personHeadcount } from "./event-attrs.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
 import {
   CENTRAL_CASTING_SCREENSHOT_KIND,
@@ -2472,13 +2473,17 @@ export async function counts() {
   if (!p) {
     const people = getMemory().people;
     const byCategory = {};
+    let peopleCensus = 0;
     for (const row of people) {
-      const kinds = new Set(
-        (row.events || []).map((ev) => ev.kind).filter(Boolean),
-      );
-      if (!kinds.size && row.category) kinds.add(row.category);
-      for (const kind of kinds) {
-        byCategory[kind] = (byCategory[kind] || 0) + 1;
+      peopleCensus += personHeadcount(row);
+      const events = personEvents(row);
+      if (!events.length && row.category) {
+        byCategory[row.category] = (byCategory[row.category] || 0) + 1;
+        continue;
+      }
+      for (const ev of events) {
+        if (!ev.kind) continue;
+        byCategory[ev.kind] = (byCategory[ev.kind] || 0) + eventHeadcount(ev);
       }
     }
     const operations = getMemory().operations || [];
@@ -2498,7 +2503,7 @@ export async function counts() {
       }
     }
     return {
-      people: people.length,
+      people: peopleCensus,
       ...kindCounts,
       ...central,
       operations: operations.length,
@@ -2510,16 +2515,33 @@ export async function counts() {
     p.query(`SELECT COUNT(*)::int AS n FROM ${KIND_COMMS[id].table}`),
   );
   const [peopleCount, ...kindCountRows] = await Promise.all([
-    p.query("SELECT COUNT(*)::int AS n FROM people"),
+    p.query(`SELECT COALESCE(SUM(
+      COALESCE((
+        SELECT MAX((ev->>'headcount')::int)
+        FROM jsonb_array_elements(COALESCE(events, '[]'::jsonb)) ev
+        WHERE (ev->>'headcount') ~ '^[0-9]+$'
+          AND (ev->>'headcount')::int BETWEEN 2 AND 100000
+      ), 1)
+    ), 0)::int AS n FROM people`),
     ...kindQueries,
   ]);
   const [postCount, opCount, grouped, opTags, centralCount] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
     p.query("SELECT COUNT(*)::int AS n FROM operations"),
     p.query(
-      `SELECT kind AS category, COUNT(DISTINCT person_id)::int AS n
-         FROM person_events
-        GROUP BY kind`,
+      `SELECT e.kind AS category,
+              COALESCE(SUM(
+                COALESCE((
+                  SELECT MAX((ev->>'headcount')::int)
+                  FROM jsonb_array_elements(COALESCE(p.events, '[]'::jsonb)) ev
+                  WHERE ev->>'kind' = e.kind
+                    AND (ev->>'headcount') ~ '^[0-9]+$'
+                    AND (ev->>'headcount')::int BETWEEN 2 AND 100000
+                ), 1)
+              ), 0)::int AS n
+         FROM person_events e
+         JOIN people p ON p.id = e.person_id
+        GROUP BY e.kind`,
     ),
     p.query(
       `SELECT t AS category, COUNT(*)::int AS n
