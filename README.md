@@ -86,7 +86,7 @@ If that person already exists, the new kind is attached as an event (annotate). 
 
 ## Add a person or official dog-comm
 
-`/add` queues a request. It does not invent cites, photos, or net-worth figures. An optional Wikimedia or official `.gov` portrait URL and an optional published Forbes or Bloomberg estimate may be queued; a host process looks up published sources, supplies cite URLs, and applies the row. Attach a real portrait under `/media/people/` from Wikimedia, an official `.gov` image, a curated news still, or a photo supplied for this card. Leaving the portrait blank is not recommended. Do not invent a face. Existing gold photos are not overwritten. If no Forbes/Bloomberg estimate is supplied, USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten.
+`/add` queues a request. It does not invent cites, photos, or net-worth figures. An optional Wikimedia or official `.gov` portrait URL and an optional published Forbes or Bloomberg estimate may be queued; a host process looks up published sources, supplies cite URLs, and applies the row. Attach a real portrait under `/media/people/` from Wikimedia, an official `.gov` image, a curated news still, or a photo supplied for this card. Leaving the portrait blank is not recommended. A portrait over 400 KB or 1600 pixels on a side is stored as a compressed JPEG. Do not invent a face. Existing gold photos are not overwritten. If no Forbes/Bloomberg estimate is supplied, USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten.
 
 ```bash
 # after look-up, apply the next pending request:
