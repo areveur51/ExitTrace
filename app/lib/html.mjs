@@ -1385,7 +1385,7 @@ export function kindListRow(kind, row, { selected } = {}) {
     ${thumb(row.still, row.handle, "still")}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.handle)}</div>
-      <div class="tui-meta"><time datetime="${esc(row.posted_at)}">${esc(formatDate(row.posted_at))}</time> · ${esc(spec.label)}</div>
+      <div class="tui-meta"><time datetime="${esc(row.posted_at)}">${esc(formatPosted(row.posted_at))}</time> · ${esc(spec.label)}</div>
     </div>
   </a>`;
 }
