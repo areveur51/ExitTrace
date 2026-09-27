@@ -405,8 +405,13 @@ export function formatUsd(n) {
 
 export function formatDate(iso) {
   if (!iso) return "—";
-  const d = new Date(`${iso}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return iso;
+  const s = String(iso).trim();
+  if (!s) return "—";
+  if (hasPostedTime(s)) return formatPosted(s);
+  const day = DATE_ONLY_RE.test(s) ? s : s.slice(0, 10);
+  if (!DATE_ONLY_RE.test(day)) return s;
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return s;
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "short",

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   asPostedAt,
+  formatDate,
   formatPosted,
   formatXDateTime,
   hasPostedTime,
@@ -85,6 +86,8 @@ test("formatPosted is X-native clock · date; date-only does not invent a time",
   assert.equal(formatPosted("2026-08-26T18:39:00Z"), "2:39 PM · Aug 26, 2026");
   assert.equal(formatPosted("2026-08-26 18:39:00"), "2:39 PM · Aug 26, 2026");
   assert.equal(formatPosted("2026-09-26T01:38:36Z"), "9:38 PM · Sep 25, 2026");
+  assert.equal(formatDate("2026-09-26T01:38:36Z"), "9:38 PM · Sep 25, 2026");
+  assert.equal(formatDate("2026-09-26"), "Sep 26, 2026");
   assert.equal(formatPosted("6:39 PM · Aug 26, 2026"), "6:39 PM · Aug 26, 2026");
   assert.equal(formatPosted("2026-01-15"), "Jan 15, 2026");
   assert.equal(formatPosted("2022-10-04"), "Oct 4, 2022");
