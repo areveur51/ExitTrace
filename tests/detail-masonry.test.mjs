@@ -82,8 +82,9 @@ function tileByKind(html, kind) {
 
 test("formatPosted is X-native clock · date; date-only does not invent a time", () => {
   assert.equal(formatPosted, formatXDateTime);
-  assert.equal(formatPosted("2026-08-26T18:39:00Z"), "6:39 PM · Aug 26, 2026");
-  assert.equal(formatPosted("2026-08-26 18:39:00"), "6:39 PM · Aug 26, 2026");
+  assert.equal(formatPosted("2026-08-26T18:39:00Z"), "2:39 PM · Aug 26, 2026");
+  assert.equal(formatPosted("2026-08-26 18:39:00"), "2:39 PM · Aug 26, 2026");
+  assert.equal(formatPosted("2026-09-26T01:38:36Z"), "9:38 PM · Sep 25, 2026");
   assert.equal(formatPosted("6:39 PM · Aug 26, 2026"), "6:39 PM · Aug 26, 2026");
   assert.equal(formatPosted("2026-01-15"), "Jan 15, 2026");
   assert.equal(formatPosted("2022-10-04"), "Oct 4, 2022");
@@ -93,9 +94,9 @@ test("formatPosted is X-native clock · date; date-only does not invent a time",
   assert.equal(hasPostedTime("2026-01-15"), false);
   assert.equal(hasPostedTime(new Date("2026-08-26T18:39:00Z")), true);
   assert.equal(hasPostedTime(new Date("2026-08-26T00:00:00.000Z")), false);
-  assert.equal(formatPosted(new Date("2026-08-26T18:39:00Z")), "6:39 PM · Aug 26, 2026");
+  assert.equal(formatPosted(new Date("2026-08-26T18:39:00Z")), "2:39 PM · Aug 26, 2026");
   assert.equal(formatPosted(new Date("2026-08-26T00:00:00.000Z")), "Aug 26, 2026");
-  assert.equal(formatPosted("2026-08-26T00:00:00Z"), "12:00 AM · Aug 26, 2026");
+  assert.equal(formatPosted("2026-08-26T00:00:00Z"), "8:00 PM · Aug 25, 2026");
   assert.equal(asPostedAt("2026-08-26T18:39:00Z"), "2026-08-26T18:39:00Z");
   assert.equal(asPostedAt("2026-01-15"), "2026-01-15");
   assert.equal(asPostedAt(new Date("2026-08-26T18:39:00Z")), "2026-08-26T18:39:00.000Z");
@@ -121,7 +122,7 @@ test("citeBlock is the shared CITE markup; citeFromRow maps dog and source-post 
   assert.match(html, /class="cite-block"/);
   assert.match(html, /class="handle">@EzraACohen</);
   assert.match(html, /class="acct">Ezra Cohen</);
-  assert.match(html, /<time datetime="2026-08-26T18:39:00Z">6:39 PM · Aug 26, 2026<\/time>/);
+  assert.match(html, /<time datetime="2026-08-26T18:39:00Z">2:39 PM · Aug 26, 2026<\/time>/);
   assert.match(html, /class="post-text">Line one\.\nLine two\.</);
   assert.doesNotMatch(html, /Handle ·|Account ·|Posted ·|Body ·|Source ·|Citation:/);
 
@@ -149,7 +150,7 @@ test("citeBlock is the shared CITE markup; citeFromRow maps dog and source-post 
     text: "Champ and Major have joined us in the White House! 💕🐾",
     snapshot: { posted_at: "2022-10-04T22:41:00Z" },
   });
-  assert.match(fromSnapTime, /<time datetime="2022-10-04T22:41:00Z">10:41 PM · Oct 4, 2022<\/time>/);
+  assert.match(fromSnapTime, /<time datetime="2022-10-04T22:41:00Z">6:41 PM · Oct 4, 2022<\/time>/);
   const flotusDateOnly = citeFromRow({
     handle: "@FLOTUS",
     account_name: "The First Lady",
@@ -244,7 +245,7 @@ test("dog detail masonry: one CITE tile + Source; lightbox on media only; X URL 
       snapshot: { posted_at: "2026-08-26T18:39:00Z" },
     }),
   );
-  assert.match(tileByKind(timed, "cite")[0], /6:39 PM · Aug 26, 2026/);
+  assert.match(tileByKind(timed, "cite")[0], /2:39 PM · Aug 26, 2026/);
   assert.match(tileByKind(timed, "cite")[0], /datetime="2026-08-26T18:39:00Z"/);
 });
 
@@ -331,7 +332,7 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
   });
   assert.equal(tileByKind(coronaCite, "cite").length, 1);
   assert.match(tileByKind(coronaCite, "cite")[0], /class="cite-block"/);
-  assert.match(tileByKind(coronaCite, "cite")[0], /3:04 PM · Jul 20, 2024/);
+  assert.match(tileByKind(coronaCite, "cite")[0], /11:04 AM · Jul 20, 2024/);
   assert.match(tileByKind(coronaCite, "cite")[0], /Official corona note/);
 
   const op = operationDetail({
@@ -390,7 +391,7 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
     text: "Police said a public official was arrested this morning.",
     source_url: "https://example.com/n/arrest-1",
   });
-  assert.match(timedPost, /2:05 PM · Mar 1, 2024/);
+  assert.match(timedPost, /9:05 AM · Mar 1, 2024/);
 });
 
 test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 class", () => {
@@ -438,7 +439,7 @@ test("store normalizeDog keeps ISO posted_at; date-only FLOTUS stays date-only",
   });
   const iso = await getDogComm("ezra-iso");
   assert.equal(iso.posted_at, "2026-08-26T18:39:00Z");
-  assert.match(dogDetail(iso), /6:39 PM · Aug 26, 2026/);
+  assert.match(dogDetail(iso), /2:39 PM · Aug 26, 2026/);
   const flotus = await getDogComm("flotus-haney-commander");
   assert.equal(flotus.posted_at, "2022-10-04");
   const html = dogDetail(flotus);

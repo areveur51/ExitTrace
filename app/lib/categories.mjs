@@ -488,12 +488,15 @@ export function postedAtValue(...candidates) {
   return vals.find((v) => hasPostedTime(v)) || vals[0] || "";
 }
 
+/** Live X screenshots are captured in this zone, so the visible clock matches them. */
+const POSTED_CLOCK_TZ = "America/New_York";
+
 function formatXClock(d) {
   const clock = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: "UTC",
+    timeZone: POSTED_CLOCK_TZ,
   }).formatToParts(d);
   const hour = clock.find((p) => p.type === "hour")?.value;
   const minute = clock.find((p) => p.type === "minute")?.value;
@@ -502,14 +505,14 @@ function formatXClock(d) {
     year: "numeric",
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
+    timeZone: POSTED_CLOCK_TZ,
   }).format(d);
   return `${hour}:${minute} ${period} · ${date}`;
 }
 
 /**
- * Shared CITE posted formatter (X-native): `6:39 PM · Aug 26, 2026`.
- * Date-only stored values stay `MMM D, YYYY` — no invented clock.
+ * Shared CITE posted formatter. Visible clock is Eastern, matching the live X screenshot.
+ * The stored instant stays UTC. Date-only values stay `MMM D, YYYY` — no invented clock.
  */
 export function formatPosted(raw) {
   if (raw == null || raw === "") return "—";
