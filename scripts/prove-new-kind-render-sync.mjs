@@ -13,6 +13,7 @@ Do not wipe media or datasets. Gap-upsert never DELETE / TRUNCATE / DROP / --cle
 
 1. Bootstrap both sides (scripts/bootstrap-db.sql) before ADD TABLE.
 2. Lab publisher:
+   psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-eagle-comms-publication.sql
    psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-red-folder-comms-publication.sql
    psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-central-casting-comms-publication.sql
    psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-request-attributions-publication.sql
@@ -23,7 +24,7 @@ Do not wipe media or datasets. Gap-upsert never DELETE / TRUNCATE / DROP / --cle
    DATABASE_URL="$RENDER_TARGET" node scripts/gap-upsert-published.mjs --from published.json
 5. Prove publication membership, subscription relation, LSN advance, row counts, and media-delta.
    people.central_casting rides the people upsert (json array, empty default, never invented).
-   red_folder_comms and central_casting_comms (plus person_id) are in the gap-upsert table list.
+   eagle_comms, red_folder_comms, and central_casting_comms (plus person_id) are in the gap-upsert table list.
    request_attributions is in the gap-upsert table list. Conflict is id.
    Partial unique is (channel, subject_status_id) WHERE subject_status_id IS NOT NULL.
    Empty backfill is OK. Media-delta does not apply to request_attributions.
