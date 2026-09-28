@@ -61,7 +61,7 @@ Identity is unique: id/slug or a normalized name matches one person. A new KEEP 
 
 `death_unconfirmed` is a KEEP kind and is not in `DEATH_KEEP_IDS`. It is not a promote `--category` and leads are never auto-classified into it. Do not use `death_celebrity`, `death_official`, or `death_ceo` for an unconfirmed claim. It may park on an Admiral-named claim cite. `event_date` stays NULL unless that cite states a calendar `YYYY-MM-DD` (NULL is allowed for this kind only). `death_date`, cause, and location are not invented and stay NULL. The event `comments` field stores the footnote, for example `Trump Truth Social claim; no media confirmation yet.` The asterisk is the UI label (`Death*` on the person card, `Unconfirmed*` in the nav), not a column. Confirmed death counts, `/deaths`, `/deaths/celebrities`, `/deaths/officials`, `/deaths/ceos`, and death dashboard slices stay `DEATH_KEEP_IDS` only. `/deaths/unconfirmed` lists this kind. One person, one card: the claim is another event on that person. Upgrade to a confirmed death kind still needs at least two official news or official gov/news-org cites, a calendar date, and CLEAR. This repo does not apply that upgrade and does not insert people for it.
 
-After insert or promote, the host process is not done until live HTML shows the row on the category **list** page and the person **detail** page (`/people/:id`). Health counts (`/health`, `/api/health`) are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. `/deaths/unconfirmed` lists unconfirmed claims and is not part of that confirmed union. `/indictments` is an empty index; indictment rows list on `/indictments/civilians` or `/indictments/non-civilians`. `/group-operations` lists every operation; tagged rows also list on `/group-operations/missing-kids`, `/group-operations/human-smuggling`, `/group-operations/fugitives`, `/group-operations/cybercrime`, `/group-operations/drug-trafficking`, `/group-operations/violent-crime`, or `/group-operations/fraud`. Operation detail is `/operations/:id`. Dog comms use `/dog-comms` and `/dog-comms/:id`. Red-folder comms use `/red-folder-comms` and `/red-folder-comms/:id`. Central Casting lists unique persons on `/central-casting` (no sense filter, no child routes) and opens the existing person detail. `/central-casting-comms` redirects there. The process scripts run this display check and print `display ok list=… detail=…`.
+After insert or promote, the host process is not done until live HTML shows the row on the category **list** page and the person **detail** page (`/people/:id`). Health counts (`/health`, `/api/health`) are not enough. `/deaths` is an empty index; death rows list on `/deaths/celebrities`, `/deaths/officials`, or `/deaths/ceos`. `/deaths/unconfirmed` lists unconfirmed claims and is not part of that confirmed union. `/indictments` is an empty index; indictment rows list on `/indictments/civilians` or `/indictments/non-civilians`. `/group-operations` lists every operation; tagged rows also list on `/group-operations/missing-kids`, `/group-operations/human-smuggling`, `/group-operations/fugitives`, `/group-operations/cybercrime`, `/group-operations/drug-trafficking`, `/group-operations/violent-crime`, or `/group-operations/fraud`. Operation detail is `/operations/:id`. Dog comms use `/dog-comms` and `/dog-comms/:id`. Eagle comms use `/eagle-comms` and `/eagle-comms/:id`. Red-folder comms use `/red-folder-comms` and `/red-folder-comms/:id`. Central Casting lists unique persons on `/central-casting` (no sense filter, no child routes) and opens the existing person detail. `/central-casting-comms` redirects there. The process scripts run this display check and print `display ok list=… detail=…`.
 
 ## Queue and process an add request
 
@@ -85,9 +85,29 @@ People: named subject, calendar `event_date` (never copied from `posted_at`), ca
 
 Dog comms: official government handle or official post URL, plus date. Unofficial or commentary social is rejected. Snapshot text/media is copied only if it is already in the local store. The command does not fetch X.
 
-After the row is applied, the host process is not done until live HTML shows it on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; celebrities, officials, and CEOs are the death list pages. `/indictments` is an empty index; civilians and non-civilians are the indictment list pages. `/group-operations` lists every operation; missing-kids, human-smuggling, fugitives, cybercrime, drug-trafficking, violent-crime, and fraud are the tagged filters. Operation detail is `/operations/:id`. Named children are not stored. Victim and arrest counts stay blank unless a cite states them. `/corona-comms` lists every person with that tag and has no child split. Dog comms use `/dog-comms` and `/dog-comms/:id`. Red-folder comms use `/red-folder-comms` and `/red-folder-comms/:id`. Central Casting uses `/central-casting` and the existing person detail `/people/:id`. The process script prints `display ok list=… detail=…` when that check passes.
+After the row is applied, the host process is not done until live HTML shows it on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; celebrities, officials, and CEOs are the death list pages. `/indictments` is an empty index; civilians and non-civilians are the indictment list pages. `/group-operations` lists every operation; missing-kids, human-smuggling, fugitives, cybercrime, drug-trafficking, violent-crime, and fraud are the tagged filters. Operation detail is `/operations/:id`. Named children are not stored. Victim and arrest counts stay blank unless a cite states them. `/corona-comms` lists every person with that tag and has no child split. Dog comms use `/dog-comms` and `/dog-comms/:id`. Eagle comms use `/eagle-comms` and `/eagle-comms/:id`. Red-folder comms use `/red-folder-comms` and `/red-folder-comms/:id`. Central Casting uses `/central-casting` and the existing person detail `/people/:id`. The process script prints `display ok list=… detail=…` when that check passes.
 
 Idempotent. Does not write `data/seed.json`.
+
+## Eagle publication (lab)
+
+`eagle_comms` is a twin of `dog_comms`. Fresh envs create it from `scripts/bootstrap-db.sql`. The page is `/eagle-comms`. A video is stored as its thumbnail, not an mp4.
+
+To replicate later inserts, the lab publisher adds the table (idempotent):
+
+```bash
+psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-eagle-comms-publication.sql
+```
+
+That is `ALTER PUBLICATION exittrace_lab_pub ADD TABLE eagle_comms` when the table is not already in the publication.
+
+On the subscriber, only after the relation exists:
+
+```sql
+ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false);
+```
+
+Never `copy_data=true`. That refresh does not copy rows already stored. Backfill with gap-upsert after the table exists, because `COUNT_SQL` selects `eagle_comms`. Media stills (`media/eagle-comms/` and screenshots under `media/screenshots/eagle-comms/`) travel on the media-delta path.
 
 ## Red-folder publication (lab)
 

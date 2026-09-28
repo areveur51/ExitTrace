@@ -9,6 +9,7 @@
 export const PUBLISHED_TABLES = Object.freeze([
   "people",
   "dog_comms",
+  "eagle_comms",
   "operations",
   "categories",
   "red_folder_comms",
@@ -29,6 +30,7 @@ const FORBIDDEN = /\b(TRUNCATE|DROP\s+|DELETE\s+FROM|--clean|COPY\s+.*FROM\s+PRO
 const TABLE_KEYS = Object.freeze({
   people: "id",
   dog_comms: "id",
+  eagle_comms: "id",
   red_folder_comms: "id",
   central_casting_comms: "id",
   request_attributions: "id",
@@ -41,6 +43,7 @@ const TABLE_KEYS = Object.freeze({
 const JSONB_COLS = Object.freeze({
   people: ["sources", "events", "tags", "career", "central_casting"],
   dog_comms: ["snapshot"],
+  eagle_comms: ["snapshot"],
   red_folder_comms: ["snapshot"],
   central_casting_comms: ["snapshot"],
   operations: ["agencies", "tags", "sources"],
@@ -165,6 +168,7 @@ const ATTRIBUTION_COLS = Object.freeze([
 const COLS = Object.freeze({
   people: PEOPLE_COLS,
   dog_comms: DOG_COLS,
+  eagle_comms: DOG_COLS,
   red_folder_comms: RED_FOLDER_COLS,
   central_casting_comms: CENTRAL_CASTING_COMMS_COLS,
   request_attributions: ATTRIBUTION_COLS,
@@ -355,6 +359,7 @@ export const COUNT_SQL = `
 SELECT
   (SELECT count(*)::int FROM people) AS people,
   (SELECT count(*)::int FROM dog_comms) AS dog_comms,
+  (SELECT count(*)::int FROM eagle_comms) AS eagle_comms,
   (SELECT count(*)::int FROM operations) AS operations,
   (SELECT count(*)::int FROM person_events) AS person_events,
   (SELECT count(*)::int FROM red_folder_comms) AS red_folder_comms,

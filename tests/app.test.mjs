@@ -177,6 +177,7 @@ test("html pages render", async () => {
     "/group-operations/fraud",
     "/unsorted",
     "/dog-comms",
+    "/eagle-comms",
     "/red-folder-comms",
     "/central-casting",
     "/add",
@@ -303,6 +304,7 @@ test("every category list page ships a pager", async () => {
     "/group-operations/fraud",
     "/unsorted",
     "/dog-comms",
+    "/eagle-comms",
     "/red-folder-comms",
     "/central-casting",
   ];
@@ -419,7 +421,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /data-key="u"/);
   assert.match(res.body, /class="keymap-keys"/);
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "e", "t", "w"]);
+  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "e", "l", "t", "w"]);
   assert.doesNotMatch(res.body, /data-key="n"/);
   assert.doesNotMatch(res.body, /data-key="s"/);
   assert.doesNotMatch(res.body, /\]<\/span> Add</);

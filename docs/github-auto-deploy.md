@@ -110,11 +110,13 @@ Path A / streaming: `et-sub-reconnect` retries ENABLE with the same backoff. `et
 
 ## Idempotent gap upsert
 
-[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people` (including `central_casting`), `dog_comms`, `operations`, optional `categories` (skipped if that table is absent), `red_folder_comms`, `central_casting_comms`, `request_attributions` (conflict on `id`; partial unique on channel + subject when subject is set), plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`). New tables follow [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md).
+[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people` (including `central_casting`), `dog_comms`, `eagle_comms`, `operations`, optional `categories` (skipped if that table is absent), `red_folder_comms`, `central_casting_comms`, `request_attributions` (conflict on `id`; partial unique on channel + subject when subject is set), plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`). New tables follow [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md).
 
 Arm automatic catch-up from heal with repository variable `ET_AUTO_GAP_UPSERT=true` (off by default).
 
-## Red-folder comms publication
+## Eagle and red-folder comms publication
+
+`eagle_comms` is a `dog_comms` twin. Lab adds it with `scripts/add-eagle-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE eagle_comms` when missing). Subscriber then `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)`, and only after the table exists. Never `copy_data=true`. That refresh does not copy rows already stored. Backfill them with gap-upsert. Do not run that upsert until `eagle_comms` exists: `COUNT_SQL` selects it. Media is `media/eagle-comms/` and `media/screenshots/eagle-comms/`.
 
 `red_folder_comms` is a `dog_comms` twin. Lab adds it with `scripts/add-red-folder-comms-publication.sql` (`ALTER PUBLICATION exittrace_lab_pub ADD TABLE red_folder_comms` when missing). Subscriber then `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)`. Never `copy_data=true`. That refresh does not copy rows already stored. Backfill them with gap-upsert. Media uses the existing media-delta rsync path.
 

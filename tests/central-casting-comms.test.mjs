@@ -115,6 +115,9 @@ function personHrefs(body) {
 test("central casting is a person list, not a KIND_COMMS clip catalog", () => {
   assert.equal(KIND_COMMS.central_casting, undefined);
   assert.equal(KIND_COMMS.dog.keymapKey, "c");
+  assert.equal(KIND_COMMS.eagle.keymapKey, "l");
+  assert.equal(KIND_COMMS.eagle.path, "/eagle-comms");
+  assert.equal(KIND_COMMS.eagle.supportingGroups, false);
   assert.equal(KIND_COMMS.red_folder.keymapKey, "e");
   assert.equal(CENTRAL_CASTING_KEYMAP, "t");
   assert.equal(CENTRAL_CASTING_PATH, "/central-casting");
