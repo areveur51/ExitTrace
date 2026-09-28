@@ -75,7 +75,7 @@ test("red folder list and search thumbs use still.thumb like dog comms", () => {
   const search = searchBody([{ type: "red_folder", row: folder() }], "FLOTUS");
   assert.match(row, /class="still thumb"/);
   assert.match(row, /width="40" height="52"/);
-  assert.match(row, /src="\/media\/thumbs\/red-folder-comms\/flotus-red-folder-2026\.jpg\?p=3"/);
+  assert.match(row, /src="\/media\/thumbs\/red-folder-comms\/flotus-red-folder-2026\.jpg\?p=4"/);
   assert.doesNotMatch(row, /src="\/media\/red-folder-comms\/flotus-red-folder-2026\.jpg"/);
   assert.match(row, /href="\/red-folder-comms\/flotus-2026-09-17-abc12345"/);
   assert.match(row, /Red Folder comms/);
