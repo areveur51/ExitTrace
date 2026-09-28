@@ -23,6 +23,7 @@ test("published tables include the new comms tables and person_events", () => {
   assert.deepEqual([...PUBLISHED_TABLES], [
     "people",
     "dog_comms",
+    "eagle_comms",
     "operations",
     "categories",
     "red_folder_comms",
