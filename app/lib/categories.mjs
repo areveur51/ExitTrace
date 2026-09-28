@@ -185,6 +185,14 @@ export const CATEGORIES = [
     blurb: "Official government posts about dogs, or that include a dog in the image. Stored locally; the source URL is a citation only.",
   },
   {
+    id: "eagle_comms",
+    kind: "eagle",
+    title: "Eagle comms",
+    nav: "Eagle comms",
+    path: "/eagle-comms",
+    blurb: "Official government posts about eagles, or that include an eagle in the image. Stored locally; the source URL is a citation only.",
+  },
+  {
     id: "red_folder_comms",
     kind: "red_folder",
     title: "Red Folder comms",
@@ -287,6 +295,9 @@ export function mapImportCategory(raw) {
     .replace(/-/g, "_");
   if (!key) return null;
   if (key === "dog_comms" || key === "dog" || key === "dog_comm" || key === "dogcomms") {
+    return null;
+  }
+  if (key === "eagle_comms" || key === "eagle" || key === "eagle_comm" || key === "eaglecomms") {
     return null;
   }
   if (
