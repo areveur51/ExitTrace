@@ -94,7 +94,7 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
     "people/james-comey.webp",
   ]);
   assert.equal(parseThumbRel("thumbs/people/james-comey.2x.jpg")?.stem, "james-comey");
-  assert.equal(PORTRAIT_CACHE, "3");
+  assert.equal(PORTRAIT_CACHE, "4");
 });
 
 test("renderPortraitJpeg writes a cover-cropped 80x104 list JPEG, not a 192 masonry hero", () => {
