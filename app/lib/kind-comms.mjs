@@ -58,12 +58,30 @@ export const KIND_COMMS = Object.freeze({
     keymapKey: "e",
     supportingGroups: true,
   }),
+  eagle: Object.freeze({
+    id: "eagle",
+    categoryId: "eagle_comms",
+    table: "eagle_comms",
+    memoryKey: "eagle_comms",
+    path: "/eagle-comms",
+    mediaDir: "eagle-comms",
+    screenshotKind: "eagle-comms",
+    searchType: "eagle",
+    cardClass: "eagle-card",
+    detailClass: "eagle-detail",
+    pageClass: "eagle-page",
+    label: "Eagle comms",
+    navLabel: "Eagle",
+    countNoun: "eagle comms",
+    keymapKey: "l",
+    supportingGroups: false,
+  }),
 });
 
 /** Parent list. Legacy `/central-casting-comms` redirects here. Not a KIND_COMMS clip catalog. */
 export const CENTRAL_CASTING_PATH = "/central-casting";
 export const CENTRAL_CASTING_LEGACY_PATH = "/central-casting-comms";
-/** c = Dog, e = Red Folder. t is free. */
+/** c = Dog, e = Red Folder, l = Eagle. t is Central Casting. */
 export const CENTRAL_CASTING_KEYMAP = "t";
 export const CENTRAL_CASTING_MEDIA_DIR = "central-casting-comms";
 export const CENTRAL_CASTING_SCREENSHOT_KIND = "central-casting-comms";
