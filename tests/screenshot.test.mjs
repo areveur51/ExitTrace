@@ -253,7 +253,7 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   const shot = "/media/screenshots/people/james-comey.jpg";
   const html = personDetail(person({ screenshot: shot, screenshot_credit: "X" }));
   assert.match(html, /class="detail-photo portrait"/);
-  assert.match(html, /src="\/media\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(html, /src="\/media\/people\/james-comey\.jpg\?p=4"/);
   assert.match(html, /class="detail-photo screenshot"/);
   assert.match(html, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
   assert.match(html, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
@@ -262,7 +262,7 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   assert.doesNotMatch(html, /class="portrait thumb"/);
 
   const coronaHtml = personDetail(corona({ screenshot: shot }));
-  assert.match(coronaHtml, /src="\/media\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(coronaHtml, /src="\/media\/people\/james-comey\.jpg\?p=4"/);
   assert.match(coronaHtml, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
 
   const dogHtml = dogDetail(
@@ -288,12 +288,12 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   assert.match(coronaHtml, /meta-pane--stack/);
 
   const missing = personDetail(person());
-  assert.match(missing, /src="\/media\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(missing, /src="\/media\/people\/james-comey\.jpg\?p=4"/);
   assert.doesNotMatch(missing, /screenshots\/people/);
 
   const list = personRow(person({ screenshot: shot }));
   assert.match(list, /class="portrait thumb"/);
-  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=4"/);
   assert.doesNotMatch(list, /screenshots/);
   assert.doesNotMatch(list, /lightbox/);
   assert.doesNotMatch(list, /src="\/media\/people\/james-comey\.jpg"/);
@@ -302,7 +302,7 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
     dog({ screenshot: "/media/screenshots/dog-comms/dod-k9-2020.jpg" }),
   );
   assert.match(dogList, /class="still thumb"/);
-  assert.match(dogList, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=3"/);
+  assert.match(dogList, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=4"/);
   assert.doesNotMatch(dogList, /screenshots/);
   assert.doesNotMatch(dogList, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
 
@@ -347,7 +347,7 @@ test("detail pages include lightbox chrome and keep list thumbs off the screensh
   const list = await requestPage("/firings");
   assert.equal(list.status, 200);
   const listHtml = list.body.toString("utf8");
-  assert.match(listHtml, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=3"/);
+  assert.match(listHtml, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=4"/);
   assert.doesNotMatch(listHtml, /screenshots\/people/);
   assert.doesNotMatch(listHtml, /class="lightbox-open"/);
 });
