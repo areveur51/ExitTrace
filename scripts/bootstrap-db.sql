@@ -499,7 +499,7 @@ ALTER TABLE operations ADD COLUMN IF NOT EXISTS screenshot TEXT;
 
 CREATE TABLE IF NOT EXISTS add_requests (
   id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL CHECK (kind IN ('person', 'dog', 'operation', 'red_folder', 'central_casting')),
+  kind TEXT NOT NULL CHECK (kind IN ('person', 'dog', 'operation', 'red_folder', 'boot', 'central_casting')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'applied', 'rejected')),
   subject TEXT,
   category TEXT,
@@ -520,7 +520,7 @@ CREATE INDEX IF NOT EXISTS add_requests_status_idx ON add_requests (status, crea
 
 ALTER TABLE add_requests DROP CONSTRAINT IF EXISTS add_requests_kind_check;
 ALTER TABLE add_requests ADD CONSTRAINT add_requests_kind_check
-  CHECK (kind IN ('person', 'dog', 'operation', 'red_folder', 'central_casting'));
+  CHECK (kind IN ('person', 'dog', 'operation', 'red_folder', 'boot', 'central_casting'));
 
 -- X mention submitter attribution. Lab table, published on exittrace_lab_pub.
 -- Not a cite. Not a column on people, operations, or comms rows.

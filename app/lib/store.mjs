@@ -219,6 +219,7 @@ function addRequestKind(raw) {
     kind === "dog" ||
     kind === "operation" ||
     kind === "red_folder" ||
+    kind === "boot" ||
     kind === "central_casting"
   ) {
     return kind;
