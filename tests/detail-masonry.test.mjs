@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   asPostedAt,
   formatDate,
@@ -14,12 +17,15 @@ import {
   citeFromRow,
   dogDetail,
   dogExtraStills,
+  kindDetail,
   kindExtraStills,
   kindSourceHtml,
   operationDetail,
   personDetail,
   sourcePostDetail,
 } from "../app/lib/html.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function dog(overrides = {}) {
   return {
@@ -417,6 +423,141 @@ test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 c
   assert.equal(tileByKind(two, "cite").length, 1);
   assert.equal(tileByKind(two, "source").length, 1);
   assert.equal((two.match(/detail-tile--line/g) || []).length, 0);
+});
+
+test("detail media keeps the first tile when a later file is the same bytes", () => {
+  const same = Buffer.from("exittrace-detail-media-same-bytes");
+  const other = Buffer.from("exittrace-detail-media-other-bytes");
+  const third = Buffer.from("exittrace-detail-media-third-bytes");
+  const files = {
+    person: path.join(ROOT, "media/people/duprule.jpg"),
+    personShot: path.join(ROOT, "media/screenshots/people/duprule.jpg"),
+    personOther: path.join(ROOT, "media/screenshots/people/duprule-other.jpg"),
+    castSame: path.join(ROOT, "media/central-casting-comms/duprule.jpg"),
+    castOther: path.join(ROOT, "media/central-casting-comms/duprule-other.jpg"),
+    dog: path.join(ROOT, "media/dog-comms/duprule.jpg"),
+    dogCopy: path.join(ROOT, "media/dog-comms/duprule-2.jpg"),
+    dogOther: path.join(ROOT, "media/dog-comms/duprule-3.jpg"),
+    folder: path.join(ROOT, "media/red-folder-comms/duprule.jpg"),
+    folderCopy: path.join(ROOT, "media/red-folder-comms/duprule-2.jpg"),
+  };
+  for (const file of Object.values(files)) fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(files.person, same);
+  fs.writeFileSync(files.personShot, same);
+  fs.writeFileSync(files.personOther, other);
+  fs.writeFileSync(files.castSame, same);
+  fs.writeFileSync(files.castOther, other);
+  fs.writeFileSync(files.dog, same);
+  fs.writeFileSync(files.dogCopy, same);
+  fs.writeFileSync(files.dogOther, third);
+  fs.writeFileSync(files.folder, same);
+  fs.writeFileSync(files.folderCopy, same);
+  const person = {
+    id: "duprule",
+    category: "indictment_non_civilian",
+    name: "LaMonica McIver",
+    event_date: "2025-06-10",
+    photo: "/media/people/duprule.jpg",
+    photo_credit: "Portrait fill-empty from that still.",
+    screenshot_credit: "Lead still from the same post.",
+    sources: [],
+    events: [],
+  };
+  try {
+    const dup = personDetail(
+      {
+        ...person,
+        screenshot: "/media/screenshots/people/duprule.jpg",
+      },
+      {
+        centralCastingClips: [
+          {
+            person_id: "duprule",
+            handle: "@nytimes",
+            account_name: "The New York Times",
+            text: "Stored central-casting snapshot.",
+            posted_at: "2026-01-04",
+            source_url: "https://x.com/nytimes/status/1",
+            still: "/media/central-casting-comms/duprule.jpg",
+            snapshot: { stills: ["/media/central-casting-comms/duprule-other.jpg"] },
+          },
+        ],
+      },
+    );
+    assert.match(dup, /detail-tile--portrait/);
+    assert.equal((dup.match(/detail-tile--screenshot/g) || []).length, 0);
+    assert.doesNotMatch(dup, /screenshots\/people\/duprule\.jpg/);
+    assert.doesNotMatch(dup, /Lead still from the same post/);
+    assert.match(dup, /data-lightbox="\/media\/people\/duprule\.jpg"/);
+    assert.match(dup, /Portrait fill-empty from that still/);
+    assert.doesNotMatch(dup, /central-casting-comms\/duprule\.jpg/);
+    assert.match(dup, /central-casting-comms\/duprule-other\.jpg/);
+
+    const distinct = personDetail({
+      ...person,
+      screenshot: "/media/screenshots/people/duprule-other.jpg",
+    });
+    assert.match(distinct, /detail-tile--portrait/);
+    assert.match(distinct, /detail-tile--screenshot/);
+    assert.match(distinct, /screenshots\/people\/duprule-other\.jpg/);
+
+    const missing = personDetail({
+      ...person,
+      screenshot: "/media/screenshots/people/duprule-missing.jpg",
+    });
+    assert.match(missing, /detail-tile--portrait/);
+    assert.match(missing, /detail-tile--screenshot/);
+    assert.match(missing, /screenshots\/people\/duprule-missing\.jpg/);
+
+    const dogHtml = dogDetail(
+      dog({
+        still: "/media/dog-comms/duprule.jpg",
+        screenshot: "/media/screenshots/dog-comms/duprule-missing.png",
+        snapshot: {
+          stills: [
+            "/media/dog-comms/duprule.jpg",
+            "/media/dog-comms/duprule-2.jpg",
+            "/media/dog-comms/duprule-3.jpg",
+          ],
+        },
+      }),
+    );
+    assert.match(dogHtml, /data-lightbox="\/media\/dog-comms\/duprule\.jpg"/);
+    assert.doesNotMatch(dogHtml, /duprule-2\.jpg/);
+    assert.match(dogHtml, /duprule-3\.jpg/);
+    assert.match(dogHtml, /detail-tile--screenshot/);
+    assert.equal((dogHtml.match(/detail-tile--still/g) || []).length, 1);
+
+    const folderHtml = kindDetail("red_folder", {
+      id: "duprule",
+      handle: "@Example",
+      account_name: "Example",
+      text: "Main post.",
+      posted_at: "2026-01-02",
+      still: "/media/red-folder-comms/duprule.jpg",
+      screenshot: "/media/screenshots/red-folder-comms/duprule-missing.png",
+      source_url: "https://x.com/Example/status/1",
+      snapshot: {
+        stills: ["/media/red-folder-comms/duprule.jpg"],
+        supporting: [
+          {
+            text: "Same photo again.",
+            still: "/media/red-folder-comms/duprule-2.jpg",
+            handle: "@Other",
+            account_name: "Other",
+            posted_at: "2026-01-03",
+            source_url: "https://x.com/Other/status/2",
+          },
+        ],
+      },
+    });
+    assert.match(folderHtml, /data-lightbox="\/media\/red-folder-comms\/duprule\.jpg"/);
+    assert.doesNotMatch(folderHtml, /duprule-2\.jpg/);
+    assert.match(folderHtml, /Same photo again/);
+    assert.match(folderHtml, /detail-tile--screenshot/);
+  } finally {
+    for (const file of Object.values(files)) fs.rmSync(file, { force: true });
+  }
 });
 
 test("store normalizeDog keeps ISO posted_at; date-only FLOTUS stays date-only", async () => {
