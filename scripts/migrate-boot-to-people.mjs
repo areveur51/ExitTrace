@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Boot AMEND migration: clip rows → unique-person membership + boot_comms person_events.
- * Preserves cite URLs + clip text as snippet. No invent. Soft-ack OFF. leftover/:5434 untouched.
+ * Preserves cite URLs + clip text as snippet. No invent. Soft-ack OFF. Parked replica port untouched.
  */
 import fs from "fs";
 import path from "path";
@@ -49,7 +49,7 @@ const PERSON_META = {
 
 async function main() {
   const pool = await getPool();
-  if (!pool) throw new Error("DATABASE_URL required (lab writer :5433)");
+  if (!pool) throw new Error("DATABASE_URL required");
   await ensureSchema(pool, bootstrapSql);
 
   const clips = (

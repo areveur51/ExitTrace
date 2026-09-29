@@ -161,7 +161,10 @@ test("standalone grokipedia pages soft-redirect; fill API stays", async () => {
 test("keymap drops grokipedia nav; person cite is not a synopsis dump", () => {
   const footer = keymapFooter("/");
   assert.doesNotMatch(footer, /href="\/grokipedia"/);
-  assert.doesNotMatch(footer, /data-key="k"/);
+  // k is Boot (DESIGN LOCK AMEND unique-person); not a Grokipedia nav key.
+  assert.match(footer, /href="\/boot-comms" data-key="k"/);
+  assert.match(footer, /data-key="k"[^>]*>[\s\S]*?<\/span> Boot/);
+  assert.doesNotMatch(footer, /href="\/grokipedia" data-key="k"/);
   assert.match(footer, /Grokipedia may appear as an extra encyclopedia cite/);
 
   const cite = grokipediaBlock({
