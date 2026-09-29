@@ -1,6 +1,12 @@
 /** Shared catalog kinds that store official-post stills (dog / red-folder).
  *  Not person KEEP tags. Table names are allowlisted here — never interpolating caller input.
  *
+ *  Boot (Riker DESIGN LOCK AMEND ~1:09pm ET 2026-09-29) supersedes the KIND_COMMS
+ *  dog-twin clip list. Parent `/boot-comms` is unique-person cards (corona/CC DRY).
+ *  Membership is person_events kind `boot_comms`; detail is `/people/:id` Boot
+ *  PersonEventSection. Legacy clip `/boot-comms/:id` redirects to the person.
+ *  The boot_comms clip table is not the parent list source.
+ *
  *  Central Casting (Riker DESIGN LOCK AMEND ~1:26am ET, MIGRATION ~1:27am ET)
  *  supersedes sense and glossary. Live a0a8470 keeps the 7 person memberships,
  *  strips the retired field only, and deletes the JTitor + Warsh glossary rows.
@@ -76,31 +82,18 @@ export const KIND_COMMS = Object.freeze({
     keymapKey: "l",
     supportingGroups: false,
   }),
-  boot: Object.freeze({
-    id: "boot",
-    categoryId: "boot_comms",
-    table: "boot_comms",
-    memoryKey: "boot_comms",
-    path: "/boot-comms",
-    mediaDir: "boot-comms",
-    screenshotKind: "boot-comms",
-    searchType: "boot",
-    cardClass: "boot-card",
-    detailClass: "boot-detail",
-    pageClass: "boot-page",
-    label: "Boot comms",
-    navLabel: "Boot",
-    countNoun: "boot comms",
-    keymapKey: "k",
-    supportingGroups: false,
-  }),
 });
 
 /** Parent list. Legacy `/central-casting-comms` redirects here. Not a KIND_COMMS clip catalog. */
 export const CENTRAL_CASTING_PATH = "/central-casting";
 export const CENTRAL_CASTING_LEGACY_PATH = "/central-casting-comms";
-/** c = Dog, e = Red Folder, l = Eagle, k = Boot. t is Central Casting. */
+/** c = Dog, e = Red Folder, l = Eagle. k = Boot (person). t is Central Casting. */
 export const CENTRAL_CASTING_KEYMAP = "t";
+
+/** Parent list = unique-person cards (corona DRY). Legacy clip `/boot-comms/:id` redirects to `/people/:id`. Not a KIND_COMMS clip catalog. */
+export const BOOT_COMMS_PATH = "/boot-comms";
+export const BOOT_COMMS_KEYMAP = "k";
+export const BOOT_COMMS_CATEGORY_ID = "boot_comms";
 export const CENTRAL_CASTING_MEDIA_DIR = "central-casting-comms";
 export const CENTRAL_CASTING_SCREENSHOT_KIND = "central-casting-comms";
 

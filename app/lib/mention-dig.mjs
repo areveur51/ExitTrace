@@ -17,7 +17,7 @@ export const SOFT_ACK_TEXT = "Queued for ExitTrace review.";
 /**
  * Dig subjects. Mapped onto existing add-request and catalog ids.
  * dog_comms → add kind `dog`. corona_comms → person category `corona_comms`.
- * red_folder → catalog kind `red_folder`. boot_comms → catalog kind `boot`.
+ * red_folder → catalog kind `red_folder`. boot_comms → person category `boot_comms` (corona DRY).
  * central_casting_comms → `central_casting`.
  */
 const SUBJECT_KIND = Object.freeze({
@@ -30,9 +30,9 @@ const SUBJECT_KIND = Object.freeze({
   red_folder: "red_folder",
   red_folder_comm: "red_folder",
   red_folder_comms: "red_folder",
-  boot: "boot_comm",
-  boot_comm: "boot_comm",
-  boot_comms: "boot_comm",
+  boot: "boot_comms",
+  boot_comm: "boot_comms",
+  boot_comms: "boot_comms",
   central_casting: "central_casting_comms",
   central_casting_comm: "central_casting_comms",
   central_casting_comms: "central_casting_comms",
@@ -45,11 +45,10 @@ export function canonicalSubjectKind(raw) {
 /** add-request kind id the promote stack already queues. */
 export function addKindForSubject(subjectKind) {
   const key = canonicalSubjectKind(subjectKind);
-  if (key === "person" || key === "corona_comms") return "person";
+  if (key === "person" || key === "corona_comms" || key === "boot_comms") return "person";
   if (key === "operation") return "operation";
   if (key === "dog_comm") return "dog";
   if (key === "red_folder") return "red_folder";
-  if (key === "boot_comm") return "boot";
   if (key === "central_casting_comms") return "central_casting";
   return "";
 }
@@ -145,7 +144,11 @@ export async function leadIngest(input = {}) {
     );
   }
   const category =
-    subjectKind === "corona_comms" ? "corona_comms" : input.category || "";
+    subjectKind === "corona_comms"
+      ? "corona_comms"
+      : subjectKind === "boot_comms"
+        ? "boot_comms"
+        : input.category || "";
   return queueAddRequest({
     kind,
     subject: input.subject,
