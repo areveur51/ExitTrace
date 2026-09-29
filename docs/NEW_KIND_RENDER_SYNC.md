@@ -59,6 +59,8 @@ It is the X mention queue on the Render app database (`scripts/mention-queue.sql
 
 `eagle_comms` is a `dog_comms` twin (same columns, conflict on `id`). Media is `media/eagle-comms/` and `media/screenshots/eagle-comms/`.
 
+`boot_comms` is a `dog_comms` twin (same columns, conflict on `id`).
+
 `red_folder_comms` is a `dog_comms` twin (same columns, conflict on `id`).
 
 `central_casting_comms` is that twin plus `person_id` (required; blank becomes SQL NULL and the insert fails closed). It is harvest under an existing person. It is not the parent list.
@@ -79,6 +81,7 @@ Lab publisher (table must already exist):
 
 ```bash
 psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-eagle-comms-publication.sql
+psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-boot-comms-publication.sql
 psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-red-folder-comms-publication.sql
 psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-central-casting-comms-publication.sql
 psql "$LAB_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/add-request-attributions-publication.sql

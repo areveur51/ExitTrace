@@ -25,7 +25,7 @@ The restore job runs on `ubuntu-latest` and reads only `secrets.DATABASE_URL` fr
 | Artifact | `exittrace-lab-dump` (`exittrace-lab.dump.gz`), retention 1 day |
 | Restore runner | `ubuntu-latest` |
 | Restore | `pg_restore --clean --if-exists` (plus `--no-owner --no-acl`) into `production` / `DATABASE_URL` |
-| Counts | Restore prints `people`, `dog_comms`, `operations`, `source_posts` so operations land with the rest of the schema |
+| Counts | Restore prints `people`, `dog_comms`, `eagle_comms`, `boot_comms`, `operations`, `source_posts` so operations land with the rest of the schema |
 
 Dump job has no Render URL. If the dump helper path is unset or not executable, the job fails closed.
 
@@ -110,7 +110,7 @@ Path A / streaming: `et-sub-reconnect` retries ENABLE with the same backoff. `et
 
 ## Idempotent gap upsert
 
-[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people` (including `central_casting`), `dog_comms`, `eagle_comms`, `operations`, optional `categories` (skipped if that table is absent), `red_folder_comms`, `central_casting_comms`, `request_attributions` (conflict on `id`; partial unique on channel + subject when subject is set), plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`). New tables follow [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md).
+[`.github/workflows/et-gap-upsert.yml`](../.github/workflows/et-gap-upsert.yml) exports published tables from lab (`scripts/export-published-tables.mjs`) and upserts by id on Render (`scripts/gap-upsert-published.mjs`). Tables: `people` (including `central_casting`), `dog_comms`, `eagle_comms`, `boot_comms`, `operations`, optional `categories` (skipped if that table is absent), `red_folder_comms`, `central_casting_comms`, `request_attributions` (conflict on `id`; partial unique on channel + subject when subject is set), plus `person_events`. `ON CONFLICT DO UPDATE` only. Never `TRUNCATE` / `DELETE` / `--clean`. Proves counts after. Dispatch `source=lab_runner` (same labels as dump) or `source=two_url` (`LAB_DATABASE_URL` + `DATABASE_URL` in environment `production`). New tables follow [NEW_KIND_RENDER_SYNC.md](NEW_KIND_RENDER_SYNC.md).
 
 Arm automatic catch-up from heal with repository variable `ET_AUTO_GAP_UPSERT=true` (off by default).
 

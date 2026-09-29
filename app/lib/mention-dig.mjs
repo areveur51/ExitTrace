@@ -17,7 +17,8 @@ export const SOFT_ACK_TEXT = "Queued for ExitTrace review.";
 /**
  * Dig subjects. Mapped onto existing add-request and catalog ids.
  * dog_comms → add kind `dog`. corona_comms → person category `corona_comms`.
- * red_folder → catalog kind `red_folder`. central_casting_comms → `central_casting`.
+ * red_folder → catalog kind `red_folder`. boot_comms → catalog kind `boot`.
+ * central_casting_comms → `central_casting`.
  */
 const SUBJECT_KIND = Object.freeze({
   person: "person",
@@ -29,6 +30,9 @@ const SUBJECT_KIND = Object.freeze({
   red_folder: "red_folder",
   red_folder_comm: "red_folder",
   red_folder_comms: "red_folder",
+  boot: "boot_comm",
+  boot_comm: "boot_comm",
+  boot_comms: "boot_comm",
   central_casting: "central_casting_comms",
   central_casting_comm: "central_casting_comms",
   central_casting_comms: "central_casting_comms",
@@ -45,6 +49,7 @@ export function addKindForSubject(subjectKind) {
   if (key === "operation") return "operation";
   if (key === "dog_comm") return "dog";
   if (key === "red_folder") return "red_folder";
+  if (key === "boot_comm") return "boot";
   if (key === "central_casting_comms") return "central_casting";
   return "";
 }

@@ -127,11 +127,13 @@ test("public chrome keeps catalog labels and omits pin larp copy", () => {
   const kinds = fs.readFileSync(path.join(ROOT, "app", "lib", "kind-comms.mjs"), "utf8");
   assert.match(kinds, /path: "\/dog-comms"/);
   assert.match(kinds, /path: "\/eagle-comms"/);
+  assert.match(kinds, /path: "\/boot-comms"/);
   assert.match(kinds, /path: "\/red-folder-comms"/);
   assert.match(kinds, /CENTRAL_CASTING_PATH = "\/central-casting"/);
   assert.match(kinds, /keymapKey: "c"/);
   assert.match(kinds, /keymapKey: "e"/);
   assert.match(kinds, /keymapKey: "l"/);
+  assert.match(kinds, /keymapKey: "k"/);
   assert.match(kinds, /CENTRAL_CASTING_KEYMAP = "t"/);
   assert.doesNotMatch(html, /key: "n", href: "\/add"/);
   assert.doesNotMatch(html, /key: "s", href: "\/search"/);
