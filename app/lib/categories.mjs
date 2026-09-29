@@ -193,6 +193,14 @@ export const CATEGORIES = [
     blurb: "Official government posts about eagles, or that include an eagle in the image. Stored locally; the source URL is a citation only.",
   },
   {
+    id: "boot_comms",
+    kind: "boot",
+    title: "Boot comms",
+    nav: "Boot comms",
+    path: "/boot-comms",
+    blurb: "Official and news-org posts and photos of a public figure in a medical walking boot after a documented lower-leg, ankle, or foot injury. Catalog cards, not person KEEP.",
+  },
+  {
     id: "red_folder_comms",
     kind: "red_folder",
     title: "Red Folder comms",
@@ -298,6 +306,9 @@ export function mapImportCategory(raw) {
     return null;
   }
   if (key === "eagle_comms" || key === "eagle" || key === "eagle_comm" || key === "eaglecomms") {
+    return null;
+  }
+  if (key === "boot_comms" || key === "boot" || key === "boot_comm" || key === "bootcomms") {
     return null;
   }
   if (

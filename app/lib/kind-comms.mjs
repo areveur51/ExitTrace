@@ -76,12 +76,30 @@ export const KIND_COMMS = Object.freeze({
     keymapKey: "l",
     supportingGroups: false,
   }),
+  boot: Object.freeze({
+    id: "boot",
+    categoryId: "boot_comms",
+    table: "boot_comms",
+    memoryKey: "boot_comms",
+    path: "/boot-comms",
+    mediaDir: "boot-comms",
+    screenshotKind: "boot-comms",
+    searchType: "boot",
+    cardClass: "boot-card",
+    detailClass: "boot-detail",
+    pageClass: "boot-page",
+    label: "Boot comms",
+    navLabel: "Boot",
+    countNoun: "boot comms",
+    keymapKey: "k",
+    supportingGroups: false,
+  }),
 });
 
 /** Parent list. Legacy `/central-casting-comms` redirects here. Not a KIND_COMMS clip catalog. */
 export const CENTRAL_CASTING_PATH = "/central-casting";
 export const CENTRAL_CASTING_LEGACY_PATH = "/central-casting-comms";
-/** c = Dog, e = Red Folder, l = Eagle. t is Central Casting. */
+/** c = Dog, e = Red Folder, l = Eagle, k = Boot. t is Central Casting. */
 export const CENTRAL_CASTING_KEYMAP = "t";
 export const CENTRAL_CASTING_MEDIA_DIR = "central-casting-comms";
 export const CENTRAL_CASTING_SCREENSHOT_KIND = "central-casting-comms";
