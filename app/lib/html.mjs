@@ -41,6 +41,8 @@ import {
 } from "./thumb.mjs";
 import {
   CENTRAL_CASTING_KEYMAP,
+  BOOT_COMMS_PATH,
+  BOOT_COMMS_KEYMAP,
   CENTRAL_CASTING_PATH,
   centralCastingStoredQuote,
   commsKind,
@@ -48,8 +50,7 @@ import {
   isCommsKind,
   KIND_COMMS,
   KIND_COMM_IDS,
-  mediaSpec,
-} from "./kind-comms.mjs";
+  mediaSpec,} from "./kind-comms.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
 import {
@@ -200,6 +201,7 @@ function keymapItems(activePath) {
       const spec = KIND_COMMS[id];
       return { key: spec.keymapKey, href: spec.path, label: spec.navLabel };
     }),
+    { key: BOOT_COMMS_KEYMAP, href: BOOT_COMMS_PATH, label: "Boot" },
     { key: CENTRAL_CASTING_KEYMAP, href: CENTRAL_CASTING_PATH, label: "Central Casting" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ].map((item) => ({
@@ -1591,7 +1593,12 @@ export function grokipediaBlock(row, { filled = [], cite } = {}) {
 export function eventTagRow(ev, { birthDate } = {}) {
   const kind = String(ev?.kind || "").trim();
   if (!kind || !isDisplayedEventKind(kind)) return "";
-  const label = kind === "corona_comms" ? categoryById(kind)?.nav || "Corona" : eventKindTitle(kind);
+  const label =
+    kind === "corona_comms"
+      ? categoryById(kind)?.nav || "Corona"
+      : kind === "boot_comms"
+        ? categoryById(kind)?.nav || "Boot"
+        : eventKindTitle(kind);
   const eventDate = String(ev.event_date || "").trim();
   const announcedRaw = String(ev.announced_date || "").trim();
   const announced =
@@ -1638,6 +1645,7 @@ export function eventTagRow(ev, { birthDate } = {}) {
     bodyHtml: `${eventLine}${announced}${ageLine}${groupLine}${attrs}`,
     className: "event-tag-row",
     tag: "article",
+    pairSnippetBefore: kind === "boot_comms",
   });
 }
 

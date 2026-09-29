@@ -10,6 +10,8 @@ import {
   CENTRAL_CASTING_CITE_GATE,
   CENTRAL_CASTING_DETAIL,
   CENTRAL_CASTING_KEYMAP,
+  BOOT_COMMS_KEYMAP,
+  BOOT_COMMS_PATH,
   CENTRAL_CASTING_PATH,
   CentralCastingClassifyError,
   KIND_COMMS,
@@ -118,9 +120,11 @@ test("central casting is a person list, not a KIND_COMMS clip catalog", () => {
   assert.equal(KIND_COMMS.eagle.keymapKey, "l");
   assert.equal(KIND_COMMS.eagle.path, "/eagle-comms");
   assert.equal(KIND_COMMS.eagle.supportingGroups, false);
-  assert.equal(KIND_COMMS.boot.keymapKey, "k");
-  assert.equal(KIND_COMMS.boot.path, "/boot-comms");
-  assert.equal(KIND_COMMS.boot.supportingGroups, false);
+  assert.equal(KIND_COMMS.boot, undefined);
+  assert.equal(BOOT_COMMS_KEYMAP, "k");
+  assert.equal(BOOT_COMMS_PATH, "/boot-comms");
+  assert.equal(categoryByPath("/boot-comms").kind, "person");
+  assert.equal(categoryByPath("/boot-comms").id, "boot_comms");
   assert.equal(KIND_COMMS.red_folder.keymapKey, "e");
   assert.equal(CENTRAL_CASTING_KEYMAP, "t");
   assert.equal(CENTRAL_CASTING_PATH, "/central-casting");
@@ -130,6 +134,7 @@ test("central casting is a person list, not a KIND_COMMS clip catalog", () => {
   const blurb = categoryByPath("/central-casting").blurb;
   assert.match(blurb, /One card per identified person/);
   assert.doesNotMatch(blurb, /sense|glossary|looks the part|replacement/i);
+  assert.equal(PROMOTE_CATEGORY_IDS.includes("boot_comms"), true);
   assert.equal(PROMOTE_CATEGORY_IDS.includes("central_casting"), false);
   assert.equal(PROMOTE_CATEGORY_IDS.includes("central_casting_comms"), false);
   assert.equal(DEATH_KEEP_IDS.includes("central_casting"), false);

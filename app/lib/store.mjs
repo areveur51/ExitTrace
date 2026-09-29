@@ -2497,6 +2497,15 @@ export async function counts() {
     }
     const central = centralCastingPersonStats(people);
     byCategory.central_casting = central.central_casting;
+    // Boot AMEND: unique persons with boot_comms membership (not clip rows).
+    let bootPersons = 0;
+    for (const row of people) {
+      const events = personEvents(row);
+      if (events.some((ev) => ev.kind === "boot_comms") || row.category === "boot_comms") {
+        bootPersons += 1;
+      }
+    }
+    byCategory.boot_comms = bootPersons;
     byCategory.operations = operations.length;
     for (const row of operations) {
       for (const tag of row.tags || []) {
@@ -2507,6 +2516,7 @@ export async function counts() {
       people: peopleCensus,
       ...kindCounts,
       ...central,
+      boot_comms: bootPersons,
       operations: operations.length,
       source_posts: (getMemory().source_posts || []).length,
       byCategory,
@@ -2575,10 +2585,17 @@ export async function counts() {
   byCategory.central_casting = centralCasting;
   byCategory.operations = opCount.rows[0].n;
   for (const row of opTags.rows) byCategory[row.category] = row.n;
+  // Boot AMEND: unique persons with boot_comms membership (not clip rows).
+  const bootCount = await p.query(
+    `SELECT COUNT(DISTINCT person_id)::int AS n FROM person_events WHERE kind = 'boot_comms'`,
+  );
+  const bootPersons = bootCount.rows[0].n;
+  byCategory.boot_comms = bootPersons;
   return {
     people: peopleCount.rows[0].n,
     ...kindCounts,
     central_casting: centralCasting,
+    boot_comms: bootPersons,
     operations: opCount.rows[0].n,
     source_posts: postCount.rows[0].n,
     byCategory,

@@ -118,6 +118,7 @@ import {
   commsKindByApiPath,
   commsKindByPath,
   isCommsKind,
+  BOOT_COMMS_PATH,
 } from "./lib/kind-comms.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -911,6 +912,49 @@ async function handle(req, res) {
         }),
       }),
     );
+  }
+
+  // Boot AMEND: legacy clip detail `/boot-comms/:id` → `/people/:slug` (or list).
+  if (p.startsWith(`${BOOT_COMMS_PATH}/`) && p !== `${BOOT_COMMS_PATH}/`) {
+    const rawId = safeId(p.slice(`${BOOT_COMMS_PATH}/`.length));
+    let personId = "";
+    if (rawId) {
+      const direct = await getPerson(rawId);
+      if (direct) personId = direct.id;
+      if (!personId) {
+        const mBoot = String(rawId).match(
+          /^(.+)-(\d{4}-\d{2}(?:-\d{2})?)-([a-f0-9]{8})$/,
+        );
+        if (mBoot) {
+          const bySlug = await getPerson(mBoot[1]);
+          if (bySlug) personId = bySlug.id;
+        }
+      }
+      if (!personId) {
+        try {
+          const pool = await getPool();
+          if (pool) {
+            const q = await pool.query(
+              `SELECT account_name FROM boot_comms WHERE id = $1 LIMIT 1`,
+              [rawId],
+            );
+            const name = String(q.rows[0]?.account_name || "").trim();
+            if (name) {
+              const { personSlug } = await import("./lib/promote.mjs");
+              const slug = personSlug(name);
+              const byName = slug ? await getPerson(slug) : null;
+              if (byName) personId = byName.id;
+            }
+          }
+        } catch {
+          /* clip table may be empty; fall through to list */
+        }
+      }
+    }
+    send(res, 302, "", {
+      Location: personId ? `/people/${encodeURIComponent(personId)}` : BOOT_COMMS_PATH,
+    });
+    return;
   }
 
   const commsDetail = commsKindByPath(p);

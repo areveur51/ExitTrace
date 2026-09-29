@@ -311,7 +311,29 @@ export function validateQueueInput(input = {}) {
     return queueCatalogPost(input, "red_folder");
   }
   if (kind === "boot") {
-    return queueCatalogPost(input, "boot");
+    // Boot AMEND: unique-person membership (corona DRY), not clip catalog.
+    const subject = String(input.subject || input.account_name || "").trim();
+    return {
+      kind: "person",
+      subject,
+      category: "boot_comms",
+      event_date: String(input.event_date || input.posted_at || "").trim(),
+      hint_url: String(input.hint_url || input.source_url || "").trim(),
+      birth_date: String(input.birth_date || "").trim(),
+      country_of_origin: String(input.country_of_origin || "").trim(),
+      position: String(input.position || "").trim(),
+      organization: String(input.organization || "").trim(),
+      comments: String(input.comments || input.text || input.reason || "").trim(),
+      reason: String(input.reason || input.comments || input.text || "").trim(),
+      branch: String(input.branch || "").trim(),
+      military: input.military,
+      source_url: String(input.source_url || "").trim(),
+      handle: String(input.handle || "").trim(),
+      posted_at: String(input.posted_at || "").trim(),
+      account_name: String(input.account_name || subject || "").trim(),
+      text: String(input.text || "").trim(),
+      cite_urls: [],
+    };
   }
   if (kind === "central_casting") {
     const subject = String(input.subject || input.name || "").trim();
@@ -871,7 +893,7 @@ async function snapshotForKind(kind, sourceUrl) {
   const rows =
     kind === "dog"
       ? await listDogComms()
-      : kind === "red_folder" || kind === "boot" || kind === "eagle"
+      : kind === "red_folder" || kind === "eagle"
         ? await listKindComms(kind)
         : await listDogComms();
   const existing = rows.find((row) => canonicalPublicUrl(row.source_url) === canonical);
@@ -947,47 +969,64 @@ async function applyQueuedRedFolder(merged) {
 }
 
 async function applyQueuedBoot(merged) {
+  // Boot AMEND: person membership + boot_comms person_events (corona DRY).
   const parsed = validateProcessBootInput(merged);
-  const existing = await findKindCommMatch("boot", {
-    handle: parsed.handle,
-    source_url: parsed.source_url,
-    posted_at: parsed.posted_at,
-  });
-  if (existing) {
-    return {
-      action: "annotated",
-      boot: existing,
-      added_cites: 0,
-      boot_comms: await countKindComms("boot"),
-      extra_urls: parsed.extra_urls || [],
-    };
+  const subject = String(
+    merged.subject || parsed.account_name || merged.account_name || "",
+  ).trim();
+  if (!subject) {
+    throw new AddError("boot membership needs a subject name", "missing_subject");
   }
-  const stored = await snapshotForKind("boot", parsed.source_url);
-  const idHandle = parsed.handle || parsed.account_name || "boot";
-  const boot = await insertKindComm("boot", {
-    id: dogRowId(idHandle, parsed.posted_at, parsed.source_url),
-    posted_at: parsed.posted_at,
-    handle: parsed.handle || "",
-    account_name: parsed.account_name || stored.account_name || parsed.handle || "",
-    text: parsed.text || stored.text || "",
-    still: parsed.still || stored.still || "",
-    still_credit: parsed.still_credit || stored.still_credit || "",
+  let event_date = String(merged.event_date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(event_date)) {
+    const posted = String(parsed.posted_at || merged.posted_at || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(posted)) event_date = posted;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(event_date)) {
+    throw new AddError(
+      "boot person event needs YYYY-MM-DD (cite-stated day); month-year stays a lead",
+      "missing_event_date",
+    );
+  }
+  const comments = String(
+    merged.comments || merged.reason || parsed.text || merged.text || "",
+  ).trim();
+  const result = await applyQueuedPerson({
+    ...merged,
+    kind: "person",
+    subject,
+    category: "boot_comms",
+    event_date,
+    cite_urls: parsed.cite_urls,
+    extra_urls: parsed.extra_urls || [],
     source_url: parsed.source_url,
-    snapshot:
-      Object.keys(stored.snapshot || {}).length > 0
-        ? { ...stored.snapshot, cites: parsed.cite_urls }
-        : {
-            handle: parsed.handle,
-            posted_at: parsed.posted_at,
-            text: parsed.text || stored.text || "",
-            cites: parsed.cite_urls,
-          },
+    comments: comments || "Medical walking boot after documented lower-leg, ankle, or foot injury",
+    reason: String(merged.reason || comments || "").trim() ||
+      "Medical walking boot after documented lower-leg, ankle, or foot injury",
+    position: String(merged.position || "").trim() || "Public figure",
+    organization: String(merged.organization || "").trim() || "Public record",
+    country_of_origin: String(merged.country_of_origin || "").trim() || "United States",
   });
+  // Stamp clip text as snippet on boot_comms cites when present (preserve, no invent).
+  const snippet = String(parsed.text || merged.text || "").trim();
+  if (snippet && result.person?.id) {
+    const { getPerson, savePerson } = await import("./store.mjs");
+    const person = await getPerson(result.person.id);
+    if (person) {
+      const events = (person.events || []).map((ev) => {
+        if (ev.kind !== "boot_comms") return ev;
+        const sources = (ev.sources || []).map((src, i) => ({
+          ...src,
+          snippet: String(src.snippet || src.quote || "").trim() || (i === 0 ? snippet : ""),
+        }));
+        return { ...ev, sources, comments: ev.comments || comments || snippet };
+      });
+      await savePerson({ ...person, events });
+    }
+  }
   return {
-    action: "created",
-    boot,
-    added_cites: parsed.cite_urls.length,
-    boot_comms: await countKindComms("boot"),
+    ...result,
+    boot_comms: result.people,
     extra_urls: parsed.extra_urls || [],
   };
 }

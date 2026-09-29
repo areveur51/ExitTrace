@@ -194,11 +194,11 @@ export const CATEGORIES = [
   },
   {
     id: "boot_comms",
-    kind: "boot",
-    title: "Boot comms",
-    nav: "Boot comms",
+    kind: "person",
+    title: "Boot",
+    nav: "Boot",
     path: "/boot-comms",
-    blurb: "Official and news-org posts and photos of a public figure in a medical walking boot after a documented lower-leg, ankle, or foot injury. Catalog cards, not person KEEP.",
+    blurb: "Identified people documented in a medical walking boot after a lower-leg, ankle, or foot injury. One card per person; Boot events and cites sit on the person detail.",
   },
   {
     id: "red_folder_comms",
@@ -229,7 +229,7 @@ export const IMPORT_CATEGORY_IDS = [
   "death_unspecified",
 ];
 
-/** Person categories a promote may write. dog_comms and red_folder_comms are post catalogs. central_casting annotates an existing person; it is not a new KEEP kind. */
+/** Person categories a promote may write. dog_comms and red_folder_comms are post catalogs. boot_comms is unique-person membership (corona DRY). central_casting annotates an existing person; it is not a new KEEP kind. */
 export const PROMOTE_CATEGORY_IDS = [
   "firings",
   "resignations",
@@ -239,6 +239,7 @@ export const PROMOTE_CATEGORY_IDS = [
   "death_ceo",
   "arrests",
   "corona_comms",
+  "boot_comms",
   "indictment_civilian",
   "indictment_non_civilian",
 ];
