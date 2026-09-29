@@ -84,7 +84,7 @@ import {
   grokipediaCite,
 } from "./grokipedia.mjs";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -744,7 +744,7 @@ export function kindEntryStills(kind, row, entry) {
 }
 
 /** One frost group: cite-DRY + Source (this URL only) + screenshot/stills masonry. */
-export function kindSupportingGroupHtml(kind, row, entry) {
+export function kindSupportingGroupHtml(kind, row, entry, seen) {
   const handle = entry?.handle || row?.handle || "";
   const extras = kindEntryStills(kind, row, entry).map((src) => ({
     src,
@@ -759,6 +759,7 @@ export function kindSupportingGroupHtml(kind, row, entry) {
         screenshotAlt: `X-post screenshot of ${handle}`,
         screenshotCredit: entry?.screenshot_credit,
         extraMedia: extras,
+        seen,
         metaHtml: detailMetaBlock({
           citeHtml: citeFromRow({
             handle: entry?.handle,
@@ -775,9 +776,9 @@ export function kindSupportingGroupHtml(kind, row, entry) {
   </section>`;
 }
 
-export function kindSupportingGroupsHtml(kind, row) {
+export function kindSupportingGroupsHtml(kind, row, seen) {
   return kindSupportingEntries(row)
-    .map((entry) => kindSupportingGroupHtml(kind, row, entry))
+    .map((entry) => kindSupportingGroupHtml(kind, row, entry, seen))
     .join("");
 }
 
@@ -837,6 +838,74 @@ function interleaveDetailTiles(mediaTiles, metaTiles) {
   return out;
 }
 
+const mediaByteCache = new Map();
+
+function mediaRoot() {
+  return path.resolve(process.env.MEDIA_DIR || path.join(ROOT_DIR, "media"));
+}
+
+/** Local /media href with the query stripped. Empty when it is not a catalog file. */
+function mediaHrefPath(href) {
+  const text = String(href || "").trim().split(/[?#]/)[0];
+  if (!text.startsWith("/media/") || text.includes("..") || text.includes("\\")) return "";
+  return text;
+}
+
+function localMediaFile(href) {
+  const rel = mediaHrefPath(href);
+  if (!rel) return "";
+  const root = mediaRoot();
+  const file = path.resolve(root, rel.slice("/media/".length));
+  if (file !== root && !file.startsWith(root + path.sep)) return "";
+  return file;
+}
+
+/** sha256 of a local media file. Empty when the file is missing — that is not a duplicate. */
+function mediaByteId(href) {
+  const file = localMediaFile(href);
+  if (!file) return "";
+  let st;
+  try {
+    st = statSync(file);
+  } catch {
+    return "";
+  }
+  if (!st.isFile() || st.size <= 0) return "";
+  const key = `${file}\0${st.mtimeMs}\0${st.size}`;
+  const hit = mediaByteCache.get(key);
+  if (hit) return hit;
+  let buf;
+  try {
+    buf = readFileSync(file);
+  } catch {
+    return "";
+  }
+  const id = createHash("sha256").update(buf).digest("hex");
+  mediaByteCache.set(key, id);
+  return id;
+}
+
+/** One detail page shares this bag so the same bytes are drawn once. */
+function detailMediaSeen() {
+  return { paths: new Set(), ids: new Set() };
+}
+
+/**
+ * Record href on the page. True when an earlier tile already used this path
+ * or these exact bytes. A missing file is kept (tests and not-yet-copied media).
+ */
+function claimDetailMedia(seen, href) {
+  const bag = seen || detailMediaSeen();
+  const mediaPath = mediaHrefPath(href);
+  if (!mediaPath) return false;
+  if (bag.paths.has(mediaPath)) return true;
+  const id = mediaByteId(mediaPath);
+  if (id && bag.ids.has(id)) return true;
+  bag.paths.add(mediaPath);
+  if (id) bag.ids.add(id);
+  return false;
+}
+
 /** Shared masonry: media + text/meta tiles in one dense column pack (dog / people / ops). */
 function detailMediaStrip({
   portraitHtml,
@@ -849,27 +918,31 @@ function detailMediaStrip({
   extraMedia = [],
   metaHtml = "",
   metaTiles = [],
+  seen,
 } = {}) {
+  const bag = seen || detailMediaSeen();
   const media = [];
   if (portraitHtml) {
-    media.push(
-      detailMediaTile({
-        kind: "portrait",
-        src: portraitSrc,
-        inner: portraitHtml,
-        alt: portraitAlt,
-        credit: creditWithoutUrls(portraitCredit),
-      }),
-    );
+    const tile = detailMediaTile({
+      kind: "portrait",
+      src: portraitSrc,
+      inner: portraitHtml,
+      alt: portraitAlt,
+      credit: creditWithoutUrls(portraitCredit),
+    });
+    if (tile && !claimDetailMedia(bag, portraitSrc)) media.push(tile);
   }
-  const shot = screenshotTile(screenshot, {
-    alt: screenshotAlt,
-    credit: screenshotCredit,
-  });
-  if (shot) media.push(shot);
+  const shotHref = normalizeScreenshotHref(screenshot);
+  if (shotHref && !claimDetailMedia(bag, shotHref)) {
+    const shot = screenshotTile(screenshot, {
+      alt: screenshotAlt,
+      credit: screenshotCredit,
+    });
+    if (shot) media.push(shot);
+  }
   for (const item of extraMedia || []) {
     const href = String(item?.src || item || "").trim();
-    if (!href) continue;
+    if (!href || claimDetailMedia(bag, href)) continue;
     const alt = item?.alt || "Post media";
     const credit = creditWithoutUrls(item?.credit || "");
     const img = `<img class="detail-photo still" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
@@ -1301,18 +1374,17 @@ function eventMediaFigure(src, alt) {
   return `<figure class="event-media">${lightboxButton(href, img, { alt })}</figure>`;
 }
 
-/** Allowlisted stills and screenshots only. A bad path is omitted. */
-function centralCastingMediaHtml(clips) {
+/** Allowlisted stills and screenshots only. A bad path is omitted. Same bytes as an earlier tile are omitted. */
+function centralCastingMediaHtml(clips, seen) {
+  const bag = seen || detailMediaSeen();
   const parts = [];
-  const seen = new Set();
   const push = (href, alt) => {
     const src = String(href || "").trim();
-    if (!src || seen.has(src)) return;
+    if (!src) return;
     const shot = normalizeScreenshotHref(src, "central-casting-comms");
     const still = isCommsMediaHref(src, "central-casting-comms") ? src : "";
     const ok = shot || still;
-    if (!ok || seen.has(ok)) return;
-    seen.add(ok);
+    if (!ok || claimDetailMedia(bag, ok)) return;
     parts.push(eventMediaFigure(ok, alt));
   };
   for (const clip of clips || []) {
@@ -1343,7 +1415,7 @@ function centralCastingSupportingSource(clip, entry) {
 }
 
 /** One Central Casting section from evidence rows plus membership cites. Not a red-folder page. */
-export function centralCastingDetailHtml(row, clips = []) {
+export function centralCastingDetailHtml(row, clips = [], seen) {
   const membership = (row?.central_casting || [])
     .map((url) => String(url || "").trim())
     .filter(Boolean);
@@ -1374,7 +1446,7 @@ export function centralCastingDetailHtml(row, clips = []) {
     kind: "central_casting",
     cites,
     summary,
-    mediaHtml: centralCastingMediaHtml(own),
+    mediaHtml: centralCastingMediaHtml(own, seen),
     personId: row?.id || "",
     pairSnippetBefore: true,
   });
@@ -1572,6 +1644,7 @@ export function personHeader(row, extras = {}) {
       screenshot: row.screenshot,
       screenshotAlt: `X-post screenshot of ${row.name}`,
       screenshotCredit: row.screenshot_credit,
+      seen: extras.seen,
       metaHtml: detailMetaBlock({
         title: row.name || "—",
         ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
@@ -1692,7 +1765,7 @@ export function epsteinFlightLogSection(legs = []) {
 }
 
 
-function eventTimeline(row, clips = [], epsteinLegs = []) {
+function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
   const events = personEvents(row).filter((ev) =>
     isDisplayedEventKind(String(ev.kind || "").trim()),
   );
@@ -1700,7 +1773,7 @@ function eventTimeline(row, clips = [], epsteinLegs = []) {
     .map((ev) => eventTagRow(ev, { birthDate: row.birth_date }))
     .filter(Boolean)
     .join("");
-  const centralCasting = centralCastingDetailHtml(row, clips);
+  const centralCasting = centralCastingDetailHtml(row, clips, seen);
   const epstein = epsteinFlightLogSection(epsteinLegs);
   if (!rows && !centralCasting && !epstein) return "";
   return `<section class="event-timeline" aria-label="Event timeline">${rows}${centralCasting}${epstein}</section>`;
@@ -1724,11 +1797,12 @@ function personTagChips(row) {
 
 export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
+  const seen = detailMediaSeen();
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
-      mediaHtml: personHeader(filled, { filled: keys, cite, attributions }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs)}`,
+      mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}`,
       active: true,
       extraClass: "person-pane",
     })}
@@ -1829,6 +1903,7 @@ export function operationDetail(row, { attributions } = {}) {
 /** Shared dog / red-folder / central-casting harvest detail: cite, post body, X link, supportive media. */
 export function commsDetail(spec, row, { attributions } = {}) {
   const grouped = !!spec.supportingGroups;
+  const seen = detailMediaSeen();
   const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
     commsKind: spec.id,
   });
@@ -1837,35 +1912,38 @@ export function commsDetail(spec, row, { attributions } = {}) {
     alt: `Post media for ${row.handle}`,
     credit: row.still_credit || "",
   }));
-  const groups = grouped ? kindSupportingGroupsHtml(spec.id, row) : "";
+  // Main strip first so a later supporting copy of the same bytes is the one omitted.
+  const mediaHtml = detailMediaStrip({
+    portraitHtml: photo,
+    portraitSrc: isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "",
+    portraitAlt: `Stored still for ${row.handle}`,
+    portraitCredit: row.still_credit,
+    screenshot: row.screenshot,
+    screenshotAlt: `X-post screenshot of ${row.handle}`,
+    screenshotCredit: row.screenshot_credit,
+    extraMedia: extras,
+    seen,
+    metaHtml: detailMetaBlock({
+      citeHtml: citeFromRow(row),
+      attributionHtml: attributionFrom(
+        row,
+        attributions,
+        spec.id === "dog"
+          ? "dog_comm"
+          : spec.id === "red_folder"
+            ? "red_folder_comm"
+            : spec.id === "central_casting"
+              ? "central_casting_comm"
+              : "",
+      ),
+      sourceHtml: kindSourceHtml(row, { includeSupporting: !grouped }),
+    }),
+  });
+  const groups = grouped ? kindSupportingGroupsHtml(spec.id, row, seen) : "";
   return `<article class="detail ${spec.detailClass}">
     ${detailShell({
       title: "Metadata",
-      mediaHtml: detailMediaStrip({
-        portraitHtml: photo,
-        portraitSrc: isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "",
-        portraitAlt: `Stored still for ${row.handle}`,
-        portraitCredit: row.still_credit,
-        screenshot: row.screenshot,
-        screenshotAlt: `X-post screenshot of ${row.handle}`,
-        screenshotCredit: row.screenshot_credit,
-        extraMedia: extras,
-        metaHtml: detailMetaBlock({
-          citeHtml: citeFromRow(row),
-          attributionHtml: attributionFrom(
-            row,
-            attributions,
-            spec.id === "dog"
-              ? "dog_comm"
-              : spec.id === "red_folder"
-                ? "red_folder_comm"
-                : spec.id === "central_casting"
-                  ? "central_casting_comm"
-                  : "",
-          ),
-          sourceHtml: kindSourceHtml(row, { includeSupporting: !grouped }),
-        }),
-      }),
+      mediaHtml,
       active: true,
       extraClass: "meta-box",
     })}${groups}
