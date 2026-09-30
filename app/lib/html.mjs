@@ -305,16 +305,14 @@ export function identityFilterNav(basePath, { tags = [], unsealed = false } = {}
   </nav>`;
 }
 
-/** Switcher for fact-tag lists. Not the identity filter. */
-export function attributeTagNav(activePath) {
-  const opts = ATTRIBUTE_TAGS.map((tag) => {
+function keymapTagSection(activePath) {
+  const tags = ATTRIBUTE_TAGS.map((tag) => {
     const on = tag.path === activePath;
-    return `<option value="${esc(tag.path)}"${on ? " selected" : ""}>${esc(tag.nav)}</option>`;
+    return `<a class="keychip keymap-tag" href="${esc(tag.path)}"${
+      on ? ' aria-current="page"' : ""
+    }>${esc(tag.nav)}</a>`;
   }).join("");
-  return `<nav class="identity-filters" aria-label="Fact tags">
-    <label class="identity-filters-label" for="fact-tag-filter">Tags</label>
-    <select class="identity-filter-select" id="fact-tag-filter" data-filter-select>${opts}</select>
-  </nav>`;
+  return `<nav class="keymap-tags" aria-label="Fact tags"><p class="keymap-section">Tags</p>${tags}</nav>`;
 }
 
 export function keymapFooter(activePath) {
@@ -328,6 +326,7 @@ export function keymapFooter(activePath) {
     .join("");
   return `<footer class="keymap" aria-label="Catalog">
     <div class="keymap-keys">${chips}</div>
+    ${keymapTagSection(activePath)}
     <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm, red-folder-comm, and central-casting stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;
 }

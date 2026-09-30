@@ -11,8 +11,9 @@ export const IDENTITY_TAGS = [
 export const IDENTITY_TAG_IDS = IDENTITY_TAGS.map((t) => t.id);
 
 /**
- * Fact tags. Not identity, not implied by an event kind, and not a keymap page.
- * A chip links to the list of people who already have the stored fact.
+ * Fact tags. Not identity, and not implied by an event kind.
+ * The catalog menu has a letterless Tags section. Each row links to the people who already store that fact.
+ * They are not catalog hotkeys.
  */
 export const ATTRIBUTE_TAGS = [
   {

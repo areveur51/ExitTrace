@@ -9,14 +9,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("Home version is package.json only and does not fall back to 1.0.0", () => {
   const version = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
-  assert.equal(version, "1.2.0");
+  assert.equal(version, "1.2.2");
 
   const shown = homeBody({ version });
-  assert.match(shown, /class="ver">v1\.2\.0</);
+  assert.match(shown, /class="ver">v1\.2\.2</);
   assert.doesNotMatch(shown, /1\.0\.0/);
 
   const missing = homeBody({ version: "" });
   assert.match(missing, /class="ver">vunknown</);
   assert.doesNotMatch(missing, /1\.0\.0/);
   assert.doesNotMatch(homeBody({}), /1\.0\.0/);
+
+  assert.doesNotMatch(shown, /home-tag-pill|aria-label="Fact tags"/);
 });

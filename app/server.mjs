@@ -50,7 +50,6 @@ import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
 import { publicGitSha } from "./lib/logical-heal.mjs";
 import {
   addBody,
-  attributeTagNav,
   identityFilterNav,
   dashboardAgeBody,
   dashboardBody,
@@ -864,7 +863,7 @@ async function handle(req, res) {
         crumbLabel: factTag.nav,
         countLabel: countText(factTag.nav, meta, rows.length),
         lede: factTag.lede,
-        body: `${attributeTagNav(factTag.path)}${listSection(
+        body: `${listSection(
           peopleList(rows),
           pager(meta, { basePath: factTag.path, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({

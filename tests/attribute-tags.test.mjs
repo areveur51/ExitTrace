@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { attributeTagNav, identityFilterNav, personDetail } from "../app/lib/html.mjs";
+import { identityFilterNav, keymapFooter, personDetail } from "../app/lib/html.mjs";
 import { handle } from "../app/server.mjs";
 import { setMemory } from "../app/lib/store.mjs";
 import { normalizeTags, personTags } from "../app/lib/tags.mjs";
@@ -54,10 +54,12 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.match(firings, /Civilians/);
   assert.doesNotMatch(firings, /Revoked clearances/);
   assert.doesNotMatch(firings, /Trump nicknames/);
-  const facts = attributeTagNav("/tags/trump-nicknames");
+  const facts = keymapFooter("/tags/trump-nicknames");
   assert.match(facts, /aria-label="Fact tags"/);
-  assert.match(facts, /Trump nicknames/);
-  assert.match(facts, /Revoked clearances/);
+  assert.match(facts, /class="keymap-section">Tags</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/trump-nicknames" aria-current="page"/);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/clearance-revoked"/);
+  assert.doesNotMatch(facts, /keymap-tag[^>]*data-key=/);
   assert.doesNotMatch(facts, /Civilians/);
 });
 
@@ -123,6 +125,8 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.doesNotMatch(nicknames.body, /href="\/people\/james-clapper"/);
   assert.doesNotMatch(nicknames.body, /href="\/people\/other-person"/);
   assert.match(nicknames.body, /aria-label="Fact tags"/);
+  assert.match(nicknames.body, /href="\/tags\/trump-nicknames" aria-current="page"/);
+  assert.doesNotMatch(nicknames.body, /id="fact-tag-filter"/);
   assert.doesNotMatch(nicknames.body, /aria-label="Identity filters"/);
 
   const clearances = await requestPage("/tags/clearance-revoked");
@@ -133,6 +137,9 @@ test("fact-tag lists include only people who already have that tag", async () =>
 
   const firings = await requestPage("/firings");
   assert.match(firings.body, /href="\/people\/other-person"/);
-  assert.doesNotMatch(firings.body, /Revoked clearances/);
-  assert.doesNotMatch(firings.body, /Trump nicknames/);
+  assert.match(firings.body, /class="keymap-tags"/);
+  assert.match(firings.body, /href="\/tags\/clearance-revoked"/);
+  assert.match(firings.body, /href="\/tags\/trump-nicknames"/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>Revoked clearances<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>Trump nicknames<\/option>/);
 });
