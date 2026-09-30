@@ -9,6 +9,18 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-09-29
+
+### Changed
+
+- Fact tags sit in a Tags section of the catalog menu. Revoked clearances and Trump nicknames each open the list of people who store that tag. The rows have no hotkey. The home-page pills and the tag-list dropdown are gone.
+
+## [1.2.1] - 2026-09-29
+
+### Added
+
+- Home page fact-tag pills under the search box. Revoked clearances and Trump nicknames each open the existing list of people who store that tag.
+
 ## [1.2.0] - 2026-09-23
 
 ### Added

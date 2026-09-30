@@ -424,6 +424,12 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /class="keymap-keys"/);
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "e", "l", "k", "t", "w"]);
+  assert.match(res.body, /class="keymap-tags" aria-label="Fact tags"/);
+  assert.match(res.body, /class="keymap-section">Tags</);
+  assert.match(res.body, /class="keychip keymap-tag" href="\/tags\/clearance-revoked">Revoked clearances</);
+  assert.match(res.body, /class="keychip keymap-tag" href="\/tags\/trump-nicknames">Trump nicknames</);
+  assert.doesNotMatch(res.body, /keymap-tag[^>]*data-key=/);
+  assert.doesNotMatch(res.body, /home-tag-pill/);
   assert.doesNotMatch(res.body, /data-key="n"/);
   assert.doesNotMatch(res.body, /data-key="s"/);
   assert.doesNotMatch(res.body, /\]<\/span> Add</);
