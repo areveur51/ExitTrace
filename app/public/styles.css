@@ -266,8 +266,9 @@ a:hover { color: var(--ink); }
   text-align: center;
   font-family: var(--font-ui);
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
   text-shadow: none;
 }
 .tui-n { color: var(--cyan); text-align: right; font-family: var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; text-shadow: var(--glow-cyan); }

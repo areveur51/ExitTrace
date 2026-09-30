@@ -195,5 +195,5 @@ test("breadcrumb markup links ancestors and marks the current page", () => {
   });
   assert.match(page, /class="tui-q crumbs"/);
   assert.match(page, /<a href="\/">Home<\/a>/);
-  assert.match(page, /class="tui-app-link" href="\/"/);
+  assert.match(page, /class="tui-app-link" href="\/">exittrace\.areveur\.com</);
 });
