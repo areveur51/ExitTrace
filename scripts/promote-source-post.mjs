@@ -44,13 +44,16 @@ Promote one Unsorted source post into an identified person row.
 Requires a named subject, a calendar event_date (not posted_at), a catalog
 category, and at least ${CITE_FLOOR} http(s) cite URLs supplied by the
 caller. A new person insert is also fail-closed on country of
-origin, position, organization, and reason of event (comments/reason).
+origin, position, organization, reason of event (comments/reason),
+and an eligible portrait stored under /media/people/.
 birth_date is optional: unknown stores as SQL NULL, never "". Do not invent
 from age or month-year. Age filters skip a null birth_date.
 Military inserts also require branch (the existing event field).
-Does not invent cites or a portrait. Attaches a local Wikimedia or
-official-gov still under /media/people/ when one already exists. Does not
-overwrite an existing gold photo. Missing still stays blank. Fills net
+Does not invent cites or a portrait. A new person requires an eligible
+Wikimedia, official-gov, or curated-news still under /media/people/.
+Does not overwrite an existing gold photo. An existing person can be
+annotated without a new portrait. Older cards saved blank stay blank
+until a later fill. Fills net
 worth from a published Forbes or Bloomberg estimate when one exists.
 Does not invent a figure or overwrite existing gold net-worth. If none,
 usd stays null with a short missing-estimate note. Leaves the

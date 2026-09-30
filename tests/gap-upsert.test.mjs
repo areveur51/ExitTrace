@@ -200,7 +200,10 @@ test("people.central_casting is a json array and is never invented", () => {
   ]);
   assert.match(kept.sql, /central_casting/);
   assert.match(kept.sql, /\$\d+::jsonb/);
-  assert.equal(kept.params.at(-1), JSON.stringify(cites));
+  assert.equal(
+    kept.params.find((value) => String(value).includes("justice.gov")),
+    JSON.stringify(cites),
+  );
 
   const fromString = pickRow("people", {
     id: "casey-vale",
@@ -217,6 +220,99 @@ test("people.central_casting is a json array and is never invented", () => {
   });
   assert.equal(objectShape.central_casting, "[]");
   assert.equal(JSON.stringify(objectShape).includes("not-a-membership"), false);
+});
+
+test("people.nicknames stay a cited list and are never invented", () => {
+  const missing = pickRow("people", { id: "casey-vale" });
+  assert.equal(missing.nicknames, "[]");
+
+  const junk = pickRow("people", {
+    id: "casey-vale",
+    nicknames: { name: "Nope", by: "Donald Trump" },
+  });
+  assert.equal(junk.nicknames, "[]");
+
+  const oneCite = pickRow("people", {
+    id: "casey-vale",
+    nicknames: [
+      {
+        name: "Nope",
+        by: "Donald Trump",
+        sources: [{ url: "https://www.reuters.com/world/us/one" }],
+      },
+    ],
+  });
+  assert.equal(oneCite.nicknames, "[]");
+
+  const kept = buildUpsertSql("people", [
+    {
+      id: "casey-vale",
+      name: "Casey Vale",
+      nicknames: [
+        {
+          name: "Newscum",
+          by: "Donald Trump",
+          sources: [
+            { url: "https://www.reuters.com/world/us/newscum", publisher: "Reuters", date: "2026-03-16" },
+            { url: "https://apnews.com/article/newscum", publisher: "Associated Press", date: "2025-06-09" },
+          ],
+        },
+      ],
+    },
+  ]);
+  assert.match(kept.sql, /nicknames/);
+  assert.match(kept.sql, /\$\d+::jsonb/);
+  const nickParam = kept.params.find((value) => String(value).includes("Newscum"));
+  assert.ok(nickParam);
+  assert.equal(String(nickParam).includes("wikipedia.org"), false);
+});
+
+test("people.clearances stay a cited list and are never invented", () => {
+  const missing = pickRow("people", { id: "casey-vale" });
+  assert.equal(missing.clearances, "[]");
+
+  const oneCite = pickRow("people", {
+    id: "casey-vale",
+    clearances: [
+      {
+        status: "revoked",
+        date: "2025-01-20",
+        authority: "Executive Order 14152",
+        sources: [{ url: "https://www.govinfo.gov/content/pkg/FR-2025-01-29/html/2025-01954.htm" }],
+      },
+    ],
+  });
+  assert.equal(oneCite.clearances, "[]");
+
+  const kept = buildUpsertSql("people", [
+    {
+      id: "casey-vale",
+      name: "Casey Vale",
+      clearances: [
+        {
+          status: "revoked",
+          date: "2025-01-20",
+          authority: "Executive Order 14152",
+          sources: [
+            {
+              url: "https://www.govinfo.gov/content/pkg/FR-2025-01-29/html/2025-01954.htm",
+              publisher: "Federal Register",
+              date: "2025-01-20",
+            },
+            {
+              url: "https://www.whitehouse.gov/presidential-actions/2025/01/holding-former-government-officials-accountablefor-election-interference-and-improper-disclosure-of-sensitive-governmental-information/",
+              publisher: "The White House",
+              date: "2025-01-20",
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+  assert.match(kept.sql, /clearances/);
+  const clearanceParam = kept.params.find((value) => String(value).includes("14152"));
+  assert.ok(clearanceParam);
+  assert.equal(String(clearanceParam).includes("wikipedia.org"), false);
 });
 
 test("person_events unsealed stays annotate-only true coalesce", () => {

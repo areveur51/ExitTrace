@@ -21,6 +21,8 @@ import {
 import { personTags } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeCentralCasting } from "./kind-comms.mjs";
+import { mergeClearances, normalizeClearances } from "./clearances.mjs";
+import { mergeNicknames, normalizeNicknames } from "./nicknames.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
@@ -517,6 +519,8 @@ export function mergePersonAnnotate(gold, prior) {
     career: mergeCareer(keep.career, extra.career),
     tags: [...(keep.tags || []), ...(extra.tags || [])],
     central_casting: mergeCentralCasting(keep.central_casting, extra.central_casting),
+    nicknames: mergeNicknames(keep.nicknames, extra.nicknames),
+    clearances: mergeClearances(keep.clearances, extra.clearances),
   });
 }
 
@@ -732,5 +736,7 @@ export function buildPersonRow(input, people) {
     summary: input.summary,
     events,
     career: personCareer(input),
+    nicknames: normalizeNicknames(input.nicknames),
+    clearances: normalizeClearances(input.clearances),
   });
 }

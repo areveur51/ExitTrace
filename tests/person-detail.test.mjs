@@ -152,6 +152,7 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   assert.match(header, /Origin · United States/);
   assert.doesNotMatch(header, /Anchor, CNN|Example Desk|USA|News|lead note/);
   assert.doesNotMatch(header, /Role ·/);
+  assert.doesNotMatch(header, /Trump nickname|data-kind="nickname"/);
 
   const html = personDetail(person);
   assert.equal(paneCount(html), 1);
@@ -174,8 +175,9 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   assert.match(html, /casey-vale-quit/);
   assert.doesNotMatch(html, /dog-comm|dog_comms/);
   assert.doesNotMatch(html, /Synopsis|Role ·/);
-  assert.match(html, /class="detail-photo portrait empty-portrait"/);
-  assert.match(html, /src="\/empty-portrait\.jpg/);
+  assert.doesNotMatch(html, /data-kind="nickname"/);
+  assert.match(html, /\/media\/people\/casey-vale\.jpg/);
+  assert.doesNotMatch(html, /class="detail-photo portrait empty-portrait"/);
   assert.doesNotMatch(html, /class="initials detail-photo portrait"/);
   assert.doesNotMatch(html, /class="portrait thumb"/);
   assert.doesNotMatch(html, /upload\.wikimedia\.org/);

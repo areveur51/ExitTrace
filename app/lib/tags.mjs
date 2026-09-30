@@ -10,6 +10,29 @@ export const IDENTITY_TAGS = [
 
 export const IDENTITY_TAG_IDS = IDENTITY_TAGS.map((t) => t.id);
 
+/**
+ * Fact tags. Not identity, not implied by an event kind, and not a keymap page.
+ * A chip links to the list of people who already have the stored fact.
+ */
+export const ATTRIBUTE_TAGS = [
+  {
+    id: "clearance_revoked",
+    nav: "Revoked clearances",
+    path: "/tags/clearance-revoked",
+    lede:
+      "People with a stored security-clearance revocation. The tag is that fact. It is not a firing and not an identity filter.",
+  },
+  {
+    id: "trump_nickname",
+    nav: "Trump nicknames",
+    path: "/tags/trump-nicknames",
+    lede:
+      "People with a stored Trump nickname. The tag is that fact. It is not an identity filter.",
+  },
+];
+
+export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
+
 /** Event kinds that imply an identity tag. Gold rows often have only the kind. */
 export const KIND_TAGS = {
   death_celebrity: ["celebrity"],
@@ -29,7 +52,7 @@ export const PATH_TAGS = {
   "/government": ["official"],
 };
 
-const TAG_SET = new Set(IDENTITY_TAG_IDS);
+const TAG_SET = new Set([...IDENTITY_TAG_IDS, ...ATTRIBUTE_TAG_IDS]);
 
 /**
  * Event filter token for indictment lists. Not an identity tag and not a KEEP kind.
@@ -224,4 +247,13 @@ export function filterPath(basePath, filter) {
 
 export function identityTagById(id) {
   return IDENTITY_TAGS.find((t) => t.id === id) || null;
+}
+
+export function attributeTagById(id) {
+  return ATTRIBUTE_TAGS.find((t) => t.id === id) || null;
+}
+
+export function attributeTagByPath(pathname) {
+  const p = String(pathname || "").split("?")[0];
+  return ATTRIBUTE_TAGS.find((t) => t.path === p) || null;
 }

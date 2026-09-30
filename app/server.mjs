@@ -50,6 +50,7 @@ import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
 import { publicGitSha } from "./lib/logical-heal.mjs";
 import {
   addBody,
+  attributeTagNav,
   identityFilterNav,
   dashboardAgeBody,
   dashboardBody,
@@ -82,7 +83,7 @@ import {
   parsePage,
 } from "./lib/paginate.mjs";
 import { parseAgeBand } from "./lib/age.mjs";
-import { filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
+import { attributeTagByPath, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
   fillEmptyFromGrokipedia,
@@ -832,6 +833,47 @@ async function handle(req, res) {
         countLabel: `${model.people} people · ${model.trends.events} events`,
         lede: "Live unique-person ranks from the same event columns harvest writes. One card per person. Reason is the KEEP kind. Empty org, country, branch, and position stay empty.",
         body: dashboardBody(model, { path: "/dashboard", range }),
+      }),
+    );
+  }
+
+  const factTag = attributeTagByPath(p);
+  if (factTag) {
+    const tags = [factTag.id];
+    const pageSize = parseCookiePageSize(req.headers.cookie);
+    const listOpts = { tags };
+    const total = await countPeople(listOpts);
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize,
+    });
+    const rows = await listPeople({
+      ...listOpts,
+      limit: meta.limit,
+      offset: meta.offset,
+    });
+    return sendHtml(
+      res,
+      layout({
+        title: factTag.nav,
+        path: factTag.path,
+        heading: factTag.nav,
+        query: factTag.nav,
+        pageSize,
+        crumbLabel: factTag.nav,
+        countLabel: countText(factTag.nav, meta, rows.length),
+        lede: factTag.lede,
+        body: `${attributeTagNav(factTag.path)}${listSection(
+          peopleList(rows),
+          pager(meta, { basePath: factTag.path, noun: "rows", pageSizes: PAGE_SIZES }),
+          listHead({
+            title: factTag.nav,
+            total: meta.total,
+            index: 1,
+            of: rows.length,
+          }),
+        )}`,
       }),
     );
   }

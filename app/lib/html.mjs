@@ -19,6 +19,12 @@ import { storedAgeAtEvent } from "./age.mjs";
 import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
+import {
+  clearanceMetaLabel,
+  clearanceStatusLabel,
+  normalizeClearances,
+} from "./clearances.mjs";
+import { isTrumpNickname, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
 import { personEvents } from "./promote.mjs";
 import {
   PAGE_SIZE,
@@ -58,7 +64,9 @@ import {
   THEME_STORAGE_KEY,
 } from "./themes.mjs";
 import {
+  ATTRIBUTE_TAGS,
   IDENTITY_TAGS,
+  attributeTagById,
   catalogMainPath,
   filterPath,
   indictmentUnsealedSelectOptions,
@@ -294,6 +302,18 @@ export function identityFilterNav(basePath, { tags = [], unsealed = false } = {}
   return `<nav class="identity-filters" aria-label="Identity filters">
     <label class="identity-filters-label" for="identity-filter">Filters</label>
     <select class="identity-filter-select" id="identity-filter" data-filter-select>${opts}</select>
+  </nav>`;
+}
+
+/** Switcher for fact-tag lists. Not the identity filter. */
+export function attributeTagNav(activePath) {
+  const opts = ATTRIBUTE_TAGS.map((tag) => {
+    const on = tag.path === activePath;
+    return `<option value="${esc(tag.path)}"${on ? " selected" : ""}>${esc(tag.nav)}</option>`;
+  }).join("");
+  return `<nav class="identity-filters" aria-label="Fact tags">
+    <label class="identity-filters-label" for="fact-tag-filter">Tags</label>
+    <select class="identity-filter-select" id="fact-tag-filter" data-filter-select>${opts}</select>
   </nav>`;
 }
 
@@ -1628,6 +1648,60 @@ function eventKindTitle(kind) {
   return cat ? cat.title : kind || "Event";
 }
 
+function nicknameMetaLine(row) {
+  const items = normalizeNicknames(row?.nicknames);
+  if (!items.length) return "";
+  const trump = items.every(isTrumpNickname);
+  const label = trump ? trumpNicknameLabel(items.length) : items.length > 1 ? "Nicknames" : "Nickname";
+  return `<p class="meta-line">${esc(label)} · ${esc(items.map((item) => item.name).join(", "))}</p>`;
+}
+
+function clearanceMetaLine(row) {
+  const items = normalizeClearances(row?.clearances);
+  if (!items.length) return "";
+  const bits = items.map((item) => {
+    const label = clearanceStatusLabel(item.status);
+    return item.date ? `${label} · ${formatDate(item.date)}` : label;
+  });
+  return `<p class="meta-line">${esc(clearanceMetaLabel(items.length))} · ${esc(bits.join("; "))}</p>`;
+}
+
+export function clearanceSections(row) {
+  return normalizeClearances(row?.clearances)
+    .map((item) => {
+      const label = clearanceStatusLabel(item.status);
+      const when = item.date
+        ? `<p class="meta-line">${esc(label)} · <time datetime="${esc(item.date)}">${esc(formatDate(item.date))}</time></p>`
+        : `<p class="meta-line">${esc(label)}</p>`;
+      const authority = item.authority ? `<p class="meta-line">${esc(item.authority)}</p>` : "";
+      const role = item.role ? `<p class="meta-line">${esc(item.role)}</p>` : "";
+      const scope = item.scope ? `<p class="meta-line">${esc(item.scope)}</p>` : "";
+      return personEventSection({
+        title: "Security clearance",
+        kind: "clearance",
+        bodyHtml: `${when}${authority}${role}${scope}`,
+        cites: item.sources,
+        className: "person-event-section clearance-section",
+      });
+    })
+    .join("");
+}
+
+export function nicknameSections(row) {
+  return normalizeNicknames(row?.nicknames)
+    .map((item) => {
+      const title = isTrumpNickname(item) ? "Trump nickname" : "Nickname";
+      return personEventSection({
+        title,
+        kind: "nickname",
+        bodyHtml: `<p class="meta-line">${esc(item.name)}</p>`,
+        cites: item.sources,
+        className: "person-event-section nickname-section",
+      });
+    })
+    .join("");
+}
+
 export function personHeader(row, extras = {}) {
   const birth = row.birth_date
     ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
@@ -1648,7 +1722,7 @@ export function personHeader(row, extras = {}) {
       metaHtml: detailMetaBlock({
         title: row.name || "—",
         ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
-        lines: [birth, origin, personTagChips(row), grokipediaBlock(row, extras)],
+        lines: [birth, origin, nicknameMetaLine(row), clearanceMetaLine(row), personTagChips(row), grokipediaBlock(row, extras)],
         citeHtml: citeFromRow(row),
         attributionHtml: attributionFrom(row, extras.attributions, "person"),
       }),
@@ -1773,10 +1847,12 @@ function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
     .map((ev) => eventTagRow(ev, { birthDate: row.birth_date }))
     .filter(Boolean)
     .join("");
+  const nicknames = nicknameSections(row);
+  const clearances = clearanceSections(row);
   const centralCasting = centralCastingDetailHtml(row, clips, seen);
   const epstein = epsteinFlightLogSection(epsteinLegs);
-  if (!rows && !centralCasting && !epstein) return "";
-  return `<section class="event-timeline" aria-label="Event timeline">${rows}${centralCasting}${epstein}</section>`;
+  if (!rows && !nicknames && !clearances && !centralCasting && !epstein) return "";
+  return `<section class="event-timeline" aria-label="Event timeline">${nicknames}${clearances}${rows}${centralCasting}${epstein}</section>`;
 }
 
 function personTagChips(row) {
@@ -1786,6 +1862,10 @@ function personTagChips(row) {
   const main = catalogMainPath(cat?.path || "/firings");
   const chips = tags
     .map((id) => {
+      const fact = attributeTagById(id);
+      if (fact) {
+        return `<a class="keychip" href="${esc(fact.path)}">${esc(fact.nav)}</a>`;
+      }
       const tag = IDENTITY_TAGS.find((t) => t.id === id);
       if (!tag) return "";
       return `<a class="keychip" href="${esc(filterPath(main, { tags: [id] }))}">${esc(tag.nav)}</a>`;
@@ -2461,7 +2541,7 @@ const ADD_CATEGORIES = [
 ];
 
 export function addCiteRule() {
-  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. A new person insert is fail-closed: country of origin, position, organization, reason of event, event date, and two official cites. Birth date is optional — unknown stores as null and is not invented from age or month-year. Military inserts also require branch (the existing event field). Country of origin and branch are not guessed. Origin is not the event country. If the person already exists, the new kind is attached — a second row is not created. Attach a real portrait on a new entry: Wikimedia, an official government image, a curated news still, or a photo supplied for this card. Leaving the portrait blank is not recommended. A portrait over 400 KB or 1600 pixels on a side is stored as a compressed JPEG. Do not invent a face. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. Group operations are a separate operation card — not a person. Operations need a name, event date, agencies, summary, a signed tag, and two official DOJ/gov/news-org cites. Victim and arrest counts stay blank unless a cite states them. Named children are not stored. A host process looks up published sources and applies the row.</p>`;
+  return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. A new person insert is fail-closed: country of origin, position, organization, reason of event, event date, two official cites, and an eligible portrait. Birth date is optional — unknown stores as null and is not invented from age or month-year. Military inserts also require branch (the existing event field). Country of origin and branch are not guessed. Origin is not the event country. If the person already exists, the new kind is attached — a second row is not created. A new person requires an eligible portrait: Wikimedia, an official government image, a curated news still, or a photo supplied for this card. The card is not created without one. A portrait over 400 KB or 1600 pixels on a side is stored as a compressed JPEG. Do not invent a face. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. Group operations are a separate operation card — not a person. Operations need a name, event date, agencies, summary, a signed tag, and two official DOJ/gov/news-org cites. Victim and arrest counts stay blank unless a cite states them. Named children are not stored. A host process looks up published sources and applies the row.</p>`;
 }
 
 export function addBody({
@@ -2557,7 +2637,7 @@ export function addBody({
           <span>Portrait URL</span>
           <input type="url" name="photo" value="${esc(values.photo || "")}" placeholder="https://upload.wikimedia.org/… or https://….gov/…" inputmode="url">
         </label>
-        <p class="hint">Attach a Wikimedia, official .gov, or curated news portrait. Leaving it blank is not recommended. Do not invent a photo.</p>
+        <p class="hint">A new person requires an eligible portrait: Wikimedia, official .gov, or a curated news still. Do not invent a photo.</p>
         <label class="field">
           <span>Net worth (USD)</span>
           <input type="text" name="net_worth_usd" inputmode="numeric" value="${esc(values.net_worth_usd || "")}" placeholder="2500000000" autocomplete="off">

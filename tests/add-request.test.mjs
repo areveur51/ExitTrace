@@ -25,7 +25,7 @@ import {
   setMemory,
   writeFileStore,
 } from "../app/lib/store.mjs";
-import { LOCK_CLI_FLAGS, NEW_PERSON_LOCK } from "./new-person-lock.mjs";
+import { LOCK_CLI_FLAGS, LOCK_MEDIA_DIR, NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = path.join(ROOT, "scripts", "process-add-request.mjs");
@@ -132,7 +132,7 @@ test("/add renders person and dog modes in TUI chrome", async () => {
   assert.match(person.body, /name="branch"/);
   assert.match(person.body, /name="hint_url"/);
   assert.match(person.body, /name="photo"/);
-  assert.match(person.body, /Leaving it blank is not recommended/);
+  assert.match(person.body, /A new person requires an eligible portrait/);
   assert.match(person.body, /do not invent a photo/i);
   assert.match(person.body, /Existing gold photos are not overwritten/);
   assert.match(person.body, /name="net_worth_usd"/);
@@ -430,7 +430,7 @@ test("add-process CLI applies next pending with cite flags", async () => {
       "arrests",
       ...LOCK_CLI_FLAGS,
     ],
-    { DATA_DIR: tmp },
+    { DATA_DIR: tmp, MEDIA_DIR: LOCK_MEDIA_DIR },
   );
   assert.equal(ok.code, 0, ok.stderr);
   assert.match(ok.stdout, /add-process created person=casey-vale people=73/);
@@ -452,7 +452,7 @@ function writeStill(dir, name, bytes = "portrait-bytes") {
   return file;
 }
 
-test("local eligible still attaches; missing or ineligible still stays blank", async () => {
+test("local eligible still attaches; a new person without one is rejected", async () => {
   setMemory(goldSeed());
   const media = fs.mkdtempSync(path.join(os.tmpdir(), "et-media-"));
   writeStill(path.join(media, "people"), "casey-vale.jpg");
@@ -478,17 +478,20 @@ test("local eligible still attaches; missing or ineligible still stays blank", a
     category: "firings",
     event_date: "2024-08-01",
   });
-  const empty = await processAddRequest({
-    id: blank.request.id,
-    overlay: {
-      ...NEW_PERSON_LOCK,
-      cite_urls: CITES,
-      photo: "https://example.com/selfie.jpg",
-      mediaDir: blankMedia,
-    },
-  });
-  assert.equal(empty.person.photo, "");
-  assert.equal(empty.person.photo_credit, "");
+  await assert.rejects(
+    () =>
+      processAddRequest({
+        id: blank.request.id,
+        overlay: {
+          ...NEW_PERSON_LOCK,
+          cite_urls: CITES,
+          photo: "https://example.com/selfie.jpg",
+          mediaDir: blankMedia,
+        },
+      }),
+    (err) => err.code === "missing_portrait",
+  );
+  assert.equal(await getPerson("riley-chen"), null);
   assert.equal(fs.existsSync(path.join(blankMedia, "people", "riley-chen.jpg")), false);
   assert.equal(goldSeed().people.length, 72);
 });

@@ -180,7 +180,7 @@ function optionalPortrait(raw) {
   }
   if (!isEligiblePortraitUrl(text)) {
     throw new AddError(
-      "portrait must be a Wikimedia or official government still; leave blank if none",
+      "portrait must be a Wikimedia or official government still, or a curated news still. A new person is not created without one",
       "ineligible_photo",
     );
   }

@@ -29,7 +29,7 @@ import {
   setMemory,
   writeFileStore,
 } from "../app/lib/store.mjs";
-import { LOCK_CLI_FLAGS, NEW_PERSON_LOCK } from "./new-person-lock.mjs";
+import { LOCK_CLI_FLAGS, LOCK_MEDIA_DIR, NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE = path.join(ROOT, "tests", "fixtures", "source-posts.jsonl");
@@ -130,7 +130,7 @@ test("promote fixture source post adds one officials-style person", async () => 
   assert.notEqual(result.person.event_date, arrest.posted_at);
   assert.notEqual(result.person.name, arrest.poster_name);
   assert.equal(result.person.category, "arrests");
-  assert.equal(result.person.photo, "");
+  assert.equal(result.person.photo, "/media/people/casey-vale.jpg");
   assert.equal(result.person.net_worth_usd, null);
   assert.equal(result.person.net_worth_note, MISSING_NET_WORTH_NOTE);
   assert.equal(result.person.net_worth_source, "");
@@ -152,7 +152,8 @@ test("promote fixture source post adds one officials-style person", async () => 
 
   const html = personDetail(result.person);
   assert.match(html, /Casey Vale/);
-  assert.match(html, /src="\/empty-portrait\.jpg/);
+  assert.match(html, /\/media\/people\/casey-vale\.jpg/);
+  assert.doesNotMatch(html, /class="detail-photo portrait empty-portrait"/);
   assert.match(html, /alt="Casey Vale"/);
   assert.doesNotMatch(html, />CV<\/span>/);
   assert.doesNotMatch(html, /example_desk/);
@@ -228,7 +229,7 @@ test("existing gold person is annotate-only", async () => {
   assert.equal(others.length, 71);
 });
 
-test("promote attaches a same-id local still and leaves a missing still blank", async () => {
+test("promote attaches a same-id local still and rejects a new person without one", async () => {
   await parkedFixture();
   const media = fs.mkdtempSync(path.join(os.tmpdir(), "et-promote-media-"));
   fs.mkdirSync(path.join(media, "people"), { recursive: true });
@@ -251,18 +252,21 @@ test("promote attaches a same-id local still and leaves a missing still blank", 
   assert.equal(created.person.net_worth_source, "https://www.forbes.com/profile/casey-vale/");
 
   const blankMedia = fs.mkdtempSync(path.join(os.tmpdir(), "et-promote-blank-"));
-  const death = await promoteSourcePost({
-    ...NEW_PERSON_LOCK,
-    source_url: "https://example.com/n/death-1",
-    subject: "Riley Chen",
-    event_date: "2024-05-10",
-    category: "death_official",
-    cite_urls: CITES,
-    photo: "https://x.com/RandomCat/photo.jpg",
-    mediaDir: blankMedia,
-  });
-  assert.equal(death.person.photo, "");
-  assert.equal(death.person.photo_credit, "");
+  await assert.rejects(
+    () =>
+      promoteSourcePost({
+        ...NEW_PERSON_LOCK,
+        source_url: "https://example.com/n/death-1",
+        subject: "Riley Chen",
+        event_date: "2024-05-10",
+        category: "death_official",
+        cite_urls: CITES,
+        photo: "https://x.com/RandomCat/photo.jpg",
+        mediaDir: blankMedia,
+      }),
+    (err) => err instanceof PromoteError && err.code === "missing_portrait",
+  );
+  assert.equal(await getPerson("riley-chen"), null);
 });
 
 test("reject missing subject, missing date, and fewer than two cites", async () => {
@@ -363,7 +367,7 @@ test("death promote sets death_date; file hydrate keeps extras", async () => {
     cite_urls: CITES,
   });
   assert.equal(result.person.death_date, "2024-05-10");
-  assert.equal(result.person.photo, "");
+  assert.equal(result.person.photo, "/media/people/casey-vale.jpg");
 
   const seed = goldSeed();
   const merged = mergeGoldPeople(seed.people, [
@@ -410,7 +414,7 @@ test("one-shot CLI writes the file store and stays idempotent", async () => {
     "Arrested, contemporaneous news reports said.",
     ...LOCK_CLI_FLAGS,
   ];
-  const first = await runPromote(flags, { DATA_DIR: tmp });
+  const first = await runPromote(flags, { DATA_DIR: tmp, MEDIA_DIR: LOCK_MEDIA_DIR });
   assert.equal(first.code, 0, first.stderr);
   assert.match(first.stdout, /promote created person=casey-vale people=73/);
   assert.match(first.stdout, /unsorted/);
@@ -419,7 +423,7 @@ test("one-shot CLI writes the file store and stays idempotent", async () => {
   const store = JSON.parse(fs.readFileSync(path.join(tmp, "store.json"), "utf8"));
   assert.equal(store.people.length, 73);
   const person = store.people.find((r) => r.id === "casey-vale");
-  assert.equal(person.photo, "");
+  assert.equal(person.photo, "/media/people/casey-vale.jpg");
   assert.equal(person.sources.length, 2);
   assert.ok(store.source_posts.some((r) => r.source_url.includes("/n/arrest-1") && !r.gold_person_id));
   assert.ok(!store.people.some((r) => /jessica bowie/i.test(r.name)));
