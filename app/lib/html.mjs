@@ -524,7 +524,7 @@ function topBar({ query, countLabel, path, crumbLabel, categoryId, mode, heading
   });
   return `<header class="tui-top">
     ${breadcrumbNav(items)}
-    <div class="tui-app"><a class="tui-app-link" href="/">exittrace</a></div>
+    <div class="tui-app"><a class="tui-app-link" href="/">exittrace.areveur.com</a></div>
     <div class="tui-n">${countLabel || ""}</div>
   </header>`;
 }
