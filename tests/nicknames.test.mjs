@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { personDetail, personHeader } from "../app/lib/html.mjs";
-import { normalizeNicknames } from "../app/lib/nicknames.mjs";
+import { peopleList, personDetail, personHeader } from "../app/lib/html.mjs";
+import { nicknameCatalogDate, normalizeNicknames, trumpNicknameReportDate } from "../app/lib/nicknames.mjs";
 import { applyIdentifiedPerson, ensurePersonNicknames, getPerson, setMemory } from "../app/lib/store.mjs";
 import { LOCK_MEDIA_DIR, LOCK_PORTRAIT, NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
@@ -21,6 +21,24 @@ const CITES = [
 ];
 
 const NICK = [{ name: "Sleepy Joe", by: "Donald Trump", sources: CITES }];
+
+test("a nickname-only card dates from the earliest Trump-nickname cite", () => {
+  assert.equal(trumpNicknameReportDate(NICK), "2019-06-11");
+  assert.equal(
+    trumpNicknameReportDate([
+      {
+        name: "Newscum",
+        by: "Donald Trump",
+        sources: [
+          { url: "https://www.reuters.com/world/us/newscum", date: "2026-03-16" },
+          { url: "https://apnews.com/article/newscum", date: "2025-06-09" },
+        ],
+      },
+    ]),
+    "2025-06-09",
+  );
+  assert.equal(trumpNicknameReportDate([{ name: "Sleepy Joe", by: "Someone Else", sources: CITES }]), null);
+});
 
 test("a nickname without two official cites is dropped", () => {
   assert.deepEqual(normalizeNicknames(undefined), []);
@@ -151,8 +169,19 @@ test("nickname update leaves the exit card alone and creates a card when the per
   assert.equal(created.person.category, "nickname");
   assert.equal(created.person.country_of_origin, "");
   assert.equal(created.person.event_date, null);
+  assert.equal(nicknameCatalogDate(created.person), "2025-06-09");
   assert.equal(created.person.photo, "/media/people/gavin-newsom.jpg");
   assert.deepEqual(created.person.events, []);
+  const list = peopleList([created.person]);
+  assert.match(list, /datetime="2025-06-09"/);
+  assert.match(list, />2025</);
+  assert.doesNotMatch(list, /Undated/);
+  const kept = peopleList([
+    { ...updated.person, name: "Joe Biden" },
+    created.person,
+  ]);
+  assert.match(kept, /datetime="2021-01-20"/);
+  assert.doesNotMatch(kept, /datetime="2019-06-11"/);
   assert.match(personDetail(created.person), /Trump nickname · Newscum/);
   assert.match(personDetail(created.person), /data-kind="nickname"/);
 });

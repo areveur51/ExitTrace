@@ -24,8 +24,8 @@ import {
   clearanceStatusLabel,
   normalizeClearances,
 } from "./clearances.mjs";
-import { isTrumpNickname, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
-import { personEvents } from "./promote.mjs";
+import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
+import { asEventDate, personEvents } from "./promote.mjs";
 import {
   PAGE_SIZE,
   PAGE_SIZES,
@@ -1140,11 +1140,16 @@ function classificationMediaSlot(inner) {
   return `<div class="row-media">${content}</div>`;
 }
 
+/** Stored exit date, or the cite day when the only entry is a Trump nickname. */
+export function personListDate(row) {
+  return asEventDate(row?.event_date) || nicknameCatalogDate(row) || "";
+}
+
 /** Shared KEEP person row: dashboard slices, category lists, and search. */
 export function personRow(row, { selected, showDeath, badges = "" } = {}) {
   const href = `/people/${encodeURIComponent(row.id)}`;
   const previewDate =
-    showDeath && row.death_date ? row.death_date : row.event_date;
+    showDeath && row.death_date ? row.death_date : personListDate(row);
   return `<a class="tui-row person-card${selected ? " is-selected" : ""}" href="${esc(href)}">
     ${classificationMediaSlot(thumb(row.photo, row.name))}
     <div class="tui-row-text">
@@ -1531,8 +1536,19 @@ export function peopleTable(rows, { showDeath } = {}) {
 
 export function peopleList(rows, { showDeath } = {}) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="people-list tui-list">${groupByYear(rows, "event_date", (row, opts) =>
-    personRow(row, { ...opts, showDeath }),
+  const ordered = rows.slice().sort((a, b) => {
+    const da = personListDate(a);
+    const db = personListDate(b);
+    if (da !== db) {
+      if (!da) return 1;
+      if (!db) return -1;
+      return db.localeCompare(da);
+    }
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+  return `<div class="people-list tui-list">${groupByYearItems(
+    ordered.map((row) => ({ date: personListDate(row), row })),
+    (item, opts) => personRow(item.row, { ...opts, showDeath }),
   )}</div>`;
 }
 

@@ -103,3 +103,27 @@ export function trumpNicknameLabel(count) {
 export function isTrumpNickname(item) {
   return clip(item?.by, BY_MAX).toLowerCase() === "donald trump";
 }
+
+/** Earliest official cite day for a Trump nickname. Not an exit date. */
+export function trumpNicknameReportDate(raw) {
+  let earliest = "";
+  for (const item of normalizeNicknames(raw)) {
+    if (!isTrumpNickname(item)) continue;
+    for (const source of item.sources || []) {
+      const date = String(source.date || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (!earliest || date < earliest) earliest = date;
+    }
+  }
+  return earliest || null;
+}
+
+/** Cite day for a card whose only entry is a Trump nickname. Other entries keep their own date. */
+export function nicknameCatalogDate(row) {
+  if (!row || row.event_date || row.death_date) return null;
+  if (String(row.category || "") && row.category !== "nickname") return null;
+  if (Array.isArray(row.clearances) && row.clearances.length) return null;
+  const events = Array.isArray(row.events) ? row.events : [];
+  if (events.some((ev) => ev && ev.kind && ev.kind !== "nickname")) return null;
+  return trumpNicknameReportDate(row.nicknames);
+}
