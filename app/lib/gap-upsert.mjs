@@ -1,10 +1,13 @@
 /**
  * Idempotent published-table gap upsert (lab → Render logical catch-up).
- * Upserts by id: people (including central_casting), dog_comms, operations,
+ * Upserts by id: people (including central_casting, nicknames, and clearances), dog_comms, operations,
  * optional categories, red_folder_comms, central_casting_comms,
  * request_attributions, plus person_events companion.
  * Never DELETE / TRUNCATE / DROP / --clean. Never invent cite URLs.
  */
+
+import { clearanceJson } from "./clearances.mjs";
+import { nicknameJson } from "./nicknames.mjs";
 
 export const PUBLISHED_TABLES = Object.freeze([
   "people",
@@ -43,7 +46,7 @@ const TABLE_KEYS = Object.freeze({
 });
 
 const JSONB_COLS = Object.freeze({
-  people: ["sources", "events", "tags", "career", "central_casting"],
+  people: ["sources", "events", "tags", "career", "central_casting", "nicknames", "clearances"],
   dog_comms: ["snapshot"],
   eagle_comms: ["snapshot"],
   boot_comms: ["snapshot"],
@@ -76,6 +79,8 @@ const PEOPLE_COLS = Object.freeze([
   "tags",
   "career",
   "central_casting",
+  "nicknames",
+  "clearances",
 ]);
 
 const DOG_COLS = Object.freeze([
@@ -243,6 +248,12 @@ function rowValue(table, col, row) {
   }
   if (table === "people" && col === "central_casting") {
     return centralCastingJson(row);
+  }
+  if (table === "people" && col === "nicknames") {
+    return nicknameJson(row?.nicknames);
+  }
+  if (table === "people" && col === "clearances") {
+    return clearanceJson(row?.clearances);
   }
   if (table === "central_casting_comms" && col === "person_id") {
     if (row?.person_id === undefined || row?.person_id === null) return null;

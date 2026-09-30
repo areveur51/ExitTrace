@@ -49,15 +49,18 @@ Fail-closed:
   people need subject + event_date + at least ${CITE_FLOOR} verified
   official news or official gov/news-org social cite URLs.
   A new person insert also needs country of origin, position,
-  organization, and reason of event (comments/reason).
+  organization, reason of event (comments/reason), and an eligible
+  portrait stored under /media/people/.
   birth_date is optional: unknown stores as SQL NULL, never "". Do not invent
   from age or month-year. Age filters skip a null birth_date.
   Military inserts also require branch (existing event field).
   Do not invent cites. Do not copy posted_at into event_date.
   Unofficial or commentary social is extra only, not a cite.
-  Attach a local Wikimedia or official-gov portrait under /media/people/
-  when an eligible still exists. Do not invent a photo. Do not overwrite
-  an existing gold photo. Missing still stays blank.
+  A new person requires an eligible portrait under /media/people/
+  (Wikimedia, official .gov, curated news, or a supplied photo).
+  Do not invent a photo. Do not overwrite an existing gold photo.
+  An existing person can be annotated without a new portrait.
+  Older cards saved blank stay blank until a later fill.
   Fill net_worth_usd / note / source from a published Forbes or Bloomberg
   estimate when one exists. Do not invent a figure. If none, usd stays
   null and the note says no published Forbes/Bloomberg estimate was

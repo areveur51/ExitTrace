@@ -2,7 +2,7 @@
 
 Portraits, dog-comm stills, eagle-comm stills, boot-comm stills, and red-folder-comm stills stored on disk and served at `/media/`.
 
-- Person photos come from Wikimedia Commons or official `.gov` works. Host process (`add-process` / `promote`) stores eligible stills under `media/people/`. The app does not invent a photo or overwrite an existing gold photo. A missing eligible still stays blank.
+- Person photos come from Wikimedia Commons, official `.gov` works, or a curated news still. Host process (`add-process` / `promote`) stores eligible stills under `media/people/`. A new person is not created without one. The app does not invent a photo or overwrite an existing gold photo. An existing card with no eligible still stays blank.
 - Optional X-post screenshots live under `media/screenshots/{people|dog-comms|eagle-comms|boot-comms|red-folder-comms|central-casting-comms|operations}/`. They are additive: a missing screenshot stays blank, and a stored portrait or still is never replaced. Corona comms use `people.screenshot`. Supporting shots for kind-comms use `media/screenshots/{dog-comms|red-folder-comms|central-casting-comms}/{id}/support/{n}/` when present; an empty field omits that tile.
 - Dog-comm stills are used only when the image is freely licensed (typically a U.S. government work).
 - Eagle-comm stills live under `media/eagle-comms/`. List thumbs are derived under `/media/thumbs/eagle-comms/` the same way as dog comms. Detail keeps the gold still. A video post stores the thumbnail, not the mp4.

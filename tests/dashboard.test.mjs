@@ -570,8 +570,11 @@ test("dashboard missing-metadata standing counts empty fields and does not guess
   assert.ok(!noAge.some((row) => row.id === "has-dates"));
   const noNetWorth = peopleMissingField(people, "net_worth");
   assert.ok(!noNetWorth.some((row) => row.id === "has-dates"));
+  const noPhoto = peopleMissingField(people, "photo");
+  assert.ok(!noPhoto.some((row) => row.id === "has-dates"));
+  assert.equal(afterKey.photo.count, seedPeople.length - withPhoto);
   const anyGap = peopleMissingField(people, "all");
-  assert.ok(anyGap.some((row) => row.id === "has-dates"));
+  assert.ok(!anyGap.some((row) => row.id === "has-dates"));
 
   const dash = await requestPage("/dashboard");
   assert.match(dash.body, /Missing metadata/);
@@ -584,7 +587,7 @@ test("dashboard missing-metadata standing counts empty fields and does not guess
   assert.match(listed.body, /id="missing-field-filter"/);
   assert.doesNotMatch(listed.body, /href="\/people\/has-dates"/);
   const allMissing = await requestPage("/dashboard/missing");
-  assert.match(allMissing.body, /href="\/people\/has-dates"/);
+  assert.doesNotMatch(allMissing.body, /href="\/people\/has-dates"/);
   const bogus = await requestPage("/dashboard/missing?field=not-a-field");
   assert.equal(bogus.status, 200);
   assert.doesNotMatch(bogus.body, /href="\/people\//);

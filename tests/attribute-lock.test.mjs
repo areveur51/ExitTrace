@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
 import { test } from "node:test";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -254,4 +256,56 @@ test("gold rows still load empty; annotate does not require the lock", async () 
   const reason = await requestPage("/dashboard/reason");
   assert.equal(reason.status, 200);
   assert.match(reason.body, /Firings/);
+});
+
+test("a new person requires a stored portrait; an existing card does not", async () => {
+  setMemory(goldSeed());
+  const emptyMedia = fs.mkdtempSync(path.join(os.tmpdir(), "et-no-portrait-"));
+  await assert.rejects(
+    () => applyIdentifiedPerson(withNewPersonLock({ ...BASE, photo: "", mediaDir: emptyMedia })),
+    (err) => err instanceof PromoteError && err.code === "missing_portrait",
+  );
+  await assert.rejects(
+    () =>
+      applyIdentifiedPerson(
+        withNewPersonLock({
+          ...BASE,
+          photo: "/empty-portrait.jpg",
+          mediaDir: emptyMedia,
+        }),
+      ),
+    (err) => err instanceof PromoteError && err.code === "missing_portrait",
+  );
+  assert.equal(await getPerson("casey-vale"), null);
+
+  setMemory({
+    people: [
+      {
+        id: "casey-vale",
+        category: "arrests",
+        name: "Casey Vale",
+        role: "",
+        event_date: "2024-01-01",
+        death_date: null,
+        country_of_origin: "",
+        photo: "",
+        photo_credit: "",
+        sources: [],
+        events: [{ kind: "arrests", event_date: "2024-01-01", sources: [] }],
+        tags: [],
+        career: [],
+        nicknames: [],
+      },
+    ],
+    operations: [],
+    source_posts: [],
+  });
+  const annotated = await applyIdentifiedPerson({
+    subject: "Casey Vale",
+    event_date: "2024-08-01",
+    category: "resignations",
+    cite_urls: CITES,
+  });
+  assert.equal(annotated.action, "annotated");
+  assert.equal(annotated.person.photo, "");
 });

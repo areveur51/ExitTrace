@@ -125,6 +125,13 @@ export function isPeopleMediaHref(raw) {
   return text.startsWith("/media/people/") && !text.includes("..");
 }
 
+/** A stored card portrait. The empty-well asset is not a portrait. */
+export function isStoredPeoplePortrait(raw) {
+  const text = String(raw || "").trim().split("?")[0];
+  if (!text || /empty-portrait/i.test(text)) return false;
+  return isPeopleMediaHref(text);
+}
+
 function extOf(name, fallback = ".jpg") {
   const ext = path.extname(String(name || "")).toLowerCase();
   return EXTS.includes(ext) ? ext : fallback;

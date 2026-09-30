@@ -11,6 +11,8 @@ import {
   incomingPersonEvent,
   collapseDuplicatePeople,
   findGoldMatch,
+  normalizeSubject,
+  personSlug,
   mergeCites,
   mergePersonAnnotate,
   personEvents,
@@ -20,7 +22,7 @@ import {
   validateIdentifiedPersonInput,
   validatePromoteInput,
 } from "./promote.mjs";
-import { isPeopleMediaHref, resolvePortrait } from "./portrait.mjs";
+import { isPeopleMediaHref, isStoredPeoplePortrait, resolvePortrait } from "./portrait.mjs";
 import { normalizeScreenshotCredit, normalizeScreenshotHref } from "./screenshot.mjs";
 import { hasRecordedNetWorth, resolveNetWorth } from "./net-worth.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -32,6 +34,8 @@ import {
   personTags,
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
+import { mergeClearances, normalizeClearances } from "./clearances.mjs";
+import { mergeNicknames, normalizeNicknames } from "./nicknames.mjs";
 import { DEATH_KEEP_IDS, asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
 import { eventHeadcount, personHeadcount } from "./event-attrs.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
@@ -120,6 +124,8 @@ function normalizePerson(row) {
     career: personCareer(row),
     tags: personTags({ ...row, events }),
     central_casting: normalizeCentralCasting(row.central_casting),
+    nicknames: normalizeNicknames(row.nicknames),
+    clearances: normalizeClearances(row.clearances),
   });
 }
 
@@ -580,9 +586,9 @@ export async function importSeed(p, seed) {
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, country_of_origin,
            photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
-           net_worth_source, sources, summary, events, tags, career
+           net_worth_source, sources, summary, events, tags, career, nicknames, clearances
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21::jsonb,$22::jsonb
          )
          ON CONFLICT (id) DO UPDATE SET
            category = EXCLUDED.category,
@@ -603,7 +609,9 @@ export async function importSeed(p, seed) {
            summary = EXCLUDED.summary,
            events = EXCLUDED.events,
            tags = EXCLUDED.tags,
-           career = EXCLUDED.career`,
+           career = EXCLUDED.career,
+           nicknames = EXCLUDED.nicknames,
+           clearances = EXCLUDED.clearances`,
         personValues(row),
       );
       await syncPersonEvents(client, row);
@@ -842,9 +850,9 @@ export async function healLogicalApply() {
             `INSERT INTO people (
                id, category, name, role, event_date, death_date, birth_date, country_of_origin,
                photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
-               net_worth_source, sources, summary, events, tags, career
+               net_worth_source, sources, summary, events, tags, career, nicknames, clearances
              ) VALUES (
-               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb
+               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21::jsonb,$22::jsonb
              )
              ON CONFLICT (id) DO UPDATE SET
                category = EXCLUDED.category,
@@ -865,7 +873,15 @@ export async function healLogicalApply() {
                summary = EXCLUDED.summary,
                events = EXCLUDED.events,
                tags = EXCLUDED.tags,
-               career = EXCLUDED.career`,
+               career = EXCLUDED.career,
+               nicknames = CASE
+                 WHEN EXCLUDED.nicknames = '[]'::jsonb THEN people.nicknames
+                 ELSE EXCLUDED.nicknames
+               END,
+               clearances = CASE
+                 WHEN EXCLUDED.clearances = '[]'::jsonb THEN people.clearances
+                 ELSE EXCLUDED.clearances
+               END`,
             personValues(row),
           );
         }
@@ -1907,6 +1923,8 @@ function personValues(row) {
     JSON.stringify(person.events || []),
     JSON.stringify(person.tags || []),
     JSON.stringify(person.career || []),
+    JSON.stringify(person.nicknames || []),
+    JSON.stringify(person.clearances || []),
   ];
 }
 
@@ -1975,9 +1993,9 @@ export async function insertPerson(row) {
     `INSERT INTO people (
        id, category, name, role, event_date, death_date, birth_date, country_of_origin,
        photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
-       net_worth_source, sources, summary, events, tags, career
+       net_worth_source, sources, summary, events, tags, career, nicknames, clearances
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21::jsonb,$22::jsonb
      )`,
     personValues(person),
   );
@@ -2009,7 +2027,7 @@ export async function savePerson(row) {
        screenshot = $11, screenshot_credit = $12,
        net_worth_usd = $13, net_worth_note = $14, net_worth_source = $15,
        sources = $16::jsonb, summary = $17, events = $18::jsonb, tags = $19::jsonb,
-       career = $20::jsonb
+       career = $20::jsonb, nicknames = $21::jsonb, clearances = $22::jsonb
      WHERE id = $1`,
     personValues(person),
   );
@@ -2141,6 +2159,183 @@ export async function attachPersonNetWorth(person, input = {}) {
   });
 }
 
+/**
+ * Attach cited nicknames. An existing person keeps category, dates, name, photo, and origin.
+ * A missing person becomes a nickname card: no exit date, no guessed origin.
+ * That new card still requires an eligible portrait.
+ */
+export async function ensurePersonNicknames({
+  subject,
+  role = "",
+  nicknames,
+  photo = "",
+  photo_credit = "",
+  mediaDir,
+} = {}) {
+  const cleaned = normalizeNicknames(nicknames);
+  if (!cleaned.length) {
+    throw new PromoteError(
+      "a nickname needs two official news or government cites",
+      "missing_nickname_cites",
+    );
+  }
+  const name = String(subject || "").trim().replace(/\s+/g, " ");
+  if (!name) {
+    throw new PromoteError("subject is required", "missing_subject");
+  }
+  const people = await listPeople();
+  const nameHits = people.filter((row) => normalizeSubject(row.name) === normalizeSubject(name));
+  if (nameHits.length > 1) {
+    throw new PromoteError(`more than one person named ${name}`, "ambiguous_person");
+  }
+  if (nameHits.length === 1) {
+    const existing = nameHits[0];
+    const merged = mergeNicknames(cleaned, existing.nicknames);
+    const p = await getPool();
+    if (!p) {
+      const mem = getMemory();
+      const i = mem.people.findIndex((row) => row.id === existing.id);
+      if (i >= 0) mem.people[i] = { ...mem.people[i], nicknames: merged };
+      return { action: "updated", person: mem.people[i] || { ...existing, nicknames: merged } };
+    }
+    await p.query(`UPDATE people SET nicknames = $2::jsonb WHERE id = $1`, [
+      existing.id,
+      JSON.stringify(merged),
+    ]);
+    return { action: "updated", person: await getPerson(existing.id) };
+  }
+  const id = personSlug(name);
+  if (people.some((row) => row.id === id)) {
+    throw new PromoteError(`id taken: ${id}`, "id_collision");
+  }
+  const resolved = await resolvePortrait({
+    mediaDir,
+    personId: id,
+    supplied: photo,
+    photo_credit,
+  });
+  if (!isStoredPeoplePortrait(resolved?.href)) {
+    throw new PromoteError(
+      "a portrait is required on a new person insert",
+      "missing_portrait",
+    );
+  }
+  const created = await insertPerson({
+    id,
+    category: "nickname",
+    name,
+    role: String(role || "").trim(),
+    event_date: null,
+    death_date: null,
+    birth_date: null,
+    country_of_origin: "",
+    photo: resolved.href,
+    photo_credit: resolved.credit || photo_credit,
+    screenshot: "",
+    screenshot_credit: "",
+    net_worth_usd: null,
+    net_worth_note: "",
+    net_worth_source: "",
+    sources: [],
+    summary: "",
+    events: [],
+    tags: [],
+    career: [],
+    nicknames: cleaned,
+  });
+  return { action: "created", person: created };
+}
+
+/**
+ * Attach a cited security-clearance fact. An existing person keeps category,
+ * dates, name, photo, and origin. A missing person becomes a clearance card
+ * on the order's calendar day. Origin is stored only when the caller supplies
+ * it. That new card still requires an eligible portrait.
+ */
+export async function ensurePersonClearances({
+  subject,
+  role = "",
+  clearances,
+  photo = "",
+  photo_credit = "",
+  mediaDir,
+  country_of_origin = "",
+} = {}) {
+  const cleaned = normalizeClearances(clearances);
+  if (!cleaned.length) {
+    throw new PromoteError(
+      "a security clearance fact needs two official news or government cites",
+      "missing_clearance_cites",
+    );
+  }
+  const name = String(subject || "").trim().replace(/\s+/g, " ");
+  if (!name) {
+    throw new PromoteError("subject is required", "missing_subject");
+  }
+  const people = await listPeople();
+  const nameHits = people.filter((row) => normalizeSubject(row.name) === normalizeSubject(name));
+  if (nameHits.length > 1) {
+    throw new PromoteError(`more than one person named ${name}`, "ambiguous_person");
+  }
+  if (nameHits.length === 1) {
+    const existing = nameHits[0];
+    const merged = mergeClearances(cleaned, existing.clearances);
+    const p = await getPool();
+    if (!p) {
+      const mem = getMemory();
+      const i = mem.people.findIndex((row) => row.id === existing.id);
+      if (i >= 0) mem.people[i] = { ...mem.people[i], clearances: merged };
+      return { action: "updated", person: mem.people[i] || { ...existing, clearances: merged } };
+    }
+    await p.query(`UPDATE people SET clearances = $2::jsonb WHERE id = $1`, [
+      existing.id,
+      JSON.stringify(merged),
+    ]);
+    return { action: "updated", person: await getPerson(existing.id) };
+  }
+  const id = personSlug(name);
+  if (people.some((row) => row.id === id)) {
+    throw new PromoteError(`id taken: ${id}`, "id_collision");
+  }
+  const resolved = await resolvePortrait({
+    mediaDir,
+    personId: id,
+    supplied: photo,
+    photo_credit,
+  });
+  if (!isStoredPeoplePortrait(resolved?.href)) {
+    throw new PromoteError(
+      "a portrait is required on a new person insert",
+      "missing_portrait",
+    );
+  }
+  const created = await insertPerson({
+    id,
+    category: "clearance",
+    name,
+    role: String(role || cleaned[0].role || "").trim(),
+    event_date: cleaned[0].date,
+    death_date: null,
+    birth_date: null,
+    country_of_origin: String(country_of_origin || "").trim(),
+    photo: resolved.href,
+    photo_credit: resolved.credit || photo_credit,
+    screenshot: "",
+    screenshot_credit: "",
+    net_worth_usd: null,
+    net_worth_note: "",
+    net_worth_source: "",
+    sources: [],
+    summary: "",
+    events: [],
+    tags: [],
+    career: [],
+    nicknames: [],
+    clearances: cleaned,
+  });
+  return { action: "created", person: created };
+}
+
 export async function applyIdentifiedPerson(input) {
   const parsed = validateIdentifiedPersonInput(input);
   const people = await listPeople();
@@ -2154,6 +2349,8 @@ export async function applyIdentifiedPerson(input) {
     net_worth_source: parsed.net_worth_source,
     net_worth_note: parsed.net_worth_note,
   };
+  const nicknames = normalizeNicknames(input.nicknames);
+  const clearances = normalizeClearances(input.clearances);
   if (existing) {
     const kind = resolveEventKind(existing, parsed.category);
     const prior = {
@@ -2161,6 +2358,8 @@ export async function applyIdentifiedPerson(input) {
       birth_date: existing.birth_date || parsed.birth_date || null,
       country_of_origin: existing.country_of_origin || parsed.country_of_origin || "",
       career: mergeCareer(existing.career, parsed.career),
+      nicknames: mergeNicknames(nicknames, existing.nicknames),
+      clearances: mergeClearances(clearances, existing.clearances),
     };
     const attached = attachPersonEvent(
       prior,
@@ -2178,15 +2377,25 @@ export async function applyIdentifiedPerson(input) {
     };
   }
   assertNewPersonInsertLock(parsed);
-  const row = buildPersonRow({ ...parsed, photo: "", photo_credit: "" }, people);
-  const created = await insertPerson(row);
-  let person = await attachPersonPortrait(created, extras);
-  if (!person.photo) {
-    console.warn(
-      `[exittrace] KEEP insert blank portrait id=${person.id} — not recommended; supply an eligible portrait (gov/Commons/news or a supplied photo) on first pass`,
+  const draft = buildPersonRow({ ...parsed, nicknames, clearances, photo: "", photo_credit: "" }, people);
+  const resolved = await resolvePortrait({
+    mediaDir: input.mediaDir,
+    personId: draft.id,
+    supplied: parsed.photo,
+    photo_credit: parsed.photo_credit,
+  });
+  if (!isStoredPeoplePortrait(resolved?.href)) {
+    throw new PromoteError(
+      "a portrait is required on a new person insert",
+      "missing_portrait",
     );
   }
-  person = await attachPersonNetWorth(person, extras);
+  const created = await insertPerson({
+    ...draft,
+    photo: resolved.href,
+    photo_credit: resolved.credit || parsed.photo_credit || "",
+  });
+  const person = await attachPersonNetWorth(created, extras);
   return {
     action: "created",
     person: projectPerson(person, parsed.category),
@@ -2883,7 +3092,13 @@ function likeNeedle(q) {
 }
 
 function matchesPerson(row, needle) {
-  return [row.name, row.role, row.summary]
+  const nicknames = (Array.isArray(row.nicknames) ? row.nicknames : [])
+    .map((item) => item?.name)
+    .filter(Boolean);
+  const clearances = (Array.isArray(row.clearances) ? row.clearances : [])
+    .flatMap((item) => [item?.status, item?.authority, item?.role])
+    .filter(Boolean);
+  return [row.name, row.role, row.summary, ...nicknames, ...clearances]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
@@ -2937,6 +3152,8 @@ export async function searchPeople(q) {
      WHERE name ILIKE $1 ESCAPE '\\'
         OR role ILIKE $1 ESCAPE '\\'
         OR summary ILIKE $1 ESCAPE '\\'
+        OR nicknames::text ILIKE $1 ESCAPE '\\'
+        OR clearances::text ILIKE $1 ESCAPE '\\'
      ORDER BY event_date DESC, name ASC`,
     [likeNeedle(raw)],
   );

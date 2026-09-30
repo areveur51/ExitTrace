@@ -44,10 +44,15 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'::
 ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
 -- Person-level origin. Not event.country. Empty stays empty until backfill.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS country_of_origin TEXT;
--- Identity tags (civilian, non_civilian, celebrity, official, ceo). Multi-tag.
+-- Identity tags (civilian, non_civilian, celebrity, official, ceo) and fact tags
+-- (clearance_revoked, trump_nickname). Multi-tag. Fact tags are not implied by kind.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Person-level occupation / service years. Not event-tag attrs. Empty stays empty.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS career JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Cited nicknames ({name, by, sources}). Empty stays empty. Not an exit event.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS nicknames JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Cited security-clearance facts ({status, date, authority, sources}). Not an exit event.
+ALTER TABLE people ADD COLUMN IF NOT EXISTS clearances JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Optional local X-post screenshot. Empty stays empty. Does not replace photo.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
@@ -117,7 +122,9 @@ ALTER TABLE people ADD CONSTRAINT people_death_date_confirmed CHECK (
 ALTER TABLE people ALTER COLUMN event_date DROP NOT NULL;
 ALTER TABLE people DROP CONSTRAINT IF EXISTS people_event_date_required;
 ALTER TABLE people ADD CONSTRAINT people_event_date_required CHECK (
-  event_date IS NOT NULL OR category = 'death_unconfirmed'
+  event_date IS NOT NULL
+  OR category = 'death_unconfirmed'
+  OR category = 'nickname'
 );
 
 ALTER TABLE person_events ALTER COLUMN event_date DROP NOT NULL;
