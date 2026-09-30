@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-09-30
+
+### Fixed
+
+- Public startup no longer replays the 2026-09-18 logical snapshot over the live catalog. That replay removed fact tags, so Trump nicknames on existing cards disappeared from the tag list. The logical subscription stays enabled.
+
 ## [1.2.2] - 2026-09-29
 
 ### Changed
