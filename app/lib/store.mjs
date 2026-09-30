@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { databaseUrl } from "./env.mjs";
 import {
   PromoteError,
@@ -730,9 +729,9 @@ export async function upsertEtMeta(k, v) {
  * no pg_subscription (publisher / lab) is a no-op. Never auto-SKIP an LSN
  * (Worf #100: SKIP needs Admiral SIGN; not planned or auto-run).
  * - Promote dog_comms.posted_at DATE→TEXT (idempotent; matches bootstrap-db.sql).
- * - Idempotent upsert of data/ops/logical-gap-heal-20260918.json.gz snapshot.
- * - Advance pg_replication_origin to lab tip, then ENABLE subscription.
- * Returns a public-safe summary (no DSNs, hosts, or passwords).
+ * - If the subscription is disabled, ENABLE it so logical apply can run.
+ * A frozen snapshot is not replayed: that overwrite drops live fact tags.
+ * Never auto-SKIP an LSN. Returns a public-safe summary (no DSNs or passwords).
  */
 export async function healLogicalApply() {
   const p = await getPool();
@@ -809,210 +808,11 @@ export async function healLogicalApply() {
     }
     out.apply_error_count_before = errCount;
 
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const root = path.resolve(here, "../..");
-    const gapPathGz = path.join(root, "data/ops/logical-gap-heal-20260918.json.gz");
-    const gapPath = path.join(root, "data/ops/logical-gap-heal-20260918.json");
-    let gap = null;
-    try {
-      if (fs.existsSync(gapPathGz)) {
-        const { gunzipSync } = await import("node:zlib");
-        gap = JSON.parse(gunzipSync(fs.readFileSync(gapPathGz)).toString("utf8"));
-      } else if (fs.existsSync(gapPath)) {
-        gap = JSON.parse(fs.readFileSync(gapPath, "utf8"));
-      }
-    } catch (e) {
-      out.gap_load_error = String(e?.message || e).slice(0, 120);
-    }
-
-    const needsCatchup =
-      out.altered || (Number.isFinite(errCount) && errCount > 0) || gap != null;
-
-    if (needsCatchup && gap) {
-      try {
-        await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub DISABLE`);
-      } catch {
-        /* already disabled */
-      }
-
-      const people = Array.isArray(gap.people) ? gap.people : [];
-      const dogs = Array.isArray(gap.dog_comms) ? gap.dog_comms : [];
-      const ops = Array.isArray(gap.operations) ? gap.operations : [];
-      const events = Array.isArray(gap.person_events) ? gap.person_events : [];
-      out.lab_tip_lsn = gap.lab_tip_lsn || null;
-
-      const client = await p.connect();
-      try {
-        await client.query("BEGIN");
-        for (const raw of people) {
-          const row = normalizePerson(raw);
-          await client.query(
-            `INSERT INTO people (
-               id, category, name, role, event_date, death_date, birth_date, country_of_origin,
-               photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
-               net_worth_source, sources, summary, events, tags, career, nicknames, clearances
-             ) VALUES (
-               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21::jsonb,$22::jsonb
-             )
-             ON CONFLICT (id) DO UPDATE SET
-               category = EXCLUDED.category,
-               name = EXCLUDED.name,
-               role = EXCLUDED.role,
-               event_date = EXCLUDED.event_date,
-               death_date = EXCLUDED.death_date,
-               birth_date = EXCLUDED.birth_date,
-               country_of_origin = EXCLUDED.country_of_origin,
-               photo = EXCLUDED.photo,
-               photo_credit = EXCLUDED.photo_credit,
-               screenshot = EXCLUDED.screenshot,
-               screenshot_credit = EXCLUDED.screenshot_credit,
-               net_worth_usd = EXCLUDED.net_worth_usd,
-               net_worth_note = EXCLUDED.net_worth_note,
-               net_worth_source = EXCLUDED.net_worth_source,
-               sources = EXCLUDED.sources,
-               summary = EXCLUDED.summary,
-               events = EXCLUDED.events,
-               tags = EXCLUDED.tags,
-               career = EXCLUDED.career,
-               nicknames = CASE
-                 WHEN EXCLUDED.nicknames = '[]'::jsonb THEN people.nicknames
-                 ELSE EXCLUDED.nicknames
-               END,
-               clearances = CASE
-                 WHEN EXCLUDED.clearances = '[]'::jsonb THEN people.clearances
-                 ELSE EXCLUDED.clearances
-               END`,
-            personValues(row),
-          );
-        }
-        for (const raw of dogs) {
-          const row = normalizeDog(raw);
-          await client.query(
-            `INSERT INTO dog_comms (
-               id, posted_at, handle, account_name, text, still, still_credit,
-               screenshot, screenshot_credit, source_url, snapshot
-             ) VALUES (
-               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb
-             )
-             ON CONFLICT (id) DO UPDATE SET
-               posted_at = EXCLUDED.posted_at,
-               handle = EXCLUDED.handle,
-               account_name = EXCLUDED.account_name,
-               text = EXCLUDED.text,
-               still = EXCLUDED.still,
-               still_credit = EXCLUDED.still_credit,
-               screenshot = EXCLUDED.screenshot,
-               screenshot_credit = EXCLUDED.screenshot_credit,
-               source_url = EXCLUDED.source_url,
-               snapshot = EXCLUDED.snapshot`,
-            [
-              row.id,
-              row.posted_at,
-              row.handle,
-              row.account_name,
-              row.text,
-              row.still,
-              row.still_credit,
-              row.screenshot,
-              row.screenshot_credit,
-              row.source_url,
-              JSON.stringify(row.snapshot || {}),
-            ],
-          );
-        }
-        for (const raw of ops) {
-          const row = normalizeOperation(raw);
-          await client.query(
-            `INSERT INTO operations (
-               id, name, event_date, announced_date, agencies, summary,
-               victim_count, arrest_count, tags, sources, screenshot
-             ) VALUES (
-               $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb,$11
-             )
-             ON CONFLICT (id) DO UPDATE SET
-               name = EXCLUDED.name,
-               event_date = EXCLUDED.event_date,
-               announced_date = EXCLUDED.announced_date,
-               agencies = EXCLUDED.agencies,
-               summary = EXCLUDED.summary,
-               victim_count = EXCLUDED.victim_count,
-               arrest_count = EXCLUDED.arrest_count,
-               tags = EXCLUDED.tags,
-               sources = EXCLUDED.sources,
-               screenshot = EXCLUDED.screenshot`,
-            operationValues(row),
-          );
-        }
-        for (const raw of events) {
-          await client.query(
-            `INSERT INTO person_events (
-               person_id, kind, event_date, sources, announced_date, position,
-               organization, country, branch, comments, age_at_event, alleged_reason,
-               unsealed
-             ) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-             ON CONFLICT (person_id, kind) DO UPDATE SET
-               event_date = EXCLUDED.event_date,
-               sources = EXCLUDED.sources,
-               announced_date = EXCLUDED.announced_date,
-               position = EXCLUDED.position,
-               organization = EXCLUDED.organization,
-               country = EXCLUDED.country,
-               branch = EXCLUDED.branch,
-               comments = EXCLUDED.comments,
-               age_at_event = EXCLUDED.age_at_event,
-               alleged_reason = EXCLUDED.alleged_reason,
-               unsealed = CASE
-                 WHEN person_events.unsealed IS TRUE THEN TRUE
-                 ELSE EXCLUDED.unsealed
-               END`,
-            [
-              raw.person_id,
-              raw.kind,
-              raw.event_date,
-              JSON.stringify(raw.sources || []),
-              raw.announced_date || null,
-              raw.position || null,
-              raw.organization || null,
-              raw.country || null,
-              raw.branch || null,
-              raw.comments || null,
-              raw.age_at_event ?? null,
-              raw.alleged_reason || null,
-              raw.unsealed === true ? true : null,
-            ],
-          );
-        }
-        await client.query("COMMIT");
-        out.gap_upserted = true;
-      } catch (e) {
-        await client.query("ROLLBACK");
-        throw e;
-      } finally {
-        client.release();
-      }
-
-      // Fast-forward origin to tip. Never auto-SKIP an LSN here.
-      if (out.lab_tip_lsn) {
-        try {
-          const origins = await p.query(
-            `SELECT roname FROM pg_replication_origin WHERE roname LIKE 'pg_%' ORDER BY roname`,
-          );
-          for (const o of origins.rows) {
-            await p.query(`SELECT pg_replication_origin_advance($1, $2::pg_lsn)`, [
-              o.roname,
-              out.lab_tip_lsn,
-            ]);
-            out.origin_advanced = true;
-          }
-        } catch (e) {
-          out.origin_error = String(e?.message || e).slice(0, 160);
-        }
-      }
-
-      await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub ENABLE`);
-      out.bounced = true;
-    } else if (needsCatchup) {
-      await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub DISABLE`);
+    const enabledRes = await p.query(
+      `SELECT subenabled FROM pg_subscription WHERE subname = 'exittrace_lab_sub'`,
+    );
+    const enabled = enabledRes.rows[0] ? Boolean(enabledRes.rows[0].subenabled) : false;
+    if (!enabled) {
       await p.query(`ALTER SUBSCRIPTION exittrace_lab_sub ENABLE`);
       out.bounced = true;
     }
