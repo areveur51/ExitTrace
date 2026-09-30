@@ -34,7 +34,7 @@ import {
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
-import { mergeNicknames, normalizeNicknames } from "./nicknames.mjs";
+import { mergeNicknames, nicknameCatalogDate, normalizeNicknames } from "./nicknames.mjs";
 import { DEATH_KEEP_IDS, asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
 import { eventHeadcount, personHeadcount } from "./event-attrs.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
@@ -2310,7 +2310,11 @@ export async function listCatalog(categoryOrOpts, maybeOpts) {
     limit: args.limit,
     offset: args.offset,
   });
-  return people.map((row) => ({ type: "person", date: row.event_date || "", row }));
+  return people.map((row) => ({
+    type: "person",
+    date: row.event_date || nicknameCatalogDate(row) || "",
+    row,
+  }));
 }
 
 export async function countCatalog(category) {
@@ -3057,7 +3061,11 @@ export async function searchCatalog(q) {
     })),
   ).flat();
   return [
-    ...people.map((row) => ({ type: "person", date: row.event_date || "", row })),
+    ...people.map((row) => ({
+      type: "person",
+      date: row.event_date || nicknameCatalogDate(row) || "",
+      row,
+    })),
     ...operations.map((row) => ({ type: "operation", date: row.event_date || "", row })),
     ...comms,
     ...posts.map((row) => ({ type: "source", date: row.posted_at || "", row })),

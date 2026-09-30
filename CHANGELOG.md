@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-09-30
+
+### Fixed
+
+- A Trump nickname with no other catalog entry uses the earliest day a cite reported it. Those rows no longer sit under Undated. A person who already has another dated entry keeps that date.
+
 ## [1.2.3] - 2026-09-30
 
 ### Fixed
