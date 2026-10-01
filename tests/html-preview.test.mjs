@@ -135,6 +135,7 @@ test("public chrome keeps catalog labels and omits pin larp copy", () => {
   assert.match(kinds, /keymapKey: "c"/);
   assert.match(kinds, /keymapKey: "e"/);
   assert.match(kinds, /keymapKey: "l"/);
+  assert.match(kinds, /keymapKey: "n"/);
   assert.match(kinds, /CENTRAL_CASTING_KEYMAP = "t"/);
   assert.match(html, /key: BOOT_COMMS_KEYMAP, href: BOOT_COMMS_PATH/);
   assert.doesNotMatch(html, /key: "n", href: "\/add"/);

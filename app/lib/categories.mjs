@@ -193,6 +193,14 @@ export const CATEGORIES = [
     blurb: "Official government posts about eagles, or that include an eagle in the image. Stored locally; the source URL is a citation only.",
   },
   {
+    id: "ronald_comms",
+    kind: "ronald",
+    title: "Ronald comms",
+    nav: "Ronald comms",
+    path: "/ronald-comms",
+    blurb: "Official and news-org posts about Ronald McDonald, or that include Ronald imagery. Stored locally; the source URL is a citation only.",
+  },
+  {
     id: "boot_comms",
     kind: "person",
     title: "Boot",
@@ -307,6 +315,9 @@ export function mapImportCategory(raw) {
     return null;
   }
   if (key === "eagle_comms" || key === "eagle" || key === "eagle_comm" || key === "eaglecomms") {
+    return null;
+  }
+  if (key === "ronald_comms" || key === "ronald" || key === "ronald_comm" || key === "ronaldcomms") {
     return null;
   }
   if (key === "boot_comms" || key === "boot" || key === "boot_comm" || key === "bootcomms") {

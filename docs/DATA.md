@@ -109,6 +109,19 @@ ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false
 
 Never `copy_data=true`. That refresh does not copy rows already stored. Backfill with gap-upsert after the table exists, because `COUNT_SQL` selects `eagle_comms`. Media stills (`media/eagle-comms/` and screenshots under `media/screenshots/eagle-comms/`) travel on the media-delta path.
 
+`ronald_comms` is a twin of `dog_comms`. Fresh envs create it from `scripts/bootstrap-db.sql`. The page is `/ronald-comms`. A video is stored as its thumbnail, not an mp4.
+
+Lab adds the table to the publication with `scripts/add-ronald-comms-publication.sql` when it is not already published:
+
+That is `ALTER PUBLICATION exittrace_lab_pub ADD TABLE ronald_comms` when the table is not already in the publication.
+
+Subscriber then:
+
+`ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)`
+
+Never `copy_data=true`. That refresh does not copy rows already stored. Backfill with gap-upsert after the table exists, because `COUNT_SQL` selects `ronald_comms`. Media stills (`media/ronald-comms/` and screenshots under `media/screenshots/ronald-comms/`) travel on the media-delta path.
+
+
 ## Boot publication (lab)
 
 `boot_comms` is a twin of `dog_comms`. Fresh envs create it from `scripts/bootstrap-db.sql`. The page is `/boot-comms`. Cite gate is the `official.mjs` family with a two-cite floor (official / gov / news-org / quote-chain). High workbook rows first; Medium stays a lead until a second cite lands. Blank X stays blank. No invented quotes, portraits, or dates. Month-year stays month-year. Do not write `data/seed.json` for live inserts.
