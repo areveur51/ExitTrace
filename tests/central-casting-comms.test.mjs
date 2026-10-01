@@ -120,6 +120,9 @@ test("central casting is a person list, not a KIND_COMMS clip catalog", () => {
   assert.equal(KIND_COMMS.eagle.keymapKey, "l");
   assert.equal(KIND_COMMS.eagle.path, "/eagle-comms");
   assert.equal(KIND_COMMS.eagle.supportingGroups, false);
+  assert.equal(KIND_COMMS.ronald.keymapKey, "n");
+  assert.equal(KIND_COMMS.ronald.path, "/ronald-comms");
+  assert.equal(KIND_COMMS.ronald.supportingGroups, false);
   assert.equal(KIND_COMMS.boot, undefined);
   assert.equal(BOOT_COMMS_KEYMAP, "k");
   assert.equal(BOOT_COMMS_PATH, "/boot-comms");
