@@ -149,6 +149,7 @@ const MIME = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".webp": "image/webp",
+  ".mp4": "video/mp4",
   ".html": "text/html; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
 };
@@ -211,19 +212,70 @@ function cachedFile(filePath, { gzippable = false } = {}) {
   return entry;
 }
 
+function byteRange(header, size) {
+  const text = String(header || "").trim();
+  if (!text) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(text);
+  if (!match || (match[1] === "" && match[2] === "")) return { invalid: true };
+  let start;
+  let end;
+  if (match[1] === "") {
+    const last = Number(match[2]);
+    if (!Number.isInteger(last) || last <= 0) return { invalid: true };
+    start = Math.max(0, size - last);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === "" ? size - 1 : Number(match[2]);
+  }
+  if (
+    !Number.isInteger(start) ||
+    !Number.isInteger(end) ||
+    start < 0 ||
+    start >= size ||
+    end < start
+  ) {
+    return { invalid: true };
+  }
+  return { start, end: Math.min(end, size - 1) };
+}
+
 function sendStatic(req, res, filePath, contentType, cacheControl) {
   const gzippable = gzippableType(contentType);
   if (!gzippable) {
     const st = fs.statSync(filePath);
     const etag = `W/"${st.size.toString(16)}-${Math.trunc(st.mtimeMs).toString(16)}"`;
+    const video = String(contentType || "").startsWith("video/");
     const headers = {
       "Content-Type": contentType,
       "Cache-Control": cacheControl,
       ETag: etag,
+      ...(video ? { "Accept-Ranges": "bytes" } : {}),
     };
     if (String(req.headers["if-none-match"] || "") === etag) {
       res.writeHead(304, headers);
       res.end();
+      return;
+    }
+    const range = video ? byteRange(req.headers.range, st.size) : null;
+    if (range?.invalid) {
+      res.writeHead(416, { "Content-Range": `bytes */${st.size}` });
+      res.end();
+      return;
+    }
+    if (range) {
+      const length = range.end - range.start + 1;
+      res.writeHead(206, {
+        ...headers,
+        "Content-Range": `bytes ${range.start}-${range.end}/${st.size}`,
+        "Content-Length": length,
+      });
+      fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
+      return;
+    }
+    if (video) {
+      res.writeHead(200, { ...headers, "Content-Length": st.size });
+      fs.createReadStream(filePath).pipe(res);
       return;
     }
     const body = fs.readFileSync(filePath);

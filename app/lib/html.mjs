@@ -378,6 +378,7 @@ function chromeWidgets() {
     <div class="tui-lightbox-scrim" data-close-lightbox></div>
     <figure class="tui-lightbox-frame" role="dialog" aria-modal="true" aria-labelledby="lightbox-title">
       <img id="lightbox-img" alt="">
+      <video id="lightbox-video" controls playsinline hidden></video>
       <figcaption id="lightbox-title" class="credit"></figcaption>
       <button type="button" class="keychip" data-close-lightbox><span class="br">[</span>Esc<span class="br">]</span> Back</button>
     </figure>
@@ -640,11 +641,28 @@ export function localMediaThumb(src, label, kind = "portrait") {
   return localPortraitImg(src, label, { size: "list", kind });
 }
 
+/** Local mp4 on this comm. Remote URLs and other catalogs stay out. */
+function localCommVideoHref(row, mediaDir) {
+  const href = String(row?.snapshot?.video || "").trim().split("?")[0];
+  if (!href || !/\.mp4$/i.test(href) || !isCommsMediaHref(href, mediaDir)) return "";
+  return href;
+}
+
+function commVideoInner(src, poster, label) {
+  const posterAttr = poster ? ` poster="${esc(poster)}"` : "";
+  return `<span class="detail-video"><video class="detail-photo" src="${esc(src)}"${posterAttr} preload="metadata" muted playsinline tabindex="-1" aria-label="${esc(label)}"></video><span class="detail-video-play" aria-hidden="true"></span></span>`;
+}
+
 /** Lightbox opens the gold /media still (or screenshot), never the 80×104 list thumb. */
-function lightboxButton(src, inner, { alt = "", credit = "" } = {}) {
+function lightboxButton(src, inner, { alt = "", credit = "", kind = "image", poster = "" } = {}) {
   const href = String(src || "").trim();
-  if (!href || !String(inner || "").includes("<img")) return inner;
-  return `<button type="button" class="lightbox-open" data-lightbox="${esc(href)}" data-lightbox-alt="${esc(alt)}" data-lightbox-credit="${esc(credit)}">${inner}</button>`;
+  const body = String(inner || "");
+  const video = kind === "video";
+  if (!href || !body) return body;
+  if (!video && !body.includes("<img")) return body;
+  const kindAttr = video ? ` data-lightbox-kind="video"` : "";
+  const posterAttr = video && poster ? ` data-lightbox-poster="${esc(poster)}"` : "";
+  return `<button type="button" class="lightbox-open" data-lightbox="${esc(href)}" data-lightbox-alt="${esc(alt)}" data-lightbox-credit="${esc(credit)}"${kindAttr}${posterAttr}>${body}</button>`;
 }
 
 /** Strip http(s) URLs from captions — X URL belongs only under Source. */
@@ -807,9 +825,11 @@ function detailMediaTile({
   inner = "",
   alt = "",
   credit = "",
+  mediaKind = "image",
+  poster = "",
 } = {}) {
   const href = String(src || "").trim();
-  const body = lightboxButton(href, inner, { alt, credit });
+  const body = lightboxButton(href, inner, { alt, credit, kind: mediaKind, poster });
   if (!body) return "";
   return `<figure class="detail-tile detail-tile--${esc(kind)}">${body}</figure>`;
 }
@@ -938,18 +958,26 @@ function detailMediaStrip({
   metaHtml = "",
   metaTiles = [],
   seen,
+  portraitKind = "image",
+  portraitPoster = "",
 } = {}) {
   const bag = seen || detailMediaSeen();
   const media = [];
+  const videoTile = portraitKind === "video";
   if (portraitHtml) {
     const tile = detailMediaTile({
-      kind: "portrait",
+      kind: videoTile ? "video" : "portrait",
       src: portraitSrc,
       inner: portraitHtml,
       alt: portraitAlt,
       credit: creditWithoutUrls(portraitCredit),
+      mediaKind: videoTile ? "video" : "image",
+      poster: portraitPoster,
     });
-    if (tile && !claimDetailMedia(bag, portraitSrc)) media.push(tile);
+    if (tile && !claimDetailMedia(bag, portraitSrc)) {
+      if (videoTile && portraitPoster) claimDetailMedia(bag, portraitPoster);
+      media.push(tile);
+    }
   }
   const shotHref = normalizeScreenshotHref(screenshot);
   if (shotHref && !claimDetailMedia(bag, shotHref)) {
@@ -1999,9 +2027,13 @@ export function operationDetail(row, { attributions } = {}) {
 export function commsDetail(spec, row, { attributions } = {}) {
   const grouped = !!spec.supportingGroups;
   const seen = detailMediaSeen();
-  const photo = localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
-    commsKind: spec.id,
-  });
+  const videoHref = localCommVideoHref(row, spec.mediaDir);
+  const stillHref = isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "";
+  const photo = videoHref
+    ? commVideoInner(videoHref, stillHref, `Stored video for ${row.handle}`)
+    : localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
+        commsKind: spec.id,
+      });
   const extras = kindExtraStills(spec.id, row, { includeSupporting: !grouped }).map((src) => ({
     src,
     alt: `Post media for ${row.handle}`,
@@ -2010,9 +2042,11 @@ export function commsDetail(spec, row, { attributions } = {}) {
   // Main strip first so a later supporting copy of the same bytes is the one omitted.
   const mediaHtml = detailMediaStrip({
     portraitHtml: photo,
-    portraitSrc: isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "",
-    portraitAlt: `Stored still for ${row.handle}`,
+    portraitSrc: videoHref || stillHref,
+    portraitAlt: videoHref ? `Stored video for ${row.handle}` : `Stored still for ${row.handle}`,
     portraitCredit: row.still_credit,
+    portraitKind: videoHref ? "video" : "image",
+    portraitPoster: videoHref ? stillHref : "",
     screenshot: row.screenshot,
     screenshotAlt: `X-post screenshot of ${row.handle}`,
     screenshotCredit: row.screenshot_credit,

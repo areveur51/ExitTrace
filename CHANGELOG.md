@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-09-30
+
+### Added
+
+- A stored comm video plays in the same popup as a still. The clip is the local file. The still is only the poster, and it is not shown again as its own image.
+
 ## [1.2.4] - 2026-09-30
 
 ### Fixed

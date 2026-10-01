@@ -201,23 +201,50 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const lightbox = document.getElementById("tui-lightbox");
   const lightboxImg = document.getElementById("lightbox-img");
+  const lightboxVideo = document.getElementById("lightbox-video");
   const lightboxTitle = document.getElementById("lightbox-title");
+
+  function stopLightboxVideo() {
+    if (!lightboxVideo) return;
+    lightboxVideo.pause();
+    lightboxVideo.removeAttribute("src");
+    lightboxVideo.removeAttribute("poster");
+    lightboxVideo.hidden = true;
+    lightboxVideo.load();
+  }
 
   function closeLightbox() {
     if (!lightbox) return;
     lightbox.hidden = true;
+    stopLightboxVideo();
     if (lightboxImg) {
+      lightboxImg.hidden = false;
       lightboxImg.removeAttribute("src");
       lightboxImg.alt = "";
     }
     if (lightboxTitle) lightboxTitle.textContent = "";
   }
 
-  function openLightbox({ src, alt, credit }) {
+  function openLightbox({ src, alt, credit, kind, poster }) {
     if (!lightbox || !lightboxImg || !src) return;
+    const video = kind === "video" && lightboxVideo;
+    if (lightboxTitle) lightboxTitle.textContent = credit || alt || "";
+    if (video) {
+      lightboxImg.hidden = true;
+      lightboxImg.removeAttribute("src");
+      lightboxVideo.hidden = false;
+      lightboxVideo.poster = poster || "";
+      lightboxVideo.src = src;
+      lightbox.hidden = false;
+      lightboxVideo.focus();
+      lightboxVideo.play().catch(() => {});
+      showToast("video opened");
+      return;
+    }
+    stopLightboxVideo();
+    lightboxImg.hidden = false;
     lightboxImg.src = src;
     lightboxImg.alt = alt || "";
-    if (lightboxTitle) lightboxTitle.textContent = credit || alt || "";
     lightbox.hidden = false;
     lightbox.querySelector("[data-close-lightbox]")?.focus();
     showToast("image opened");
@@ -238,6 +265,8 @@ document.addEventListener("DOMContentLoaded", () => {
           src: shot.getAttribute("data-lightbox") || "",
           alt: shot.getAttribute("data-lightbox-alt") || "",
           credit: shot.getAttribute("data-lightbox-credit") || "",
+          kind: shot.getAttribute("data-lightbox-kind") || "",
+          poster: shot.getAttribute("data-lightbox-poster") || "",
         });
       }
     },

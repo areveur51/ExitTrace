@@ -529,6 +529,43 @@ body.tui-home .home-stage {
   background: none;
   cursor: zoom-in;
 }
+.detail-video {
+  position: relative;
+  display: block;
+}
+.detail-video .detail-photo {
+  pointer-events: none;
+}
+.detail-media--masonry .detail-tile--video .detail-photo {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: 70vh;
+  aspect-ratio: auto;
+  object-fit: contain;
+  background: var(--bg-sel);
+}
+.detail-video-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3.25rem;
+  height: 3.25rem;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--cyan);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--void) 72%, transparent);
+  pointer-events: none;
+}
+.detail-video-play::before {
+  content: "";
+  position: absolute;
+  left: 1.25rem;
+  top: 0.95rem;
+  border-style: solid;
+  border-width: 0.65rem 0 0.65rem 1.05rem;
+  border-color: transparent transparent transparent var(--cyan);
+}
 .detail-screenshot {
   margin: 0;
   flex: 0 0 auto;
@@ -1082,7 +1119,8 @@ img.empty-portrait { object-position: center center; }
   align-items: center;
   gap: 0.55rem;
 }
-.tui-lightbox-frame img {
+.tui-lightbox-frame img,
+.tui-lightbox-frame video {
   display: block;
   max-width: min(96vw, 72rem);
   max-height: 80vh;
@@ -1092,6 +1130,8 @@ img.empty-portrait { object-position: center center; }
   background: var(--bg-sel);
   border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
 }
+.tui-lightbox-frame img[hidden],
+.tui-lightbox-frame video[hidden] { display: none; }
 .modal-keys {
   display: flex;
   flex-wrap: wrap;
