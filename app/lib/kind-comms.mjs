@@ -98,14 +98,14 @@ export const KIND_COMMS = Object.freeze({
     navLabel: "Ronald",
     countNoun: "ronald comms",
     keymapKey: "n",
-    supportingGroups: false,
+    supportingGroups: true,
   }),
 });
 
 /** Parent list. Legacy `/central-casting-comms` redirects here. Not a KIND_COMMS clip catalog. */
 export const CENTRAL_CASTING_PATH = "/central-casting";
 export const CENTRAL_CASTING_LEGACY_PATH = "/central-casting-comms";
-/** c = Dog, e = Red Folder, l = Eagle, n = Ronald. k = Boot (person). t is Central Casting. */
+/** c = Dog, e = Red Folder, l = Eagle, n = Ronald (supportingGroups like Red Folder). k = Boot (person). t is Central Casting. */
 export const CENTRAL_CASTING_KEYMAP = "t";
 
 /** Parent list = unique-person cards (corona DRY). Legacy clip `/boot-comms/:id` redirects to `/people/:id`. Not a KIND_COMMS clip catalog. */
