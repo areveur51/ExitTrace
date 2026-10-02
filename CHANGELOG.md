@@ -9,6 +9,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-10-02
+
+### Added
+
+- The Tags menu includes Epstein Clients. That list is the people named on the Epstein flight log. The row has no hotkey.
+- Gap-upsert sends a wide table in batches under Postgres's parameter limit, so the flight-log copy no longer stops the rest of the sync.
+
 ## [1.2.5] - 2026-09-30
 
 ### Added

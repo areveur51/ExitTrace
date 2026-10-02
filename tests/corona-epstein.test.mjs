@@ -4,6 +4,7 @@ import { coronaStatusLabel, normalizeCoronaStatus } from "../app/lib/corona-stat
 import { EVENT_ATTR_FIELDS, normalizeEventAttrs } from "../app/lib/event-attrs.mjs";
 import {
   EPSTEIN_SEED_NAMES,
+  epsteinPassengerSkipReason,
   normalizeEpsteinLeg,
   normalizePassengerName,
 } from "../app/lib/epstein-flight-log.mjs";
@@ -46,6 +47,20 @@ test("epstein leg normalize + seed names", () => {
   assert.equal(leg.aircraft, "N908JE");
   assert.equal(normalizePassengerName("Ghislaine Maxwell"), "ghislaine maxwell");
   assert.equal(normalizeEpsteinLeg({ passenger_name_raw: "X", flight_date: "bad" }), null);
+  assert.equal(epsteinPassengerSkipReason("? ?"), "blank");
+  assert.equal(epsteinPassengerSkipReason("n/a"), "unknown");
+  assert.equal(epsteinPassengerSkipReason("A"), "single");
+  assert.equal(epsteinPassengerSkipReason("12"), "numeric");
+  assert.equal(epsteinPassengerSkipReason("Female (1)"), "placeholder");
+  assert.equal(epsteinPassengerSkipReason("Reposition"), "placeholder");
+  assert.equal(epsteinPassengerSkipReason("ILLEGIBLE"), "placeholder");
+  assert.equal(epsteinPassengerSkipReason("Passengers (0)"), "placeholder");
+  assert.equal(epsteinPassengerSkipReason("Secret Serivce (4)"), "placeholder");
+  assert.equal(epsteinPassengerSkipReason("Nanny S 1"), "placeholder");
+  assert.equal(epsteinPassengerSkipReason("WIFE?"), "placeholder");
+  assert.equal(epsteinPassengerSkipReason("A P"), "");
+  assert.equal(epsteinPassengerSkipReason("Jeff Epstein"), "");
+  assert.equal(epsteinPassengerSkipReason("Jean-Luc Brunel"), "");
 });
 
 test("gap upsert publishes epstein_flight_legs", () => {

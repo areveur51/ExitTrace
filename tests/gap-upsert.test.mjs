@@ -9,11 +9,14 @@ import {
   PUBLISHED_TABLES,
   assertSafeSql,
   buildUpsertSql,
+  chunkUpsertRows,
   countProof,
   countTableSql,
   normalizePayload,
   pickRow,
   planGapUpsert,
+  upsertChunkSize,
+  UPSERT_PARAM_BUDGET,
 } from "../app/lib/gap-upsert.mjs";
 import { PLACE_STEPS } from "../scripts/prove-new-kind-render-sync.mjs";
 
@@ -374,6 +377,30 @@ test("new-kind place steps name logical backfill and refuse copy_data true", () 
   assert.match(doc, /media-delta/);
   assert.match(PLACE_STEPS, /HTTPS peer path is not this path/);
   assert.match(doc, /Never `copy_data=true`/);
+});
+
+test("gap upsert splits a table that would exceed the parameter budget", () => {
+  const size = upsertChunkSize("epstein_flight_legs");
+  assert.ok(size >= 1);
+  const rows = Array.from({ length: size + 1 }, (_, i) => ({
+    passenger_name_raw: `Passenger ${i}`,
+    flight_date: "1998-01-03",
+    dep: "West Palm Beach, FL, United States",
+    arr: "Teterboro, NJ, United States",
+    aircraft: "N908JE",
+  }));
+  assert.equal(chunkUpsertRows("epstein_flight_legs", rows).length, 2);
+  const planned = planGapUpsert(
+    { epstein_flight_legs: rows },
+    { existingTables: ["epstein_flight_legs"] },
+  );
+  assert.equal(planned.plans.length, 2);
+  assert.equal(planned.counts_in.epstein_flight_legs, rows.length);
+  for (const plan of planned.plans) {
+    assert.equal(plan.table, "epstein_flight_legs");
+    assert.ok(plan.params.length <= UPSERT_PARAM_BUDGET);
+    assert.match(plan.sql, /INSERT INTO epstein_flight_legs/);
+  }
 });
 
 test("gap upsert sources do not contain private-host needles", () => {

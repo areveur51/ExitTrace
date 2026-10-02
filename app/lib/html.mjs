@@ -65,6 +65,7 @@ import {
 } from "./themes.mjs";
 import {
   ATTRIBUTE_TAGS,
+  EPSTEIN_CLIENTS_CATEGORY,
   IDENTITY_TAGS,
   attributeTagById,
   catalogMainPath,
@@ -429,6 +430,12 @@ export function breadcrumbItems({
   if (p === "/") return items;
 
   if (p.startsWith("/people/")) {
+    const fact = attributeTagById(categoryId);
+    if (categoryId === EPSTEIN_CLIENTS_CATEGORY && fact && !categoryById(categoryId)) {
+      items.push({ href: fact.path, label: fact.nav });
+      items.push({ href: p, label: label || "Person" });
+      return items;
+    }
     const cat = categoryById(categoryId);
     const trail = categoryTrail(cat);
     items.push(...(trail.length ? trail : [{ href: "/firings", label: "Catalog" }]));
@@ -1152,7 +1159,9 @@ function netWorthCell(row) {
 
 function kindLabel(row) {
   const cat = categoryById(row.category);
-  return cat ? cat.nav : row.category || "Person";
+  if (cat) return cat.nav;
+  if (row.category === EPSTEIN_CLIENTS_CATEGORY) return "Flight log";
+  return row.category || "Person";
 }
 
 /**
@@ -1855,7 +1864,7 @@ export function careerHistory(row) {
 
 
 /** Epstein Flight Log. Hidden when legs is empty. */
-export function epsteinFlightLogSection(legs = []) {
+export function epsteinFlightLogSection(legs = [], { note: lead = "" } = {}) {
   const rows = Array.isArray(legs) ? legs.filter(Boolean) : [];
   if (!rows.length) return "";
   const items = rows
@@ -1867,17 +1876,22 @@ export function epsteinFlightLogSection(legs = []) {
           : String(rawDate || "").slice(0, 10).trim();
       const route = [leg.dep || leg.dep_code || "?", leg.arr || leg.arr_code || "?"].join(" → ");
       const craft = String(leg.aircraft_tail || leg.aircraft || leg.aircraft_model || "").trim();
+      const note = String(leg.comment || "").trim();
       const when = date
         ? `<time datetime="${esc(date)}">${esc(formatDate(date))}</time>`
         : "—";
       const craftBit = craft ? ` · ${esc(craft)}` : "";
-      return `<li class="epstein-leg">${when} · ${esc(route)}${craftBit}</li>`;
+      const noteBit = note ? ` · ${esc(note)}` : "";
+      return `<li class="epstein-leg">${when} · ${esc(route)}${craftBit}${noteBit}</li>`;
     })
     .join("");
+  const leadHtml = String(lead || "").trim()
+    ? `<p class="event-summary">${esc(String(lead).trim())}</p>`
+    : "";
   return personEventSection({
     title: "Epstein Flight Log",
     kind: "epstein_flight_log",
-    bodyHtml: `<ol class="epstein-flight-log">${items}</ol>`,
+    bodyHtml: `${leadHtml}<ol class="epstein-flight-log">${items}</ol>`,
   });
 }
 
@@ -1893,7 +1907,9 @@ function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
   const nicknames = nicknameSections(row);
   const clearances = clearanceSections(row);
   const centralCasting = centralCastingDetailHtml(row, clips, seen);
-  const epstein = epsteinFlightLogSection(epsteinLegs);
+  const flightNote =
+    row.category === EPSTEIN_CLIENTS_CATEGORY ? String(row.summary || "").trim() : "";
+  const epstein = epsteinFlightLogSection(epsteinLegs, { note: flightNote });
   if (!rows && !nicknames && !clearances && !centralCasting && !epstein) return "";
   return `<section class="event-timeline" aria-label="Event timeline">${nicknames}${clearances}${rows}${centralCasting}${epstein}</section>`;
 }
