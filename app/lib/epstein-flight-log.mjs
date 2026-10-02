@@ -15,6 +15,36 @@ export function normalizePassengerName(raw) {
     .trim();
 }
 
+const PLACEHOLDER_PASSENGERS = new Set([
+  "illegible",
+  "reposition",
+  "wife",
+  "staff",
+  "bodyguard",
+  "vor holding",
+]);
+
+/**
+ * Rows that are not a person name. Blank, unknown, one character, digits,
+ * and log placeholders (a count, a reposition, an illegible mark) stay off
+ * the catalog. Initials and unresolved spellings are kept so they can be tracked.
+ */
+export function epsteinPassengerSkipReason(name) {
+  const norm = normalizePassengerName(name);
+  if (!norm) return "blank";
+  if (["unknown", "na", "n a", "none", "null", "tbd"].includes(norm)) return "unknown";
+  const compact = norm.replace(/ /g, "");
+  if (compact.length <= 1) return "single";
+  if (/^\d+$/.test(compact)) return "numeric";
+  if (/^(female|male|passengers|kids) \d+$/.test(norm)) return "placeholder";
+  if (/^nanny s \d+$/.test(norm)) return "placeholder";
+  if (/^secret serivce \d+$/.test(norm) || /^secret service \d+$/.test(norm)) {
+    return "placeholder";
+  }
+  if (PLACEHOLDER_PASSENGERS.has(norm)) return "placeholder";
+  return "";
+}
+
 export function epsteinLegKey(row = {}) {
   const passenger_name_raw = String(row.passenger_name_raw || "").trim();
   const flight_date = String(row.flight_date || "").trim().slice(0, 10);

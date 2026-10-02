@@ -15,6 +15,9 @@ export const IDENTITY_TAG_IDS = IDENTITY_TAGS.map((t) => t.id);
  * The catalog menu has a letterless Tags section. Each row links to the people who already store that fact.
  * They are not catalog hotkeys.
  */
+/** Person category for a flight-log card that has no other catalog entry. Not a nav page. */
+export const EPSTEIN_CLIENTS_CATEGORY = "epstein_clients";
+
 export const ATTRIBUTE_TAGS = [
   {
     id: "clearance_revoked",
@@ -29,6 +32,13 @@ export const ATTRIBUTE_TAGS = [
     path: "/tags/trump-nicknames",
     lede:
       "People with a stored Trump nickname. The tag is that fact. It is not an identity filter.",
+  },
+  {
+    id: "epstein_clients",
+    nav: "Epstein Clients",
+    path: "/tags/epstein-clients",
+    lede:
+      "People named on the Epstein flight log. The tag is that fact. It is not a charge and not an identity filter.",
   },
 ];
 

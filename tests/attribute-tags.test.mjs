@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { identityFilterNav, keymapFooter, personDetail } from "../app/lib/html.mjs";
+import { breadcrumbItems, epsteinFlightLogSection, identityFilterNav, keymapFooter, personDetail, personRow } from "../app/lib/html.mjs";
 import { handle } from "../app/server.mjs";
 import { setMemory } from "../app/lib/store.mjs";
 import { normalizeTags, personTags } from "../app/lib/tags.mjs";
@@ -31,8 +31,8 @@ function requestPage(pathname) {
 
 test("fact tags stay on the person and are not identity filters", () => {
   assert.deepEqual(
-    normalizeTags(["official", "clearance_revoked", "trump_nickname", "nope"]),
-    ["official", "clearance_revoked", "trump_nickname"],
+    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "nope"]),
+    ["official", "clearance_revoked", "trump_nickname", "epstein_clients"],
   );
   assert.deepEqual(
     personTags({
@@ -59,8 +59,18 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.match(facts, /class="keymap-section">Tags</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/trump-nicknames" aria-current="page"/);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/clearance-revoked"/);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/epstein-clients"/);
+  assert.match(facts, />Epstein Clients</);
   assert.doesNotMatch(facts, /keymap-tag[^>]*data-key=/);
   assert.doesNotMatch(facts, /Civilians/);
+  assert.deepEqual(
+    personTags({ category: "epstein_clients", tags: [], events: [] }),
+    [],
+  );
+  assert.deepEqual(
+    personTags({ category: "epstein_clients", tags: ["epstein_clients"], events: [] }),
+    ["epstein_clients"],
+  );
 });
 
 test("a stored fact tag is a chip to that list, not a kind", () => {
@@ -90,6 +100,18 @@ test("a stored fact tag is a chip to that list, not a kind", () => {
   assert.match(clearance, />Revoked clearances</);
   assert.doesNotMatch(clearance, /Trump nicknames/);
   assert.doesNotMatch(clearance, /lied/);
+
+  const logged = personDetail({
+    id: "adam-perrylang",
+    name: "Adam Perrylang",
+    category: "epstein_clients",
+    event_date: "2002-03-01",
+    tags: ["epstein_clients"],
+    events: [],
+  });
+  assert.match(logged, /href="\/tags\/epstein-clients"/);
+  assert.match(logged, />Epstein Clients</);
+  assert.doesNotMatch(logged, /Revoked clearances/);
 });
 
 test("fact-tag lists include only people who already have that tag", async () => {
@@ -115,6 +137,14 @@ test("fact-tag lists include only people who already have that tag", async () =>
         event_date: "2020-01-01",
         tags: ["official"],
         events: [{ kind: "firings", event_date: "2020-01-01", sources: [] }],
+      },
+      {
+        id: "adam-perrylang",
+        name: "Adam Perrylang",
+        category: "epstein_clients",
+        event_date: "2002-03-01",
+        tags: ["epstein_clients"],
+        events: [],
       },
     ],
   });
@@ -142,4 +172,63 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.match(firings.body, /href="\/tags\/trump-nicknames"/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Revoked clearances<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Trump nicknames<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>Epstein Clients<\/option>/);
+
+  const clients = await requestPage("/tags/epstein-clients");
+  assert.equal(clients.status, 200);
+  assert.match(clients.body, /href="\/people\/adam-perrylang"/);
+  assert.match(clients.body, /Flight log/);
+  assert.doesNotMatch(clients.body, /epstein_clients/);
+  assert.doesNotMatch(clients.body, /href="\/people\/gavin-newsom"/);
+  assert.doesNotMatch(clients.body, /href="\/people\/james-clapper"/);
+  assert.doesNotMatch(clients.body, /href="\/people\/other-person"/);
+  assert.match(clients.body, /href="\/tags\/epstein-clients" aria-current="page"/);
+  assert.doesNotMatch(clients.body, /id="fact-tag-filter"/);
+
+  const row = personRow({
+    id: "adam-perrylang",
+    name: "Adam Perrylang",
+    category: "epstein_clients",
+    event_date: "2002-03-01",
+  });
+  assert.match(row, /Flight log/);
+  assert.doesNotMatch(row, /epstein_clients/);
+  assert.deepEqual(
+    breadcrumbItems({
+      path: "/people/adam-perrylang",
+      label: "Adam Perrylang",
+      categoryId: "epstein_clients",
+    }),
+    [
+      { href: "/", label: "Home" },
+      { href: "/tags/epstein-clients", label: "Epstein Clients" },
+      { href: "/people/adam-perrylang", label: "Adam Perrylang" },
+    ],
+  );
+  const leg = epsteinFlightLogSection([
+    {
+      flight_date: "1997-12-14",
+      dep: "West Palm Beach, FL, United States",
+      arr: "Teterboro, NJ, United States",
+      aircraft_tail: "N908JE",
+      comment: "(Pilot)",
+    },
+  ]);
+  assert.match(leg, /Dec 14, 1997/);
+  assert.match(leg, /West Palm Beach, FL, United States → Teterboro, NJ, United States/);
+  assert.match(leg, /N908JE/);
+  assert.match(leg, /\(Pilot\)/);
+  const noted = epsteinFlightLogSection(
+    [
+      {
+        flight_date: "2002-02-09",
+        dep: "Miami, FL, United States",
+        arr: "Westchester County, NY, United States",
+        aircraft_tail: "N908JE",
+      },
+    ],
+    { note: "This is not a charge." },
+  );
+  assert.match(noted, /This is not a charge/);
+  assert.match(noted, /Feb 9, 2002/);
 });

@@ -309,6 +309,23 @@ export function normalizePayload(input) {
   return out;
 }
 
+/** Stay under Postgres's 65,535-parameter bind limit. */
+export const UPSERT_PARAM_BUDGET = 60000;
+
+export function upsertChunkSize(table) {
+  if (!isPublishedTable(table)) throw new Error("unknown published table");
+  const width = COLS[table].length || 1;
+  return Math.max(1, Math.floor(UPSERT_PARAM_BUDGET / width));
+}
+
+export function chunkUpsertRows(table, rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const size = upsertChunkSize(table);
+  const out = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
 export function buildUpsertSql(table, rows) {
   if (!isPublishedTable(table)) throw new Error("unknown published table");
   const list = Array.isArray(rows) ? rows : [];
@@ -346,7 +363,9 @@ export function planGapUpsert(payload, { existingTables = PUBLISHED_TABLES.conca
       skipped.push({ table, reason: "table_absent", count: data[table].length });
       continue;
     }
-    plans.push(buildUpsertSql(table, data[table]));
+    for (const part of chunkUpsertRows(table, data[table])) {
+      plans.push(buildUpsertSql(table, part));
+    }
   }
   return { plans, skipped, counts_in: Object.fromEntries(ALL_UPSERT_TABLES.map((t) => [t, data[t].length])) };
 }
