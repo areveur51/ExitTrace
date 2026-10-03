@@ -227,9 +227,24 @@ function keptEventDate(prior, incoming) {
   return prior.event_date || incoming.event_date || null;
 }
 
+/**
+ * Set only after events are unique, cites are merged, and ages are stamped.
+ * A symbol stays out of JSON snapshots and string-key copies. Object spread
+ * drops it, so a replaced events array is normalized again.
+ */
+export const EVENTS_READY = Symbol.for("exittrace.personEventsReady");
+
+/** Non-enumerable so object spread and JSON omit it. */
+export function markEventsReady(row) {
+  if (!row || typeof row !== "object" || row[EVENTS_READY] === true) return row;
+  Object.defineProperty(row, EVENTS_READY, { value: true });
+  return row;
+}
+
 /** Lift legacy category/event_date/sources into events; keep one event per kind. */
 export function personEvents(row) {
   if (!row || typeof row !== "object") return [];
+  if (row[EVENTS_READY] === true && Array.isArray(row.events)) return row.events;
   let events;
   if (Array.isArray(row.events) && row.events.length) {
     events = uniqueEvents(row.events);
@@ -323,7 +338,7 @@ export function projectPerson(row, kinds) {
       parseStoredAge(derived.age_at_event),
   };
   projected.tags = personTags(projected);
-  return projected;
+  return markEventsReady(projected);
 }
 
 /**

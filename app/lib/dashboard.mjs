@@ -19,7 +19,7 @@ import {
 import { EVENT_ATTR_FIELDS, eventHeadcount, personHeadcount } from "./event-attrs.mjs";
 import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
-import { deathPersonEvent, personEvents } from "./promote.mjs";
+import { EVENTS_READY, deathPersonEvent, markEventsReady, personEvents } from "./promote.mjs";
 
 export { AGE_BANDS, parseAgeBand } from "./age.mjs";
 
@@ -135,11 +135,20 @@ export function explicitAttr(row, field) {
   return String(row?.[key] || "").trim();
 }
 
+const rankEventCache = new WeakMap();
+
 /** KEEP events only. Career / service_history rows never feed ranks. */
 export function dashRankEvents(row) {
-  return personEvents(row).filter((ev) =>
+  const events = personEvents(row);
+  if (row && typeof row === "object") {
+    const hit = rankEventCache.get(row);
+    if (hit && hit.source === events) return hit.filtered;
+  }
+  const filtered = events.filter((ev) =>
     PROMOTE_CATEGORY_IDS.includes(String(ev.kind || "").trim()),
   );
+  if (row && typeof row === "object") rankEventCache.set(row, { source: events, filtered });
+  return filtered;
 }
 
 /**
@@ -358,7 +367,11 @@ export function filterPeopleToRange(people, range) {
       eventInDashRange(ev.event_date, range),
     );
     if (!events.length) continue;
-    out.push({ ...row, events });
+    // Spread drops the symbol. A prepared row's in-range events stay prepared.
+    // Ranks do not read cites, so sources outside the range are not merged again.
+    const next = { ...row, events };
+    if (row && row[EVENTS_READY] === true) markEventsReady(next);
+    out.push(next);
   }
   return out;
 }
@@ -538,12 +551,8 @@ function eventFieldBlank(events, field) {
   return events.every((ev) => !String(ev?.[field] || "").trim());
 }
 
-/** True when this unique person is missing the named stored field. */
-export function personMissingField(row, fieldId, range) {
-  const field = parseMissingField(fieldId);
-  if (!field || !row) return false;
-  const events = inRangeKeepEvents(row, range);
-  switch (field.id) {
+function personMissingPrepared(row, fieldId, events) {
+  switch (fieldId) {
     case "photo":
       return !isPeopleMediaHref(row.photo);
     case "summary":
@@ -569,21 +578,32 @@ export function personMissingField(row, fieldId, range) {
   }
 }
 
+/** True when this unique person is missing the named stored field. */
+export function personMissingField(row, fieldId, range) {
+  const field = parseMissingField(fieldId);
+  if (!field || !row) return false;
+  return personMissingPrepared(row, field.id, inRangeKeepEvents(row, range));
+}
+
 /** Unique people in range missing each tracked field. */
 export function missingStanding(people, range) {
   const rows = filterPeopleToRange(people, range);
   const total = rows.length;
   const resolved = resolveDashRange(range);
-  return DASH_MISSING_FIELDS.map((field) => {
-    const count = rows.filter((row) => personMissingField(row, field.id, resolved)).length;
-    return {
-      key: field.id,
-      label: field.label,
-      count,
-      total,
-      href: dashRangeHref(DASH_MISSING.path, resolved, { field: field.id }),
-    };
-  });
+  const counts = Object.fromEntries(DASH_MISSING_FIELDS.map((field) => [field.id, 0]));
+  for (const row of rows) {
+    const events = inRangeKeepEvents(row, resolved);
+    for (const field of DASH_MISSING_FIELDS) {
+      if (personMissingPrepared(row, field.id, events)) counts[field.id] += 1;
+    }
+  }
+  return DASH_MISSING_FIELDS.map((field) => ({
+    key: field.id,
+    label: field.label,
+    count: counts[field.id],
+    total,
+    href: dashRangeHref(DASH_MISSING.path, resolved, { field: field.id }),
+  }));
 }
 
 /** True when this unique person is missing at least one tracked field. */

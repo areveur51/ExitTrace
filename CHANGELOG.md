@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-10-03
+
+### Fixed
+
+- Catalog pages no longer rebuild person events that are already prepared. Repeat loads of the home page, health counts, and the full people list reuse a short in-process snapshot. The counts themselves are unchanged.
+
 ## [1.2.6] - 2026-10-02
 
 ### Added

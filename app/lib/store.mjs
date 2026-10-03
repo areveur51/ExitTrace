@@ -25,12 +25,11 @@ import { isPeopleMediaHref, isStoredPeoplePortrait, resolvePortrait } from "./po
 import { normalizeScreenshotCredit, normalizeScreenshotHref } from "./screenshot.mjs";
 import { hasRecordedNetWorth, resolveNetWorth } from "./net-worth.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
-import { ageFilterActive, matchesAgeFilter, stampEventAge } from "./age.mjs";
+import { ageFilterActive, matchesAgeFilter } from "./age.mjs";
 import {
   kindsImplyingTags,
   matchesTags,
   normalizeTags,
-  personTags,
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
@@ -60,6 +59,26 @@ import {
 
 let pool = null;
 let memory = null;
+
+/** Postgres catalog reads only. Memory tests stay live. Direct SQL shows up within this window. An expired snapshot is served once while it refreshes. */
+const CATALOG_CACHE_MS = 12_000;
+let catalogEpoch = 0;
+let countsCache = null;
+let countsInflight = null;
+let allPeopleCache = null;
+let allPeopleInflight = null;
+
+function dropCatalogCache() {
+  catalogEpoch += 1;
+  countsCache = null;
+  countsInflight = null;
+  allPeopleCache = null;
+  allPeopleInflight = null;
+}
+
+function catalogCacheFresh(entry) {
+  return Boolean(entry) && Date.now() - entry.at < CATALOG_CACHE_MS;
+}
 
 export function backendName() {
   return databaseUrl() ? "postgres" : "file";
@@ -97,7 +116,7 @@ function asDate(v) {
 
 function normalizePerson(row) {
   const birth_date = asDate(row.birth_date);
-  const events = personEvents(row).map((ev) => stampEventAge(ev, birth_date));
+  // projectPerson normalizes events once and marks them ready.
   return projectPerson({
     id: row.id,
     category: row.category,
@@ -119,9 +138,9 @@ function normalizePerson(row) {
     net_worth_source: row.net_worth_source || "",
     sources: Array.isArray(row.sources) ? row.sources : row.sources || [],
     summary: row.summary || "",
-    events,
+    events: row.events,
     career: personCareer(row),
-    tags: personTags({ ...row, events }),
+    tags: row.tags,
     central_casting: normalizeCentralCasting(row.central_casting),
     nicknames: normalizeNicknames(row.nicknames),
     clearances: normalizeClearances(row.clearances),
@@ -405,6 +424,7 @@ function emptyMemory() {
 }
 
 export function setMemory(seed) {
+  dropCatalogCache();
   memory = {
     people: (seed.people || []).map(normalizePerson),
     ...kindCommMemory(seed),
@@ -682,6 +702,7 @@ export async function importSeed(p, seed) {
       [JSON.stringify({ imported_at: new Date().toISOString(), ...(seed.meta || {}) })],
     );
     await client.query("COMMIT");
+    dropCatalogCache();
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -1298,6 +1319,44 @@ function projectListed(rows, categories) {
   );
 }
 
+function wantsFullPeopleList(categories, ageFilter, tags, unsealed, limit, offset) {
+  return (
+    !categories.length &&
+    !tags.length &&
+    unsealed !== true &&
+    !ageFilterActive(ageFilter) &&
+    limit == null &&
+    !offset
+  );
+}
+
+function refreshAllPeople(p) {
+  const epoch = catalogEpoch;
+  if (allPeopleInflight && allPeopleInflight.epoch === epoch) return allPeopleInflight.promise;
+  const promise = (async () => {
+    const params = [];
+    const sql = `SELECT * FROM people${peopleKindOrder([], params)}`;
+    const q = await p.query(sql, params);
+    const rows = q.rows.map(normalizePerson);
+    if (epoch === catalogEpoch) allPeopleCache = { at: Date.now(), rows };
+    return rows;
+  })().finally(() => {
+    if (allPeopleInflight && allPeopleInflight.promise === promise) allPeopleInflight = null;
+  });
+  allPeopleInflight = { epoch, promise };
+  return promise;
+}
+
+async function loadAllPeople(p) {
+  if (catalogCacheFresh(allPeopleCache)) return allPeopleCache.rows;
+  // Serve the previous snapshot while a refresh runs. A catalog write clears it.
+  if (allPeopleCache) {
+    refreshAllPeople(p).catch(() => {});
+    return allPeopleCache.rows;
+  }
+  return refreshAllPeople(p);
+}
+
 export async function listPeople(categoryOrOpts, maybeOpts) {
   const args = parseListArgs(categoryOrOpts, maybeOpts);
   const limit = finiteInt(args.limit, null);
@@ -1325,6 +1384,10 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
     }
     return applyWindow(rows.slice().sort(comparePeople), limit, offset);
   }
+  if (wantsFullPeopleList(categories, ageFilter, tags, unsealed, limit, offset)) {
+    const rows = await loadAllPeople(p);
+    return rows.slice();
+  }
   const params = [];
   let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed)}`;
   sql += peopleKindOrder(categories, params);
@@ -1338,7 +1401,9 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
     sql += ` OFFSET $${params.length}`;
   }
   const q = await p.query(sql, params);
-  return projectListed(q.rows.map(normalizePerson), categories);
+  const normalized = q.rows.map(normalizePerson);
+  // Already projected. A category slice re-picks that kind's list date.
+  return categories.length ? projectListed(normalized, categories) : normalized;
 }
 
 export async function listKindComms(kind, opts = {}) {
@@ -1512,6 +1577,7 @@ export async function insertOperation(row) {
       throw new PromoteError(`operation exists: ${op.id}`, "id_collision");
     }
     mem.operations.push(op);
+    dropCatalogCache();
     return op;
   }
   await p.query(
@@ -1523,6 +1589,7 @@ export async function insertOperation(row) {
      )`,
     operationValues(op),
   );
+  dropCatalogCache();
   return op;
 }
 
@@ -1535,6 +1602,7 @@ export async function saveOperation(row) {
     const i = mem.operations.findIndex((r) => r.id === op.id);
     if (i < 0) mem.operations.push(op);
     else mem.operations[i] = op;
+    dropCatalogCache();
     return op;
   }
   await p.query(
@@ -1557,6 +1625,7 @@ export async function saveOperation(row) {
        screenshot = COALESCE(NULLIF(operations.screenshot, ''), EXCLUDED.screenshot)`,
     operationValues(op),
   );
+  dropCatalogCache();
   return op;
 }
 
@@ -1787,6 +1856,7 @@ export async function insertPerson(row) {
       throw new PromoteError(`person exists: ${person.id}`, "id_collision");
     }
     mem.people.push(person);
+    dropCatalogCache();
     return person;
   }
   await p.query(
@@ -1804,6 +1874,7 @@ export async function insertPerson(row) {
     await syncPersonEvents(client, person);
   } finally {
     client.release();
+    dropCatalogCache();
   }
   return person;
 }
@@ -1818,6 +1889,7 @@ export async function savePerson(row) {
       throw new PromoteError(`person not found: ${person.id}`, "person_not_found");
     }
     mem.people[i] = person;
+    dropCatalogCache();
     return person;
   }
   await p.query(
@@ -1836,6 +1908,7 @@ export async function savePerson(row) {
     await syncPersonEvents(client, person);
   } finally {
     client.release();
+    dropCatalogCache();
   }
   return getPerson(person.id);
 }
@@ -1847,12 +1920,15 @@ export async function deletePerson(id) {
     const mem = getMemory();
     const n = mem.people.length;
     mem.people = mem.people.filter((r) => r.id !== id);
-    return mem.people.length !== n;
+    const removed = mem.people.length !== n;
+    if (removed) dropCatalogCache();
+    return removed;
   }
   const client = await p.connect();
   try {
     await client.query("DELETE FROM person_events WHERE person_id = $1", [id]);
     const q = await client.query("DELETE FROM people WHERE id = $1", [id]);
+    if (q.rowCount > 0) dropCatalogCache();
     return q.rowCount > 0;
   } finally {
     client.release();
@@ -1900,6 +1976,7 @@ export async function setPersonPhoto(id, photo, photo_credit = "") {
     const i = mem.people.findIndex((r) => r.id === id);
     if (i < 0) return person;
     mem.people[i] = { ...person, photo: href, photo_credit: credit };
+    dropCatalogCache();
     return mem.people[i];
   }
   await p.query(
@@ -1908,6 +1985,7 @@ export async function setPersonPhoto(id, photo, photo_credit = "") {
       WHERE id = $3 AND (photo IS NULL OR photo = '')`,
     [href, credit, id],
   );
+  dropCatalogCache();
   return getPerson(id);
 }
 
@@ -1936,6 +2014,7 @@ export async function setPersonNetWorth(id, worth) {
     const i = mem.people.findIndex((r) => r.id === id);
     if (i < 0) return person;
     mem.people[i] = { ...person, ...resolved };
+    dropCatalogCache();
     return mem.people[i];
   }
   await p.query(
@@ -1947,6 +2026,7 @@ export async function setPersonNetWorth(id, worth) {
         AND (net_worth_source IS NULL OR net_worth_source = '')`,
     [resolved.net_worth_usd, resolved.net_worth_note, resolved.net_worth_source, id],
   );
+  dropCatalogCache();
   return getPerson(id);
 }
 
@@ -1996,12 +2076,14 @@ export async function ensurePersonNicknames({
       const mem = getMemory();
       const i = mem.people.findIndex((row) => row.id === existing.id);
       if (i >= 0) mem.people[i] = { ...mem.people[i], nicknames: merged };
+      dropCatalogCache();
       return { action: "updated", person: mem.people[i] || { ...existing, nicknames: merged } };
     }
     await p.query(`UPDATE people SET nicknames = $2::jsonb WHERE id = $1`, [
       existing.id,
       JSON.stringify(merged),
     ]);
+    dropCatalogCache();
     return { action: "updated", person: await getPerson(existing.id) };
   }
   const id = personSlug(name);
@@ -2085,12 +2167,14 @@ export async function ensurePersonClearances({
       const mem = getMemory();
       const i = mem.people.findIndex((row) => row.id === existing.id);
       if (i >= 0) mem.people[i] = { ...mem.people[i], clearances: merged };
+      dropCatalogCache();
       return { action: "updated", person: mem.people[i] || { ...existing, clearances: merged } };
     }
     await p.query(`UPDATE people SET clearances = $2::jsonb WHERE id = $1`, [
       existing.id,
       JSON.stringify(merged),
     ]);
+    dropCatalogCache();
     return { action: "updated", person: await getPerson(existing.id) };
   }
   const id = personSlug(name);
@@ -2246,6 +2330,7 @@ export async function upsertSourcePosts(rows) {
         inserted += 1;
       }
     }
+    if (incoming.length) dropCatalogCache();
     return { inserted, updated, source_posts: mem.source_posts.length };
   }
   const client = await p.connect();
@@ -2294,6 +2379,7 @@ export async function upsertSourcePosts(rows) {
       else inserted += 1;
     }
     await client.query("COMMIT");
+    if (incoming.length) dropCatalogCache();
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -2432,12 +2518,14 @@ export async function annotateCentralCasting(personId, classification) {
   if (!p) {
     const row = getMemory().people.find((item) => item.id === id);
     row.central_casting = central_casting;
+    dropCatalogCache();
     return { ...row, central_casting };
   }
   await p.query(`UPDATE people SET central_casting = $2::jsonb WHERE id = $1`, [
     id,
     JSON.stringify(central_casting),
   ]);
+  dropCatalogCache();
   return getPerson(id);
 }
 
@@ -2455,6 +2543,7 @@ export async function insertCentralCastingClip(row) {
       throw new CentralCastingClassifyError(`clip exists: ${clip.id}`, "id_collision");
     }
     list.push(clip);
+    dropCatalogCache();
     return clip;
   }
   await p.query(
@@ -2479,10 +2568,35 @@ export async function insertCentralCastingClip(row) {
       clip.person_id,
     ],
   );
+  dropCatalogCache();
   return clip;
 }
 
+function refreshCounts() {
+  const epoch = catalogEpoch;
+  if (countsInflight && countsInflight.epoch === epoch) return countsInflight.promise;
+  const promise = countsUncached().then((value) => {
+    if (epoch === catalogEpoch) countsCache = { at: Date.now(), value };
+    return value;
+  }).finally(() => {
+    if (countsInflight && countsInflight.promise === promise) countsInflight = null;
+  });
+  countsInflight = { epoch, promise };
+  return promise;
+}
+
 export async function counts() {
+  const p = await getPool();
+  if (!p) return countsUncached();
+  if (catalogCacheFresh(countsCache)) return countsCache.value;
+  if (countsCache) {
+    refreshCounts().catch(() => {});
+    return countsCache.value;
+  }
+  return refreshCounts();
+}
+
+async function countsUncached() {
   const p = await getPool();
   if (!p) {
     const people = getMemory().people;
@@ -2695,6 +2809,7 @@ export async function insertKindComm(kind, row) {
       throw new PromoteError(`${spec.label} exists: ${comm.id}`, "id_collision");
     }
     list.push(comm);
+    dropCatalogCache();
     return comm;
   }
   const params = [
@@ -2717,6 +2832,7 @@ export async function insertKindComm(kind, row) {
     `INSERT INTO ${spec.table} (${columns}) VALUES (${values})`,
     params,
   );
+  dropCatalogCache();
   return comm;
 }
 
@@ -3095,6 +3211,7 @@ export async function migrateUniquePeople() {
 }
 
 export async function closeStore() {
+  dropCatalogCache();
   if (pool) {
     await pool.end();
     pool = null;
