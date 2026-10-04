@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-10-03
+
+### Added
+
+- Operation cards show the official seal of the lead law-enforcement agency named on that operation. A department seal is used only when no law-enforcement agency is listed. An operation with no matching seal stays on the empty portrait.
+
 ## [1.2.7] - 2026-10-03
 
 ### Fixed

@@ -14,7 +14,7 @@ import {
   GROUP_OPS_KEEP_IDS,
   isIndictmentKeepKind,
 } from "./categories.mjs";
-import { normalizeOperationTags, operationTagLabel } from "./operation.mjs";
+import { normalizeOperationTags, operationPortraitFrom, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
 import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
@@ -1338,8 +1338,9 @@ export function operationRow(row, { selected } = {}) {
   const tags = normalizeOperationTags(row.tags);
   const tagLabel = tags.map((id) => operationTagLabel(id)).filter(Boolean).join(", ") || "Operation";
   const agencies = (row.agencies || []).filter(Boolean).join(", ") || "—";
+  const portrait = operationPortraitFrom(row);
   return `<a class="tui-row operation-card${selected ? " is-selected" : ""}" href="${esc(href)}">
-    ${thumb(row.photo, row.name || "OP")}
+    ${thumb(portrait.photo, row.name || "OP")}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.name || "—")}</div>
       <div class="tui-meta"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(tagLabel)} · ${esc(agencies)} · victims ${esc(countCell(row.victim_count))} · arrests ${esc(countCell(row.arrest_count))}</div>
@@ -2006,13 +2007,15 @@ export function operationDetail(row, { attributions } = {}) {
   const sourceHtml = sources.length
     ? `<h3 class="pane-h">Sources</h3>${citeList(sources)}`
     : "";
+  const portrait = operationPortraitFrom(row);
   return `<article class="detail operation-detail" data-operation-id="${esc(row.id)}">
     ${detailShell({
       title: "Operation",
       mediaHtml: detailMediaStrip({
-        portraitHtml: localMediaPortrait(row.photo, row.name || "OP"),
-        portraitSrc: isPeopleMediaHref(row.photo) ? row.photo : "",
+        portraitHtml: localMediaPortrait(portrait.photo, row.name || "OP"),
+        portraitSrc: portrait.photo,
         portraitAlt: row.name || "OP",
+        portraitCredit: portrait.photo_credit,
         screenshot: row.screenshot,
         screenshotAlt: `X-post screenshot of ${row.name || "operation"}`,
         metaHtml: detailMetaBlock({
