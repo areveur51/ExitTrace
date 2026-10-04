@@ -1,5 +1,5 @@
 /** Derived local list thumbs. Never fetch X, Wikimedia, or news at view time.
- *  Never writes into media/people or kind-comm still dirs (dog, red-folder, central-casting).
+ *  Never writes into media/people, media/agencies, or kind-comm still dirs.
  *  Never deletes originals.
  */
 
@@ -45,11 +45,12 @@ export function isCommsMediaHref(raw, mediaDir) {
 }
 
 const PEOPLE = "/media/people/";
+const AGENCIES = "/media/agencies/";
 const COMM_DIRS = commsThumbKinds();
 const THUMBS = "/media/thumbs/";
 const EXTS = [".jpg", ".jpeg", ".png", ".webp"];
 const THUMB_REL = new RegExp(
-  `^thumbs/(people|${COMM_DIRS.join("|")})/([a-z0-9][a-z0-9_-]*)(\\.(?:2x|hero))?\\.(jpg|webp)$`,
+  `^thumbs/(people|agencies|${COMM_DIRS.join("|")})/([a-z0-9][a-z0-9_-]*)(\\.(?:2x|hero))?\\.(jpg|webp)$`,
   "i",
 );
 const VARIANT_SIZE = {
@@ -103,6 +104,8 @@ function catalogKind(src) {
   }
   const person = localLeaf(text, PEOPLE);
   if (person) return { kind: "people", stem: stemOf(person) };
+  const agency = localLeaf(text, AGENCIES);
+  if (agency) return { kind: "agencies", stem: stemOf(agency) };
   for (const dir of COMM_DIRS) {
     const leaf = localLeaf(text, `/media/${dir}/`);
     if (leaf) return { kind: dir, stem: stemOf(leaf) };
@@ -144,10 +147,14 @@ export function sourceRelCandidates(thumbRel) {
   return EXTS.map((ext) => `${parsed.kind}/${parsed.stem}${ext}`);
 }
 
-/** Gold catalog still for people and kind-comm media dirs. Empty when the href is not local media. */
+/** Gold catalog still for people, agency seals, and kind-comm media dirs. Empty when the href is not local media. */
 export function goldMediaHref(src) {
   const text = String(src || "").trim();
-  if (localLeaf(text, PEOPLE) || COMM_DIRS.some((dir) => isCommsMediaHref(text, dir))) {
+  if (
+    localLeaf(text, PEOPLE) ||
+    localLeaf(text, AGENCIES) ||
+    COMM_DIRS.some((dir) => isCommsMediaHref(text, dir))
+  ) {
     return text;
   }
   return "";
@@ -514,13 +521,13 @@ export async function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = 
 export async function buildAllThumbs(mediaDir) {
   const root = path.resolve(mediaDir);
   const made = [];
-  for (const kind of ["people", ...COMM_DIRS]) {
+  for (const kind of ["people", "agencies", ...COMM_DIRS]) {
     const dir = path.join(root, kind);
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
     for (const name of fs.readdirSync(dir)) {
       if (!EXTS.includes(path.extname(name).toLowerCase())) continue;
       const stem = stemOf(name);
-      const variants = kind === "people" ? ["", ".2x", ".hero"] : ["", ".2x"];
+      const variants = kind === "people" || kind === "agencies" ? ["", ".2x", ".hero"] : ["", ".2x"];
       for (const variant of variants) {
         for (const ext of ["jpg", "webp"]) {
           if (variant === ".hero" && ext === "jpg") continue;

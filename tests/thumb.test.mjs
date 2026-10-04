@@ -55,6 +55,13 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
   );
   assert.equal(goldMediaHref("/media/people/james-comey.jpg"), "/media/people/james-comey.jpg");
   assert.equal(goldMediaHref("/media/thumbs/people/james-comey.jpg"), "");
+  assert.equal(listThumbHref("/media/agencies/fbi.png"), "/media/thumbs/agencies/fbi.jpg");
+  assert.equal(
+    thumbHrefFor("/media/agencies/fbi.png", { variant: ".hero", ext: "webp" }),
+    "/media/thumbs/agencies/fbi.hero.webp",
+  );
+  assert.equal(goldMediaHref("/media/agencies/fbi.png"), "/media/agencies/fbi.png");
+  assert.equal(goldMediaHref("/media/thumbs/agencies/fbi.jpg"), "");
   assert.equal(
     listThumbHref("/media/dog-comms/dod-k9-2020.jpg"),
     "/media/thumbs/dog-comms/dod-k9-2020.jpg",

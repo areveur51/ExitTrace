@@ -13,8 +13,10 @@ import {
   parseEventDate,
   personSlug,
 } from "./promote.mjs";
+import { operationLeadLogo } from "./agency-logo.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
+import { goldMediaHref } from "./thumb.mjs";
 
 export const OPERATION_TAG_IDS = GROUP_OPS_KEEP_IDS;
 
@@ -156,6 +158,20 @@ function asSources(raw) {
   return Array.isArray(raw) ? raw.filter((s) => s && s.url) : [];
 }
 
+/** Stored gold still wins. Otherwise the lead agency seal. Screenshot paths are not stills. */
+export function operationPortraitFrom(row = {}) {
+  const agencies = parseAgencies(row.agencies || row.organization || row.orgs);
+  const photo = String(row.photo || "").trim();
+  const gold = goldMediaHref(photo);
+  if (gold) {
+    return {
+      photo: gold,
+      photo_credit: String(row.photo_credit || "").trim(),
+    };
+  }
+  return operationLeadLogo(agencies);
+}
+
 export function normalizeOperation(row = {}) {
   const name = String(row.name || row.subject || "").trim();
   const event_date = asEventDate(row.event_date);
@@ -171,18 +187,22 @@ export function normalizeOperation(row = {}) {
     victim_count = null;
     arrest_count = null;
   }
+  const agencies = parseAgencies(row.agencies || row.organization || row.orgs);
+  const logo = operationPortraitFrom({ ...row, agencies });
   return {
     id: String(row.id || "").trim() || operationSlug(name),
     name,
     event_date,
     announced_date,
-    agencies: parseAgencies(row.agencies || row.organization || row.orgs),
+    agencies,
     summary: String(row.summary || row.reason || row.comments || "").trim(),
     victim_count,
     arrest_count,
     tags: normalizeOperationTags(row.tags || row.category),
     sources: asSources(row.sources),
     screenshot: normalizeScreenshotHref(row.screenshot, "operations"),
+    photo: logo.photo,
+    photo_credit: logo.photo_credit,
   };
 }
 
@@ -214,7 +234,7 @@ export function mergeOperationAnnotate(gold, prior) {
   const b = normalizeOperation(prior);
   const cites = mergeCites(a.sources, b.sources);
   const tags = [...new Set([...a.tags, ...b.tags])];
-  return {
+  const merged = {
     ...a,
     agencies: a.agencies.length ? a.agencies : b.agencies,
     summary: a.summary || b.summary,
@@ -225,6 +245,12 @@ export function mergeOperationAnnotate(gold, prior) {
     sources: cites.sources,
     screenshot: a.screenshot || b.screenshot || "",
   };
+  if (!merged.photo) {
+    const logo = operationLeadLogo(merged.agencies);
+    merged.photo = logo.photo;
+    merged.photo_credit = logo.photo_credit;
+  }
+  return merged;
 }
 
 export function validateIdentifiedOperationInput(input = {}) {

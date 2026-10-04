@@ -167,10 +167,14 @@ test("empty src uses the placeholder and a real src stays the stored still", () 
       commsDetail(CENTRAL_CASTING_DETAIL, casting({ still: "" })),
       commsDetail(CENTRAL_CASTING_DETAIL, casting()),
     ],
-    ["operation list", operationRow(operation()), operationRow(operation({ photo: "/media/people/jordan-hale.jpg" }))],
+    [
+      "operation list",
+      operationRow(operation({ agencies: ["Example Clearinghouse"] })),
+      operationRow(operation({ photo: "/media/people/jordan-hale.jpg" })),
+    ],
     [
       "operation detail",
-      operationDetail(operation()),
+      operationDetail(operation({ agencies: ["Example Clearinghouse"] })),
       operationDetail(operation({ photo: "/media/people/jordan-hale.jpg" })),
     ],
   ];
@@ -190,7 +194,10 @@ test("empty src uses the placeholder and a real src stays the stored still", () 
   assert.doesNotMatch(external, /upload\.wikimedia\.org/);
 
   const shotAsPhoto = operationRow(
-    operation({ photo: "/media/screenshots/operations/restore.jpg" }),
+    operation({
+      agencies: ["Example Clearinghouse"],
+      photo: "/media/screenshots/operations/restore.jpg",
+    }),
   );
   assert.equal(wellSrc(shotAsPhoto), EMPTY_PORTRAIT_HREF);
   assert.doesNotMatch(shotAsPhoto, /screenshots/);
