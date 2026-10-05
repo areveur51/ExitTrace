@@ -16,7 +16,7 @@ import {
 } from "./categories.mjs";
 import { normalizeOperationTags, operationPortraitFrom, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
-import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount } from "./event-attrs.mjs";
+import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount, normalizeEventMedia } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
 import {
@@ -26,6 +26,8 @@ import {
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
 import { asEventDate, personEvents } from "./promote.mjs";
+import { isUnofficialOrCommentarySocial } from "./official.mjs";
+import { canonicalPublicUrl } from "./urls.mjs";
 import {
   PAGE_SIZE,
   PAGE_SIZES,
@@ -1429,6 +1431,46 @@ export function personEventSection({
   </${el}>`;
 }
 
+/** One bottom-of-page figure. Caption is the matching cite link, not the post text. */
+function supportingMediaFigure(item, source) {
+  const alt = item.alt || "Supporting media";
+  const credit = creditWithoutUrls(item.credit || "");
+  const href = String(source?.url || item.url || "").trim();
+  const date = String(source?.date || "").trim();
+  const dateHtml = date
+    ? ` <time datetime="${esc(date)}">${esc(formatDate(date))}</time>`
+    : "";
+  const caption = href
+    ? `${citeLink(href)}${dateHtml}`
+    : esc(credit || alt);
+  const frameInner = /\.mp4$/i.test(item.src)
+    ? commVideoInner(item.src, item.poster || "", alt)
+    : `<img class="detail-photo still" src="${esc(item.src)}" alt="${esc(alt)}" decoding="async">`;
+  const button = lightboxButton(item.src, `<span class="detail-support-frame">${frameInner}</span>`, {
+    alt,
+    credit,
+    kind: /\.mp4$/i.test(item.src) ? "video" : "image",
+    poster: item.poster || "",
+  });
+  return `<figure class="detail-tile detail-tile--support">${button}<figcaption class="event-media-caption">${caption}</figcaption></figure>`;
+}
+
+/** Supporting clips after every event section. Empty when none are stored. */
+function personSupportingMediaHtml(row) {
+  const figures = [];
+  for (const ev of personEvents(row)) {
+    const sources = Array.isArray(ev.sources) ? ev.sources : [];
+    for (const item of normalizeEventMedia(ev.media)) {
+      const want = canonicalPublicUrl(item.url);
+      const source =
+        sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
+      figures.push(supportingMediaFigure(item, source));
+    }
+  }
+  if (!figures.length) return "";
+  return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3><div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div></section>`;
+}
+
 function eventMediaFigure(src, alt) {
   const href = String(src || "").trim();
   if (!href) return "";
@@ -1837,7 +1879,9 @@ export function eventTagRow(ev, { birthDate } = {}) {
     kind,
     cites: (ev.sources || []).map((source) => ({
       url: source?.url || "",
-      snippet: String(source?.snippet || source?.quote || source?.title || "").trim(),
+      snippet: isUnofficialOrCommentarySocial(source?.url)
+        ? ""
+        : String(source?.snippet || source?.quote || source?.title || "").trim(),
       source_label: source?.publisher || "",
       title: source?.title || "",
       date: source?.date || "",
@@ -1942,7 +1986,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${personSupportingMediaHtml(filled)}`,
       active: true,
       extraClass: "person-pane",
     })}

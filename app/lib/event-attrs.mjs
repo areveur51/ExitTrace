@@ -1,5 +1,6 @@
 /** One event schema for harvest leads and dashboard slices. No parallel copy. */
 
+import { canonicalPublicUrl } from "./urls.mjs";
 import {
   DEATH_KEEP_IDS,
   DEATH_UNCONFIRMED_ID,
@@ -409,6 +410,52 @@ export function personHeadcount(row) {
     if (weight > n) n = weight;
   }
   return n;
+}
+
+/** Local supporting clip on a person event. Not a portrait and not a cite. */
+const EVENT_MEDIA_HREF =
+  /^\/media\/people\/[a-z0-9][a-z0-9-]*\/support\/[a-z0-9][a-z0-9.-]*\.(mp4|jpe?g|png|webp)$/i;
+
+function eventMediaHref(raw) {
+  const text = String(raw || "").trim().split("?")[0];
+  if (!text || text.includes("..") || !EVENT_MEDIA_HREF.test(text)) return "";
+  return text;
+}
+
+function eventMediaCaption(raw) {
+  return String(raw || "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+/** Fail closed. Remote URLs, portraits, and nested screenshot paths stay out. */
+export function normalizeEventMedia(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    if (out.length >= 8) break;
+    const src = eventMediaHref(typeof item === "string" ? item : item?.src);
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    const row = { src };
+    if (item && typeof item === "object") {
+      const alt = eventMediaCaption(item.alt);
+      const credit = eventMediaCaption(item.credit);
+      if (alt) row.alt = alt;
+      if (credit) row.credit = credit;
+      if (/\.mp4$/i.test(src)) {
+        const poster = eventMediaHref(item.poster);
+        if (poster && !/\.mp4$/i.test(poster)) row.poster = poster;
+      }
+      const cite = canonicalPublicUrl(item.url || item.cite);
+      if (cite) row.url = cite;
+    }
+    out.push(row);
+  }
+  return out;
 }
 
 export function mergeEventAttrs(prior = {}, incoming = {}) {

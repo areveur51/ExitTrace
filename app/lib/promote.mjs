@@ -13,6 +13,7 @@ import {
   mapLeadReason,
   mergeEventAttrs,
   normalizeEventAttrs,
+  normalizeEventMedia,
   parseHeadcount,
   parseOriginCountry,
   resolveEventCalendar,
@@ -181,6 +182,11 @@ export function normalizePersonEvent(raw, fallback = {}) {
     event.unsealed =
       raw.unsealed === true || fallback.unsealed === true ? true : null;
   }
+  const media = normalizeEventMedia([
+    ...(Array.isArray(fallback.media) ? fallback.media : []),
+    ...(Array.isArray(raw.media) ? raw.media : []),
+  ]);
+  if (media.length) event.media = media;
   return event;
 }
 
@@ -212,6 +218,8 @@ function uniqueEvents(events) {
     if (isIndictmentKeepKind(prior.kind)) {
       merged.unsealed = mergedUnsealed(prior.kind, prior.unsealed, ev.unsealed);
     }
+    const media = normalizeEventMedia([...(prior.media || []), ...(ev.media || [])]);
+    if (media.length) merged.media = media;
     byKind.set(ev.kind, merged);
   }
   return [...byKind.values()].sort((a, b) => {
@@ -383,6 +391,8 @@ export function attachPersonEvent(person, incoming) {
         ev.unsealed,
       );
     }
+    const media = normalizeEventMedia([...(events[i].media || []), ...(ev.media || [])]);
+    if (media.length) next[i].media = media;
     return {
       person: projectPerson({ ...person, events: next }),
       added: merged.added,
@@ -483,6 +493,8 @@ export function mergePersonAnnotate(gold, prior) {
     if (isIndictmentKeepKind(ev.kind)) {
       row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
     }
+    const media = normalizeEventMedia(ev.media);
+    if (media.length) row.media = media;
     eventsByKind.set(ev.kind, row);
   }
   for (const ev of extra.events) {
@@ -499,6 +511,8 @@ export function mergePersonAnnotate(gold, prior) {
       if (isIndictmentKeepKind(ev.kind)) {
         row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
       }
+      const media = normalizeEventMedia(ev.media);
+      if (media.length) row.media = media;
       eventsByKind.set(ev.kind, row);
       continue;
     }
@@ -516,6 +530,8 @@ export function mergePersonAnnotate(gold, prior) {
         ev.unsealed,
       );
     }
+    const media = normalizeEventMedia([...(existing.media || []), ...(ev.media || [])]);
+    if (media.length) existing.media = media;
   }
   return projectPerson({
     ...keep,

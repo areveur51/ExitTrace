@@ -590,7 +590,7 @@ test("operation cards use the lead agency seal, not person thumbs", () => {
     arrest_count: null,
   });
   assert.match(html, /class="tui-row operation-card/);
-  assert.match(html, /src="\/media\/thumbs\/agencies\/fbi\.jpg\?p=5"/);
+  assert.match(html, /src="\/media\/thumbs\/agencies\/fbi\.jpg\?p=6"/);
   assert.doesNotMatch(html, /class="[^"]*empty-portrait/);
   assert.doesNotMatch(html, /person-card/);
   assert.doesNotMatch(html, /\/media\/thumbs\/people\//);
