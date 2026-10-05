@@ -31,8 +31,8 @@ function requestPage(pathname) {
 
 test("fact tags stay on the person and are not identity filters", () => {
   assert.deepEqual(
-    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "nope"]),
-    ["official", "clearance_revoked", "trump_nickname", "epstein_clients"],
+    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "masks", "nope"]),
+    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "masks"],
   );
   assert.deepEqual(
     personTags({
@@ -61,6 +61,8 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/clearance-revoked"/);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/epstein-clients"/);
   assert.match(facts, />Epstein Clients</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/masks"/);
+  assert.match(facts, />Masks</);
   assert.doesNotMatch(facts, /keymap-tag[^>]*data-key=/);
   assert.doesNotMatch(facts, /Civilians/);
   assert.deepEqual(
@@ -112,9 +114,22 @@ test("a stored fact tag is a chip to that list, not a kind", () => {
   assert.match(logged, /href="\/tags\/epstein-clients"/);
   assert.match(logged, />Epstein Clients</);
   assert.doesNotMatch(logged, /Revoked clearances/);
+
+  const masked = personDetail({
+    id: "benjamin-netanyahu",
+    name: "Benjamin Netanyahu",
+    category: "death_unconfirmed",
+    tags: ["official", "masks"],
+    events: [{ kind: "death_unconfirmed", event_date: null, sources: [] }],
+  });
+  assert.match(masked, /href="\/tags\/masks"/);
+  assert.match(masked, />Masks</);
+  assert.match(masked, />Officials</);
 });
 
 test("fact-tag lists include only people who already have that tag", async () => {
+  // List pages read Postgres when DATABASE_URL is set. Keep this fixture in memory.
+  process.env.DATABASE_URL = "";
   setMemory({
     people: [
       {
@@ -173,6 +188,8 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.doesNotMatch(firings.body, /<option[^>]*>Revoked clearances<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Trump nicknames<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Epstein Clients<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>Masks<\/option>/);
+  assert.match(firings.body, /href="\/tags\/masks"/);
 
   const clients = await requestPage("/tags/epstein-clients");
   assert.equal(clients.status, 200);
