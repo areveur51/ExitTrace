@@ -844,14 +844,14 @@ test("list uses small thumbs + srcset; person masonry uses the gold still", asyn
   const heroWebp = await getRaw(`/media/thumbs/people/${stem}.hero.webp`);
   const original = await getRaw(row.photo);
 
-  assert.match(list.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg\\?p=4"`));
-  assert.match(list.body, new RegExp(`${stem}\\.2x\\.jpg\\?p=4 160w`));
+  assert.match(list.body, new RegExp(`src="/media/thumbs/people/${stem}\\.jpg\\?p=5"`));
+  assert.match(list.body, new RegExp(`${stem}\\.2x\\.jpg\\?p=5 160w`));
   assert.match(list.body, /loading="lazy"/);
   assert.doesNotMatch(list.body, new RegExp(`src="/media/people/${stem}\\.`));
   assert.match(detail.body, /class="person-header"/);
   assert.match(detail.body, /class="detail-photo portrait"/);
-  assert.match(detail.body, new RegExp(`src="/media/people/${stem}\\.jpg\\?p=4"`));
-  assert.match(detail.body, new RegExp(`${stem}\\.hero\\.webp\\?p=4`));
+  assert.match(detail.body, new RegExp(`src="/media/people/${stem}\\.jpg\\?p=5"`));
+  assert.match(detail.body, new RegExp(`${stem}\\.hero\\.webp\\?p=5`));
   assert.match(detail.body, /data-lightbox="\/media\/people\//);
   assert.doesNotMatch(detail.body, /class="portrait thumb"/);
   assert.doesNotMatch(detail.body, new RegExp(`<img[^>]+src="/media/thumbs/people/${stem}\\.jpg`));

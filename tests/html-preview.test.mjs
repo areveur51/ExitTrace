@@ -61,15 +61,15 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
 
   assert.match(person, /class="portrait thumb"/);
   assert.match(person, /width="40" height="52"/);
-  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=4"/);
-  assert.match(person, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=4 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=4 160w"/);
+  assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=5"/);
+  assert.match(person, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=5 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=5 160w"/);
   assert.match(person, /type="image\/webp"/);
   assert.match(person, /loading="lazy"/);
   assert.match(person, /decoding="async"/);
   assert.doesNotMatch(person, /src="\/media\/people\/james-comey\.jpg/);
   assert.match(dogRow, /class="still thumb"/);
   assert.match(dogRow, /width="40" height="52"/);
-  assert.match(dogRow, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=4"/);
+  assert.match(dogRow, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=5"/);
   assert.match(dogRow, /loading="lazy"/);
   assert.match(dogRow, /decoding="async"/);
   assert.doesNotMatch(dogRow, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
@@ -84,14 +84,14 @@ test("person list uses small thumbs + srcset; detail masonry uses the gold still
   const list = personRow(firing());
   const person = personDetail(firing());
   const dogPage = dogDetail(dog());
-  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=4"/);
-  assert.match(list, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=4 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=4 160w"/);
+  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=5"/);
+  assert.match(list, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=5 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=5 160w"/);
   assert.match(list, /loading="lazy"/);
   assert.match(person, /class="person-header"/);
   assert.match(person, /class="detail-photo portrait"/);
-  assert.match(person, /src="\/media\/people\/james-comey\.jpg\?p=4"/);
+  assert.match(person, /src="\/media\/people\/james-comey\.jpg\?p=5"/);
   assert.match(person, /type="image\/webp"/);
-  assert.match(person, /james-comey\.hero\.webp\?p=4/);
+  assert.match(person, /james-comey\.hero\.webp\?p=5/);
   assert.match(person, /width="192" height="250"/);
   assert.doesNotMatch(person, /class="portrait thumb"/);
   assert.doesNotMatch(person, /<img[^>]+src="\/media\/thumbs\/people\/james-comey\.jpg/);
