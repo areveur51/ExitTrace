@@ -9,9 +9,19 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.10] - 2026-10-05
+
+### Added
+
+- A person card shows supporting media in a square masonry at the bottom of the detail. Each caption is the cite link and its date. A click opens the file at its own aspect ratio. An unofficial social cite on an event stays the link and the date.
+
+### Changed
+
+- The Masks tag lede states that impersonation is part of what the tag records. The tag remains that stored claim. It is not a finding that a mask was used, and it is not an identity filter.
+
 ### Fixed
 
-- Replaced portraits use a new cache key, so search results and the card show the current photo. The shared key moves from 4 to 5. The portrait files are unchanged.
+- Replaced portraits use cache key 6, so a file replaced at the same path is not served from key 5.
 
 ## [1.2.9] - 2026-10-05
 

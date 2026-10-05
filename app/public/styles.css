@@ -618,6 +618,51 @@ body.tui-home .home-stage {
 }
 .event-media { margin: 0.35rem 0 0; }
 .event-media img { display: block; width: min(100%, 320px); height: auto; }
+.detail-supporting {
+  margin: 0.85rem 0 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
+}
+.detail-supporting .event-h { margin: 0 0 0.55rem; }
+/* One square cell so portrait clips and wide stills pack in the same masonry. */
+.detail-support-masonry .detail-tile--support {
+  break-inside: avoid;
+  margin: 0 0 0.65rem;
+}
+.detail-support-frame {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: var(--bg-sel);
+}
+.detail-support-frame .detail-video {
+  width: 100%;
+  height: 100%;
+}
+.detail-supporting .detail-support-frame .detail-photo,
+.detail-supporting .detail-support-frame video.detail-photo {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  min-height: 0;
+  aspect-ratio: auto;
+  object-fit: cover;
+  object-position: center;
+}
+.event-media-caption {
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+.event-media video.detail-photo {
+  display: block;
+  width: min(100%, 32rem);
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  background: var(--bg-sel);
+}
 .career-history {
   margin: 0.85rem 0 0;
   padding: 0.55rem 0 0;
@@ -1112,8 +1157,8 @@ img.empty-portrait { object-position: center center; }
   position: relative;
   z-index: 1;
   margin: 0;
-  max-width: min(96vw, 72rem);
-  max-height: 92vh;
+  max-width: 96vw;
+  max-height: 94vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1122,10 +1167,10 @@ img.empty-portrait { object-position: center center; }
 .tui-lightbox-frame img,
 .tui-lightbox-frame video {
   display: block;
-  max-width: min(96vw, 72rem);
-  max-height: 80vh;
   width: auto;
   height: auto;
+  max-width: 96vw;
+  max-height: 86vh;
   object-fit: contain;
   background: var(--bg-sel);
   border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);

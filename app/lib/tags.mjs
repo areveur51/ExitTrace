@@ -45,7 +45,7 @@ export const ATTRIBUTE_TAGS = [
     nav: "Masks",
     path: "/tags/masks",
     lede:
-      "People stored with a mask or body-double claim. The tag is that claim. It is not a finding that a mask was used, and it is not an identity filter.",
+      "People stored with a mask, body-double, or impersonation claim. Impersonation is part of what this tag records. The tag is that claim. It is not a finding that a mask was used, and it is not an identity filter.",
   },
 ];
 

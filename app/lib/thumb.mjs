@@ -29,7 +29,7 @@ export const PORTRAIT_PX_H = LIST_THUMB_PX_H;
 export const DETAIL_PORTRAIT_CSS_W = 192;
 export const DETAIL_PORTRAIT_CSS_H = 250;
 /** Cache-bust when the derived crop pipeline changes (immutable media URLs). */
-export const PORTRAIT_CACHE = "5";
+export const PORTRAIT_CACHE = "6";
 export const LIST_THUMB_QUALITY = 78;
 export const LIST_THUMB_WEBP_QUALITY = 78;
 

@@ -87,7 +87,7 @@ test("operation list and detail paint the seal and leave an unmapped card empty"
       "Federal Bureau of Investigation",
     ],
   });
-  assert.match(list, /\/media\/thumbs\/agencies\/nysp\.jpg\?p=5/);
+  assert.match(list, /\/media\/thumbs\/agencies\/nysp\.jpg\?p=6/);
   assert.doesNotMatch(list, /\/media\/thumbs\/agencies\/fbi/);
   assert.doesNotMatch(list, /class="[^"]*empty-portrait/);
 
@@ -97,7 +97,7 @@ test("operation list and detail paint the seal and leave an unmapped card empty"
     agencies: ["U.S. Department of Justice"],
     summary: "Roundup.",
   });
-  assert.match(detail, /\/media\/agencies\/doj\.jpg\?p=5/);
+  assert.match(detail, /\/media\/agencies\/doj\.jpg\?p=6/);
   assert.match(detail, /data-lightbox="\/media\/agencies\/doj\.jpg"/);
   assert.match(detail, /United States Department of Justice/);
   assert.doesNotMatch(detail, /class="[^"]*empty-portrait/);
