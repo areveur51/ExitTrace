@@ -13,6 +13,11 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Replaced portraits use a new cache key, so search results and the card show the current photo. The shared key moves from 4 to 5. The portrait files are unchanged.
 
+## [1.2.9] - 2026-10-05
+
+### Added
+
+- Fact tag Masks (`/tags/masks`). It records a stored mask or body-double claim. It is not a finding that a mask was used, and it is not an identity filter.
 
 ## [1.2.8] - 2026-10-03
 

@@ -40,6 +40,13 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People named on the Epstein flight log. The tag is that fact. It is not a charge and not an identity filter.",
   },
+  {
+    id: "masks",
+    nav: "Masks",
+    path: "/tags/masks",
+    lede:
+      "People stored with a mask or body-double claim. The tag is that claim. It is not a finding that a mask was used, and it is not an identity filter.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
