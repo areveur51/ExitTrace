@@ -9,6 +9,11 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+### Fixed
+
+- Replaced portraits use a new cache key, so search results and the card show the current photo. The shared key moves from 4 to 5. The portrait files are unchanged.
+
+
 ## [1.2.8] - 2026-10-03
 
 ### Added
