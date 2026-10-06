@@ -32,6 +32,14 @@ export const CATEGORIES = [
     blurb: "Public-role arrests recorded by contemporaneous news reports.",
   },
   {
+    id: "notable",
+    kind: "person",
+    title: "Notable event",
+    nav: "Notable",
+    path: "/notable",
+    blurb: "Notable events attached to an identified person. One card per person; the event and its cites sit on the person detail.",
+  },
+  {
     id: "corona_comms",
     kind: "person",
     title: "Corona Comms",
@@ -237,7 +245,7 @@ export const IMPORT_CATEGORY_IDS = [
   "death_unspecified",
 ];
 
-/** Person categories a promote may write. dog_comms and red_folder_comms are post catalogs. boot_comms is unique-person membership (corona DRY). central_casting annotates an existing person; it is not a new KEEP kind. */
+/** Person categories a promote may write. dog_comms and red_folder_comms are post catalogs. boot_comms is unique-person membership (corona DRY). central_casting annotates an existing person; it is not a new KEEP kind. notable is a person_events label, not a new table. */
 export const PROMOTE_CATEGORY_IDS = [
   "firings",
   "resignations",
@@ -246,6 +254,7 @@ export const PROMOTE_CATEGORY_IDS = [
   "death_official",
   "death_ceo",
   "arrests",
+  "notable",
   "corona_comms",
   "boot_comms",
   "indictment_civilian",
