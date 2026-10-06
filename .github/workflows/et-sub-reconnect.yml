@@ -2,9 +2,16 @@ name: et-sub-reconnect
 
 # Path-only: bounce the logical subscriber apply worker.
 # Does not DROP the subscription or recreate the slot.
+# ENABLE runs only when confirm is exactly RE_ENABLE_LIVE_SYNC.
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: Exact RE_ENABLE_LIVE_SYNC required before ENABLE of exittrace_lab_sub. Any other value fails closed.
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: et-sub-reconnect
@@ -22,6 +29,11 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Refuse ENABLE without confirm
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: bash scripts/require-reenable-confirm.sh
       - name: Install psql
         run: |
           set -euo pipefail

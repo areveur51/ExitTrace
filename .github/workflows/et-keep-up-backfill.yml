@@ -3,9 +3,16 @@ name: et-keep-up-backfill
 # Path-only: stamp public keep_up et_meta keys, then bounce the logical
 # subscriber apply worker (DISABLE/ENABLE). Does not DROP the subscription
 # and does not recreate the slot.
+# ENABLE runs only when confirm is exactly RE_ENABLE_LIVE_SYNC.
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: Exact RE_ENABLE_LIVE_SYNC required before ENABLE of exittrace_lab_sub. Any other value fails closed.
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: et-keep-up-backfill
@@ -23,6 +30,11 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Refuse ENABLE without confirm
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: bash scripts/require-reenable-confirm.sh
       - name: Install psql
         run: |
           set -euo pipefail

@@ -2,9 +2,16 @@ name: et-subscription-prove
 
 # Path-only Phase 0 prove. No cutover. dump/restore stays.
 # Reads production secrets by name only.
+# DROP/CREATE runs only when confirm is exactly RE_ENABLE_LIVE_SYNC.
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: Exact RE_ENABLE_LIVE_SYNC required before DROP or CREATE of exittrace_lab_sub. Any other value fails closed.
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: et-subscription-prove
@@ -23,6 +30,11 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       EXITTRACE_LOGICAL_CONNINFO: ${{ secrets.EXITTRACE_LOGICAL_CONNINFO }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Refuse DROP/CREATE without confirm
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: bash scripts/require-reenable-confirm.sh
       - name: Install psql
         run: |
           set -euo pipefail

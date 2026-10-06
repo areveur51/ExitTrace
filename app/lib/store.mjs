@@ -751,12 +751,37 @@ export async function upsertEtMeta(k, v) {
  * Ops heal for lab→Render logical apply crash-loop. Subscriber-only:
  * no pg_subscription (publisher / lab) is a no-op. Never auto-SKIP an LSN
  * (Worf #100: SKIP needs Admiral SIGN; not planned or auto-run).
+ * Default off: no-op unless ET_LOGICAL_HEAL is exactly "on". Boot must not
+ * silently ENABLE exittrace_lab_sub. Leave ET_LOGICAL_HEAL unset on Render.
+ * When armed:
  * - Promote dog_comms.posted_at DATE→TEXT (idempotent; matches bootstrap-db.sql).
  * - If the subscription is disabled, ENABLE it so logical apply can run.
  * A frozen snapshot is not replayed: that overwrite drops live fact tags.
  * Never auto-SKIP an LSN. Returns a public-safe summary (no DSNs or passwords).
  */
 export async function healLogicalApply() {
+  if (process.env.ET_LOGICAL_HEAL !== "on") {
+    console.log(
+      "[exittrace] logical_heal skipped: ET_LOGICAL_HEAL is not on; exittrace_lab_sub ENABLE not run",
+    );
+    return {
+      ok: true,
+      reason: "heal_disabled",
+      skipped: true,
+      posted_at_type_before: null,
+      posted_at_type_after: null,
+      altered: false,
+      apply_error_count_before: null,
+      bounced: false,
+      gap_upserted: false,
+      origin_advanced: false,
+      lab_tip_lsn: null,
+      people: null,
+      dog_comms: null,
+      operations: null,
+      warren: null,
+    };
+  }
   const p = await getPool();
   if (!p) return { ok: false, reason: "no_pool" };
   let present = false;
