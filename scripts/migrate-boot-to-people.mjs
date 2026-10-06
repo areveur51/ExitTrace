@@ -26,22 +26,18 @@ const bootstrapSql = fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sq
 /** Structural fields only (not cites). Public roles; no invented injury facts. */
 const PERSON_META = {
   "Joe Biden": {
-    country_of_origin: "United States",
     position: "President of the United States",
     organization: "Executive Office of the President",
   },
   "Nicole Kidman": {
-    country_of_origin: "Australia",
     position: "Actor",
     organization: "Entertainment",
   },
   "Britney Spears": {
-    country_of_origin: "United States",
     position: "Singer",
     organization: "Entertainment",
   },
   "Simone Biles": {
-    country_of_origin: "United States",
     position: "Gymnast",
     organization: "USA Gymnastics",
   },
@@ -80,7 +76,6 @@ async function main() {
       continue;
     }
     const meta = PERSON_META[subject] || {
-      country_of_origin: "United States",
       position: "Public figure",
       organization: "Public record",
     };

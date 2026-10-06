@@ -87,7 +87,35 @@ export { coronaStatusLabel, normalizeCoronaStatus };
  * Empty stays empty — do not guess.
  */
 export function parseOriginCountry(raw = {}) {
-  return firstText(raw, ORIGIN_ALIASES);
+  return originText(firstText(raw, ORIGIN_ALIASES));
+}
+
+/**
+ * Null-safe read of a stored origin. null/undefined/non-text and the literal
+ * strings "null"/"undefined" read as "" (never rendered, never trimmed on null).
+ */
+export function originText(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value !== "string") return "";
+  const text = value.trim();
+  return /^(null|undefined)$/i.test(text) ? "" : text;
+}
+
+/** Hard cap on origin_unknown_reason (fail-closed, never truncated). */
+export const ORIGIN_UNKNOWN_REASON_MAX = 300;
+
+/**
+ * Deliberate "origin not stated" marker for a NEW person insert.
+ * Only origin_unknown === true (or the string "true") counts, and it must
+ * carry origin_unknown_reason (why no cited source states an origin).
+ * A missing/forgotten origin is NOT this marker and stays fail-closed.
+ * Never a value to guess from residence, country, name, or role.
+ */
+export function parseOriginUnknown(raw = {}) {
+  const v = raw?.origin_unknown;
+  const flag = v === true || (typeof v === "string" && v.trim().toLowerCase() === "true");
+  const reason = flag ? String(raw?.origin_unknown_reason || "").trim() : "";
+  return { origin_unknown: flag, origin_unknown_reason: reason };
 }
 
 function asFlag(raw) {

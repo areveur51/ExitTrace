@@ -16,6 +16,9 @@ import {
   normalizeEventMedia,
   parseHeadcount,
   parseOriginCountry,
+  parseOriginUnknown,
+  originText,
+  ORIGIN_UNKNOWN_REASON_MAX,
   resolveEventCalendar,
   unsealedFromEvidence,
 } from "./event-attrs.mjs";
@@ -638,6 +641,7 @@ export function validateIdentifiedPersonInput(input = {}) {
     input.birth_date ?? input.birthDate ?? input["Birth Date"],
   );
   const country_of_origin = parseOriginCountry(input);
+  const { origin_unknown, origin_unknown_reason } = parseOriginUnknown(input);
   const military = isMilitaryInput(input);
   return {
     subject,
@@ -652,6 +656,8 @@ export function validateIdentifiedPersonInput(input = {}) {
     ...attrs,
     birth_date,
     country_of_origin,
+    origin_unknown,
+    origin_unknown_reason,
     military,
     career: personCareer(input),
     unsealed: unsealedFromEvidence(
@@ -672,10 +678,31 @@ export function validateIdentifiedPersonInput(input = {}) {
  * birth_date is optional: unknown stores as null, never "".
  */
 export function assertNewPersonInsertLock(input = {}) {
-  if (!String(input.country_of_origin || "").trim()) {
+  const origin = originText(input.country_of_origin);
+  const { origin_unknown, origin_unknown_reason } = parseOriginUnknown(input);
+  if (origin && origin_unknown) {
     throw new PromoteError(
-      "country of origin is required on new person insert",
+      "country_of_origin and origin_unknown=true are mutually exclusive",
+      "origin_conflict",
+    );
+  }
+  if (!origin && !origin_unknown) {
+    throw new PromoteError(
+      "country of origin is required on new person insert " +
+        "(or origin_unknown=true with origin_unknown_reason when no cited source states it)",
       "missing_origin_country",
+    );
+  }
+  if (!origin && !origin_unknown_reason) {
+    throw new PromoteError(
+      "origin_unknown=true requires origin_unknown_reason (why no cited source states origin)",
+      "missing_origin_unknown_reason",
+    );
+  }
+  if (!origin && origin_unknown_reason.length > ORIGIN_UNKNOWN_REASON_MAX) {
+    throw new PromoteError(
+      `origin_unknown_reason must be at most ${ORIGIN_UNKNOWN_REASON_MAX} characters`,
+      "origin_unknown_reason_too_long",
     );
   }
   if (!String(input.position || "").trim()) {

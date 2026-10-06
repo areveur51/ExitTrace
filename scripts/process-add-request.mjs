@@ -34,7 +34,7 @@ function usage(exitCode = 0) {
   [--source-url <https://…>] [--handle @Official] [--posted-at YYYY-MM-DD]
   [--text "…"] [--account-name "…"] [--still <path>] [--still-credit "…"]
   [--photo <Wikimedia|.gov URL or /media/people/…>] [--photo-credit "…"]
-  [--birth-date YYYY-MM-DD] [--country-of-origin "…"]
+  [--birth-date YYYY-MM-DD] [--country-of-origin "…" | --origin-unknown "reason"]
   [--position "…"] [--organization "…"] [--reason "…"] [--comments "…"]
   [--country "…"] [--branch "…"] [--military]
   [--unsealed-evidence "quote that the cite unsealed or made public the indictment"]
@@ -56,6 +56,9 @@ Fail-closed:
   A new person insert also needs country of origin, position,
   organization, reason of event (comments/reason), and an eligible
   portrait stored under /media/people/.
+  When no cited source states origin, pass --origin-unknown "<reason>"
+  (deliberate null: stores SQL NULL, hidden on the card, still counted as a
+  missing-origin gap). A forgotten origin is still rejected.
   birth_date is optional: unknown stores as SQL NULL, never "". Do not invent
   from age or month-year. Age filters skip a null birth_date.
   Military inserts also require branch (existing event field).
@@ -147,6 +150,9 @@ function parseArgs(argv) {
     else if (arg === "--birth-date" || arg === "--birth_date") out.birth_date = take();
     else if (arg === "--country-of-origin" || arg === "--origin-country") {
       out.country_of_origin = take();
+    } else if (arg === "--origin-unknown") {
+      out.origin_unknown = true;
+      out.origin_unknown_reason = take();
     } else if (arg === "--military") {
       const peek = argv[i + 1];
       if (peek && !String(peek).startsWith("--") && /^(true|false|yes|no|1|0)$/i.test(peek)) {

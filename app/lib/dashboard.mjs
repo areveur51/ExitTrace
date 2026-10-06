@@ -16,7 +16,7 @@ import {
   GROUP_OPS_KEEP_IDS,
   PROMOTE_CATEGORY_IDS,
 } from "./categories.mjs";
-import { EVENT_ATTR_FIELDS, eventHeadcount, personHeadcount } from "./event-attrs.mjs";
+import { EVENT_ATTR_FIELDS, eventHeadcount, personHeadcount, originText } from "./event-attrs.mjs";
 import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { EVENTS_READY, deathPersonEvent, markEventsReady, personEvents } from "./promote.mjs";
@@ -566,7 +566,7 @@ function personMissingPrepared(row, fieldId, events) {
     case "net_worth":
       return missingNetWorth(row);
     case "origin":
-      return !String(row.country_of_origin || "").trim();
+      return !originText(row.country_of_origin);
     case "comments":
       return eventFieldBlank(events, "comments");
     case "position":

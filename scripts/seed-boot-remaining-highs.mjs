@@ -36,7 +36,6 @@ const SEEDS = [
     ],
     snippet:
       "Kyle Busch in medical walking boots after a Daytona Xfinity crash (R lower-leg compound + L midfoot).",
-    country_of_origin: "United States",
     position: "NASCAR driver",
     organization: "NASCAR",
   },
@@ -49,7 +48,6 @@ const SEEDS = [
     ],
     snippet:
       "Kelly Ripa in a medical walking boot after breaking four bones in her left foot in a dance class.",
-    country_of_origin: "United States",
     position: "Television host",
     organization: "Live with Kelly and Michael",
   },
@@ -100,7 +98,8 @@ async function main() {
       cite_urls: cites,
       comments: row.snippet || row.comments || "Medical walking boot after documented lower-leg, ankle, or foot injury",
       reason: row.snippet || row.comments || "Medical walking boot after documented lower-leg, ankle, or foot injury",
-      country_of_origin: row.country_of_origin || "United States",
+      // Never guess an origin; only a cite-stated row.country_of_origin is passed.
+      country_of_origin: row.country_of_origin || "",
       position: row.position || "Public figure",
       organization: row.organization || "Public record",
     });
