@@ -16,8 +16,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { databaseUrl, loadDotEnv } from "../app/lib/env.mjs";
 import {
-  ALL_UPSERT_TABLES,
   COUNT_SQL,
+  COUNT_TABLES,
   countProof,
   countTableSql,
   planGapUpsert,
@@ -86,27 +86,20 @@ async function countOne(table) {
 }
 
 async function counts() {
-  const out = Object.fromEntries(ALL_UPSERT_TABLES.map((t) => [t, 0]));
+  const out = Object.fromEntries(COUNT_TABLES.map((t) => [t, 0]));
   try {
     const res = await pool.query(COUNT_SQL);
     const row = res.rows[0] || {};
-    for (const t of ALL_UPSERT_TABLES) {
-      if (t === "categories") continue;
-      out[t] = Number(row[t] || 0);
-    }
+    for (const t of COUNT_TABLES) out[t] = Number(row[t] || 0);
   } catch (err) {
     if (!err || err.code !== "42P01") throw err;
-    for (const t of ALL_UPSERT_TABLES) {
-      if (t === "categories") continue;
-      out[t] = await countOne(t);
-    }
+    for (const t of COUNT_TABLES) out[t] = await countOne(t);
   }
-  out.categories = await countOne("categories");
   return out;
 }
 
 function formatCounts(row) {
-  return ALL_UPSERT_TABLES.map((t) => `${t}=${row[t] ?? 0}`).join(" ");
+  return COUNT_TABLES.map((t) => `${t}=${row[t] ?? 0}`).join(" ");
 }
 
 try {
