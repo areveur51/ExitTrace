@@ -9,6 +9,10 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+### Added
+
+- Person KEEP kind `notable` (Notable event). The list is `/notable`. A stored `notable` person event renders a Notable event section on the person card. Promote and add-process accept the kind under the same fail-closed gates. No new table and no publication change.
+
 ### Changed
 
 - The menu groups Dog, Red Folder, Eagle, Ronald, Boot, Corona, and Central Casting under a Comms section, set off the same way as Tags. Their links, routes, and shortcut keys are unchanged, and they no longer appear at the top level.

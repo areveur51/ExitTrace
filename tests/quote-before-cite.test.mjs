@@ -38,7 +38,7 @@ test("resignation cite without a snippet renders unchanged: link then date, no b
 });
 
 test("every kind pairs a stored snippet before its cite (no per-kind switch)", () => {
-  for (const kind of ["resignations", "firings", "corona_comms", "boot_comms", "central_casting", "arrests"]) {
+  for (const kind of ["resignations", "firings", "corona_comms", "boot_comms", "central_casting", "arrests", "notable"]) {
     const html = personEventSection({
       title: "T",
       kind,

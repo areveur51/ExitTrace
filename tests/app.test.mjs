@@ -154,6 +154,7 @@ test("html pages render", async () => {
     "/resignations",
     "/government",
     "/arrests",
+    "/notable",
     "/corona-comms",
     "/dashboard",
     "/dashboard/reason",
@@ -285,6 +286,7 @@ test("every category list page ships a pager", async () => {
     "/resignations",
     "/government",
     "/arrests",
+    "/notable",
     "/corona-comms",
     "/dashboard/reason",
     "/dashboard/age",
@@ -425,7 +427,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /data-key="u"/);
   assert.match(res.body, /class="keymap-keys"/);
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ["f", "r", "g", "a", "i", "d", "m", "b", "u", "w"]);
+  assert.deepEqual(keys, ["f", "r", "g", "a", "v", "i", "d", "m", "b", "u", "w"]);
   const commKeys = [...res.body.matchAll(/class="keychip keymap-comm"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(commKeys, ["c", "e", "l", "n", "k", "o", "t"]);
   assert.match(res.body, /class="keymap-group keymap-comms" aria-label="Comms"><p class="keymap-section">Comms</);
