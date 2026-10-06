@@ -30,6 +30,23 @@ export function databaseUrl() {
   return u;
 }
 
+/**
+ * Render Postgres requires TLS. node-pg needs sslmode on the URL (match
+ * scripts/ci-ensure-database-url-ssl.sh / et-gap-upsert). Mutates
+ * process.env.DATABASE_URL and PGSSLMODE. Does not log the URL.
+ */
+export function ensureDatabaseUrlSsl() {
+  const raw = databaseUrl();
+  if (!raw) return "";
+  let u = raw;
+  if (!/[?&]sslmode=/i.test(u)) {
+    u = u.includes("?") ? `${u}&sslmode=require` : `${u}?sslmode=require`;
+  }
+  process.env.DATABASE_URL = u;
+  if (!process.env.PGSSLMODE) process.env.PGSSLMODE = "require";
+  return u;
+}
+
 export function resolveRoot(root) {
   const mediaDir = path.resolve(
     process.env.MEDIA_DIR || path.join(root, "media"),

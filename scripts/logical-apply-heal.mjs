@@ -6,7 +6,7 @@
  */
 import path from "path";
 import { fileURLToPath } from "url";
-import { databaseUrl, loadDotEnv } from "../app/lib/env.mjs";
+import { databaseUrl, ensureDatabaseUrlSsl, loadDotEnv } from "../app/lib/env.mjs";
 import {
   APPLY_REL_STATES_SQL,
   APPLY_SNAPSHOT_SQL,
@@ -14,8 +14,10 @@ import {
   HEAL_META_KEYS,
   LOGICAL_SUB_NAME,
   POSTED_AT_TYPE_SQL,
+  emptyApplySnapshot,
   planHeal,
   sanitizeApplyError,
+  sanitizeSnapshotQueryError,
 } from "../app/lib/logical-heal.mjs";
 import { closeStore, getEtMeta, getPool, upsertEtMeta } from "../app/lib/store.mjs";
 
@@ -43,70 +45,93 @@ async function queryOne(pool, sql, params = []) {
   try {
     const res = await pool.query(sql, params);
     return res.rows[0] || null;
-  } catch {
-    return null;
+  } catch (err) {
+    const sanitized = sanitizeSnapshotQueryError(err);
+    console.error(
+      `SNAPSHOT_QUERY_ERROR code=${sanitized.code || "none"} message=${sanitized.message}`,
+    );
+    const wrapped = new Error("snapshot_query_failed");
+    wrapped.sanitized = sanitized;
+    throw wrapped;
   }
 }
 
 async function readSnapshot(pool) {
-  const core = await queryOne(
-    pool,
-    `SELECT
-       EXISTS (SELECT 1 FROM pg_subscription WHERE subname = $1) AS present,
-       COALESCE((SELECT subenabled FROM pg_subscription WHERE subname = $1), false) AS enabled,
-       EXISTS (SELECT 1 FROM pg_stat_subscription WHERE subname = $1 AND pid IS NOT NULL) AS worker_present,
-       (SELECT received_lsn::text FROM pg_stat_subscription WHERE subname = $1 LIMIT 1) AS received_lsn,
-       (SELECT latest_end_lsn::text FROM pg_stat_subscription WHERE subname = $1 LIMIT 1) AS latest_end_lsn,
-       (SELECT EXTRACT(EPOCH FROM (now() - last_msg_receipt_time))::bigint
-          FROM pg_stat_subscription WHERE subname = $1 LIMIT 1) AS last_msg_receipt_age_seconds,
-       (SELECT EXTRACT(EPOCH FROM (now() - last_msg_send_time))::bigint
-          FROM pg_stat_subscription WHERE subname = $1 LIMIT 1) AS last_msg_send_age_seconds,
-       (SELECT count(*)::int FROM pg_subscription_rel sr
-          JOIN pg_subscription s ON s.oid = sr.srsubid WHERE s.subname = $1) AS rel_count,
-       (SELECT count(*)::int FROM pg_subscription_rel sr
-          JOIN pg_subscription s ON s.oid = sr.srsubid
-         WHERE s.subname = $1 AND sr.srsubstate IN ('r', 's')) AS rel_ready_count`,
-    [LOGICAL_SUB_NAME],
-  );
-  const stats = await queryOne(pool, APPLY_SNAPSHOT_SQL, [LOGICAL_SUB_NAME]);
-  const rels = await pool
-    .query(APPLY_REL_STATES_SQL, [LOGICAL_SUB_NAME])
-    .then((r) => r.rows.map((x) => x.state))
-    .catch(() => []);
-  const worker = await queryOne(pool, APPLY_WORKER_QUERY_SQL, [LOGICAL_SUB_NAME]);
-  const posted = await queryOne(pool, POSTED_AT_TYPE_SQL);
-  const row = core || stats || {};
-  return {
-    present: Boolean(row.present),
-    enabled: Boolean(row.enabled),
-    worker_present: Boolean(row.worker_present),
-    received_lsn: row.received_lsn || null,
-    latest_end_lsn: row.latest_end_lsn || null,
-    last_msg_receipt_age_seconds:
-      row.last_msg_receipt_age_seconds === null || row.last_msg_receipt_age_seconds === undefined
-        ? null
-        : Number(row.last_msg_receipt_age_seconds),
-    last_msg_send_age_seconds:
-      row.last_msg_send_age_seconds === null || row.last_msg_send_age_seconds === undefined
-        ? null
-        : Number(row.last_msg_send_age_seconds),
-    apply_error_count:
-      stats?.apply_error_count === null || stats?.apply_error_count === undefined
-        ? null
-        : Number(stats.apply_error_count),
-    sync_error_count:
-      stats?.sync_error_count === null || stats?.sync_error_count === undefined
-        ? null
-        : Number(stats.sync_error_count),
-    rel_count: row.rel_count === null || row.rel_count === undefined ? null : Number(row.rel_count),
-    rel_ready_count:
-      row.rel_ready_count === null || row.rel_ready_count === undefined
-        ? null
-        : Number(row.rel_ready_count),
-    rel_states: rels,
-    last_apply_error: sanitizeApplyError(worker?.query),
-    posted_at_data_type: posted?.data_type || null,
-  };
+  try {
+    const core = await queryOne(
+      pool,
+      `SELECT
+         EXISTS (SELECT 1 FROM pg_subscription WHERE subname = $1) AS present,
+         COALESCE((SELECT subenabled FROM pg_subscription WHERE subname = $1), false) AS enabled,
+         EXISTS (SELECT 1 FROM pg_stat_subscription WHERE subname = $1 AND pid IS NOT NULL) AS worker_present,
+         (SELECT received_lsn::text FROM pg_stat_subscription WHERE subname = $1 LIMIT 1) AS received_lsn,
+         (SELECT latest_end_lsn::text FROM pg_stat_subscription WHERE subname = $1 LIMIT 1) AS latest_end_lsn,
+         (SELECT EXTRACT(EPOCH FROM (now() - last_msg_receipt_time))::bigint
+            FROM pg_stat_subscription WHERE subname = $1 LIMIT 1) AS last_msg_receipt_age_seconds,
+         (SELECT EXTRACT(EPOCH FROM (now() - last_msg_send_time))::bigint
+            FROM pg_stat_subscription WHERE subname = $1 LIMIT 1) AS last_msg_send_age_seconds,
+         (SELECT count(*)::int FROM pg_subscription_rel sr
+            JOIN pg_subscription s ON s.oid = sr.srsubid WHERE s.subname = $1) AS rel_count,
+         (SELECT count(*)::int FROM pg_subscription_rel sr
+            JOIN pg_subscription s ON s.oid = sr.srsubid
+           WHERE s.subname = $1 AND sr.srsubstate IN ('r', 's')) AS rel_ready_count`,
+      [LOGICAL_SUB_NAME],
+    );
+    const stats = await queryOne(pool, APPLY_SNAPSHOT_SQL, [LOGICAL_SUB_NAME]);
+    let rels;
+    try {
+      const relRes = await pool.query(APPLY_REL_STATES_SQL, [LOGICAL_SUB_NAME]);
+      rels = relRes.rows.map((x) => x.state);
+    } catch (err) {
+      const sanitized = sanitizeSnapshotQueryError(err);
+      console.error(
+        `SNAPSHOT_QUERY_ERROR code=${sanitized.code || "none"} message=${sanitized.message}`,
+      );
+      throw Object.assign(new Error("snapshot_query_failed"), { sanitized });
+    }
+    const worker = await queryOne(pool, APPLY_WORKER_QUERY_SQL, [LOGICAL_SUB_NAME]);
+    const posted = await queryOne(pool, POSTED_AT_TYPE_SQL);
+    const row = core || stats || {};
+    return {
+      present: Boolean(row.present),
+      enabled: Boolean(row.enabled),
+      worker_present: Boolean(row.worker_present),
+      received_lsn: row.received_lsn || null,
+      latest_end_lsn: row.latest_end_lsn || null,
+      last_msg_receipt_age_seconds:
+        row.last_msg_receipt_age_seconds === null || row.last_msg_receipt_age_seconds === undefined
+          ? null
+          : Number(row.last_msg_receipt_age_seconds),
+      last_msg_send_age_seconds:
+        row.last_msg_send_age_seconds === null || row.last_msg_send_age_seconds === undefined
+          ? null
+          : Number(row.last_msg_send_age_seconds),
+      apply_error_count:
+        stats?.apply_error_count === null || stats?.apply_error_count === undefined
+          ? null
+          : Number(stats.apply_error_count),
+      sync_error_count:
+        stats?.sync_error_count === null || stats?.sync_error_count === undefined
+          ? null
+          : Number(stats.sync_error_count),
+      rel_count: row.rel_count === null || row.rel_count === undefined ? null : Number(row.rel_count),
+      rel_ready_count:
+        row.rel_ready_count === null || row.rel_ready_count === undefined
+          ? null
+          : Number(row.rel_ready_count),
+      rel_states: rels,
+      last_apply_error: sanitizeApplyError(worker?.query),
+      posted_at_data_type: posted?.data_type || null,
+      query_failed: false,
+    };
+  } catch (err) {
+    const sanitized = err?.sanitized || sanitizeSnapshotQueryError(err);
+    return {
+      ...emptyApplySnapshot(),
+      query_failed: true,
+      last_apply_error: sanitized.message,
+    };
+  }
 }
 
 function readHealState(meta) {
@@ -152,6 +177,7 @@ if (!databaseUrl()) {
   console.error("DATABASE_URL is required");
   process.exit(1);
 }
+ensureDatabaseUrlSsl();
 
 const pool = await getPool();
 if (!pool) {
@@ -194,7 +220,8 @@ try {
   }
 
   if (plan.actions.includes("observe") && plan.actions.length === 1) {
-    if (plan.state !== "absent") {
+    // query_failed / absent: observe only — no et_meta writes, no reconnect/refresh.
+    if (plan.state !== "absent" && plan.state !== "query_failed") {
       await stampHeal(HEAL_META_KEYS.unhealthySince, { at: null, cleared: true });
       await stampHeal(HEAL_META_KEYS.reconnectCount, { n: 0 });
       await stampHeal(HEAL_META_KEYS.lastAction, { action: "observe" });
