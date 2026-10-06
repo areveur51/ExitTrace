@@ -182,7 +182,7 @@ test("fact-tag lists include only people who already have that tag", async () =>
 
   const firings = await requestPage("/firings");
   assert.match(firings.body, /href="\/people\/other-person"/);
-  assert.match(firings.body, /class="keymap-tags"/);
+  assert.match(firings.body, /class="keymap-group keymap-tags"/);
   assert.match(firings.body, /href="\/tags\/clearance-revoked"/);
   assert.match(firings.body, /href="\/tags\/trump-nicknames"/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Revoked clearances<\/option>/);
