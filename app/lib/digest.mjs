@@ -43,7 +43,10 @@ function feed(row) {
   };
 }
 
-/** Our public RSS list. Official news-org / .gov only. No hosted third-party digest. */
+/** Our public RSS list. Official news-org / .gov only. No hosted third-party digest.
+ * USA Today (rssfeeds.usatoday.com now 301s to the HTML homepage) and State
+ * (www.state.gov feeds answer 403) are off the list: no working official feed.
+ * See RETIRED_DIGEST_FEED_URLS. */
 export const OFFICIAL_RSS_FEEDS = [
   feed({
     handle: "bbcnews",
@@ -136,11 +139,6 @@ export const OFFICIAL_RSS_FEEDS = [
     url: "https://www.latimes.com/world-nation/rss2.0.xml",
   }),
   feed({
-    handle: "usatoday",
-    name: "USA Today",
-    url: "https://rssfeeds.usatoday.com/usatoday-NewsTopStories",
-  }),
-  feed({
     handle: "dwnews",
     name: "DW News",
     url: "https://rss.dw.com/rdf/rss-en-all",
@@ -176,11 +174,6 @@ export const OFFICIAL_RSS_FEEDS = [
     url: "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=20",
   }),
   feed({
-    gov: true,
-    name: "Department of State",
-    url: "https://www.state.gov/rss-feed/press-releases/feed/",
-  }),
-  feed({
     handle: "apnews",
     name: "AP exits since 2017",
     slice: "historical",
@@ -199,6 +192,12 @@ export const OFFICIAL_RSS_FEEDS = [
     url: googleNewsSite("bbc.com", `${EXIT_QUERY} after:${DIGEST_SINCE}`),
   }),
 ];
+
+/** Official feeds that stopped serving RSS. Kept so tests block a silent re-add. */
+export const RETIRED_DIGEST_FEED_URLS = Object.freeze([
+  "https://rssfeeds.usatoday.com/usatoday-NewsTopStories",
+  "https://www.state.gov/rss-feed/press-releases/feed/",
+]);
 
 export function isGoogleNewsHost(host) {
   const h = String(host || "")

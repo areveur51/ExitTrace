@@ -7,6 +7,7 @@ import { queueAddRequest } from "../app/lib/add-request.mjs";
 import { IMPORT_CATEGORY_IDS, mapImportCategory } from "../app/lib/categories.mjs";
 import {
   OFFICIAL_RSS_FEEDS,
+  RETIRED_DIGEST_FEED_URLS,
   asAddNameLead,
   assertOfficialFeedList,
   classifyDigestText,
@@ -121,6 +122,21 @@ test("official feed list is ours and stays on the cite allowlist", () => {
       ]),
     /allowlist|official/,
   );
+});
+
+test("retired official feeds stay off the digest list", () => {
+  const urls = OFFICIAL_RSS_FEEDS.map((f) => f.url);
+  assert.equal(new Set(urls).size, urls.length);
+  assert.ok(RETIRED_DIGEST_FEED_URLS.length >= 2);
+  for (const dead of RETIRED_DIGEST_FEED_URLS) {
+    assert.ok(!urls.includes(dead), `retired feed re-added: ${dead}`);
+  }
+  assert.ok(!urls.some((u) => /rssfeeds\.usatoday\.com/i.test(u)));
+  assert.ok(!urls.some((u) => /^https?:\/\/(www\.)?state\.gov\//i.test(u)));
+  const current = selectDigestFeeds("current");
+  assert.ok(!current.some((f) => f.name === "USA Today"));
+  assert.ok(!current.some((f) => f.name === "Department of State"));
+  assert.ok(current.filter((f) => f.gov).length >= 3);
 });
 
 test("digest item is never a cite; Wikipedia and Q drops are not cites", () => {
