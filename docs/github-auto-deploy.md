@@ -75,16 +75,20 @@ Live (not `et_meta`) public fields on `keep_up.logical`:
 | `SYNC_MODE` | Logical sub | Dump cron (`lab-to-render-sync`) | Auto heal |
 |--|--|--|--|
 | `dump` (public default) | absent or optional | scheduled `pg_restore --clean` | no-op when no subscription |
-| `logical` (private env var) | primary | skipped (cold standby) | `et-logical-heal` every 15 minutes |
+| `logical` (private env var) | primary | skipped (cold standby) | `et-logical-heal` is `workflow_dispatch` only (no cron) |
 | `logical` + sustained unhealthy | still primary | one-shot dump **only** if `ET_DUMP_COLD_FALLBACK=true` **and** dispatch `allow_dump_fallback=true` | gap-upsert catch-up if `ET_AUTO_GAP_UPSERT=true` |
 
 Scheduled dump reads `vars.SYNC_MODE` (default `dump`). Dispatch input wins, so a one-shot `SYNC_MODE=dump` does not change the repo var and does not re-enable the dump cron while logical is primary. Do **not** flip `vars.SYNC_MODE` to `dump` while the subscription is enabled — that is dual-write. Changing the var back to dump is a human SIGN (disable the sub first).
 
 ## Logical apply heal
 
-[`.github/workflows/et-logical-heal.yml`](../.github/workflows/et-logical-heal.yml) runs `scripts/logical-apply-heal.mjs` (library: `app/lib/logical-heal.mjs`). It reuses the existing subscription name and the same DISABLE/ENABLE / `REFRESH PUBLICATION WITH (copy_data = false)` verbs as `et-sub-reconnect` and `et-sub-refresh-publication`.
+[`.github/workflows/et-logical-heal.yml`](../.github/workflows/et-logical-heal.yml) runs `scripts/logical-apply-heal.mjs` (library: `app/lib/logical-heal.mjs`). It reuses the existing subscription name and the same DISABLE/ENABLE / `REFRESH PUBLICATION WITH (copy_data = false)` verbs as `et-sub-reconnect` and `et-sub-refresh-publication`. The workflow is `workflow_dispatch` only. It has no cron, so it does not re-ENABLE `exittrace_lab_sub` on a timer.
 
-Auto (no SIGN):
+Process boot calls `healLogicalApply()`. That function is a no-op unless `ET_LOGICAL_HEAL` is exactly `on` (default off). It logs one line and does not ENABLE the subscription. Leave `ET_LOGICAL_HEAL` unset on Render. Do not set it in Render env or examples.
+
+`et-sub-reconnect`, `et-keep-up-backfill`, and `et-subscription-prove` stay `workflow_dispatch` only. They refuse ENABLE, DROP, and CREATE unless the dispatch input `confirm` is exactly `RE_ENABLE_LIVE_SYNC`. A missing or wrong confirm fails the job before any of those statements.
+
+When an operator dispatches `et-logical-heal` (no SIGN, no cron):
 
 - Reconnect (DISABLE/ENABLE) with backoff 8/16/32/64s on `handshake_retry`, `crash_loop`, `lsn_stalled`, or a disabled sub.
 - `REFRESH PUBLICATION WITH (copy_data = false)` only when relation rows are empty or none are ready. Never `copy_data=true`.
@@ -106,7 +110,7 @@ NEEDS_SIGN poison transaction — do not auto SKIP.
 
 A `posted_at` TEXT vs DATE mismatch is one **class** of apply poison (see `scripts/bootstrap-db.sql`); heal prints `POSTED_AT_TYPE` as a hint and does not assume that is the cause.
 
-Path A / streaming: `et-sub-reconnect` retries ENABLE with the same backoff. `et-path-a-probe` prints apply error counts next to receipt times so handshake retries are not mistaken for a healthy stream.
+Path A / streaming: `et-sub-reconnect` retries ENABLE with the same backoff only when dispatch `confirm` is exactly `RE_ENABLE_LIVE_SYNC`. Without that confirm the job fails before DISABLE/ENABLE. `et-path-a-probe` prints apply error counts next to receipt times so handshake retries are not mistaken for a healthy stream.
 
 ## Idempotent gap upsert
 
