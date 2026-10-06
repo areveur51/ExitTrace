@@ -162,6 +162,22 @@ test("ensureThumbFile derives list, 2x, and hero files and refuses traversal", a
   }
 });
 
+
+test("large gold stills decode for list thumbs", () => {
+  // High-resolution stills (multi-thousand px on a side) must still yield an 80x104 list crop.
+  // decodeStill uses the same jpeg-js memory ceiling as decodePortrait so decode does not fail closed.
+  const src = solidJpeg({ width: 2800, height: 2200 });
+  const out = renderPortraitJpeg(src);
+  assert.ok(out && out.length > 0);
+  const decoded = jpeg.decode(out, { useTArray: true });
+  assert.equal(decoded.width, LIST_THUMB_PX_W);
+  assert.equal(decoded.height, LIST_THUMB_PX_H);
+  const dense = renderPortraitJpeg(src, ".2x");
+  const denseDecoded = jpeg.decode(dense, { useTArray: true });
+  assert.equal(denseDecoded.width, LIST_THUMB_2X_W);
+  assert.equal(denseDecoded.height, LIST_THUMB_2X_H);
+});
+
 test("request-path reuse keeps an existing thumb instead of crashing on a huge source", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "exittrace-thumbs-reuse-"));
   try {

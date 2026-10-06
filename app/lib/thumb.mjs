@@ -176,7 +176,13 @@ function decodeStill(buf) {
   }
   if (buf[0] === 0xff && buf[1] === 0xd8) {
     try {
-      return jpeg.decode(buf, { useTArray: true, formatAsRGBA: true });
+      // Same memory ceiling as decodePortrait — large gold stills can exceed
+      // jpeg-js default and used to return null, so list thumbs 404.
+      return jpeg.decode(buf, {
+        useTArray: true,
+        formatAsRGBA: true,
+        maxMemoryUsageInMB: 2048,
+      });
     } catch {
       return null;
     }
