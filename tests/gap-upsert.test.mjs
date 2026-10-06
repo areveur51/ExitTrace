@@ -35,6 +35,7 @@ test("published tables include the new comms tables and person_events", () => {
     "central_casting_comms",
     "request_attributions",
     "epstein_flight_legs",
+    "source_posts",
   ]);
   assert.deepEqual(
     [...ALL_UPSERT_TABLES],
@@ -79,7 +80,7 @@ test("upsert SQL is idempotent ON CONFLICT and refuses destructive verbs", () =>
 
   assert.throws(() => assertSafeSql("TRUNCATE people"), /destructive/);
   assert.throws(() => assertSafeSql("DELETE FROM dog_comms"), /destructive/);
-  assert.throws(() => buildUpsertSql("source_posts", [{ id: "x" }]), /unknown/);
+  assert.throws(() => buildUpsertSql("mention_queue", [{ id: "x" }]), /unknown/);
 });
 
 test("categories is optional when the table is absent", () => {
@@ -139,7 +140,8 @@ test("count proof is non-decreasing and reports source rows", () => {
   assert.doesNotMatch(COUNT_SQL, /TRUNCATE/);
   assert.doesNotMatch(COUNT_SQL, /DELETE/);
   assert.equal(countTableSql("central_casting_comms"), "SELECT count(*)::int AS n FROM central_casting_comms");
-  assert.throws(() => countTableSql("source_posts"), /unknown/);
+  assert.equal(countTableSql("source_posts"), "SELECT count(*)::int AS n FROM source_posts");
+  assert.throws(() => countTableSql("mention_queue"), /unknown/);
 });
 
 test("red_folder_comms and central_casting_comms gap-upsert like dog_comms", () => {
@@ -355,7 +357,89 @@ test("normalizePayload drops unknown tables and keeps published rows", () => {
   assert.equal(n.people[0].id, "a");
   assert.equal(n.dog_comms.length, 0);
   assert.equal("parked_only" in n, false);
-  assert.equal("source_posts" in n, false);
+  assert.equal(n.source_posts[0].id, "parked");
+  assert.equal(n.source_posts[0].media_urls, "[]");
+});
+
+const SOURCE_POST_ROW = Object.freeze({
+  id: "sp-0000000000000001",
+  category: "arrests",
+  source_url: "https://x.com/desk/status/1",
+  canonical_url: "https://x.com/desk/status/1",
+  quoted_url: "",
+  card_url: "",
+  text: "parked post",
+  poster_handle: "@desk",
+  poster_name: "Desk",
+  posted_at: "2026-10-06",
+  media_urls: ["https://pbs.twimg.com/media/a.jpg"],
+  gold_person_id: null,
+});
+
+test("source_posts is exported, upserted by id, and counted", () => {
+  assert.equal(PUBLISHED_TABLES.includes("source_posts"), true);
+  assert.equal(ALL_UPSERT_TABLES.includes("source_posts"), true);
+  assert.match(COUNT_SQL, /\(SELECT count\(\*\)::int FROM source_posts\) AS source_posts/);
+  assert.deepEqual(Object.keys(pickRow("source_posts", SOURCE_POST_ROW)), [
+    "id",
+    "category",
+    "source_url",
+    "canonical_url",
+    "quoted_url",
+    "card_url",
+    "text",
+    "poster_handle",
+    "poster_name",
+    "posted_at",
+    "media_urls",
+    "gold_person_id",
+  ]);
+  const built = buildUpsertSql("source_posts", [SOURCE_POST_ROW]);
+  assert.match(built.sql, /^INSERT INTO source_posts \(id, category, source_url, canonical_url,/);
+  assert.match(built.sql, /ON CONFLICT \(id\) DO UPDATE SET/);
+  assert.doesNotMatch(built.sql, /id = EXCLUDED\.id/);
+  // media_urls is the only jsonb column (slot 11 of 12).
+  assert.match(built.sql, /\$11::jsonb/);
+  assert.equal((built.sql.match(/::jsonb/g) || []).length, 1);
+  assert.equal(built.params[10], JSON.stringify(SOURCE_POST_ROW.media_urls));
+  // NOT NULL media_urls never binds null.
+  const bare = buildUpsertSql("source_posts", [{ ...SOURCE_POST_ROW, media_urls: null }]);
+  assert.equal(bare.params[10], "[]");
+});
+
+test("source_posts upsert never erases an existing gold_person_id with a null", () => {
+  const unlinked = buildUpsertSql("source_posts", [SOURCE_POST_ROW]);
+  assert.match(
+    unlinked.sql,
+    /gold_person_id = COALESCE\(EXCLUDED\.gold_person_id, source_posts\.gold_person_id\)/,
+  );
+  assert.doesNotMatch(unlinked.sql, /gold_person_id = EXCLUDED\.gold_person_id\b(?!,)/);
+  assert.equal(unlinked.params.at(-1), null);
+  const blank = buildUpsertSql("source_posts", [{ ...SOURCE_POST_ROW, gold_person_id: "  " }]);
+  assert.equal(blank.params.at(-1), null);
+  const linked = buildUpsertSql("source_posts", [{ ...SOURCE_POST_ROW, gold_person_id: "casey-vale" }]);
+  assert.equal(linked.params.at(-1), "casey-vale");
+});
+
+test("source_posts gap upsert is insert/update only, never delete", () => {
+  const planned = planGapUpsert(
+    { source_posts: [SOURCE_POST_ROW, { ...SOURCE_POST_ROW, id: "sp-2", canonical_url: "https://x.com/desk/status/2" }] },
+    { existingTables: ["source_posts"] },
+  );
+  assert.equal(planned.counts_in.source_posts, 2);
+  assert.equal(planned.plans.length, 1);
+  for (const plan of planned.plans) {
+    assert.match(plan.sql, /^INSERT INTO source_posts/);
+    assert.doesNotMatch(plan.sql, /\b(DELETE|TRUNCATE|DROP)\b/i);
+    assertSafeSql(plan.sql);
+  }
+  const absent = planGapUpsert({ source_posts: [SOURCE_POST_ROW] }, { existingTables: ["people"] });
+  assert.equal(absent.plans.length, 0);
+  assert.deepEqual(absent.skipped, [{ table: "source_posts", reason: "table_absent", count: 1 }]);
+  const proof = countProof({ source_posts: 2321 }, { source_posts: 2409 }, { source_posts: 2409 });
+  assert.equal(proof.source_posts.delta, 88);
+  assert.equal(proof.source_posts.ok, true);
+  assert.equal(countProof({ source_posts: 5 }, { source_posts: 4 }, { source_posts: 4 }).source_posts.ok, false);
 });
 
 test("new-kind place steps name logical backfill and refuse copy_data true", () => {
