@@ -1002,7 +1002,7 @@ img.empty-portrait { object-position: center center; }
   max-width: 52rem;
   order: 100;
 }
-.keymap-tags {
+.keymap-group {
   order: 90;
   display: flex;
   flex-wrap: wrap;
@@ -2087,7 +2087,7 @@ html[data-theme="glass"] .dash-stats {
     flex: 1 1 calc(50% - 0.4rem);
     min-height: 44px;
   }
-  .keymap-tags .keychip {
+  .keymap-group .keychip {
     flex: 1 1 100%;
   }
   .facts { grid-template-columns: 1fr; }
@@ -2259,7 +2259,7 @@ html[data-theme="glass"] .dash-stats {
    lists. On home, stretch the stage to the remaining dvh so the wordmark
    + search stay in the viewport middle beside the keymap rail. */
 @media (min-width: 721px) {
-  .keymap-tags {
+  .keymap-group {
     flex: 0 0 auto;
     flex-direction: column;
     flex-wrap: nowrap;

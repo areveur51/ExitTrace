@@ -202,18 +202,11 @@ function keymapItems(activePath) {
     { key: "r", href: "/resignations" },
     { key: "g", href: "/government" },
     { key: "a", href: "/arrests" },
-    { key: "o", href: "/corona-comms" },
     { key: "i", href: "/indictments" },
     { key: "d", href: "/deaths" },
     { key: "m", href: "/group-operations" },
     { key: "b", href: "/dashboard", label: "Dashboard" },
     { key: "u", href: "/unsorted" },
-    ...KIND_COMM_IDS.map((id) => {
-      const spec = KIND_COMMS[id];
-      return { key: spec.keymapKey, href: spec.path, label: spec.navLabel };
-    }),
-    { key: BOOT_COMMS_KEYMAP, href: BOOT_COMMS_PATH, label: "Boot" },
-    { key: CENTRAL_CASTING_KEYMAP, href: CENTRAL_CASTING_PATH, label: "Central Casting" },
     { key: "w", href: "/downloads", label: "Downloads" },
   ].map((item) => ({
     ...item,
@@ -221,6 +214,23 @@ function keymapItems(activePath) {
   }));
   if (activePath !== "/") keys.push({ key: "h", href: "/", label: "Home" });
   return keys;
+}
+
+/**
+ * Comms section of the keymap menu (same section pattern as Tags).
+ * Order: KIND_COMMS clip catalogs (Dog, Red Folder, Eagle, Ronald), then
+ * Boot (person), Corona, then Central Casting. Shortcut keys are unchanged.
+ */
+export function keymapCommsItems() {
+  return [
+    ...KIND_COMM_IDS.map((id) => {
+      const spec = KIND_COMMS[id];
+      return { key: spec.keymapKey, href: spec.path, label: spec.navLabel };
+    }),
+    { key: BOOT_COMMS_KEYMAP, href: BOOT_COMMS_PATH, label: "Boot" },
+    { key: "o", href: "/corona-comms", label: categoryByPath("/corona-comms")?.nav || "Corona" },
+    { key: CENTRAL_CASTING_KEYMAP, href: CENTRAL_CASTING_PATH, label: "Central Casting" },
+  ];
 }
 
 export function themeSwitcher() {
@@ -308,27 +318,48 @@ export function identityFilterNav(basePath, { tags = [], unsealed = false } = {}
   </nav>`;
 }
 
+/** One keymap menu chip. Keyed chips show [k] and carry data-key for shortcuts. */
+function keymapChip(item, activePath, { cls = "keychip", order = null } = {}) {
+  const on = item.href === activePath;
+  const key = item.key ? ` data-key="${esc(item.key)}"` : "";
+  const style = order == null ? "" : ` style="--key-order:${order}"`;
+  const cap = item.key ? `<span class="br">[</span>${esc(item.key)}<span class="br">]</span> ` : "";
+  return `<a class="${cls}" href="${esc(item.href)}"${key}${style}${on ? ' aria-current="page"' : ""}>${cap}${esc(item.label)}</a>`;
+}
+
+/** Shared keymap section (heading + grouped chips). Used by Comms and Tags; desktop and mobile share it. */
+function keymapSection({ id, title, ariaLabel, chipClass, items }, activePath) {
+  const chips = items.map((item) => keymapChip(item, activePath, { cls: `keychip ${chipClass}` })).join("");
+  return `<nav class="keymap-group keymap-${id}" aria-label="${esc(ariaLabel)}"><p class="keymap-section">${esc(title)}</p>${chips}</nav>`;
+}
+
+function keymapCommsSection(activePath) {
+  return keymapSection(
+    { id: "comms", title: "Comms", ariaLabel: "Comms", chipClass: "keymap-comm", items: keymapCommsItems() },
+    activePath,
+  );
+}
+
 function keymapTagSection(activePath) {
-  const tags = ATTRIBUTE_TAGS.map((tag) => {
-    const on = tag.path === activePath;
-    return `<a class="keychip keymap-tag" href="${esc(tag.path)}"${
-      on ? ' aria-current="page"' : ""
-    }>${esc(tag.nav)}</a>`;
-  }).join("");
-  return `<nav class="keymap-tags" aria-label="Fact tags"><p class="keymap-section">Tags</p>${tags}</nav>`;
+  return keymapSection(
+    {
+      id: "tags",
+      title: "Tags",
+      ariaLabel: "Fact tags",
+      chipClass: "keymap-tag",
+      items: ATTRIBUTE_TAGS.map((tag) => ({ href: tag.path, label: tag.nav })),
+    },
+    activePath,
+  );
 }
 
 export function keymapFooter(activePath) {
   const chips = keymapItems(activePath)
-    .map((k, i) => {
-      const on = k.href === activePath;
-      return `<a class="keychip" href="${esc(k.href)}" data-key="${esc(k.key)}" style="--key-order:${i}"${
-        on ? ' aria-current="page"' : ""
-      }><span class="br">[</span>${esc(k.key)}<span class="br">]</span> ${esc(k.label)}</a>`;
-    })
+    .map((k, i) => keymapChip(k, activePath, { order: i }))
     .join("");
   return `<footer class="keymap" aria-label="Catalog">
     <div class="keymap-keys">${chips}</div>
+    ${keymapCommsSection(activePath)}
     ${keymapTagSection(activePath)}
     <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm, red-folder-comm, and central-casting stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
   </footer>`;

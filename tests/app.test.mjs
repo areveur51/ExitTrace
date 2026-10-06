@@ -425,8 +425,11 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /data-key="u"/);
   assert.match(res.body, /class="keymap-keys"/);
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ["f", "r", "g", "a", "o", "i", "d", "m", "b", "u", "c", "e", "l", "n", "k", "t", "w"]);
-  assert.match(res.body, /class="keymap-tags" aria-label="Fact tags"/);
+  assert.deepEqual(keys, ["f", "r", "g", "a", "i", "d", "m", "b", "u", "w"]);
+  const commKeys = [...res.body.matchAll(/class="keychip keymap-comm"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(commKeys, ["c", "e", "l", "n", "k", "o", "t"]);
+  assert.match(res.body, /class="keymap-group keymap-comms" aria-label="Comms"><p class="keymap-section">Comms</);
+  assert.match(res.body, /class="keymap-group keymap-tags" aria-label="Fact tags"/);
   assert.match(res.body, /class="keymap-section">Tags</);
   assert.match(res.body, /class="keychip keymap-tag" href="\/tags\/clearance-revoked">Revoked clearances</);
   assert.match(res.body, /class="keychip keymap-tag" href="\/tags\/trump-nicknames">Trump nicknames</);
