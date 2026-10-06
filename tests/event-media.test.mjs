@@ -186,3 +186,49 @@ test("missing sibling poster leaves supporting video without a poster attr", () 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("explicit poster that exists still renders on supporting video", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "et-poster-explicit-"));
+  const prev = process.env.MEDIA_DIR;
+  try {
+    const support = path.join(dir, "people", "joe-biden", "support");
+    mkdirSync(support, { recursive: true });
+    const clip = "explicit-clip.mp4";
+    const posterName = "explicit-named-poster.jpg";
+    writeFileSync(path.join(support, clip), Buffer.from("fake-mp4"));
+    writeFileSync(path.join(support, posterName), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    // Sibling poster also present; explicit must win.
+    writeFileSync(path.join(support, "explicit-clip.poster.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    process.env.MEDIA_DIR = dir;
+    const cite = "https://x.com/example/status/1";
+    const src = `/media/people/joe-biden/support/${clip}`;
+    const poster = `/media/people/joe-biden/support/${posterName}`;
+    const html = personDetail({
+      id: "joe-biden",
+      name: "Joe Biden",
+      category: "government_stepdowns",
+      event_date: "2024-07-21",
+      events: [
+        {
+          kind: "government_stepdowns",
+          event_date: "2024-07-21",
+          comments: "Explicit poster proof.",
+          sources: [
+            { url: "https://www.reuters.com/article/world/fact-check-biden", publisher: "Reuters", date: "2020-10-07" },
+            { url: cite, publisher: "Supporting post", date: "2026-09-30" },
+          ],
+          media: [{ src, poster, url: cite, alt: "Explicit poster clip" }],
+        },
+      ],
+    });
+    assert.match(html, new RegExp(`src="${src.replace(/\./g, "\\.")}"`));
+    assert.match(html, new RegExp(`poster="${poster.replace(/\./g, "\\.")}"`));
+    assert.doesNotMatch(html, /explicit-clip\.poster\.jpg/);
+    assert.match(html, /playsinline/);
+  } finally {
+    if (prev === undefined) delete process.env.MEDIA_DIR;
+    else process.env.MEDIA_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+

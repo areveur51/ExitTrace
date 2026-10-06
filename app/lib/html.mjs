@@ -908,34 +908,36 @@ function localMediaFile(href) {
   return file;
 }
 
+/** True when a resolved local media file exists and is a non-empty regular file. */
+function localMediaFileReady(file) {
+  if (!file) return false;
+  try {
+    const st = statSync(file);
+    return st.isFile() && st.size > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Sibling `{stem}.poster.jpg` next to a local mp4. Empty when the file is missing. */
 export function siblingVideoPosterHref(src) {
   const rel = mediaHrefPath(src);
   if (!rel || !/\.mp4$/i.test(rel)) return "";
   const posterRel = rel.replace(/\.mp4$/i, ".poster.jpg");
+  // Defense in depth: mediaHrefPath already rejects ".."; keep an explicit guard.
   if (posterRel === rel || posterRel.includes("..")) return "";
   const file = localMediaFile(posterRel);
-  if (!file || !existsSync(file)) return "";
-  try {
-    if (!statSync(file).isFile() || statSync(file).size <= 0) return "";
-  } catch {
-    return "";
-  }
+  if (!localMediaFileReady(file)) return "";
   return posterRel;
 }
 
 /** Prefer an explicit poster; otherwise a sibling .poster.jpg when present on disk. */
 export function resolveVideoPosterHref(src, explicit = "") {
   const given = mediaHrefPath(explicit);
-  if (given && !/\.mp4$/i.test(given)) {
+  // Defense in depth beside mediaHrefPath / localMediaFile MEDIA_DIR containment.
+  if (given && !given.includes("..") && !/\.mp4$/i.test(given)) {
     const file = localMediaFile(given);
-    if (file && existsSync(file)) {
-      try {
-        if (statSync(file).isFile() && statSync(file).size > 0) return given;
-      } catch {
-        /* fall through */
-      }
-    }
+    if (localMediaFileReady(file)) return given;
   }
   return siblingVideoPosterHref(src);
 }
