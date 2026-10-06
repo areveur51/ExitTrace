@@ -1014,10 +1014,8 @@ async function applyQueuedBoot(merged) {
       "Medical walking boot after documented lower-leg, ankle, or foot injury",
     position: String(merged.position || "").trim() || "Public figure",
     organization: String(merged.organization || "").trim() || "Public record",
-    // An explicit origin_unknown marker is never overwritten with a guessed default.
-    country_of_origin:
-      String(merged.country_of_origin || "").trim() ||
-      (parseOriginUnknown(merged).origin_unknown ? "" : "United States"),
+    // Never guess an origin: a missing origin stays empty (fail-closed lock).
+    country_of_origin: String(merged.country_of_origin || "").trim(),
   });
   // Stamp clip text as snippet on boot_comms cites when present (preserve, no invent).
   const snippet = String(parsed.text || merged.text || "").trim();

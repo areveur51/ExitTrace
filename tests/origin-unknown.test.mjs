@@ -10,13 +10,15 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { parseOriginUnknown } from "../app/lib/event-attrs.mjs";
+import { ORIGIN_UNKNOWN_REASON_MAX, originText, parseOriginUnknown } from "../app/lib/event-attrs.mjs";
 import { AddError, processAddRequest, queueAddRequest } from "../app/lib/add-request.mjs";
 import { personMissingField } from "../app/lib/dashboard.mjs";
 import { personHeader } from "../app/lib/html.mjs";
 import { assertNewPersonInsertLock, PromoteError } from "../app/lib/promote.mjs";
+import { helperArgs, runApply } from "../scripts/et-daily-apply.mjs";
 import {
   applyIdentifiedPerson,
+  createAddRequest,
   getAddRequest,
   getMemory,
   getPerson,
@@ -222,4 +224,108 @@ test("add-process CLI --origin-unknown applies a deliberate null origin", async 
   const vale = store.people.find((r) => r.id === "casey-vale");
   assert.ok(vale);
   assert.equal(String(vale.country_of_origin || ""), "");
+});
+
+test("origin_unknown_reason is capped at 300 characters (fail-closed, not truncated)", async () => {
+  assert.equal(ORIGIN_UNKNOWN_REASON_MAX, 300);
+  setMemory(goldSeed());
+  await assert.rejects(
+    () => applyIdentifiedPerson(noOrigin({ origin_unknown: true, origin_unknown_reason: "x".repeat(301) })),
+    isCode("origin_unknown_reason_too_long"),
+  );
+  assert.equal(await getPerson("casey-vale"), null);
+  const ok = await applyIdentifiedPerson(noOrigin({ origin_unknown: true, origin_unknown_reason: "x".repeat(300) }));
+  assert.equal(ok.action, "created");
+});
+
+test("originText reads null-safe and never yields a 'null' string", () => {
+  for (const v of [null, undefined, "", "   ", "null", " NULL ", "undefined", 0, false, {}, []]) {
+    assert.equal(originText(v), "", String(v));
+  }
+  assert.equal(originText("  Germany "), "Germany");
+  for (const v of [null, undefined, "null", "  "]) {
+    const header = personHeader({ id: "x", name: "X", country_of_origin: v, photo: "" });
+    assert.doesNotMatch(header, /Origin ·/);
+    assert.doesNotMatch(header, />\s*null\s*</i);
+    assert.equal(personMissingField({ id: "x", country_of_origin: v, events: [] }, "origin"), true);
+  }
+  assert.match(personHeader({ id: "x", name: "X", country_of_origin: "Germany", photo: "" }), /Origin · Germany/);
+  // A literal "null" origin is not accepted as a value on insert either.
+  assert.throws(
+    () => assertNewPersonInsertLock({ ...NEW_PERSON_LOCK, country_of_origin: "null" }),
+    isCode("missing_origin_country"),
+  );
+});
+
+test("never guess: queued boot membership without origin is rejected, not defaulted", async () => {
+  setMemory(goldSeed());
+  const lock = { ...NEW_PERSON_LOCK };
+  delete lock.country_of_origin;
+  // Boot via the person queue (validateQueueInput maps boot -> person/boot_comms).
+  const queued = await queueAddRequest({
+    kind: "boot",
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    source_url: CITES[0],
+  });
+  await assert.rejects(
+    () => processAddRequest({ id: queued.request.id, overlay: { ...lock, cite_urls: CITES } }),
+    isCode("missing_origin_country"),
+  );
+  // Legacy kind=boot request (applyQueuedBoot) used to default "United States".
+  const legacy = await createAddRequest({
+    id: "ar-legacyboot0001",
+    kind: "boot",
+    subject: "Casey Vale",
+    event_date: "2024-06-15",
+    source_url: CITES[0],
+    cite_urls: CITES,
+  });
+  await assert.rejects(
+    () => processAddRequest({ id: legacy.id, overlay: { ...lock, cite_urls: CITES, source_url: CITES[0] } }),
+    isCode("missing_origin_country"),
+  );
+  const vale = await getPerson("casey-vale");
+  assert.equal(vale, null);
+});
+
+test("daily: grok row carrying origin_unknown is stripped and still rejected for missing origin", async () => {
+  const row = {
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+    position: "Analyst",
+    organization: "Example Desk",
+    reason: "Arrested per contemporaneous reports",
+    country_of_origin: "",
+    origin_unknown: true,
+    origin_unknown_reason: REASON,
+    cite_urls: CITES,
+  };
+  const args = helperArgs(SCRIPT, row);
+  assert.ok(!args.includes("--origin-unknown"));
+  assert.ok(!args.includes("--country-of-origin"));
+  assert.ok(!args.some((a) => a === REASON));
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "et-daily-origin-"));
+  fs.copyFileSync(SEED, path.join(tmp, "seed.json"));
+  const applyPath = path.join(tmp, "apply.json");
+  fs.writeFileSync(applyPath, JSON.stringify({ rows: [row], skipped: [] }));
+  const prev = { DATA_DIR: process.env.DATA_DIR, MEDIA_DIR: process.env.MEDIA_DIR };
+  process.env.DATA_DIR = tmp;
+  process.env.MEDIA_DIR = LOCK_MEDIA_DIR;
+  let summary;
+  try {
+    summary = runApply({ applyPath, root: ROOT, node: process.execPath, helper: SCRIPT });
+  } finally {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+  assert.equal(summary.inserted, 0);
+  assert.equal(summary.failed, 1);
+  assert.match(summary.failed_rows[0].out, /country of origin is required/);
+  const store = JSON.parse(fs.readFileSync(path.join(tmp, "store.json"), "utf8"));
+  assert.ok(!store.people.some((p) => p.id === "casey-vale"));
 });

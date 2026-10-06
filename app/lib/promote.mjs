@@ -17,6 +17,8 @@ import {
   parseHeadcount,
   parseOriginCountry,
   parseOriginUnknown,
+  originText,
+  ORIGIN_UNKNOWN_REASON_MAX,
   resolveEventCalendar,
   unsealedFromEvidence,
 } from "./event-attrs.mjs";
@@ -676,7 +678,7 @@ export function validateIdentifiedPersonInput(input = {}) {
  * birth_date is optional: unknown stores as null, never "".
  */
 export function assertNewPersonInsertLock(input = {}) {
-  const origin = String(input.country_of_origin || "").trim();
+  const origin = originText(input.country_of_origin);
   const { origin_unknown, origin_unknown_reason } = parseOriginUnknown(input);
   if (origin && origin_unknown) {
     throw new PromoteError(
@@ -695,6 +697,12 @@ export function assertNewPersonInsertLock(input = {}) {
     throw new PromoteError(
       "origin_unknown=true requires origin_unknown_reason (why no cited source states origin)",
       "missing_origin_unknown_reason",
+    );
+  }
+  if (!origin && origin_unknown_reason.length > ORIGIN_UNKNOWN_REASON_MAX) {
+    throw new PromoteError(
+      `origin_unknown_reason must be at most ${ORIGIN_UNKNOWN_REASON_MAX} characters`,
+      "origin_unknown_reason_too_long",
     );
   }
   if (!String(input.position || "").trim()) {

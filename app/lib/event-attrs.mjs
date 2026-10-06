@@ -87,8 +87,22 @@ export { coronaStatusLabel, normalizeCoronaStatus };
  * Empty stays empty — do not guess.
  */
 export function parseOriginCountry(raw = {}) {
-  return firstText(raw, ORIGIN_ALIASES);
+  return originText(firstText(raw, ORIGIN_ALIASES));
 }
+
+/**
+ * Null-safe read of a stored origin. null/undefined/non-text and the literal
+ * strings "null"/"undefined" read as "" (never rendered, never trimmed on null).
+ */
+export function originText(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value !== "string") return "";
+  const text = value.trim();
+  return /^(null|undefined)$/i.test(text) ? "" : text;
+}
+
+/** Hard cap on origin_unknown_reason (fail-closed, never truncated). */
+export const ORIGIN_UNKNOWN_REASON_MAX = 300;
 
 /**
  * Deliberate "origin not stated" marker for a NEW person insert.

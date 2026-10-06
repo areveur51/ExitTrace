@@ -16,7 +16,7 @@ import {
 } from "./categories.mjs";
 import { normalizeOperationTags, operationPortraitFrom, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
-import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount, normalizeEventMedia } from "./event-attrs.mjs";
+import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount, normalizeEventMedia, originText } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
 import {
@@ -1838,8 +1838,9 @@ export function personHeader(row, extras = {}) {
   const birth = row.birth_date
     ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
     : "";
-  const origin = row.country_of_origin
-    ? `<p class="meta-line">Origin · ${esc(row.country_of_origin)}</p>`
+  const originValue = originText(row.country_of_origin);
+  const origin = originValue
+    ? `<p class="meta-line">Origin · ${esc(originValue)}</p>`
     : "";
   return `<header class="person-header">
     ${detailMediaStrip({

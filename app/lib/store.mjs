@@ -35,7 +35,7 @@ import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
 import { mergeNicknames, nicknameCatalogDate, normalizeNicknames } from "./nicknames.mjs";
 import { DEATH_KEEP_IDS, asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
-import { eventHeadcount, personHeadcount } from "./event-attrs.mjs";
+import { eventHeadcount, personHeadcount, originText } from "./event-attrs.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
 import {
   CENTRAL_CASTING_SCREENSHOT_KIND,
@@ -125,7 +125,7 @@ function normalizePerson(row) {
     event_date: asDate(row.event_date),
     death_date: asDate(row.death_date),
     birth_date,
-    country_of_origin: String(row.country_of_origin || "").trim(),
+    country_of_origin: originText(row.country_of_origin),
     photo: row.photo || "",
     photo_credit: row.photo_credit || "",
     screenshot: normalizeScreenshotHref(row.screenshot, "people"),
@@ -296,9 +296,7 @@ function normalizeAddRequest(row) {
     net_worth_source: row.net_worth_source || payload.net_worth_source || "",
     net_worth_note: row.net_worth_note || payload.net_worth_note || "",
     birth_date: asDate(row.birth_date || payload.birth_date) || "",
-    country_of_origin: String(
-      row.country_of_origin || payload.country_of_origin || "",
-    ).trim(),
+    country_of_origin: originText(row.country_of_origin) || originText(payload.country_of_origin),
     origin_unknown: row.origin_unknown === true || payload.origin_unknown === true,
     origin_unknown_reason: String(
       row.origin_unknown_reason || payload.origin_unknown_reason || "",
