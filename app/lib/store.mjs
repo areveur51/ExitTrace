@@ -2275,7 +2275,16 @@ export async function applyIdentifiedPerson(input) {
     };
     const attached = attachPersonEvent(
       prior,
-      incomingPersonEvent({ ...parsed, category: kind }, incoming),
+      incomingPersonEvent(
+        {
+          ...parsed,
+          category: kind,
+          screenshot: input.screenshot,
+          screenshot_credit: input.screenshot_credit,
+          media: input.media,
+        },
+        incoming,
+      ),
     );
     let person = await savePerson(attached.person);
     person = await attachPersonPortrait(person, extras);
@@ -2289,7 +2298,19 @@ export async function applyIdentifiedPerson(input) {
     };
   }
   assertNewPersonInsertLock(parsed);
-  const draft = buildPersonRow({ ...parsed, nicknames, clearances, photo: "", photo_credit: "" }, people);
+  const draft = buildPersonRow(
+    {
+      ...parsed,
+      nicknames,
+      clearances,
+      photo: "",
+      photo_credit: "",
+      screenshot: input.screenshot,
+      screenshot_credit: input.screenshot_credit,
+      media: input.media,
+    },
+    people,
+  );
   const resolved = await resolvePortrait({
     mediaDir: input.mediaDir,
     personId: draft.id,
