@@ -3,8 +3,8 @@
  * Upserts by id: people (including central_casting, nicknames, and clearances), dog_comms, operations,
  * optional categories, red_folder_comms, central_casting_comms,
  * request_attributions, source_posts (gold_person_id never nulled), add_requests (terminal
- * status / processed fields never regress), et_meta (keep_up stamps never move backwards;
- * Render-owned keys kept), plus person_events companion.
+ * status / processed fields never regress), et_meta (LAB_OWNED_META_KEYS only; every other
+ * key skipped and reported), plus person_events companion.
  * Never DELETE / TRUNCATE / DROP / --clean. Never invent cite URLs.
  */
 
@@ -209,37 +209,51 @@ const ADD_REQUEST_COLS = Object.freeze([
 const ET_META_COLS = Object.freeze(["k", "v"]);
 
 /**
- * et_meta keys Render writes for itself (lab-to-render-sync dump restore,
- * et-cutover-verify). Gap-upsert inserts them only when absent; it never
- * overwrites Render's own value.
+ * et_meta keys lab truly owns (stamped on lab by et-stamp-keep-up.sh / the
+ * daily jobs, and only replicated to Render). Frozen allowlist: exact keys plus
+ * exact dot-terminated prefixes. Lab wins only for these keys.
+ *
+ * Every other key is SKIPPED and reported, never inserted or updated:
+ * - Render-owned: keep_up.dump_restore.* (lab-to-render-sync), keep_up.logical.last_verify
+ *   (et-cutover-verify), keep_up.logical.last_heal and logical.heal.* (logical heal on Render),
+ *   seed (server boot import also writes it on Render).
+ * - Replication proofs: rca_* / cutover_prove_* must arrive only by the logical stream,
+ *   or the RCA prove workflows would report a false "landed".
+ * - Anything new (mention / dig cursors, since_id, ...) until someone adds it here on purpose.
  */
-export const RENDER_OWNED_META_KEYS = Object.freeze([
-  "keep_up.dump_restore.mode",
-  "keep_up.dump_restore.last_success",
-  "keep_up.logical.last_verify",
-]);
+export const LAB_OWNED_META_KEYS = Object.freeze({
+  exact: Object.freeze([
+    "keep_up.daily_ingest.last_pass",
+    "keep_up.daily_pack.last_pass",
+    "keep_up.media_delta.last_success",
+    "keep_up.media_delta.last_with_files",
+  ]),
+  prefixes: Object.freeze(["keep_up.daily_ingest.", "keep_up.daily_pack.", "keep_up.media_delta."]),
+});
 
-const ISO_STAMP_RE = "^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}";
+export function isLabOwnedMetaKey(k) {
+  const key = String(k ?? "");
+  if (!key) return false;
+  if (LAB_OWNED_META_KEYS.exact.includes(key)) return true;
+  return LAB_OWNED_META_KEYS.prefixes.some((pre) => key.startsWith(pre) && key.length > pre.length);
+}
 
+function metaLiteral(k) {
+  if (!/^[a-z0-9_.]+$/.test(k)) throw new Error("refusing non-ident meta key");
+  return `'${k}'`;
+}
+
+/**
+ * Defense in depth: even if a non-allowlisted row reached the SQL, the update
+ * keeps Render's value (insert-if-missing at most). Prefix match uses left(),
+ * not LIKE, so "_" is never a wildcard.
+ */
 function etMetaValueSql() {
-  const owned = RENDER_OWNED_META_KEYS.map((k) => {
-    if (!/^[a-z0-9_.]+$/.test(k)) throw new Error("refusing non-ident meta key");
-    return `'${k}'`;
-  }).join(", ");
-  const cur = "et_meta.v";
-  const inc = "EXCLUDED.v";
-  return `v = CASE
-    WHEN et_meta.k IN (${owned}) THEN ${cur}
-    WHEN jsonb_typeof(${cur} -> 'at') = 'string'
-      AND jsonb_typeof(${inc} -> 'at') = 'string'
-      AND (${cur} ->> 'at') ~ '${ISO_STAMP_RE}'
-      AND (${inc} ->> 'at') ~ '${ISO_STAMP_RE}'
-    THEN CASE
-      WHEN (${inc} ->> 'at')::timestamptz < (${cur} ->> 'at')::timestamptz THEN ${cur}
-      ELSE ${inc}
-    END
-    ELSE ${inc}
-  END`;
+  const exact = LAB_OWNED_META_KEYS.exact.map(metaLiteral).join(", ");
+  const prefixes = LAB_OWNED_META_KEYS.prefixes
+    .map((pre) => `left(et_meta.k, ${pre.length}) = ${metaLiteral(pre)}`)
+    .join(" OR ");
+  return `v = CASE WHEN et_meta.k IN (${exact}) OR ${prefixes} THEN EXCLUDED.v ELSE et_meta.v END`;
 }
 
 const CATEGORY_COLS = Object.freeze(["id", "kind", "title", "nav", "path", "blurb"]);
@@ -498,6 +512,18 @@ export function planGapUpsert(payload, { existingTables = PUBLISHED_TABLES.conca
   const have = new Set(existingTables);
   const plans = [];
   const skipped = [];
+  if (data.et_meta.length) {
+    const notOwned = data.et_meta.filter((r) => !isLabOwnedMetaKey(r.k));
+    if (notOwned.length) {
+      skipped.push({
+        table: "et_meta",
+        reason: "not_lab_owned",
+        count: notOwned.length,
+        keys: notOwned.map((r) => r.k).sort(),
+      });
+      data.et_meta = data.et_meta.filter((r) => isLabOwnedMetaKey(r.k));
+    }
+  }
   for (const table of ALL_UPSERT_TABLES) {
     if (!data[table].length) continue;
     if (!have.has(table)) {

@@ -7,8 +7,9 @@ import {
   ALL_UPSERT_TABLES,
   COUNT_SQL,
   PUBLISHED_TABLES,
-  RENDER_OWNED_META_KEYS,
+  LAB_OWNED_META_KEYS,
   assertSafeSql,
+  isLabOwnedMetaKey,
   buildUpsertSql,
   chunkUpsertRows,
   countProof,
@@ -20,6 +21,8 @@ import {
   UPSERT_PARAM_BUDGET,
 } from "../app/lib/gap-upsert.mjs";
 import { PLACE_STEPS } from "../scripts/prove-new-kind-render-sync.mjs";
+import { HEAL_META_KEYS } from "../app/lib/logical-heal.mjs";
+import { KEEP_UP_META_KEYS } from "../app/lib/keep-up.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -576,22 +579,102 @@ test("add_requests upsert never regresses a terminal status or erases processed 
   assert.match(sql, /cite_urls = EXCLUDED\.cite_urls/);
 });
 
-test("et_meta upsert keeps Render-owned keys and never moves a stamp backwards", () => {
-  assert.deepEqual([...RENDER_OWNED_META_KEYS], [
-    "keep_up.dump_restore.mode",
-    "keep_up.dump_restore.last_success",
-    "keep_up.logical.last_verify",
+const MENTION_CURSOR_KEY = "x_mention.since_id";
+
+test("et_meta lab-owned allowlist is frozen, exact, and excludes Render-owned keys", () => {
+  assert.equal(Object.isFrozen(LAB_OWNED_META_KEYS), true);
+  assert.equal(Object.isFrozen(LAB_OWNED_META_KEYS.exact), true);
+  assert.equal(Object.isFrozen(LAB_OWNED_META_KEYS.prefixes), true);
+  assert.deepEqual([...LAB_OWNED_META_KEYS.exact], [
+    "keep_up.daily_ingest.last_pass",
+    "keep_up.daily_pack.last_pass",
+    "keep_up.media_delta.last_success",
+    "keep_up.media_delta.last_with_files",
   ]);
-  const { sql } = buildUpsertSql("et_meta", [{ k: "keep_up.media_delta.last_success", v: { at: "2026-10-06T14:25:25Z" } }]);
-  assert.match(
-    sql,
-    /WHEN et_meta\.k IN \('keep_up\.dump_restore\.mode', 'keep_up\.dump_restore\.last_success', 'keep_up\.logical\.last_verify'\) THEN et_meta\.v/,
+  assert.deepEqual([...LAB_OWNED_META_KEYS.prefixes], [
+    "keep_up.daily_ingest.",
+    "keep_up.daily_pack.",
+    "keep_up.media_delta.",
+  ]);
+  for (const k of LAB_OWNED_META_KEYS.prefixes) assert.ok(k.endsWith("."));
+  for (const k of Object.values(HEAL_META_KEYS)) assert.equal(isLabOwnedMetaKey(k), false, k);
+  for (const k of [
+    KEEP_UP_META_KEYS.dumpRestoreMode,
+    KEEP_UP_META_KEYS.dumpRestoreLastSuccess,
+    KEEP_UP_META_KEYS.logicalLastVerify,
+    KEEP_UP_META_KEYS.logicalLagSeconds,
+    KEEP_UP_META_KEYS.logicalStreamStarted,
+    "keep_up.logical.last_heal",
+    "seed",
+    "cutover_prove_20260914",
+    "rca_enews_wal_probe_20260916",
+    MENTION_CURSOR_KEY,
+    "mention.dig.cursor",
+    "since_id",
+    "keep_up.media_delta",
+    "keep_up.media_delta.",
+    "keep_upXmedia_delta.last_success",
+  ]) {
+    assert.equal(isLabOwnedMetaKey(k), false, k);
+  }
+  assert.equal(isLabOwnedMetaKey("keep_up.media_delta.last_success"), true);
+  assert.equal(isLabOwnedMetaKey("keep_up.daily_pack.next_field"), true);
+});
+
+test("et_meta: heal and mention cursor keys keep Render's value; allowlisted key takes lab's", () => {
+  const healKey = HEAL_META_KEYS.unhealthySince;
+  const planned = planGapUpsert(
+    {
+      et_meta: [
+        { k: healKey, v: { at: "2026-10-06T14:00:00Z" } },
+        { k: HEAL_META_KEYS.reconnectCount, v: { n: 0 } },
+        { k: HEAL_META_KEYS.lastAction, v: { action: "observe" } },
+        { k: MENTION_CURSOR_KEY, v: { since_id: "1" } },
+        { k: KEEP_UP_META_KEYS.dumpRestoreMode, v: { mode: "disabled" } },
+        { k: "keep_up.media_delta.last_success", v: { at: "2026-10-06T14:25:25Z" } },
+      ],
+    },
+    { existingTables: ["et_meta"] },
   );
-  assert.match(sql, /WHEN \(EXCLUDED\.v ->> 'at'\)::timestamptz < \(et_meta\.v ->> 'at'\)::timestamptz THEN et_meta\.v/);
-  // The cast sits only inside the guarded inner CASE, after the ISO shape check.
-  const guard = sql.indexOf("~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}'");
-  assert.ok(guard > 0 && guard < sql.indexOf("::timestamptz"));
-  assert.doesNotMatch(sql, /v = EXCLUDED\.v\b(?! ->)/);
+  // Non-allowlisted keys never reach SQL: skipped and reported by name.
+  assert.deepEqual(planned.skipped, [
+    {
+      table: "et_meta",
+      reason: "not_lab_owned",
+      count: 5,
+      keys: [
+        KEEP_UP_META_KEYS.dumpRestoreMode,
+        HEAL_META_KEYS.lastAction,
+        HEAL_META_KEYS.reconnectCount,
+        healKey,
+        MENTION_CURSOR_KEY,
+      ].sort(),
+    },
+  ]);
+  assert.equal(planned.plans.length, 1);
+  const [plan] = planned.plans;
+  assert.deepEqual(plan.params, ["keep_up.media_delta.last_success", JSON.stringify({ at: "2026-10-06T14:25:25Z" })]);
+  for (const k of [healKey, MENTION_CURSOR_KEY, KEEP_UP_META_KEYS.dumpRestoreMode]) {
+    assert.equal(plan.params.includes(k), false, k);
+  }
+  assert.equal(planned.counts_in.et_meta, 1);
+  // Allowlisted key: lab's value wins on conflict.
+  assert.match(
+    plan.sql,
+    /v = CASE WHEN et_meta\.k IN \('keep_up\.daily_ingest\.last_pass', 'keep_up\.daily_pack\.last_pass', 'keep_up\.media_delta\.last_success', 'keep_up\.media_delta\.last_with_files'\) OR left\(et_meta\.k, 21\) = 'keep_up\.daily_ingest\.' OR left\(et_meta\.k, 19\) = 'keep_up\.daily_pack\.' OR left\(et_meta\.k, 20\) = 'keep_up\.media_delta\.' THEN EXCLUDED\.v ELSE et_meta\.v END/,
+  );
+  assert.doesNotMatch(plan.sql, /LIKE/);
+  assert.doesNotMatch(plan.sql, /timestamptz/);
+});
+
+test("et_meta: an unknown key is insert-if-missing at most, never an update", () => {
+  // Plan level: unknown keys are skipped (so not even inserted).
+  const planned = planGapUpsert({ et_meta: [{ k: "brand_new_key", v: { x: 1 } }] }, { existingTables: ["et_meta"] });
+  assert.equal(planned.plans.length, 0);
+  assert.deepEqual(planned.skipped, [{ table: "et_meta", reason: "not_lab_owned", count: 1, keys: ["brand_new_key"] }]);
+  // SQL level (defense in depth): built directly, the conflict branch keeps Render's value.
+  const built = buildUpsertSql("et_meta", [{ k: "brand_new_key", v: { x: 1 } }]);
+  assert.match(built.sql, /ON CONFLICT \(k\) DO UPDATE SET\s+v = CASE WHEN .* THEN EXCLUDED\.v ELSE et_meta\.v END$/s);
 });
 
 test("add_requests and et_meta rows missing NOT NULL fields are dropped, never sent as null", () => {
@@ -610,7 +693,7 @@ test("add_requests and et_meta rows missing NOT NULL fields are dropped, never s
 
 test("add_requests and et_meta gap upsert is insert/update only, never delete", () => {
   const planned = planGapUpsert(
-    { add_requests: [ADD_REQUEST_ROW], et_meta: [{ k: "seed", v: { note: "x" } }] },
+    { add_requests: [ADD_REQUEST_ROW], et_meta: [{ k: "keep_up.daily_pack.last_pass", v: { at: "2026-10-06T13:50:18Z" } }] },
     { existingTables: ["add_requests", "et_meta"] },
   );
   assert.equal(planned.plans.length, 2);
@@ -619,7 +702,7 @@ test("add_requests and et_meta gap upsert is insert/update only, never delete", 
     assert.doesNotMatch(plan.sql, /\b(DELETE|TRUNCATE|DROP)\b/i);
     assertSafeSql(plan.sql);
   }
-  const absent = planGapUpsert({ et_meta: [{ k: "seed", v: {} }] }, { existingTables: ["people"] });
+  const absent = planGapUpsert({ et_meta: [{ k: "keep_up.daily_pack.last_pass", v: {} }] }, { existingTables: ["people"] });
   assert.deepEqual(absent.skipped, [{ table: "et_meta", reason: "table_absent", count: 1 }]);
   assert.equal(countProof({ add_requests: 10 }, { add_requests: 9 }, { add_requests: 9 }).add_requests.ok, false);
   assert.equal(countProof({ et_meta: 12 }, { et_meta: 13 }, { et_meta: 10 }).et_meta.ok, true);
