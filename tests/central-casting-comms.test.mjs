@@ -562,7 +562,7 @@ test("jim-mattis central casting section uses evidence cites and hides an empty 
   assert.match(coronaOnly[0], /data-kind="corona_comms"/);
   assert.match(
     coronaOnly[0],
-    /<a class="source-link"[\s\S]*<blockquote class="event-snippet">Corona note<\/blockquote>/,
+    /<li><blockquote class="event-snippet">Corona note<\/blockquote><a class="source-link" href="https:\/\/www\.bbc\.com\/news\/casey-corona"/,
   );
 });
 
