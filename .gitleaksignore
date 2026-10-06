@@ -1,0 +1,10 @@
+# Known historical false positives in unit-test OAuth fixture strings.
+# Fingerprints only — never secret values. Do not broaden to whole files.
+2651ae30782492d128db582a4d798619ad85d876:tests/mention-queue.test.mjs:generic-api-key:522
+2651ae30782492d128db582a4d798619ad85d876:tests/mention-queue.test.mjs:generic-api-key:523
+2651ae30782492d128db582a4d798619ad85d876:tests/mention-queue.test.mjs:generic-api-key:524
+2651ae30782492d128db582a4d798619ad85d876:tests/mention-queue.test.mjs:generic-api-key:525
+ec6be200264eb3681b6756164ae6a17faf9e3c85:tests/mention-queue.test.mjs:generic-api-key:522
+ec6be200264eb3681b6756164ae6a17faf9e3c85:tests/mention-queue.test.mjs:generic-api-key:523
+ec6be200264eb3681b6756164ae6a17faf9e3c85:tests/mention-queue.test.mjs:generic-api-key:524
+ec6be200264eb3681b6756164ae6a17faf9e3c85:tests/mention-queue.test.mjs:generic-api-key:525
