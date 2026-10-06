@@ -21,6 +21,7 @@ import {
   publicGitSha,
   reconnectBackoffSeconds,
   sanitizeApplyError,
+  sanitizeSnapshotQueryError,
   syncModeMachine,
 } from "../app/lib/logical-heal.mjs";
 
@@ -267,4 +268,73 @@ test("boot heal is subscriber-only and never auto-SKIPs LSN", () => {
   assert.doesNotMatch(script, /ALTER SUBSCRIPTION[^\n]*SKIP/);
   assert.match(keep, /isLogicalSubscriber/);
   assert.match(keep, /publicHealthApplyState/);
+});
+
+
+test("query_failed is not absent and stays observe-only", () => {
+  const failed = classifyApplyHealth({ present: false, query_failed: true });
+  assert.equal(failed.state, "query_failed");
+  assert.notEqual(failed.state, "absent");
+  assert.equal(failed.reason, "snapshot_query_failed");
+  assert.equal(publicHealthApplyState("query_failed"), null);
+  assert.equal(publicApplyState("query_failed"), "query_failed");
+  const plan = planHeal({ present: false, query_failed: true, last_apply_error: "ssl required" });
+  assert.equal(plan.state, "query_failed");
+  assert.deepEqual(plan.actions, ["observe"]);
+  assert.equal(plan.actions.includes("reconnect"), false);
+  assert.equal(plan.actions.includes("refresh_publication"), false);
+  assert.equal(plan.sign_required, false);
+});
+
+test("sanitizeSnapshotQueryError strips conninfo and passwords", () => {
+  const leaked = sanitizeSnapshotQueryError({
+    code: "28000",
+    message:
+      'connection to server at "db.example.com" (203.0.113.9), port 5432 failed: password=s3cret host=db.example.com user=exittrace postgres://u:p@db.example.com:5432/exittrace',
+  });
+  assert.equal(leaked.code, "28000");
+  assert.doesNotMatch(leaked.message, /s3cret/);
+  assert.doesNotMatch(leaked.message, /203\.0\.113\.9/);
+  assert.doesNotMatch(leaked.message, /postgres:\/\//);
+  assert.doesNotMatch(leaked.message, /password=s3cret/i);
+  assert.match(leaked.message, /redacted/i);
+});
+
+test("heal requires TLS and surfaces sanitized query_failed", () => {
+  const helper = fs.readFileSync(path.join(ROOT, "scripts/ci-ensure-database-url-ssl.sh"), "utf8");
+  assert.match(helper, /ensure_ssl/);
+  assert.match(helper, /sslmode=require/);
+  assert.match(helper, /PGSSLMODE=require/);
+  const script = fs.readFileSync(path.join(ROOT, "scripts/logical-apply-heal.mjs"), "utf8");
+  assert.match(script, /ensureDatabaseUrlSsl/);
+  assert.match(script, /sanitizeSnapshotQueryError/);
+  assert.match(script, /SNAPSHOT_QUERY_ERROR/);
+  assert.match(script, /query_failed: true/);
+  assert.doesNotMatch(script, /catch \{\s*return null;\s*\}/);
+  const env = fs.readFileSync(path.join(ROOT, "app/lib/env.mjs"), "utf8");
+  assert.match(env, /export function ensureDatabaseUrlSsl/);
+  assert.match(env, /sslmode=require/);
+});
+
+test("ensureDatabaseUrlSsl appends sslmode without logging secrets", async () => {
+  const { ensureDatabaseUrlSsl, databaseUrl } = await import("../app/lib/env.mjs");
+  const prev = process.env.DATABASE_URL;
+  const prevSsl = process.env.PGSSLMODE;
+  try {
+    process.env.DATABASE_URL = "postgres://user:s3cret@db.example.com:5432/exittrace";
+    delete process.env.PGSSLMODE;
+    const out = ensureDatabaseUrlSsl();
+    assert.match(out, /sslmode=require/);
+    assert.equal(process.env.PGSSLMODE, "require");
+    assert.equal(databaseUrl(), out);
+    assert.match(out, /s3cret/); // URL still has creds in memory; must not be logged
+    process.env.DATABASE_URL = "postgres://user:s3cret@db.example.com:5432/exittrace?sslmode=require";
+    const again = ensureDatabaseUrlSsl();
+    assert.equal(again.split("sslmode=").length, 2);
+  } finally {
+    if (prev === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prev;
+    if (prevSsl === undefined) delete process.env.PGSSLMODE;
+    else process.env.PGSSLMODE = prevSsl;
+  }
 });

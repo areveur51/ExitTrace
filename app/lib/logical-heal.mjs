@@ -16,6 +16,7 @@ export const APPLY_STATES = Object.freeze([
   "lsn_stalled",
   "relations_stale",
   "poison_txn",
+  "query_failed",
 ]);
 
 export const HEAL_ACTIONS = Object.freeze([
@@ -76,7 +77,8 @@ export function isLogicalSubscriber(snapshotOrPresent) {
  */
 export function publicHealthApplyState(value) {
   const state = publicApplyState(value);
-  if (state === "absent") return null;
+  // Heal/diagnostic-only: not a live subscriber apply_state for public keep_up.
+  if (state === "absent" || state === "query_failed") return null;
   return state;
 }
 
@@ -111,6 +113,30 @@ export function sanitizeApplyError(text) {
   return s.slice(0, 500);
 }
 
+/**
+ * Sanitize a DB/driver error for heal logs. Returns { code, message } with
+ * conninfo, passwords, hosts, and URLs stripped. Never throws.
+ */
+export function sanitizeSnapshotQueryError(err) {
+  const codeRaw = err && (err.code || err.errno);
+  let code = codeRaw === null || codeRaw === undefined || codeRaw === "" ? "" : String(codeRaw);
+  code = code.replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 32);
+  const rawMsg =
+    err && typeof err === "object"
+      ? err.message || err.detail || String(err)
+      : err === null || err === undefined
+        ? ""
+        : String(err);
+  let message = sanitizeApplyError(rawMsg) || "query_failed";
+  // Extra pass for libpq-style password= / user= / host= fragments.
+  message = message
+    .replace(/\b(password|passwd|user|host|hostaddr|dbname|port)\s*=\s*\S+/gi, "$1=[redacted]")
+    .replace(/\bpostgresql?:\/\/\S+/gi, "[redacted-url]");
+  if (UNSAFE_VALUE.test(message)) message = "[redacted-apply-error]";
+  return { code, message: message.slice(0, 500) };
+}
+
+
 export function emptyApplySnapshot() {
   return {
     present: false,
@@ -127,6 +153,7 @@ export function emptyApplySnapshot() {
     rel_states: [],
     last_apply_error: null,
     posted_at_data_type: null,
+    query_failed: false,
   };
 }
 
@@ -165,6 +192,7 @@ export function normalizeSnapshot(raw = {}) {
     rel_states: states,
     last_apply_error: sanitizeApplyError(src.last_apply_error),
     posted_at_data_type: src.posted_at_data_type ? String(src.posted_at_data_type) : null,
+    query_failed: asBool(src.query_failed),
   };
 }
 
@@ -209,6 +237,19 @@ function lsnUnchanged(snap, prev) {
 export function classifyApplyHealth(rawSnapshot, rawPrevious = null) {
   const snap = normalizeSnapshot(rawSnapshot);
   const prev = rawPrevious ? normalizeSnapshot(rawPrevious) : null;
+
+  // Snapshot SELECTs failed (often TLS). Must not look like publisher "absent".
+  if (snap.query_failed) {
+    return {
+      state: "query_failed",
+      subscriber: false,
+      lag_seconds: snap.last_msg_receipt_age_seconds,
+      apply_error_count: snap.apply_error_count,
+      lsn_stalled: false,
+      handshake_retry: false,
+      reason: "snapshot_query_failed",
+    };
+  }
 
   // No pg_subscription: publisher / lab. Internal "absent" is for planHeal observe.
   // Public health maps this to null — not a subscriber crash_loop/absent alarm.
@@ -404,6 +445,15 @@ export function planHeal(rawSnapshot, opts = {}) {
     apply_error: snap.last_apply_error,
     refresh_copy_data: false,
   };
+
+  if (health.state === "query_failed") {
+    return {
+      ...base,
+      actions: ["observe"],
+      reason: "snapshot_query_failed",
+      apply_error: snap.last_apply_error,
+    };
+  }
 
   if (!isLogicalSubscriber(snap) || health.state === "absent") {
     return { ...base, actions: ["observe"], reason: "no_subscription_public_dump_ok" };
