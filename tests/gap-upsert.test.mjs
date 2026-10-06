@@ -24,6 +24,9 @@ import { PLACE_STEPS } from "../scripts/prove-new-kind-render-sync.mjs";
 import { HEAL_META_KEYS } from "../app/lib/logical-heal.mjs";
 import { KEEP_UP_META_KEYS } from "../app/lib/keep-up.mjs";
 
+// Separate import keeps this hunk away from the shared import block.
+import { COUNT_TABLES } from "../app/lib/gap-upsert.mjs";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("published tables include the new comms tables and person_events", () => {
@@ -148,6 +151,27 @@ test("count proof is non-decreasing and reports source rows", () => {
   assert.equal(countTableSql("central_casting_comms"), "SELECT count(*)::int AS n FROM central_casting_comms");
   assert.equal(countTableSql("source_posts"), "SELECT count(*)::int AS n FROM source_posts");
   assert.throws(() => countTableSql("mention_queue"), /unknown/);
+});
+
+test("count proof only names real published tables (never JS-only categories)", () => {
+  const named = [...COUNT_SQL.matchAll(/FROM ([a-z_]+)\) AS ([a-z_]+)/g)].map((m) => {
+    assert.equal(m[1], m[2]);
+    return m[1];
+  });
+  assert.deepEqual([...named].sort(), [...COUNT_TABLES].sort());
+  for (const t of COUNT_TABLES) assert.equal(ALL_UPSERT_TABLES.includes(t), true, t);
+  assert.equal(COUNT_TABLES.includes("categories"), false);
+  assert.equal(COUNT_TABLES.includes("add_requests"), true);
+  assert.equal(COUNT_TABLES.includes("et_meta"), true);
+  assert.doesNotMatch(COUNT_SQL, /categories/);
+  assert.match(COUNT_SQL, /\(SELECT count\(\*\)::int FROM add_requests\) AS add_requests/);
+  assert.match(COUNT_SQL, /\(SELECT count\(\*\)::int FROM et_meta\) AS et_meta/);
+  assert.equal("categories" in countProof({}, {}, {}), false);
+  assert.equal("add_requests" in countProof({}, {}, {}), true);
+  assert.equal("et_meta" in countProof({}, {}, {}), true);
+  const script = fs.readFileSync(path.join(ROOT, "scripts/gap-upsert-published.mjs"), "utf8");
+  assert.doesNotMatch(script, /countOne\(\s*["']categories["']\s*\)/);
+  assert.doesNotMatch(script, /FROM categories/);
 });
 
 test("red_folder_comms and central_casting_comms gap-upsert like dog_comms", () => {

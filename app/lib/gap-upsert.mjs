@@ -32,6 +32,12 @@ export const COMPANION_TABLES = Object.freeze(["person_events"]);
 
 export const ALL_UPSERT_TABLES = Object.freeze([...PUBLISHED_TABLES, ...COMPANION_TABLES]);
 
+/**
+ * Tables the count proof reads. `categories` is JS-only (app/lib/categories.mjs);
+ * no such table exists on lab or Render, so it is never counted.
+ */
+export const COUNT_TABLES = Object.freeze(ALL_UPSERT_TABLES.filter((t) => t !== "categories"));
+
 /** Render app DB only. Never publication, gap-upsert, or export. */
 export const RENDER_ONLY_TABLES = Object.freeze(["mention_queue"]);
 
@@ -538,7 +544,7 @@ export function planGapUpsert(payload, { existingTables = PUBLISHED_TABLES.conca
 }
 
 export function countProof(before, after, expectedIn) {
-  const tables = ALL_UPSERT_TABLES;
+  const tables = COUNT_TABLES;
   const out = {};
   for (const t of tables) {
     const b = Number(before?.[t] ?? 0);
