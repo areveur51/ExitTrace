@@ -215,8 +215,23 @@ test("red folder supporting group renders cite+source+optional screenshot+stills
   assert.equal((html.match(/class="supporting-group"/g) || []).length, 2);
   assert.match(html, /data-supporting-index="0"/);
   assert.match(html, /data-supporting-index="1"/);
-  // Main post: portrait + main screenshot + cite + primary Source only.
-  assert.match(html, /class="detail-media detail-media--masonry" data-tiles="4"/);
+  const mainAt = html.indexOf('class="detail-official-post"');
+  const contextAt = html.indexOf('class="detail-context"');
+  const supportAt = html.indexOf('class="detail-supporting"');
+  assert.ok(mainAt >= 0 && contextAt > mainAt && supportAt > contextAt);
+  // Main post: portrait + main screenshot + cite. Source and support cites follow.
+  const main = html.slice(mainAt, contextAt);
+  assert.match(main, /class="detail-media detail-media--masonry" data-tiles="3"/);
+  assert.doesNotMatch(main, /marijkeanon|areveur51|Source ·/);
+  const context = html.slice(contextAt, supportAt);
+  assert.match(context, /MELANIATRUMP\/status\/2001266577077837917/);
+  assert.match(context, /class="handle">@MarijkeANON</);
+  assert.match(context, /class="handle">@Areveur51</);
+  assert.doesNotMatch(context, /lightbox-open/);
+  const support = html.slice(supportAt);
+  assert.match(support, /marijkeanon-2026-09-18\.jpg/);
+  assert.match(support, /areveur51-2026-09-18-4\.png/);
+  assert.doesNotMatch(support, /class="cite-block"/);
   assert.doesNotMatch(html, /Supporting · @MarijkeANON|Supporting · @Areveur51/);
 
   const first = kindSupportingGroupHtml("red_folder", row, entries[0]);

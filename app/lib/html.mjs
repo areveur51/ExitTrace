@@ -820,24 +820,40 @@ export function kindEntryStills(kind, row, entry) {
   return out;
 }
 
-/** One frost group: cite-DRY + Source (this URL only) + screenshot/stills masonry. */
-export function kindSupportingGroupHtml(kind, row, entry, seen) {
+/** Screenshot + stills for one supporting entry. Meta stays out unless a caller passes it. */
+function supportingEntryStrip(kind, row, entry, seen, metaHtml = "") {
   const handle = entry?.handle || row?.handle || "";
   const extras = kindEntryStills(kind, row, entry).map((src) => ({
     src,
     alt: `Post media for ${handle}`,
     credit: entry?.still_credit || "",
   }));
+  return detailMediaStrip({
+    screenshot: entry?.screenshot,
+    screenshotAlt: `X-post screenshot of ${handle}`,
+    screenshotCredit: entry?.screenshot_credit,
+    extraMedia: extras,
+    seen,
+    metaHtml,
+  });
+}
+
+function supportingStripHasMedia(html) {
+  return /detail-tile--(?:portrait|screenshot|still|video|support)/.test(String(html || ""));
+}
+
+/** One frost group: cite-DRY + Source (this URL only) + screenshot/stills masonry.
+ *  Central Casting clips still use this mixed group. Official-post pages do not. */
+export function kindSupportingGroupHtml(kind, row, entry, seen) {
   return `<section class="supporting-group" data-supporting-index="${esc(String(entry?.index ?? ""))}">
     ${detailShell({
       title: "Supporting",
-      mediaHtml: detailMediaStrip({
-        screenshot: entry?.screenshot,
-        screenshotAlt: `X-post screenshot of ${handle}`,
-        screenshotCredit: entry?.screenshot_credit,
-        extraMedia: extras,
+      mediaHtml: supportingEntryStrip(
+        kind,
+        row,
+        entry,
         seen,
-        metaHtml: detailMetaBlock({
+        detailMetaBlock({
           citeHtml: citeFromRow({
             handle: entry?.handle,
             account_name: entry?.account_name,
@@ -846,7 +862,7 @@ export function kindSupportingGroupHtml(kind, row, entry, seen) {
           }),
           sourceHtml: detailSourceLine(entry?.source_url),
         }),
-      }),
+      ),
       active: true,
       extraClass: "meta-box",
     })}
@@ -2152,8 +2168,109 @@ export function operationDetail(row, { attributions } = {}) {
   </article>`;
 }
 
-/** Shared dog / red-folder / central-casting harvest detail: cite, post body, X link, supportive media. */
-export function commsDetail(spec, row, { attributions } = {}) {
+const OFFICIAL_POST_IDS = new Set(["dog", "red_folder", "eagle", "ronald"]);
+
+function commsAttributionSurface(specId) {
+  if (specId === "dog") return "dog_comm";
+  if (specId === "red_folder") return "red_folder_comm";
+  if (specId === "central_casting") return "central_casting_comm";
+  return "";
+}
+
+/** Context and citations: the official Source, then each supporting cite. No media. */
+function officialPostContextHtml(spec, row) {
+  const parts = [
+    detailMetaBlock({
+      sourceHtml: kindSourceHtml(row, { includeSupporting: false }),
+    }),
+  ];
+  for (const entry of kindSupportingEntries(row)) {
+    if (spec.supportingGroups) {
+      parts.push(
+        `<div class="detail-context-entry" data-supporting-index="${esc(String(entry.index))}">${detailMetaBlock({
+          citeHtml: citeFromRow({
+            handle: entry.handle,
+            account_name: entry.account_name,
+            posted_at: entry.posted_at,
+            text: entry.text,
+          }),
+          sourceHtml: detailSourceLine(entry.source_url),
+        })}</div>`,
+      );
+    } else {
+      const label = entry.handle ? `Supporting · ${entry.handle}` : "Supporting";
+      parts.push(
+        detailMetaBlock({
+          sourceHtml: detailSourceLine(entry.source_url, { label }),
+        }),
+      );
+    }
+  }
+  return `<section class="detail-context" aria-label="Context and citations">${parts.join("")}</section>`;
+}
+
+/** Supporting stills and screenshots only. Omitted when nothing stored remains. */
+function officialPostSupportHtml(spec, row, seen) {
+  const groups = [];
+  for (const entry of kindSupportingEntries(row)) {
+    const strip = supportingEntryStrip(spec.id, row, entry, seen);
+    if (!supportingStripHasMedia(strip)) continue;
+    groups.push(
+      `<section class="supporting-group" data-supporting-index="${esc(String(entry.index))}">${strip}</section>`,
+    );
+  }
+  if (!groups.length) return "";
+  return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3>${groups.join("")}</section>`;
+}
+
+/** dog / red_folder / eagle / ronald: main post, then context and citations, then supporting media. */
+function officialPostDetail(spec, row, { attributions } = {}) {
+  const seen = detailMediaSeen();
+  const videoHref = localCommVideoHref(row, spec.mediaDir);
+  const stillHref = isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "";
+  const photo = videoHref
+    ? commVideoInner(videoHref, stillHref, `Stored video for ${row.handle}`)
+    : localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
+        commsKind: spec.id,
+      });
+  const extras = kindExtraStills(spec.id, row, { includeSupporting: false }).map((src) => ({
+    src,
+    alt: `Post media for ${row.handle}`,
+    credit: row.still_credit || "",
+  }));
+  const mediaHtml = detailMediaStrip({
+    portraitHtml: photo,
+    portraitSrc: videoHref || stillHref,
+    portraitAlt: videoHref ? `Stored video for ${row.handle}` : `Stored still for ${row.handle}`,
+    portraitCredit: row.still_credit,
+    portraitKind: videoHref ? "video" : "image",
+    portraitPoster: videoHref ? stillHref : "",
+    screenshot: row.screenshot,
+    screenshotAlt: `X-post screenshot of ${row.handle}`,
+    screenshotCredit: row.screenshot_credit,
+    extraMedia: extras,
+    seen,
+    metaHtml: detailMetaBlock({
+      citeHtml: citeFromRow(row),
+      attributionHtml: attributionFrom(row, attributions, commsAttributionSurface(spec.id)),
+    }),
+  });
+  return `<article class="detail ${spec.detailClass}">
+    ${detailShell({
+      title: "Metadata",
+      mediaHtml: `<section class="detail-official-post" aria-label="Main post">${mediaHtml}</section>`,
+      metaHtml: officialPostContextHtml(spec, row),
+      afterHtml: officialPostSupportHtml(spec, row, seen),
+      active: true,
+      extraClass: "meta-box",
+    })}
+  </article>`;
+}
+
+/** Shared harvest detail. Official-post kinds stack three sections. Central Casting keeps the mixed group. */
+export function commsDetail(spec, row, options = {}) {
+  if (OFFICIAL_POST_IDS.has(spec?.id)) return officialPostDetail(spec, row, options);
+  const { attributions } = options;
   const grouped = !!spec.supportingGroups;
   const seen = detailMediaSeen();
   const videoHref = localCommVideoHref(row, spec.mediaDir);
@@ -2183,17 +2300,7 @@ export function commsDetail(spec, row, { attributions } = {}) {
     seen,
     metaHtml: detailMetaBlock({
       citeHtml: citeFromRow(row),
-      attributionHtml: attributionFrom(
-        row,
-        attributions,
-        spec.id === "dog"
-          ? "dog_comm"
-          : spec.id === "red_folder"
-            ? "red_folder_comm"
-            : spec.id === "central_casting"
-              ? "central_casting_comm"
-              : "",
-      ),
+      attributionHtml: attributionFrom(row, attributions, commsAttributionSurface(spec.id)),
       sourceHtml: kindSourceHtml(row, { includeSupporting: !grouped }),
     }),
   });

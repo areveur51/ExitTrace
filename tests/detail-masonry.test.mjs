@@ -11,6 +11,7 @@ import {
   hasPostedTime,
   postedAtValue,
 } from "../app/lib/categories.mjs";
+import { KIND_COMMS } from "../app/lib/kind-comms.mjs";
 import { getDogComm, setMemory } from "../app/lib/store.mjs";
 import {
   citeBlock,
@@ -198,8 +199,10 @@ test("dog detail masonry: one CITE tile + Source; lightbox on media only; X URL 
   const html = dogDetail(dog());
   assert.match(html, /detail-media--masonry/);
   assert.doesNotMatch(html, /detail-media--tiles-3/);
-  // 5 media + ONE cite + Source
-  assert.match(html, /data-tiles="7"/);
+  // Main strip: 5 media + ONE cite. Source sits in the context section.
+  assert.match(html, /data-tiles="6"/);
+  assert.match(html, /class="detail-official-post"[\s\S]*class="detail-context"/);
+  assert.doesNotMatch(masonryInner(html), /detail-tile--source/);
   assert.match(html, /detail-tile--portrait/);
   assert.match(html, /detail-tile--screenshot/);
   assert.match(html, /detail-tile--meta/);
@@ -407,7 +410,7 @@ test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 c
   const multi = dogDetail(dog());
   assert.doesNotMatch(multi, /detail-media--tiles-3/);
   assert.match(multi, /detail-tile--screenshot/);
-  assert.match(multi, /data-tiles="7"/);
+  assert.match(multi, /data-tiles="6"/);
 
   const two = dogDetail(
     dog({
@@ -415,9 +418,9 @@ test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 c
       screenshot: "/media/screenshots/dog-comms/ezraacohen-dow-2026.png",
     }),
   );
-  // portrait + screenshot + cite + Source
+  // portrait + screenshot + cite; Source is outside the strip
   assert.doesNotMatch(two, /detail-media--tiles-3/);
-  assert.match(two, /data-tiles="4"/);
+  assert.match(two, /data-tiles="3"/);
   assert.match(two, /detail-tile--screenshot/);
   assert.match(two, /detail-tile--meta/);
   assert.equal(tileByKind(two, "cite").length, 1);
@@ -615,6 +618,100 @@ test("dog supporting stills merge into extras; supporting X links stay under Sou
   ]);
   assert.match(kindSourceHtml(row), /Supporting · @Ally/);
   const html = dogDetail(row);
-  assert.match(html, /Supporting · @Ally/);
-  assert.match(html, /ezraacohen-dow-2026-4\.jpg/);
+  const mainAt = html.indexOf('class="detail-official-post"');
+  const contextAt = html.indexOf('class="detail-context"');
+  const supportAt = html.indexOf('class="detail-supporting"');
+  assert.ok(mainAt >= 0 && contextAt > mainAt && supportAt > contextAt);
+  assert.match(html.slice(contextAt, supportAt), /Supporting · @Ally/);
+  assert.doesNotMatch(html.slice(mainAt, contextAt), /ezraacohen-dow-2026-4\.jpg/);
+  assert.match(html.slice(supportAt), /ezraacohen-dow-2026-4\.jpg/);
+  assert.doesNotMatch(html.slice(supportAt), /class="cite-block"/);
+});
+
+test("official-post kinds render main post, then context, then supporting media", () => {
+  for (const id of ["dog", "red_folder", "eagle", "ronald"]) {
+    const spec = KIND_COMMS[id];
+    const html = kindDetail(id, {
+      id: `${id}-order`,
+      posted_at: "2026-09-17T15:04:00Z",
+      handle: "@Desk",
+      account_name: "Desk",
+      text: "Official post text.",
+      still: `/media/${spec.mediaDir}/main.jpg`,
+      screenshot: `/media/screenshots/${spec.screenshotKind}/main.png`,
+      source_url: "https://x.com/Desk/status/1",
+      snapshot: {
+        stills: [`/media/${spec.mediaDir}/extra.jpg`],
+        supporting: [
+          {
+            handle: "@Ally",
+            account_name: "Ally",
+            text: "Context note.",
+            posted_at: "2026-09-18",
+            source_url: "https://x.com/Ally/status/2",
+            still: `/media/${spec.mediaDir}/support.jpg`,
+          },
+        ],
+      },
+    });
+    const mainAt = html.indexOf('class="detail-official-post"');
+    const contextAt = html.indexOf('class="detail-context"');
+    const supportAt = html.indexOf('class="detail-supporting"');
+    assert.ok(mainAt >= 0 && contextAt > mainAt && supportAt > contextAt, id);
+    const main = html.slice(mainAt, contextAt);
+    const context = html.slice(contextAt, supportAt);
+    const support = html.slice(supportAt);
+    assert.match(main, /detail-tile--portrait|detail-tile--video/, id);
+    assert.match(main, /class="cite-block"/, id);
+    assert.match(main, /Official post text/, id);
+    assert.match(main, /extra\.jpg/, id);
+    assert.match(main, /class="handle">@Desk</, id);
+    assert.doesNotMatch(main, /support\.jpg/, id);
+    assert.doesNotMatch(main, /detail-tile--source/, id);
+    assert.match(context, /Source ·/, id);
+    assert.match(context, /https:\/\/x\.com\/Desk\/status\/1/, id);
+    assert.doesNotMatch(context, /lightbox-open|detail-tile--still|detail-tile--screenshot/, id);
+    assert.match(support, /support\.jpg/, id);
+    assert.match(support, /class="supporting-group"/, id);
+    assert.doesNotMatch(support, /class="cite-block"/, id);
+    if (spec.supportingGroups) {
+      assert.match(context, /Context note/, id);
+      assert.doesNotMatch(context, /Supporting ·/, id);
+    } else {
+      assert.match(context, /Supporting · @Ally/, id);
+    }
+    assert.doesNotMatch(html, /Batcave/i, id);
+    assert.doesNotMatch(html, /Sources · \d+ available/, id);
+    assert.doesNotMatch(html, /Warner/i, id);
+  }
+});
+
+test("official-post and supporting strips size the box to the image", () => {
+  const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
+  const fitAt = css.indexOf("Official-post media strips");
+  assert.ok(fitAt > 0);
+  const fit = css.slice(fitAt);
+  assert.match(fit, /detail-official-post/);
+  assert.match(fit, /detail-supporting/);
+  assert.match(fit, /min-width:\s*min\(100%,\s*16rem\)/);
+  assert.match(fit, /height:\s*auto/);
+  assert.match(fit, /aspect-ratio:\s*auto/);
+  assert.match(fit, /object-fit:\s*contain/);
+  assert.doesNotMatch(fit, /object-fit:\s*cover/);
+  assert.doesNotMatch(fit, /aspect-ratio:\s*192\s*\/\s*250/);
+  const frame = css.match(/\.detail-support-frame\s*\{[^}]+\}/);
+  assert.ok(frame);
+  assert.match(frame[0], /min-width:\s*min\(100%,\s*16rem\)/);
+  assert.match(frame[0], /height:\s*auto/);
+  assert.match(frame[0], /aspect-ratio:\s*auto/);
+  assert.match(frame[0], /overflow:\s*visible/);
+  assert.doesNotMatch(frame[0], /aspect-ratio:\s*1\s*\/\s*1/);
+  assert.doesNotMatch(frame[0], /overflow:\s*hidden/);
+  const framePhoto = css.match(
+    /\.detail-supporting \.detail-support-frame \.detail-photo,[\s\S]*?\{[^}]+\}/,
+  );
+  assert.ok(framePhoto);
+  assert.match(framePhoto[0], /height:\s*auto/);
+  assert.match(framePhoto[0], /object-fit:\s*contain/);
+  assert.doesNotMatch(framePhoto[0], /object-fit:\s*cover/);
 });

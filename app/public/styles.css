@@ -624,31 +624,35 @@ body.tui-home .home-stage {
   border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
 }
 .detail-supporting .event-h { margin: 0 0 0.55rem; }
-/* One square cell so portrait clips and wide stills pack in the same masonry. */
+/* Bottom supporting strip: one minimum width, height from the file. No square crop. */
 .detail-support-masonry .detail-tile--support {
   break-inside: avoid;
   margin: 0 0 0.65rem;
+  min-width: min(100%, 16rem);
+  overflow: visible;
 }
 .detail-support-frame {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
+  min-width: min(100%, 16rem);
+  height: auto;
+  aspect-ratio: auto;
+  overflow: visible;
   background: var(--bg-sel);
 }
 .detail-support-frame .detail-video {
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 .detail-supporting .detail-support-frame .detail-photo,
 .detail-supporting .detail-support-frame video.detail-photo {
   width: 100%;
-  height: 100%;
-  max-width: none;
+  height: auto;
+  max-width: 100%;
   max-height: none;
   min-height: 0;
   aspect-ratio: auto;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 .event-media-caption {
@@ -1200,6 +1204,21 @@ img.empty-portrait { object-position: center center; }
   flex-direction: column;
   min-width: 0;
   width: 100%;
+}
+/* Official-post detail order (dog, red folder, eagle, ronald):
+   1. detail-official-post  2. detail-context  3. detail-supporting */
+:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail)
+  :is(.detail-official-post, .detail-context, .detail-supporting) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+}
+:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail) .detail-context {
+  margin-top: 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
 }
 .meta-pane {
   display: flex;
@@ -1914,7 +1933,10 @@ html[data-theme="glass"] .detail .meta-pane--stack::before {
 html[data-theme="glass"] .detail .detail-media,
 html[data-theme="glass"] .detail .detail-copy,
 html[data-theme="glass"] .detail .career-history,
-html[data-theme="glass"] .detail .event-timeline {
+html[data-theme="glass"] .detail .event-timeline,
+html[data-theme="glass"] .detail .detail-official-post,
+html[data-theme="glass"] .detail .detail-context,
+html[data-theme="glass"] .detail .detail-supporting {
   position: relative;
   z-index: 1;
 }
@@ -2253,6 +2275,15 @@ html[data-theme="glass"] .dash-stats {
     gap: 1rem;
     align-items: start;
   }
+  /* Official-post pages stay one column so context and supporting media
+     cannot sit beside the portrait between 1280 and 1400. */
+  .dog-detail,
+  .red-folder-detail,
+  .eagle-detail,
+  .ronald-detail {
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 /* Widescreen/tablet HUD grid is align-items:start + rows:auto for catalog
@@ -2328,4 +2359,29 @@ html[data-theme="glass"] .dash-stats {
   .keymap .keychip {
     padding: 0.12rem 0.35rem;
   }
+}
+
+/* Official-post media strips (top post + bottom supporting): one minimum
+   width, height from the image. Beats the shared masonry cover / 192×250
+   crop and the ≤720px min-height box. People and operation portrait wells
+   keep their own cover crop. */
+:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail)
+  :is(.detail-official-post, .detail-supporting, .supporting-group)
+  :is(.detail-tile--portrait, .detail-tile--screenshot, .detail-tile--still) {
+  min-height: 0;
+  min-width: min(100%, 16rem);
+  overflow: visible;
+}
+:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail)
+  :is(.detail-official-post, .detail-supporting, .supporting-group)
+  :is(.detail-tile--portrait, .detail-tile--screenshot, .detail-tile--still)
+  :is(img, .detail-photo, .lightbox-open) {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center;
 }
