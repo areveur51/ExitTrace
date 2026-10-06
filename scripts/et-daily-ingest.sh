@@ -14,15 +14,29 @@
 #   PASS         grok picked >=1 row, >=1 applied, and no apply failed
 #   PASS_EMPTY   grok picked 0 rows (a truly empty day)
 #   FAIL         apply.json missing or unparseable, apply driver exited non-zero,
-#                any row failed, or rows were picked but 0 were applied
+#                any row failed, rows were picked but 0 were applied, or a news
+#                seed failed or timed out (reason=seed_failed:<slice>:<code>,
+#                e.g. seed_failed:current:ETIMEDOUT). A seed failure is never
+#                PASS_EMPTY and never stamps, so a network failure does not look
+#                like an empty day. The run still goes on to grok and apply
+#                with whatever leads the other slice produced.
 #   SKIP_LOCKED  another et-daily run holds the lock (appended, report kept)
 #   DRY_RUN      ET_DAILY_DRY_RUN=1 with no helper override (nothing written)
 #
 # Overrides (defaults in brackets):
 #   ET_DAILY_ROOT [repo root of this file]  ET_DAILY_NODE [node on PATH]
-#   ET_DAILY_GROK [grok on PATH]            ET_DAILY_TMP [/tmp]
-#   ET_DAILY_LOCK [$ET_DAILY_TMP/et-daily-ingest.lock]
+#   ET_DAILY_GROK [grok on PATH]
+#   ET_DAILY_GROK_CWD [$ET_DAILY_ROOT] working folder grok runs in. Point it
+#     at a scratch dir so grok does not start inside the repo.
+#   ET_DAILY_TMP [a fresh mktemp -d dir, 0700, under ${TMPDIR:-/tmp}] holds the
+#     report, apply.json, summary, digests, leads, prompt, and grok log. The
+#     path is printed as report= on stdout. A default dir is kept for review.
+#   ET_DAILY_LOCK [${XDG_CACHE_HOME:-$HOME/.cache}/et-daily/et-daily-ingest.lock]
+#     The default lock dir is created 0700. It must not be a symlink, must be
+#     owned by the caller, and must not be group/other writable.
 #   ET_DAILY_HELPER [scripts/process-add-request.mjs]
+#   ET_DAILY_SEED_JS [scripts/seed-rss-digest.mjs]
+#   ET_DAILY_SEED_TIMEOUT [300] seconds per seed slice (timeout -k 10)
 #   ET_DAILY_APPLY_JS [scripts/et-daily-apply.mjs]
 #   ET_DAILY_STAMP [unset: no keep-up stamp]  ET_DAILY_HEALTH_URL
 #   ET_DAILY_REPORT_TAG [unset] extra key=value appended to day= and prove= lines
@@ -35,15 +49,52 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=${ET_DAILY_ROOT:-$(cd "$HERE/.." && pwd)}
 NODE=${ET_DAILY_NODE:-$(command -v node || echo node)}
 GROK=${ET_DAILY_GROK:-$(command -v grok || echo grok)}
-TMPD=${ET_DAILY_TMP:-/tmp}
-LOCK=${ET_DAILY_LOCK:-$TMPD/et-daily-ingest.lock}
+GROK_CWD=${ET_DAILY_GROK_CWD:-$ROOT}
 DRY=${ET_DAILY_DRY_RUN:-0}
 HELPER=${ET_DAILY_HELPER:-$ROOT/scripts/process-add-request.mjs}
 APPLY_JS=${ET_DAILY_APPLY_JS:-$ROOT/scripts/et-daily-apply.mjs}
+SEED_JS=${ET_DAILY_SEED_JS:-$ROOT/scripts/seed-rss-digest.mjs}
+SEED_TIMEOUT=${ET_DAILY_SEED_TIMEOUT:-300}
 STAMP=${ET_DAILY_STAMP:-}
 HEALTH_URL=${ET_DAILY_HEALTH_URL:-http://127.0.0.1:5220/api/health}
 TAG=${ET_DAILY_REPORT_TAG:-}
 DAY=$(date +%Y%m%d)
+
+# Private dir check: symlink first (fail closed, before any mkdir or chmod,
+# because chmod follows symlinks), then mkdir, owner, and group/other-writable.
+private_dir() {
+  local d="$1"
+  if [[ -L "$d" ]]; then echo "et-daily FAIL: $d is a symlink" >&2; return 1; fi
+  if [[ ! -e "$d" ]]; then
+    mkdir -m 700 -- "$d" 2>/dev/null || [[ -d "$d" ]] || { echo "et-daily FAIL: cannot create $d" >&2; return 1; }
+  fi
+  if [[ -L "$d" || ! -d "$d" ]]; then echo "et-daily FAIL: $d is not a real directory" >&2; return 1; fi
+  if [[ ! -O "$d" ]]; then echo "et-daily FAIL: $d is not owned by $(id -un)" >&2; return 1; fi
+  chmod 700 -- "$d" || { echo "et-daily FAIL: cannot chmod $d" >&2; return 1; }
+  if [[ -n "$(find "$d" -maxdepth 0 -perm /022 2>/dev/null)" ]]; then
+    echo "et-daily FAIL: $d is group/other writable" >&2
+    return 1
+  fi
+}
+
+# Lock: the caller's ET_DAILY_LOCK, else a private per-user cache dir.
+if [[ -n "${ET_DAILY_LOCK:-}" ]]; then
+  LOCK=$ET_DAILY_LOCK
+else
+  CACHE=${XDG_CACHE_HOME:-${HOME:?et-daily: HOME or XDG_CACHE_HOME must be set}/.cache}
+  mkdir -p -- "$CACHE" || { echo "et-daily FAIL: cannot create $CACHE" >&2; exit 1; }
+  private_dir "$CACHE/et-daily" || exit 1
+  LOCK=$CACHE/et-daily/et-daily-ingest.lock
+fi
+
+# Work dir: the caller's ET_DAILY_TMP, else a fresh private mktemp -d dir.
+if [[ -n "${ET_DAILY_TMP:-}" ]]; then
+  TMPD=$ET_DAILY_TMP
+else
+  TMPD=$(mktemp -d "${TMPDIR:-/tmp}/et-daily.XXXXXXXX") || { echo "et-daily FAIL: mktemp -d" >&2; exit 1; }
+  chmod 700 "$TMPD"
+fi
+
 REPORT=$TMPD/et-daily-${DAY}-report.md
 APPLY=$TMPD/et-daily-${DAY}-apply.json
 SUMMARY=$TMPD/et-daily-${DAY}-apply-summary.json
@@ -64,6 +115,7 @@ if ! flock -n 9; then
     echo "skip $(date): another et-daily run holds $LOCK"
     echo "prove=SKIP_LOCKED $TAG"
   } >> "$REPORT"
+  echo "report=$REPORT"
   exit 0
 fi
 
@@ -71,6 +123,7 @@ fi
   echo "et-daily start $(date)"
   echo "day=$DAY dry_run=$DRY lock=$LOCK $TAG"
 } > "$REPORT"
+echo "report=$REPORT"
 
 fail() {
   echo "prove=FAIL reason=$1 $TAG" >> "$REPORT"
@@ -79,9 +132,40 @@ fail() {
 
 cd "$ROOT" || fail root_missing
 mkdir -p "$ROOT/var"
+[[ -d "$GROK_CWD" ]] || fail grok_cwd_missing
 
 # Children get fd 9 closed (9>&-) so a stray background child cannot keep
 # the run lock after this script exits.
+
+# One news seed slice. Records <slice>:<code> in SEED_FAIL when the seeder
+# exits non-zero, times out, or reports a failed feed fetch (fetch_failed=N).
+SEED_FAIL=""
+seed_slice() {
+  local slice="$1" out="$2" log="$TMPD/et-daily-${DAY}-seed-$1.log" rc code nfail
+  echo "seed $slice" >> "$REPORT"
+  timeout -k 10 "$SEED_TIMEOUT" "$NODE" "$SEED_JS" --slice "$slice" --jsonl "$out" > "$log" 2>&1 9>&-
+  rc=$?
+  cat "$log" >> "$REPORT"
+  code=""
+  if [[ $rc -eq 124 || $rc -eq 137 ]]; then
+    code=TIMEOUT
+  elif [[ $rc -ne 0 ]]; then
+    code=$(grep -oE '\b(ETIMEDOUT|ENOTFOUND|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|EAI_AGAIN|UND_ERR_[A-Z_]+|ABORT_ERR)\b' "$log" | head -n 1)
+    code=${code:-exit$rc}
+  else
+    nfail=$(grep -oE 'fetch_failed=[0-9]+' "$log" | tail -n 1 | cut -d= -f2)
+    if [[ -n "$nfail" && "$nfail" != "0" ]]; then
+      code=$(grep -oE '^fetch_errors=[^ ]+' "$log" | tail -n 1 | cut -d= -f2 | cut -d, -f1 | cut -d: -f2)
+      code="fetch_${code:-error}"
+    fi
+  fi
+  code=$(printf '%s' "$code" | tr -cd 'A-Za-z0-9_.-')
+  if [[ -n "$code" ]]; then
+    echo "FAIL seed $slice $code" >> "$REPORT"
+    SEED_FAIL="${SEED_FAIL:+$SEED_FAIL,}$slice:$code"
+  fi
+}
+
 if [[ "$DRY" == "1" ]]; then
   echo "dry_run: seeding skipped" >> "$REPORT"
   : > "$CURRENT"
@@ -90,14 +174,8 @@ if [[ "$DRY" == "1" ]]; then
     cp "$ET_DAILY_LEADS_IN" "$CURRENT"
   fi
 else
-  echo "seed current" >> "$REPORT"
-  if ! "$NODE" scripts/seed-rss-digest.mjs --slice current --jsonl "$CURRENT" >> "$REPORT" 2>&1 9>&-; then
-    echo "FAIL seed current" >> "$REPORT"
-  fi
-  echo "seed historical" >> "$REPORT"
-  if ! "$NODE" scripts/seed-rss-digest.mjs --slice historical --jsonl "$HIST" >> "$REPORT" 2>&1 9>&-; then
-    echo "FAIL seed historical" >> "$REPORT"
-  fi
+  seed_slice current "$CURRENT"
+  seed_slice historical "$HIST"
 fi
 
 python3 - "$CURRENT" "$HIST" "$LEADS" >> "$REPORT" 2>&1 9>&- << 'PY'
@@ -158,13 +236,12 @@ Write ONLY this JSON to $APPLY (no markdown):
 Leads (category, posted_at, hint_url, text):
 $LEAD_BODY
 EOF
-[[ "$DRY" == "1" ]] || cp "$PROMPT" "$TMPD/et-daily-prompt.md" 2>/dev/null || true
 
 # A stale apply.json from an earlier run today must not be re-applied.
 rm -f "$APPLY" "$SUMMARY"
 
-echo "grok start max-turns=2" >> "$REPORT"
-env -C "$ROOT" PATH="$PATH" "$GROK" --permission-mode auto --always-approve --no-subagents --max-turns 2 --output-format plain --no-alt-screen --prompt-file "$PROMPT" > "$GLOG" 2>&1 9>&-
+echo "grok start max-turns=2 cwd=$GROK_CWD" >> "$REPORT"
+env -C "$GROK_CWD" PATH="$PATH" "$GROK" --permission-mode auto --always-approve --no-subagents --max-turns 2 --output-format plain --no-alt-screen --prompt-file "$PROMPT" > "$GLOG" 2>&1 9>&-
 GRC=$?
 echo "grok_exit=$GRC" >> "$REPORT"
 
@@ -217,6 +294,16 @@ else:
 PY
 )
 read -r PROVE WHY PICKED INSERTED FAILED <<< "$VERDICT"
+# A failed or timed-out seed overrides PASS/PASS_EMPTY (and is listed first
+# on another FAIL), so a network failure never stamps as an empty day.
+if [[ -n "$SEED_FAIL" ]]; then
+  if [[ "$PROVE" == "FAIL" ]]; then
+    WHY="seed_failed:$SEED_FAIL;$WHY"
+  else
+    WHY="seed_failed:$SEED_FAIL"
+  fi
+  PROVE=FAIL
+fi
 COUNTS="picked=$PICKED inserted=$INSERTED failed=$FAILED grok_exit=$GRC apply_exit=$ARC"
 
 case "$PROVE" in

@@ -98,7 +98,14 @@ if (!databaseUrl() && !args.dry_run) {
 }
 
 const feeds = selectDigestFeeds(args.slice);
+// fetch_failed / fetch_errors let the daily ingest fail closed on a feed that
+// answered with a non-OK status or non-RSS body (a thrown fetch exits non-zero).
+const fetchFailed = (result.fetched || []).filter((f) => !f.ok);
+const clean = (v) => String(v || "").replace(/[\s,:=]+/g, "_");
 console.log(
-  `digest slice=${args.slice} feeds=${feeds.length} leads=${result.leads.length} import_rows=${result.import_rows.length} inserted=${result.imported.inserted || 0} updated=${result.imported.updated || 0} annotated=${result.imported.annotated || 0} queued=${result.queued.length} skipped=${result.skipped.length} jsonl=${jsonlPath}`,
+  `digest slice=${args.slice} feeds=${feeds.length} leads=${result.leads.length} import_rows=${result.import_rows.length} inserted=${result.imported.inserted || 0} updated=${result.imported.updated || 0} annotated=${result.imported.annotated || 0} queued=${result.queued.length} skipped=${result.skipped.length} fetch_failed=${fetchFailed.length} jsonl=${jsonlPath}`,
 );
+if (fetchFailed.length) {
+  console.log(`fetch_errors=${fetchFailed.map((f) => `${clean(f.name)}:${clean(f.error)}`).join(",")}`);
+}
 await closeStore();
