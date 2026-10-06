@@ -142,6 +142,25 @@ test("retired official feeds stay off the digest list", () => {
   assert.ok(current.filter((f) => f.gov).length >= 3);
 });
 
+test("France 24 stays on the official English RSS", () => {
+  const current = selectDigestFeeds("current");
+  const rows = current.filter((f) => f.handle === "france24");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].name, "France 24");
+  assert.equal(rows[0].gov, false);
+  assert.equal(rows[0].slice, "current");
+  assert.equal(rows[0].url, "https://www.france24.com/en/rss");
+  const u = new URL(rows[0].url);
+  assert.equal(u.host, "www.france24.com");
+  assert.equal(u.pathname, "/en/rss");
+  assert.equal(isOfficialNewsHandle("france24"), true);
+  assert.equal(assertOfficialFeedList(rows), true);
+  assert.equal(
+    RETIRED_DIGEST_FEED_URLS.includes("https://www.france24.com/en/rss"),
+    false,
+  );
+});
+
 test("USA Today comes through Google News with the AP/Reuters shape", () => {
   const current = selectDigestFeeds("current");
   const usa = current.filter((f) => f.handle === "usatoday");

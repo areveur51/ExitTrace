@@ -47,7 +47,9 @@ function feed(row) {
  * The direct USA Today feed (rssfeeds.usatoday.com now 301s to the HTML
  * homepage) is retired; USA Today comes in through Google News like AP and
  * Reuters. State (www.state.gov feeds answer 403) is off the list: no working
- * official feed. See RETIRED_DIGEST_FEED_URLS. */
+ * official feed. See RETIRED_DIGEST_FEED_URLS.
+ * France 24 English (https://www.france24.com/en/rss) returned real RSS on
+ * 2026-10-06 (application/rss+xml, channel items), so that official URL stays. */
 export const OFFICIAL_RSS_FEEDS = [
   feed({
     handle: "bbcnews",
