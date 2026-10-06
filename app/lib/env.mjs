@@ -30,22 +30,32 @@ export function databaseUrl() {
   return u;
 }
 
+const WEAK_SSLMODES = new Set(["disable", "allow", "prefer"]);
+
 /**
- * Render Postgres requires TLS. node-pg needs sslmode on the URL (match
- * scripts/ci-ensure-database-url-ssl.sh / et-gap-upsert). Mutates
- * process.env.DATABASE_URL and PGSSLMODE. Does not log the URL.
+ * Render Postgres requires TLS. Upgrade missing/weak sslmode to require
+ * (mirrors scripts/ci-ensure-database-url-ssl.sh / et-gap-upsert).
+ * Mutates process.env.DATABASE_URL and PGSSLMODE. Does not log the URL.
+ * TODO: prefer verify-full when a Render CA pin is available.
  */
 export function ensureDatabaseUrlSsl() {
   const raw = databaseUrl();
   if (!raw) return "";
   let u = raw;
-  if (!/[?&]sslmode=/i.test(u)) {
+  const modeMatch = u.match(/[?&]sslmode=([^&]*)/i);
+  const mode = modeMatch ? decodeURIComponent(modeMatch[1]).toLowerCase() : "";
+  if (!mode) {
     u = u.includes("?") ? `${u}&sslmode=require` : `${u}?sslmode=require`;
+  } else if (WEAK_SSLMODES.has(mode)) {
+    u = u.replace(/([?&]sslmode=)[^&]*/i, "$1require");
   }
+  // verify-full / verify-ca / require stay as-is
   process.env.DATABASE_URL = u;
-  if (!process.env.PGSSLMODE) process.env.PGSSLMODE = "require";
+  const pg = String(process.env.PGSSLMODE || "").toLowerCase();
+  if (!pg || WEAK_SSLMODES.has(pg)) process.env.PGSSLMODE = "require";
   return u;
 }
+
 
 export function resolveRoot(root) {
   const mediaDir = path.resolve(

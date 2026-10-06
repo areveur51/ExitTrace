@@ -214,14 +214,19 @@ try {
   console.log(`DUMP_FALLBACK=${plan.dump_fallback ? "1" : "0"}`);
   if (plan.skip_recipe) console.log(plan.skip_recipe);
 
+  if (plan.state === "query_failed") {
+    console.log("HEAL_FAIL query_failed");
+    process.exit(1);
+  }
+
   if (dryRun || !apply) {
     console.log("DRY_RUN");
     process.exit(plan.sign_required ? 2 : 0);
   }
 
   if (plan.actions.includes("observe") && plan.actions.length === 1) {
-    // query_failed / absent: observe only — no et_meta writes, no reconnect/refresh.
-    if (plan.state !== "absent" && plan.state !== "query_failed") {
+    // absent: observe only — no et_meta writes, no reconnect/refresh.
+    if (plan.state !== "absent") {
       await stampHeal(HEAL_META_KEYS.unhealthySince, { at: null, cleared: true });
       await stampHeal(HEAL_META_KEYS.reconnectCount, { n: 0 });
       await stampHeal(HEAL_META_KEYS.lastAction, { action: "observe" });

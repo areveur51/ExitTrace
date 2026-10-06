@@ -128,10 +128,16 @@ export function sanitizeSnapshotQueryError(err) {
         ? ""
         : String(err);
   let message = sanitizeApplyError(rawMsg) || "query_failed";
-  // Extra pass for libpq-style password= / user= / host= fragments.
+  // Extra pass: libpq conninfo fragments + quoted/bare hosts (public Actions logs).
+  // Typical: connection to server at "hostname" (ip), port N failed
   message = message
     .replace(/\b(password|passwd|user|host|hostaddr|dbname|port)\s*=\s*\S+/gi, "$1=[redacted]")
-    .replace(/\bpostgresql?:\/\/\S+/gi, "[redacted-url]");
+    .replace(/\bpostgresql?:\/\/\S+/gi, "[redacted-url]")
+    .replace(/\b(?:connection to )?server at\s+"[^"]+"/gi, 'server at "[redacted-host]"')
+    .replace(/\b(?:connection to )?server at\s+'[^']+'/gi, 'server at "[redacted-host]"')
+    .replace(/\b(?:connection to )?server at\s+[^\s,)]+/gi, "server at [redacted-host]")
+    .replace(/\b(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}\b/g, "[redacted-host]")
+    .replace(/\bport\s+\d{2,5}\b/gi, "port [redacted]");
   if (UNSAFE_VALUE.test(message)) message = "[redacted-apply-error]";
   return { code, message: message.slice(0, 500) };
 }
