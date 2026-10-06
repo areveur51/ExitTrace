@@ -297,8 +297,29 @@ test("sanitizeSnapshotQueryError strips conninfo and passwords", () => {
   assert.doesNotMatch(leaked.message, /203\.0\.113\.9/);
   assert.doesNotMatch(leaked.message, /postgres:\/\//);
   assert.doesNotMatch(leaked.message, /password=s3cret/i);
+  assert.doesNotMatch(leaked.message, /db\.example\.com/);
+  assert.doesNotMatch(leaked.message, /5432/);
   assert.match(leaked.message, /redacted/i);
 });
+
+test("sanitizeSnapshotQueryError redacts quoted libpq server-at hosts", () => {
+  const a = sanitizeSnapshotQueryError({
+    code: "ECONNREFUSED",
+    message: 'connection to server at "oregon-postgres.render.com" (10.1.2.3), port 5432 failed: Connection refused',
+  });
+  assert.doesNotMatch(a.message, /oregon-postgres/i);
+  assert.doesNotMatch(a.message, /render\.com/i);
+  assert.doesNotMatch(a.message, /10\.1\.2\.3/);
+  assert.doesNotMatch(a.message, /\b5432\b/);
+  assert.match(a.message, /\[redacted-host\]/);
+
+  const b = sanitizeSnapshotQueryError({
+    message: "server at 'lab.internal.example' refused",
+  });
+  assert.doesNotMatch(b.message, /lab\.internal/);
+  assert.match(b.message, /\[redacted-host\]/);
+});
+
 
 test("heal requires TLS and surfaces sanitized query_failed", () => {
   const helper = fs.readFileSync(path.join(ROOT, "scripts/ci-ensure-database-url-ssl.sh"), "utf8");
@@ -337,4 +358,37 @@ test("ensureDatabaseUrlSsl appends sslmode without logging secrets", async () =>
     if (prevSsl === undefined) delete process.env.PGSSLMODE;
     else process.env.PGSSLMODE = prevSsl;
   }
+});
+
+test("ensureDatabaseUrlSsl upgrades weak sslmode and PGSSLMODE", async () => {
+  const { ensureDatabaseUrlSsl } = await import("../app/lib/env.mjs");
+  const prev = process.env.DATABASE_URL;
+  const prevSsl = process.env.PGSSLMODE;
+  try {
+    for (const weak of ["disable", "allow", "prefer"]) {
+      process.env.DATABASE_URL = `postgres://u:p@db.example.com/db?sslmode=${weak}`;
+      process.env.PGSSLMODE = weak;
+      const out = ensureDatabaseUrlSsl();
+      assert.match(out, /sslmode=require/);
+      assert.doesNotMatch(out, new RegExp(`sslmode=${weak}`));
+      assert.equal(process.env.PGSSLMODE, "require");
+    }
+    process.env.DATABASE_URL = "postgres://u:p@db.example.com/db?sslmode=verify-full";
+    process.env.PGSSLMODE = "verify-full";
+    const kept = ensureDatabaseUrlSsl();
+    assert.match(kept, /sslmode=verify-full/);
+    assert.equal(process.env.PGSSLMODE, "verify-full");
+  } finally {
+    if (prev === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prev;
+    if (prevSsl === undefined) delete process.env.PGSSLMODE;
+    else process.env.PGSSLMODE = prevSsl;
+  }
+});
+
+test("heal script exits non-zero on query_failed", () => {
+  const script = fs.readFileSync(path.join(ROOT, "scripts/logical-apply-heal.mjs"), "utf8");
+  assert.match(script, /plan\.state === ["']query_failed["']/);
+  assert.match(script, /HEAL_FAIL query_failed/);
+  assert.match(script, /process\.exit\(1\)/);
 });
