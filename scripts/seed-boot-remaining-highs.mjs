@@ -100,8 +100,9 @@ async function main() {
       reason: row.snippet || row.comments || "Medical walking boot after documented lower-leg, ankle, or foot injury",
       // Never guess an origin; only a cite-stated row.country_of_origin is passed.
       country_of_origin: row.country_of_origin || "",
-      position: row.position || "Public figure",
-      organization: row.organization || "Public record",
+      // Never guess a role; only a cite-stated row.position/organization is passed.
+      position: row.position || "",
+      organization: row.organization || "",
     });
     if (row.snippet && result.person?.id) {
       const person = await getPerson(result.person.id);

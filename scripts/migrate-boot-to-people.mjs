@@ -29,13 +29,14 @@ const PERSON_META = {
     position: "President of the United States",
     organization: "Executive Office of the President",
   },
+  // "Entertainment" is a sector, not an organization; leave blank (no placeholder).
   "Nicole Kidman": {
     position: "Actor",
-    organization: "Entertainment",
+    organization: "",
   },
   "Britney Spears": {
     position: "Singer",
-    organization: "Entertainment",
+    organization: "",
   },
   "Simone Biles": {
     position: "Gymnast",
@@ -75,9 +76,11 @@ async function main() {
       console.warn(`SKIP ${clip.id}: need 2 cites, got ${cite_urls.length}`);
       continue;
     }
+    // Never guess a role: subjects without researched meta pass blanks
+    // (no "Public figure" / "Public record" placeholder).
     const meta = PERSON_META[subject] || {
-      position: "Public figure",
-      organization: "Public record",
+      position: "",
+      organization: "",
     };
     const snippet = String(clip.text || clip.snapshot?.text || "").trim();
     const result = await applyIdentifiedPerson({
