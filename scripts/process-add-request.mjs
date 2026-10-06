@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { AddError, processAddRequest } from "../app/lib/add-request.mjs";
+import { AddError, processAddRequest, queueAddRequest } from "../app/lib/add-request.mjs";
 import { DisplayError, assertDisplayed } from "../app/lib/display-check.mjs";
 import { CITE_FLOOR, PromoteError } from "../app/lib/promote.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "../app/lib/env.mjs";
@@ -28,7 +28,7 @@ const bootstrapSql = fs.readFileSync(
 );
 
 function usage(exitCode = 0) {
-  console.log(`Usage: node scripts/process-add-request.mjs --id <ar-…> | --next
+  console.log(`Usage: node scripts/process-add-request.mjs --id <ar-…> | --next | --queue
   [--cite-url <https://…>] [--cite-url <https://…>]
   [--subject "…"] [--event-date YYYY-MM-DD] [--category <id>]
   [--source-url <https://…>] [--handle @Official] [--posted-at YYYY-MM-DD]
@@ -40,6 +40,11 @@ function usage(exitCode = 0) {
   [--unsealed-evidence "quote that the cite unsealed or made public the indictment"]
   [--agencies "…"] [--victim-count N] [--arrest-count N] [--announced-date YYYY-MM-DD]
   [--net-worth <USD>] [--net-worth-source <Forbes|Bloomberg URL>] [--net-worth-note "…"]
+
+--queue parks (or reuses, by fingerprint) a pending person add request
+built from --subject / --category / --event-date / --hint-url, then
+processes that request by id. The daily ingest uses this. Same fail-closed
+checks as --id.
 
 Host-side process hook (scratch directory, two turns, one envelope):
   look up official/news/gov cites, then apply this command with the envelope
@@ -110,6 +115,7 @@ function parseArgs(argv) {
     if (arg === "-h" || arg === "--help") usage(0);
     else if (arg === "--id") out.id = take();
     else if (arg === "--next") out.next = true;
+    else if (arg === "--queue") out.queue = true;
     else if (arg === "--cite-url" || arg === "--cite") out.cite_urls.push(take());
     else if (arg === "--subject") out.subject = take();
     else if (arg === "--event-date") out.event_date = take();
@@ -172,7 +178,11 @@ try {
   process.exit(1);
 }
 
-if (!args.id && !args.next) usage(1);
+if (!args.id && !args.next && !args.queue) usage(1);
+if (args.queue && (args.id || args.next)) {
+  console.error("--queue cannot be combined with --id or --next");
+  process.exit(1);
+}
 
 if (databaseUrl()) {
   const pool = await getPool();
@@ -182,9 +192,29 @@ if (databaseUrl()) {
   hydrateFileMemory(dataDir, seed);
 }
 
+if (args.queue) {
+  try {
+    const { request, created } = await queueAddRequest({
+      kind: "person",
+      subject: args.subject || "",
+      category: args.category || "",
+      event_date: args.event_date || "",
+      hint_url: args.hint_url || args.source_url || "",
+    });
+    args.id = request.id;
+    console.log(`add-queue ${created ? "created" : "reused"} request=${request.id}`);
+  } catch (err) {
+    const message = err instanceof AddError ? err.message : err;
+    console.error(message);
+    await closeStore();
+    process.exit(1);
+  }
+}
+
 const overlay = { ...args };
 delete overlay.id;
 delete overlay.next;
+delete overlay.queue;
 
 let result;
 try {
