@@ -58,7 +58,6 @@ test("person event, ops, dog source, and grokipedia cites use the URL as link te
   const casting = personEventSection({
     title: "Central Casting",
     kind: "central_casting",
-    pairSnippetBefore: true,
     cites: [
       {
         url: "https://x.com/realDonaldTrump/status/1",
@@ -87,7 +86,7 @@ test("person event, ops, dog source, and grokipedia cites use the URL as link te
   });
   assert.match(
     corona,
-    /<a class="source-link" href="https:\/\/www\.bbc\.com\/news\/casey-corona"[\s\S]*<blockquote class="event-snippet">Corona note<\/blockquote>/,
+    /<li><blockquote class="event-snippet">Corona note<\/blockquote><a class="source-link" href="https:\/\/www\.bbc\.com\/news\/casey-corona"/,
   );
   assert.equal(anchorText(corona), "https://www.bbc.com/news/casey-corona");
   assert.doesNotMatch(corona, /<a[^>]*>BBC News<\/a>/);

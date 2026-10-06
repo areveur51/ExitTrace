@@ -1408,7 +1408,7 @@ function sectionCites(raw) {
   return out;
 }
 
-function sectionCiteList(cites, { pairSnippetBefore = false } = {}) {
+function sectionCiteList(cites) {
   return `<ol class="sources cite-list">${cites
     .map((s) => {
       const label = s.source_label || s.title || "";
@@ -1419,9 +1419,9 @@ function sectionCiteList(cites, { pairSnippetBefore = false } = {}) {
         ? `<blockquote class="event-snippet">${esc(s.snippet)}</blockquote>`
         : "";
       const link = citeLink(s.url, { label });
-      // Central Casting pairs each stored quote immediately before its own cite.
-      // Other event sections keep the cite, then the date, then the snippet.
-      return pairSnippetBefore ? `<li>${snippet}${link}${date}</li>` : `<li>${link}${date}${snippet}</li>`;
+      // Standing rule (all kinds): each stored quote sits immediately before its own cite.
+      // Cites without a snippet render exactly as before: link, then date.
+      return `<li>${snippet}${link}${date}</li>`;
     })
     .join("")}</ol>`;
 }
@@ -1442,7 +1442,6 @@ export function personEventSection({
   className = "person-event-section",
   tag = "section",
   personId = "",
-  pairSnippetBefore = false,
 } = {}) {
   const heading = String(headingHtml || "").trim() || (String(title || "").trim() ? esc(String(title).trim()) : "");
   if (!heading) return "";
@@ -1453,7 +1452,7 @@ export function personEventSection({
   if (!items.length && !summaryText && !media && !body) return "";
   const el = tag === "article" ? "article" : "section";
   const summaryHtml = summaryText ? `<p class="event-summary">${esc(summaryText)}</p>` : "";
-  const citeHtml = items.length ? sectionCiteList(items, { pairSnippetBefore }) : "";
+  const citeHtml = items.length ? sectionCiteList(items) : "";
   const kindAttr = kind ? ` data-kind="${esc(kind)}"` : "";
   const personAttr = personId ? ` data-person-id="${esc(personId)}"` : "";
   return `<${el} class="${esc(className)}"${kindAttr}${personAttr} data-section="person-event">
@@ -1589,7 +1588,6 @@ export function centralCastingDetailHtml(row, clips = [], seen) {
     summary,
     mediaHtml: centralCastingMediaHtml(own, seen),
     personId: row?.id || "",
-    pairSnippetBefore: true,
   });
 }
 
@@ -1926,7 +1924,6 @@ export function eventTagRow(ev, { birthDate } = {}) {
     bodyHtml: `${eventLine}${announced}${ageLine}${groupLine}${attrs}`,
     className: "event-tag-row",
     tag: "article",
-    pairSnippetBefore: kind === "boot_comms",
   });
 }
 
