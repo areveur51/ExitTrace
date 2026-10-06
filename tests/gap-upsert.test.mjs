@@ -7,6 +7,7 @@ import {
   ALL_UPSERT_TABLES,
   COUNT_SQL,
   PUBLISHED_TABLES,
+  RENDER_OWNED_META_KEYS,
   assertSafeSql,
   buildUpsertSql,
   chunkUpsertRows,
@@ -36,6 +37,8 @@ test("published tables include the new comms tables and person_events", () => {
     "request_attributions",
     "epstein_flight_legs",
     "source_posts",
+    "add_requests",
+    "et_meta",
   ]);
   assert.deepEqual(
     [...ALL_UPSERT_TABLES],
@@ -503,4 +506,121 @@ test("gap upsert sources do not contain private-host needles", () => {
       assert.equal(text.includes(pat), false, `${rel} must not contain ${pat}`);
     }
   }
+});
+
+const ADD_REQUEST_ROW = Object.freeze({
+  id: "ar-0000000000000001",
+  kind: "person",
+  status: "applied",
+  subject: "Casey Vale",
+  category: "arrests",
+  event_date: "2026-10-01",
+  hint_url: "https://www.example.com/hint",
+  handle: "@desk",
+  source_url: "https://x.com/desk/status/1",
+  posted_at: "2026-10-01",
+  cite_urls: ["https://www.example.com/a"],
+  payload: { source: "x_mention" },
+  error: null,
+  result: { person_id: "casey-vale" },
+  created_at: "2026-10-01T12:00:00.000Z",
+  processed_at: "2026-10-01T12:05:00.000Z",
+});
+
+test("add_requests and et_meta are exported, upserted by key, and counted", () => {
+  for (const t of ["add_requests", "et_meta"]) {
+    assert.equal(PUBLISHED_TABLES.includes(t), true);
+    assert.equal(ALL_UPSERT_TABLES.includes(t), true);
+    assert.match(COUNT_SQL, new RegExp(`\\(SELECT count\\(\\*\\)::int FROM ${t}\\) AS ${t}`));
+    assert.equal(countTableSql(t), `SELECT count(*)::int AS n FROM ${t}`);
+  }
+  assert.equal(PUBLISHED_TABLES.includes("lead_ingest"), false);
+  assert.equal(PUBLISHED_TABLES.includes("mention_queue"), false);
+
+  assert.deepEqual(Object.keys(pickRow("add_requests", ADD_REQUEST_ROW)), [
+    "id", "kind", "status", "subject", "category", "event_date", "hint_url", "handle",
+    "source_url", "posted_at", "cite_urls", "payload", "error", "result", "created_at", "processed_at",
+  ]);
+  const ar = buildUpsertSql("add_requests", [ADD_REQUEST_ROW]);
+  assert.match(ar.sql, /^INSERT INTO add_requests \(id, kind, status,/);
+  assert.match(ar.sql, /ON CONFLICT \(id\) DO UPDATE SET/);
+  assert.deepEqual(ar.sql.match(/\$\d+::jsonb/g), ["$11::jsonb", "$12::jsonb", "$14::jsonb"]);
+  assert.equal(ar.params[10], JSON.stringify(ADD_REQUEST_ROW.cite_urls));
+  assert.equal(ar.params[11], JSON.stringify(ADD_REQUEST_ROW.payload));
+  const bare = buildUpsertSql("add_requests", [{ ...ADD_REQUEST_ROW, cite_urls: null, payload: null, result: null, status: "" }]);
+  assert.equal(bare.params[10], "[]");
+  assert.equal(bare.params[11], "{}");
+  assert.equal(bare.params[13], null);
+  assert.equal(bare.params[2], "pending");
+
+  assert.deepEqual(Object.keys(pickRow("et_meta", { k: "seed", v: {} })), ["k", "v"]);
+  const meta = buildUpsertSql("et_meta", [{ k: "keep_up.daily_pack.last_pass", v: { at: "2026-10-06T13:50:18Z" } }]);
+  assert.match(meta.sql, /^INSERT INTO et_meta \(k, v\)/);
+  assert.match(meta.sql, /ON CONFLICT \(k\) DO UPDATE SET/);
+  assert.match(meta.sql, /\$2::jsonb/);
+  assert.equal(meta.params[1], JSON.stringify({ at: "2026-10-06T13:50:18Z" }));
+});
+
+test("add_requests upsert never regresses a terminal status or erases processed fields", () => {
+  const { sql } = buildUpsertSql("add_requests", [ADD_REQUEST_ROW]);
+  assert.match(
+    sql,
+    /status = CASE WHEN EXCLUDED\.status = 'pending' AND add_requests\.status IN \('applied', 'rejected'\) THEN add_requests\.status ELSE EXCLUDED\.status END/,
+  );
+  for (const c of ["error", "result", "processed_at"]) {
+    assert.match(sql, new RegExp(`${c} = COALESCE\\(EXCLUDED\\.${c}, add_requests\\.${c}\\)`));
+  }
+  assert.match(sql, /created_at = LEAST\(add_requests\.created_at, EXCLUDED\.created_at\)/);
+  // Lab-authoritative fields still update.
+  assert.match(sql, /subject = EXCLUDED\.subject/);
+  assert.match(sql, /cite_urls = EXCLUDED\.cite_urls/);
+});
+
+test("et_meta upsert keeps Render-owned keys and never moves a stamp backwards", () => {
+  assert.deepEqual([...RENDER_OWNED_META_KEYS], [
+    "keep_up.dump_restore.mode",
+    "keep_up.dump_restore.last_success",
+    "keep_up.logical.last_verify",
+  ]);
+  const { sql } = buildUpsertSql("et_meta", [{ k: "keep_up.media_delta.last_success", v: { at: "2026-10-06T14:25:25Z" } }]);
+  assert.match(
+    sql,
+    /WHEN et_meta\.k IN \('keep_up\.dump_restore\.mode', 'keep_up\.dump_restore\.last_success', 'keep_up\.logical\.last_verify'\) THEN et_meta\.v/,
+  );
+  assert.match(sql, /WHEN \(EXCLUDED\.v ->> 'at'\)::timestamptz < \(et_meta\.v ->> 'at'\)::timestamptz THEN et_meta\.v/);
+  // The cast sits only inside the guarded inner CASE, after the ISO shape check.
+  const guard = sql.indexOf("~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}'");
+  assert.ok(guard > 0 && guard < sql.indexOf("::timestamptz"));
+  assert.doesNotMatch(sql, /v = EXCLUDED\.v\b(?! ->)/);
+});
+
+test("add_requests and et_meta rows missing NOT NULL fields are dropped, never sent as null", () => {
+  const n = normalizePayload({
+    et_meta: [{ k: "seed", v: { note: "x" } }, { k: "", v: {} }, { k: "no-v", v: null }, { v: {} }],
+    add_requests: [
+      ADD_REQUEST_ROW,
+      { ...ADD_REQUEST_ROW, id: "ar-2", created_at: null },
+      { ...ADD_REQUEST_ROW, id: "ar-3", kind: "" },
+      { ...ADD_REQUEST_ROW, id: "" },
+    ],
+  });
+  assert.deepEqual(n.et_meta.map((r) => r.k), ["seed"]);
+  assert.deepEqual(n.add_requests.map((r) => r.id), [ADD_REQUEST_ROW.id]);
+});
+
+test("add_requests and et_meta gap upsert is insert/update only, never delete", () => {
+  const planned = planGapUpsert(
+    { add_requests: [ADD_REQUEST_ROW], et_meta: [{ k: "seed", v: { note: "x" } }] },
+    { existingTables: ["add_requests", "et_meta"] },
+  );
+  assert.equal(planned.plans.length, 2);
+  for (const plan of planned.plans) {
+    assert.match(plan.sql, /^INSERT INTO (add_requests|et_meta) /);
+    assert.doesNotMatch(plan.sql, /\b(DELETE|TRUNCATE|DROP)\b/i);
+    assertSafeSql(plan.sql);
+  }
+  const absent = planGapUpsert({ et_meta: [{ k: "seed", v: {} }] }, { existingTables: ["people"] });
+  assert.deepEqual(absent.skipped, [{ table: "et_meta", reason: "table_absent", count: 1 }]);
+  assert.equal(countProof({ add_requests: 10 }, { add_requests: 9 }, { add_requests: 9 }).add_requests.ok, false);
+  assert.equal(countProof({ et_meta: 12 }, { et_meta: 13 }, { et_meta: 10 }).et_meta.ok, true);
 });

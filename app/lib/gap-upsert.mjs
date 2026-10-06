@@ -2,7 +2,9 @@
  * Idempotent published-table gap upsert (lab → Render logical catch-up).
  * Upserts by id: people (including central_casting, nicknames, and clearances), dog_comms, operations,
  * optional categories, red_folder_comms, central_casting_comms,
- * request_attributions, source_posts (gold_person_id never nulled), plus person_events companion.
+ * request_attributions, source_posts (gold_person_id never nulled), add_requests (terminal
+ * status / processed fields never regress), et_meta (keep_up stamps never move backwards;
+ * Render-owned keys kept), plus person_events companion.
  * Never DELETE / TRUNCATE / DROP / --clean. Never invent cite URLs.
  */
 
@@ -22,6 +24,8 @@ export const PUBLISHED_TABLES = Object.freeze([
   "request_attributions",
   "epstein_flight_legs",
   "source_posts",
+  "add_requests",
+  "et_meta",
 ]);
 
 export const COMPANION_TABLES = Object.freeze(["person_events"]);
@@ -47,6 +51,8 @@ const TABLE_KEYS = Object.freeze({
   person_events: ["person_id", "kind"],
   epstein_flight_legs: ["passenger_name_raw", "flight_date", "dep", "arr", "aircraft"],
   source_posts: "id",
+  add_requests: "id",
+  et_meta: "k",
 });
 
 const JSONB_COLS = Object.freeze({
@@ -61,6 +67,8 @@ const JSONB_COLS = Object.freeze({
   categories: [],
   person_events: ["sources"],
   source_posts: ["media_urls"],
+  add_requests: ["cite_urls", "payload", "result"],
+  et_meta: ["v"],
 });
 
 const PEOPLE_COLS = Object.freeze([
@@ -178,6 +186,62 @@ const SOURCE_POST_COLS = Object.freeze([
   "gold_person_id",
 ]);
 
+/** Add/request queue (scripts/bootstrap-db.sql). Keyed by id (random nonce, so lab and Render never share ids by accident). */
+const ADD_REQUEST_COLS = Object.freeze([
+  "id",
+  "kind",
+  "status",
+  "subject",
+  "category",
+  "event_date",
+  "hint_url",
+  "handle",
+  "source_url",
+  "posted_at",
+  "cite_urls",
+  "payload",
+  "error",
+  "result",
+  "created_at",
+  "processed_at",
+]);
+
+const ET_META_COLS = Object.freeze(["k", "v"]);
+
+/**
+ * et_meta keys Render writes for itself (lab-to-render-sync dump restore,
+ * et-cutover-verify). Gap-upsert inserts them only when absent; it never
+ * overwrites Render's own value.
+ */
+export const RENDER_OWNED_META_KEYS = Object.freeze([
+  "keep_up.dump_restore.mode",
+  "keep_up.dump_restore.last_success",
+  "keep_up.logical.last_verify",
+]);
+
+const ISO_STAMP_RE = "^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}";
+
+function etMetaValueSql() {
+  const owned = RENDER_OWNED_META_KEYS.map((k) => {
+    if (!/^[a-z0-9_.]+$/.test(k)) throw new Error("refusing non-ident meta key");
+    return `'${k}'`;
+  }).join(", ");
+  const cur = "et_meta.v";
+  const inc = "EXCLUDED.v";
+  return `v = CASE
+    WHEN et_meta.k IN (${owned}) THEN ${cur}
+    WHEN jsonb_typeof(${cur} -> 'at') = 'string'
+      AND jsonb_typeof(${inc} -> 'at') = 'string'
+      AND (${cur} ->> 'at') ~ '${ISO_STAMP_RE}'
+      AND (${inc} ->> 'at') ~ '${ISO_STAMP_RE}'
+    THEN CASE
+      WHEN (${inc} ->> 'at')::timestamptz < (${cur} ->> 'at')::timestamptz THEN ${cur}
+      ELSE ${inc}
+    END
+    ELSE ${inc}
+  END`;
+}
+
 const CATEGORY_COLS = Object.freeze(["id", "kind", "title", "nav", "path", "blurb"]);
 
 const ATTRIBUTION_COLS = Object.freeze([
@@ -209,6 +273,8 @@ const COLS = Object.freeze({
   categories: CATEGORY_COLS,
   epstein_flight_legs: EPSTEIN_LEG_COLS,
   source_posts: SOURCE_POST_COLS,
+  add_requests: ADD_REQUEST_COLS,
+  et_meta: ET_META_COLS,
 });
 
 export function isPublishedTable(name) {
@@ -242,6 +308,19 @@ function updateSet(table, cols) {
   return cols
     .filter((c) => !keys.has(c))
     .map((c) => {
+      if (table === "et_meta" && c === "v") return etMetaValueSql();
+      if (table === "add_requests") {
+        if (c === "status") {
+          // A terminal status on Render never regresses to pending.
+          return `status = CASE WHEN EXCLUDED.status = 'pending' AND add_requests.status IN ('applied', 'rejected') THEN add_requests.status ELSE EXCLUDED.status END`;
+        }
+        if (c === "error" || c === "result" || c === "processed_at") {
+          return `${quoteIdent(c)} = COALESCE(EXCLUDED.${quoteIdent(c)}, add_requests.${quoteIdent(c)})`;
+        }
+        if (c === "created_at") {
+          return "created_at = LEAST(add_requests.created_at, EXCLUDED.created_at)";
+        }
+      }
       if (table === "source_posts" && c === "gold_person_id") {
         // Never erase an existing gold link with a null (matches store.mjs upsert).
         return `${quoteIdent(c)} = COALESCE(EXCLUDED.${quoteIdent(c)}, ${quoteIdent(table)}.${quoteIdent(c)})`;
@@ -282,6 +361,18 @@ function rowValue(table, col, row) {
   }
   if (table === "people" && col === "clearances") {
     return clearanceJson(row?.clearances);
+  }
+  if (table === "add_requests") {
+    if (col === "cite_urls" || col === "payload") {
+      const v = row?.[col];
+      const empty = col === "cite_urls" ? "[]" : "{}";
+      if (v === undefined || v === null || v === "") return empty;
+      return typeof v === "string" ? v : JSON.stringify(v);
+    }
+    if (col === "status") {
+      const text = String(row?.status ?? "").trim();
+      return text || "pending";
+    }
   }
   if (table === "source_posts" && col === "media_urls") {
     const v = row?.media_urls;
@@ -331,6 +422,21 @@ export function pickRow(table, row) {
   return out;
 }
 
+/**
+ * NOT NULL columns with no safe value to invent: et_meta needs k and v,
+ * add_requests needs id, kind and created_at. Such rows are dropped, never sent as null.
+ */
+function keepRow(table, row) {
+  const present = (v) => v !== undefined && v !== null && String(v).trim() !== "";
+  if (table === "et_meta") {
+    return present(row?.k) && row?.v !== undefined && row?.v !== null;
+  }
+  if (table === "add_requests") {
+    return present(row?.id) && present(row?.kind) && present(row?.created_at);
+  }
+  return true;
+}
+
 export function normalizePayload(input) {
   const src = input && typeof input === "object" ? input : {};
   const out = {};
@@ -338,6 +444,7 @@ export function normalizePayload(input) {
     const rows = Array.isArray(src[table]) ? src[table] : [];
     out[table] = rows
       .filter((r) => r && typeof r === "object")
+      .filter((r) => keepRow(table, r))
       .map((r) => pickRow(table, r));
   }
   return out;
@@ -440,5 +547,7 @@ SELECT
   (SELECT count(*)::int FROM central_casting_comms) AS central_casting_comms,
   (SELECT count(*)::int FROM request_attributions) AS request_attributions,
   (SELECT count(*)::int FROM epstein_flight_legs) AS epstein_flight_legs,
-  (SELECT count(*)::int FROM source_posts) AS source_posts
+  (SELECT count(*)::int FROM source_posts) AS source_posts,
+  (SELECT count(*)::int FROM add_requests) AS add_requests,
+  (SELECT count(*)::int FROM et_meta) AS et_meta
 `.trim();
