@@ -32,6 +32,7 @@ function sandbox() {
     grok,
     `#!/bin/bash
 echo called >> "$STUB_DIR/grok-calls"
+pwd > "$STUB_DIR/grok-cwd"
 [ -n "\${STUB_GROK_SLEEP:-}" ] && sleep "$STUB_GROK_SLEEP"
 pf=""
 while [ $# -gt 0 ]; do [ "$1" = "--prompt-file" ] && pf="$2"; shift; done
@@ -72,9 +73,11 @@ function env(sb, extra = {}) {
   };
 }
 
-function runDaily(sb, extra = {}) {
+function runDaily(sb, extra = {}, drop = []) {
+  const e = env(sb, extra);
+  for (const k of drop) delete e[k];
   return new Promise((resolve) => {
-    const child = spawn("bash", [DAILY], { env: env(sb, extra), stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("bash", [DAILY], { env: e, stdio: ["ignore", "pipe", "pipe"] });
     const out = [];
     child.stdout.on("data", (c) => out.push(c));
     child.stderr.on("data", (c) => out.push(c));
@@ -232,4 +235,92 @@ test("process-add-request --queue parks then applies a person (file store)", asy
   });
   assert.equal(bad.status, 1);
   assert.match(bad.stderr, /--queue cannot be combined/);
+});
+
+test("daily: grok runs in ET_DAILY_GROK_CWD; the default is the repo root", async () => {
+  const sb = sandbox();
+  const scratch = fs.mkdtempSync(path.join(sb.dir, "grok-cwd-"));
+  const apply = { STUB_APPLY_JSON: JSON.stringify({ rows: [], skipped: [] }) };
+  const r = await runDaily(sb, { ...apply, ET_DAILY_GROK_CWD: scratch });
+  const rep = report(sb);
+  assert.equal(r.code, 0, rep);
+  assert.equal(fs.readFileSync(path.join(sb.dir, "grok-cwd"), "utf8").trim(), fs.realpathSync(scratch));
+  assert.match(rep, new RegExp(`grok start max-turns=2 cwd=${scratch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+
+  const d = await runDaily(sb, apply);
+  assert.equal(d.code, 0, report(sb));
+  assert.equal(fs.readFileSync(path.join(sb.dir, "grok-cwd"), "utf8").trim(), fs.realpathSync(ROOT));
+});
+
+test("daily: a missing ET_DAILY_GROK_CWD -> prove=FAIL grok_cwd_missing, grok not started", async () => {
+  const sb = sandbox();
+  const r = await runDaily(sb, {
+    STUB_APPLY_JSON: JSON.stringify({ rows: [ROW], skipped: [] }),
+    ET_DAILY_GROK_CWD: path.join(sb.dir, "no-such-dir"),
+  });
+  const rep = report(sb);
+  assert.equal(r.code, 1, rep);
+  assert.match(lastProve(rep), /^prove=FAIL reason=grok_cwd_missing/);
+  assert.equal(calls(sb, "grok-calls").length, 0);
+});
+
+test("daily: without ET_DAILY_TMP/ET_DAILY_LOCK it uses a private mktemp dir and a private cache lock", async () => {
+  const sb = sandbox();
+  const xdg = path.join(sb.dir, "xdg");
+  fs.mkdirSync(path.join(xdg, "et-daily"), { recursive: true, mode: 0o755 });
+  fs.chmodSync(path.join(xdg, "et-daily"), 0o755);
+  const r = await runDaily(
+    sb,
+    { STUB_APPLY_JSON: JSON.stringify({ rows: [], skipped: [] }), TMPDIR: sb.dir, XDG_CACHE_HOME: xdg },
+    ["ET_DAILY_TMP", "ET_DAILY_LOCK"],
+  );
+  const work = fs.readdirSync(sb.dir).filter((n) => /^et-daily\.[A-Za-z0-9]{8}$/.test(n));
+  assert.equal(work.length, 1, `one mktemp work dir: ${fs.readdirSync(sb.dir)}`);
+  const wdir = path.join(sb.dir, work[0]);
+  assert.equal(fs.statSync(wdir).mode & 0o777, 0o700);
+  const repFile = fs.readdirSync(wdir).find((n) => /^et-daily-\d{8}-report\.md$/.test(n));
+  assert.ok(repFile, "report lives in the work dir");
+  const rep = fs.readFileSync(path.join(wdir, repFile), "utf8");
+  assert.equal(r.code, 0, rep);
+  assert.match(lastProve(rep), /^prove=PASS_EMPTY /);
+  assert.match(r.out, new RegExp(`^report=${path.join(wdir, repFile).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"));
+  const lockDir = path.join(xdg, "et-daily");
+  assert.match(rep, new RegExp(`lock=${lockDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/et-daily-ingest\\.lock`));
+  assert.ok(fs.existsSync(path.join(lockDir, "et-daily-ingest.lock")));
+  assert.equal(fs.statSync(lockDir).mode & 0o777, 0o700, "existing lock dir tightened to 0700");
+  assert.ok(!fs.existsSync(path.join(sb.dir, "et-daily-ingest.lock")), "no lock in the tmp dir");
+  assert.ok(!fs.readdirSync(wdir).includes("et-daily-prompt.md"), "no extra prompt copy");
+
+  // HOME fallback when XDG_CACHE_HOME is unset; the cache dir is created 0700.
+  const home = path.join(sb.dir, "home");
+  fs.mkdirSync(home);
+  const h = await runDaily(
+    sb,
+    { STUB_APPLY_JSON: JSON.stringify({ rows: [], skipped: [] }), TMPDIR: sb.dir, HOME: home },
+    ["ET_DAILY_TMP", "ET_DAILY_LOCK", "XDG_CACHE_HOME"],
+  );
+  assert.equal(h.code, 0, h.out);
+  assert.ok(fs.existsSync(path.join(home, ".cache", "et-daily", "et-daily-ingest.lock")));
+  assert.equal(fs.statSync(path.join(home, ".cache", "et-daily")).mode & 0o777, 0o700);
+});
+
+test("daily: a symlinked default lock dir fails closed before any mkdir or chmod", async () => {
+  const sb = sandbox();
+  const xdg = path.join(sb.dir, "xdg");
+  const elsewhere = path.join(sb.dir, "elsewhere");
+  fs.mkdirSync(xdg);
+  fs.mkdirSync(elsewhere);
+  fs.chmodSync(elsewhere, 0o755);
+  fs.symlinkSync(elsewhere, path.join(xdg, "et-daily"));
+  const r = await runDaily(
+    sb,
+    { STUB_APPLY_JSON: JSON.stringify({ rows: [ROW], skipped: [] }), TMPDIR: sb.dir, XDG_CACHE_HOME: xdg },
+    ["ET_DAILY_TMP", "ET_DAILY_LOCK"],
+  );
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /et-daily FAIL: .*\/xdg\/et-daily is a symlink/);
+  assert.equal(fs.statSync(elsewhere).mode & 0o777, 0o755, "symlink target not chmod'ed");
+  assert.deepEqual(fs.readdirSync(elsewhere), [], "nothing written through the symlink");
+  assert.equal(calls(sb, "grok-calls").length, 0);
+  assert.equal(fs.readdirSync(sb.dir).filter((n) => n.startsWith("et-daily.")).length, 0, "no work dir left");
 });

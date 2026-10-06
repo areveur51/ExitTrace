@@ -20,8 +20,15 @@
 #
 # Overrides (defaults in brackets):
 #   ET_DAILY_ROOT [repo root of this file]  ET_DAILY_NODE [node on PATH]
-#   ET_DAILY_GROK [grok on PATH]            ET_DAILY_TMP [/tmp]
-#   ET_DAILY_LOCK [$ET_DAILY_TMP/et-daily-ingest.lock]
+#   ET_DAILY_GROK [grok on PATH]
+#   ET_DAILY_GROK_CWD [$ET_DAILY_ROOT] working folder grok runs in. Point it
+#     at a scratch dir so grok does not start inside the repo.
+#   ET_DAILY_TMP [a fresh mktemp -d dir, 0700, under ${TMPDIR:-/tmp}] holds the
+#     report, apply.json, summary, digests, leads, prompt, and grok log. The
+#     path is printed as report= on stdout. A default dir is kept for review.
+#   ET_DAILY_LOCK [${XDG_CACHE_HOME:-$HOME/.cache}/et-daily/et-daily-ingest.lock]
+#     The default lock dir is created 0700. It must not be a symlink, must be
+#     owned by the caller, and must not be group/other writable.
 #   ET_DAILY_HELPER [scripts/process-add-request.mjs]
 #   ET_DAILY_APPLY_JS [scripts/et-daily-apply.mjs]
 #   ET_DAILY_STAMP [unset: no keep-up stamp]  ET_DAILY_HEALTH_URL
@@ -35,8 +42,7 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=${ET_DAILY_ROOT:-$(cd "$HERE/.." && pwd)}
 NODE=${ET_DAILY_NODE:-$(command -v node || echo node)}
 GROK=${ET_DAILY_GROK:-$(command -v grok || echo grok)}
-TMPD=${ET_DAILY_TMP:-/tmp}
-LOCK=${ET_DAILY_LOCK:-$TMPD/et-daily-ingest.lock}
+GROK_CWD=${ET_DAILY_GROK_CWD:-$ROOT}
 DRY=${ET_DAILY_DRY_RUN:-0}
 HELPER=${ET_DAILY_HELPER:-$ROOT/scripts/process-add-request.mjs}
 APPLY_JS=${ET_DAILY_APPLY_JS:-$ROOT/scripts/et-daily-apply.mjs}
@@ -44,6 +50,42 @@ STAMP=${ET_DAILY_STAMP:-}
 HEALTH_URL=${ET_DAILY_HEALTH_URL:-http://127.0.0.1:5220/api/health}
 TAG=${ET_DAILY_REPORT_TAG:-}
 DAY=$(date +%Y%m%d)
+
+# Private dir check: symlink first (fail closed, before any mkdir or chmod,
+# because chmod follows symlinks), then mkdir, owner, and group/other-writable.
+private_dir() {
+  local d="$1"
+  if [[ -L "$d" ]]; then echo "et-daily FAIL: $d is a symlink" >&2; return 1; fi
+  if [[ ! -e "$d" ]]; then
+    mkdir -m 700 -- "$d" 2>/dev/null || [[ -d "$d" ]] || { echo "et-daily FAIL: cannot create $d" >&2; return 1; }
+  fi
+  if [[ -L "$d" || ! -d "$d" ]]; then echo "et-daily FAIL: $d is not a real directory" >&2; return 1; fi
+  if [[ ! -O "$d" ]]; then echo "et-daily FAIL: $d is not owned by $(id -un)" >&2; return 1; fi
+  chmod 700 -- "$d" || { echo "et-daily FAIL: cannot chmod $d" >&2; return 1; }
+  if [[ -n "$(find "$d" -maxdepth 0 -perm /022 2>/dev/null)" ]]; then
+    echo "et-daily FAIL: $d is group/other writable" >&2
+    return 1
+  fi
+}
+
+# Lock: the caller's ET_DAILY_LOCK, else a private per-user cache dir.
+if [[ -n "${ET_DAILY_LOCK:-}" ]]; then
+  LOCK=$ET_DAILY_LOCK
+else
+  CACHE=${XDG_CACHE_HOME:-${HOME:?et-daily: HOME or XDG_CACHE_HOME must be set}/.cache}
+  mkdir -p -- "$CACHE" || { echo "et-daily FAIL: cannot create $CACHE" >&2; exit 1; }
+  private_dir "$CACHE/et-daily" || exit 1
+  LOCK=$CACHE/et-daily/et-daily-ingest.lock
+fi
+
+# Work dir: the caller's ET_DAILY_TMP, else a fresh private mktemp -d dir.
+if [[ -n "${ET_DAILY_TMP:-}" ]]; then
+  TMPD=$ET_DAILY_TMP
+else
+  TMPD=$(mktemp -d "${TMPDIR:-/tmp}/et-daily.XXXXXXXX") || { echo "et-daily FAIL: mktemp -d" >&2; exit 1; }
+  chmod 700 "$TMPD"
+fi
+
 REPORT=$TMPD/et-daily-${DAY}-report.md
 APPLY=$TMPD/et-daily-${DAY}-apply.json
 SUMMARY=$TMPD/et-daily-${DAY}-apply-summary.json
@@ -64,6 +106,7 @@ if ! flock -n 9; then
     echo "skip $(date): another et-daily run holds $LOCK"
     echo "prove=SKIP_LOCKED $TAG"
   } >> "$REPORT"
+  echo "report=$REPORT"
   exit 0
 fi
 
@@ -71,6 +114,7 @@ fi
   echo "et-daily start $(date)"
   echo "day=$DAY dry_run=$DRY lock=$LOCK $TAG"
 } > "$REPORT"
+echo "report=$REPORT"
 
 fail() {
   echo "prove=FAIL reason=$1 $TAG" >> "$REPORT"
@@ -79,6 +123,7 @@ fail() {
 
 cd "$ROOT" || fail root_missing
 mkdir -p "$ROOT/var"
+[[ -d "$GROK_CWD" ]] || fail grok_cwd_missing
 
 # Children get fd 9 closed (9>&-) so a stray background child cannot keep
 # the run lock after this script exits.
@@ -158,13 +203,12 @@ Write ONLY this JSON to $APPLY (no markdown):
 Leads (category, posted_at, hint_url, text):
 $LEAD_BODY
 EOF
-[[ "$DRY" == "1" ]] || cp "$PROMPT" "$TMPD/et-daily-prompt.md" 2>/dev/null || true
 
 # A stale apply.json from an earlier run today must not be re-applied.
 rm -f "$APPLY" "$SUMMARY"
 
-echo "grok start max-turns=2" >> "$REPORT"
-env -C "$ROOT" PATH="$PATH" "$GROK" --permission-mode auto --always-approve --no-subagents --max-turns 2 --output-format plain --no-alt-screen --prompt-file "$PROMPT" > "$GLOG" 2>&1 9>&-
+echo "grok start max-turns=2 cwd=$GROK_CWD" >> "$REPORT"
+env -C "$GROK_CWD" PATH="$PATH" "$GROK" --permission-mode auto --always-approve --no-subagents --max-turns 2 --output-format plain --no-alt-screen --prompt-file "$PROMPT" > "$GLOG" 2>&1 9>&-
 GRC=$?
 echo "grok_exit=$GRC" >> "$REPORT"
 
