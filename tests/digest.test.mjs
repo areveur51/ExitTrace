@@ -6,13 +6,17 @@ import { fileURLToPath } from "url";
 import { queueAddRequest } from "../app/lib/add-request.mjs";
 import { IMPORT_CATEGORY_IDS, mapImportCategory } from "../app/lib/categories.mjs";
 import {
+  DIGEST_FETCH_RETRIES,
+  DIGEST_FETCH_RETRY_DELAY_MS,
   OFFICIAL_RSS_FEEDS,
+  RETIRED_DIGEST_FEED_URLS,
   asAddNameLead,
   assertOfficialFeedList,
   classifyDigestText,
   digestItemCiteUrls,
   digestItemsToLeads,
   extractLeadName,
+  fetchFeedXml,
   formatJsonlRows,
   isDigestItemCite,
   leadsToImportRows,
@@ -121,6 +125,145 @@ test("official feed list is ours and stays on the cite allowlist", () => {
       ]),
     /allowlist|official/,
   );
+});
+
+test("retired official feeds stay off the digest list", () => {
+  const urls = OFFICIAL_RSS_FEEDS.map((f) => f.url);
+  assert.equal(new Set(urls).size, urls.length);
+  assert.ok(RETIRED_DIGEST_FEED_URLS.length >= 2);
+  for (const dead of RETIRED_DIGEST_FEED_URLS) {
+    assert.ok(!urls.includes(dead), `retired feed re-added: ${dead}`);
+  }
+  assert.ok(!urls.some((u) => /rssfeeds\.usatoday\.com/i.test(u)));
+  assert.ok(!urls.some((u) => /^https?:\/\/(www\.)?state\.gov\//i.test(u)));
+  assert.ok(!urls.some((u) => /travel\.state\.gov/i.test(u)));
+  const current = selectDigestFeeds("current");
+  assert.ok(!current.some((f) => f.name === "Department of State"));
+  assert.ok(current.filter((f) => f.gov).length >= 3);
+});
+
+test("USA Today comes through Google News with the AP/Reuters shape", () => {
+  const current = selectDigestFeeds("current");
+  const usa = current.filter((f) => f.handle === "usatoday");
+  assert.equal(usa.length, 1);
+  const ap = current.find((f) => f.handle === "apnews");
+  assert.deepEqual(Object.keys(usa[0]).sort(), Object.keys(ap).sort());
+  assert.equal(usa[0].name, "USA Today");
+  assert.equal(usa[0].gov, false);
+  assert.equal(usa[0].slice, "current");
+  const u = new URL(usa[0].url);
+  assert.equal(u.host, "news.google.com");
+  assert.equal(u.pathname, "/rss/search");
+  assert.equal(u.searchParams.get("q"), "site:usatoday.com when:1d");
+  assert.equal(
+    usa[0].url,
+    ap.url.replace(encodeURIComponent("site:apnews.com"), encodeURIComponent("site:usatoday.com")),
+  );
+  assert.equal(isOfficialNewsHandle("usatoday"), true);
+  assert.equal(assertOfficialFeedList(usa), true);
+});
+
+const RSS_OK = '<?xml version="1.0"?><rss version="2.0"><channel><item><title>A</title><link>https://apnews.com/article/a</link></item></channel></rss>';
+
+function scriptedFetch(steps) {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    const step = steps[Math.min(calls.length - 1, steps.length - 1)];
+    if (step instanceof Error) throw step;
+    if (typeof step === "number") return { ok: false, status: step, text: async () => "" };
+    return { ok: true, status: 200, text: async () => step };
+  };
+  return { calls, fetchImpl };
+}
+
+function recordSleep() {
+  const waits = [];
+  return { waits, sleep: async (ms) => { waits.push(ms); } };
+}
+
+test("feed fetch retry is exactly one, after a 2-5s backoff", () => {
+  assert.equal(DIGEST_FETCH_RETRIES, 1);
+  assert.ok(DIGEST_FETCH_RETRY_DELAY_MS >= 2000 && DIGEST_FETCH_RETRY_DELAY_MS <= 5000);
+});
+
+test("feed fetch: first-try success does not retry or wait", async () => {
+  const { calls, fetchImpl } = scriptedFetch([RSS_OK]);
+  const { waits, sleep } = recordSleep();
+  const got = await fetchFeedXml("https://example.test/rss", { fetchImpl, sleep });
+  assert.equal(got.ok, true);
+  assert.equal(got.attempts, 1);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(waits, []);
+});
+
+test("feed fetch: succeeds on the one retry (non-OK, not_rss, or throw first)", async () => {
+  for (const firstStep of [503, "<html><body>busy</body></html>", new TypeError("fetch failed")]) {
+    const { calls, fetchImpl } = scriptedFetch([firstStep, RSS_OK]);
+    const { waits, sleep } = recordSleep();
+    const got = await fetchFeedXml("https://example.test/rss", { fetchImpl, sleep });
+    assert.equal(got.ok, true);
+    assert.equal(got.error, "");
+    assert.equal(got.attempts, 2);
+    assert.equal(calls.length, 2);
+    assert.deepEqual(waits, [DIGEST_FETCH_RETRY_DELAY_MS]);
+    assert.equal(parseRssItems(got.xml).length, 1);
+  }
+});
+
+test("feed fetch: still failing after the one retry is a fetch failure", async () => {
+  for (const [step, error] of [[403, "403"], ["<html><body>home</body></html>", "not_rss"]]) {
+    const { calls, fetchImpl } = scriptedFetch([step, step, RSS_OK]);
+    const { waits, sleep } = recordSleep();
+    const got = await fetchFeedXml("https://example.test/rss", { fetchImpl, sleep });
+    assert.equal(got.ok, false);
+    assert.equal(got.error, error);
+    assert.equal(got.attempts, 2);
+    assert.equal(calls.length, 2, "never more than one retry");
+    assert.deepEqual(waits, [DIGEST_FETCH_RETRY_DELAY_MS]);
+  }
+  const boom = scriptedFetch([new TypeError("fetch failed"), new TypeError("fetch failed again"), RSS_OK]);
+  const { sleep } = recordSleep();
+  await assert.rejects(
+    fetchFeedXml("https://example.test/rss", { fetchImpl: boom.fetchImpl, sleep }),
+    /fetch failed again/,
+  );
+  assert.equal(boom.calls.length, 2);
+});
+
+test("seedRssDigest counts a feed as failed only after the retry", async () => {
+  const feeds = testFeeds().filter((f) => f.slice === "current");
+  const steps = {
+    [feeds[0].url]: [503, fixtureXml("ap-current.xml")],
+    [feeds[1].url]: [403, 403, fixtureXml("reuters-current.xml")],
+  };
+  const seen = {};
+  const fetchImpl = async (url) => {
+    seen[url] = (seen[url] || 0) + 1;
+    const step = steps[url][seen[url] - 1];
+    if (typeof step === "number") return { ok: false, status: step, text: async () => "" };
+    return { ok: true, status: 200, text: async () => step };
+  };
+  const { waits, sleep } = recordSleep();
+  const out = await seedRssDigest({
+    people: [],
+    feeds,
+    fetchImpl,
+    sleep,
+    importPosts: false,
+    queueLeads: false,
+  });
+  assert.deepEqual(seen, { [feeds[0].url]: 2, [feeds[1].url]: 2 });
+  assert.deepEqual(waits, [DIGEST_FETCH_RETRY_DELAY_MS, DIGEST_FETCH_RETRY_DELAY_MS]);
+  const byName = Object.fromEntries(out.fetched.map((f) => [f.name, f]));
+  assert.equal(byName["AP News"].ok, true);
+  assert.equal(byName["AP News"].attempts, 2);
+  assert.equal(byName.Reuters.ok, false);
+  assert.equal(byName.Reuters.error, "403");
+  assert.equal(byName.Reuters.attempts, 2);
+  assert.equal(out.fetched.filter((f) => !f.ok).length, 1);
+  assert.ok(out.skipped.some((s) => s.skip === "fetch" && s.url === feeds[1].url && s.error === "403"));
+  assert.ok(out.leads.some((l) => l.lead_name === "Casey Vale"));
 });
 
 test("digest item is never a cite; Wikipedia and Q drops are not cites", () => {
