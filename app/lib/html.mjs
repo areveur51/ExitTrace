@@ -95,7 +95,7 @@ import {
   grokipediaCite,
 } from "./grokipedia.mjs";
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -908,6 +908,38 @@ function localMediaFile(href) {
   return file;
 }
 
+/** Sibling `{stem}.poster.jpg` next to a local mp4. Empty when the file is missing. */
+export function siblingVideoPosterHref(src) {
+  const rel = mediaHrefPath(src);
+  if (!rel || !/\.mp4$/i.test(rel)) return "";
+  const posterRel = rel.replace(/\.mp4$/i, ".poster.jpg");
+  if (posterRel === rel || posterRel.includes("..")) return "";
+  const file = localMediaFile(posterRel);
+  if (!file || !existsSync(file)) return "";
+  try {
+    if (!statSync(file).isFile() || statSync(file).size <= 0) return "";
+  } catch {
+    return "";
+  }
+  return posterRel;
+}
+
+/** Prefer an explicit poster; otherwise a sibling .poster.jpg when present on disk. */
+export function resolveVideoPosterHref(src, explicit = "") {
+  const given = mediaHrefPath(explicit);
+  if (given && !/\.mp4$/i.test(given)) {
+    const file = localMediaFile(given);
+    if (file && existsSync(file)) {
+      try {
+        if (statSync(file).isFile() && statSync(file).size > 0) return given;
+      } catch {
+        /* fall through */
+      }
+    }
+  }
+  return siblingVideoPosterHref(src);
+}
+
 /** sha256 of a local media file. Empty when the file is missing — that is not a duplicate. */
 function mediaByteId(href) {
   const file = localMediaFile(href);
@@ -1443,14 +1475,17 @@ function supportingMediaFigure(item, source) {
   const caption = href
     ? `${citeLink(href)}${dateHtml}`
     : esc(credit || alt);
+  const videoPoster = /\.mp4$/i.test(item.src)
+    ? resolveVideoPosterHref(item.src, item.poster || "")
+    : "";
   const frameInner = /\.mp4$/i.test(item.src)
-    ? commVideoInner(item.src, item.poster || "", alt)
+    ? commVideoInner(item.src, videoPoster, alt)
     : `<img class="detail-photo still" src="${esc(item.src)}" alt="${esc(alt)}" decoding="async">`;
   const button = lightboxButton(item.src, `<span class="detail-support-frame">${frameInner}</span>`, {
     alt,
     credit,
     kind: /\.mp4$/i.test(item.src) ? "video" : "image",
-    poster: item.poster || "",
+    poster: videoPoster,
   });
   return `<figure class="detail-tile detail-tile--support">${button}<figcaption class="event-media-caption">${caption}</figcaption></figure>`;
 }
