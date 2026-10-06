@@ -2,7 +2,7 @@
  * Idempotent published-table gap upsert (lab → Render logical catch-up).
  * Upserts by id: people (including central_casting, nicknames, and clearances), dog_comms, operations,
  * optional categories, red_folder_comms, central_casting_comms,
- * request_attributions, plus person_events companion.
+ * request_attributions, source_posts (gold_person_id never nulled), plus person_events companion.
  * Never DELETE / TRUNCATE / DROP / --clean. Never invent cite URLs.
  */
 
@@ -21,6 +21,7 @@ export const PUBLISHED_TABLES = Object.freeze([
   "central_casting_comms",
   "request_attributions",
   "epstein_flight_legs",
+  "source_posts",
 ]);
 
 export const COMPANION_TABLES = Object.freeze(["person_events"]);
@@ -45,6 +46,7 @@ const TABLE_KEYS = Object.freeze({
   categories: "id",
   person_events: ["person_id", "kind"],
   epstein_flight_legs: ["passenger_name_raw", "flight_date", "dep", "arr", "aircraft"],
+  source_posts: "id",
 });
 
 const JSONB_COLS = Object.freeze({
@@ -58,6 +60,7 @@ const JSONB_COLS = Object.freeze({
   operations: ["agencies", "tags", "sources"],
   categories: [],
   person_events: ["sources"],
+  source_posts: ["media_urls"],
 });
 
 const PEOPLE_COLS = Object.freeze([
@@ -159,6 +162,22 @@ const EPSTEIN_LEG_COLS = Object.freeze([
   "person_id",
 ]);
 
+/** Parked public posts (scripts/bootstrap-db.sql). Keyed by id; canonical_url is also UNIQUE. */
+const SOURCE_POST_COLS = Object.freeze([
+  "id",
+  "category",
+  "source_url",
+  "canonical_url",
+  "quoted_url",
+  "card_url",
+  "text",
+  "poster_handle",
+  "poster_name",
+  "posted_at",
+  "media_urls",
+  "gold_person_id",
+]);
+
 const CATEGORY_COLS = Object.freeze(["id", "kind", "title", "nav", "path", "blurb"]);
 
 const ATTRIBUTION_COLS = Object.freeze([
@@ -189,6 +208,7 @@ const COLS = Object.freeze({
   person_events: EVENT_COLS,
   categories: CATEGORY_COLS,
   epstein_flight_legs: EPSTEIN_LEG_COLS,
+  source_posts: SOURCE_POST_COLS,
 });
 
 export function isPublishedTable(name) {
@@ -222,6 +242,10 @@ function updateSet(table, cols) {
   return cols
     .filter((c) => !keys.has(c))
     .map((c) => {
+      if (table === "source_posts" && c === "gold_person_id") {
+        // Never erase an existing gold link with a null (matches store.mjs upsert).
+        return `${quoteIdent(c)} = COALESCE(EXCLUDED.${quoteIdent(c)}, ${quoteIdent(table)}.${quoteIdent(c)})`;
+      }
       if (table === "person_events" && c === "unsealed") {
         return `${quoteIdent(c)} = CASE WHEN ${quoteIdent(table)}.${quoteIdent(c)} IS TRUE THEN TRUE ELSE EXCLUDED.${quoteIdent(c)} END`;
       }
@@ -258,6 +282,16 @@ function rowValue(table, col, row) {
   }
   if (table === "people" && col === "clearances") {
     return clearanceJson(row?.clearances);
+  }
+  if (table === "source_posts" && col === "media_urls") {
+    const v = row?.media_urls;
+    if (v === undefined || v === null || v === "") return "[]";
+    return typeof v === "string" ? v : JSON.stringify(v);
+  }
+  if (table === "source_posts" && col === "gold_person_id") {
+    if (row?.gold_person_id === undefined || row?.gold_person_id === null) return null;
+    const text = String(row.gold_person_id).trim();
+    return text || null;
   }
   if (table === "central_casting_comms" && col === "person_id") {
     if (row?.person_id === undefined || row?.person_id === null) return null;
@@ -405,5 +439,6 @@ SELECT
   (SELECT count(*)::int FROM red_folder_comms) AS red_folder_comms,
   (SELECT count(*)::int FROM central_casting_comms) AS central_casting_comms,
   (SELECT count(*)::int FROM request_attributions) AS request_attributions,
-  (SELECT count(*)::int FROM epstein_flight_legs) AS epstein_flight_legs
+  (SELECT count(*)::int FROM epstein_flight_legs) AS epstein_flight_legs,
+  (SELECT count(*)::int FROM source_posts) AS source_posts
 `.trim();
