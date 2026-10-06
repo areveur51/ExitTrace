@@ -161,8 +161,14 @@ test("count proof only names real published tables (never JS-only categories)", 
   assert.deepEqual([...named].sort(), [...COUNT_TABLES].sort());
   for (const t of COUNT_TABLES) assert.equal(ALL_UPSERT_TABLES.includes(t), true, t);
   assert.equal(COUNT_TABLES.includes("categories"), false);
+  assert.equal(COUNT_TABLES.includes("add_requests"), true);
+  assert.equal(COUNT_TABLES.includes("et_meta"), true);
   assert.doesNotMatch(COUNT_SQL, /categories/);
+  assert.match(COUNT_SQL, /\(SELECT count\(\*\)::int FROM add_requests\) AS add_requests/);
+  assert.match(COUNT_SQL, /\(SELECT count\(\*\)::int FROM et_meta\) AS et_meta/);
   assert.equal("categories" in countProof({}, {}, {}), false);
+  assert.equal("add_requests" in countProof({}, {}, {}), true);
+  assert.equal("et_meta" in countProof({}, {}, {}), true);
   const script = fs.readFileSync(path.join(ROOT, "scripts/gap-upsert-published.mjs"), "utf8");
   assert.doesNotMatch(script, /countOne\(\s*["']categories["']\s*\)/);
   assert.doesNotMatch(script, /FROM categories/);
