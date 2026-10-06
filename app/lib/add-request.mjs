@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { PROMOTE_CATEGORY_IDS } from "./categories.mjs";
-import { isMilitaryInput } from "./event-attrs.mjs";
+import { isMilitaryInput, parseOriginUnknown } from "./event-attrs.mjs";
 import { centralCastingCiteStanding } from "./kind-comms.mjs";
 import {
   handleFromUrl,
@@ -321,6 +321,7 @@ export function validateQueueInput(input = {}) {
       hint_url: String(input.hint_url || input.source_url || "").trim(),
       birth_date: String(input.birth_date || "").trim(),
       country_of_origin: String(input.country_of_origin || "").trim(),
+      ...parseOriginUnknown(input),
       position: String(input.position || "").trim(),
       organization: String(input.organization || "").trim(),
       comments: String(input.comments || input.text || input.reason || "").trim(),
@@ -414,6 +415,7 @@ export function validateQueueInput(input = {}) {
       country_of_origin: String(
         input.country_of_origin || input.origin_country || "",
       ).trim(),
+      ...parseOriginUnknown(input),
       position: String(input.position || "").trim(),
       organization: String(input.organization || "").trim(),
       country: String(input.country || "").trim(),
@@ -717,6 +719,13 @@ export function mergeProcessOverlay(request, overlay = {}) {
         request.country_of_origin ||
         "",
     ).trim(),
+    origin_unknown:
+      overlay.origin_unknown !== undefined && overlay.origin_unknown !== ""
+        ? overlay.origin_unknown
+        : request.origin_unknown,
+    origin_unknown_reason: String(
+      overlay.origin_unknown_reason || request.origin_unknown_reason || "",
+    ).trim(),
     tags: overlay.tags || request.tags,
     photo: String(overlay.photo || request.photo || "").trim(),
     photo_credit: String(overlay.photo_credit || request.photo_credit || "").trim(),
@@ -1005,7 +1014,10 @@ async function applyQueuedBoot(merged) {
       "Medical walking boot after documented lower-leg, ankle, or foot injury",
     position: String(merged.position || "").trim() || "Public figure",
     organization: String(merged.organization || "").trim() || "Public record",
-    country_of_origin: String(merged.country_of_origin || "").trim() || "United States",
+    // An explicit origin_unknown marker is never overwritten with a guessed default.
+    country_of_origin:
+      String(merged.country_of_origin || "").trim() ||
+      (parseOriginUnknown(merged).origin_unknown ? "" : "United States"),
   });
   // Stamp clip text as snippet on boot_comms cites when present (preserve, no invent).
   const snippet = String(parsed.text || merged.text || "").trim();

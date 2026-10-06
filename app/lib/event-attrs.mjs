@@ -90,6 +90,20 @@ export function parseOriginCountry(raw = {}) {
   return firstText(raw, ORIGIN_ALIASES);
 }
 
+/**
+ * Deliberate "origin not stated" marker for a NEW person insert.
+ * Only origin_unknown === true (or the string "true") counts, and it must
+ * carry origin_unknown_reason (why no cited source states an origin).
+ * A missing/forgotten origin is NOT this marker and stays fail-closed.
+ * Never a value to guess from residence, country, name, or role.
+ */
+export function parseOriginUnknown(raw = {}) {
+  const v = raw?.origin_unknown;
+  const flag = v === true || (typeof v === "string" && v.trim().toLowerCase() === "true");
+  const reason = flag ? String(raw?.origin_unknown_reason || "").trim() : "";
+  return { origin_unknown: flag, origin_unknown_reason: reason };
+}
+
 function asFlag(raw) {
   if (raw === true || raw === 1) return true;
   const text = String(raw || "")

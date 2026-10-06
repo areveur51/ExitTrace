@@ -299,6 +299,10 @@ function normalizeAddRequest(row) {
     country_of_origin: String(
       row.country_of_origin || payload.country_of_origin || "",
     ).trim(),
+    origin_unknown: row.origin_unknown === true || payload.origin_unknown === true,
+    origin_unknown_reason: String(
+      row.origin_unknown_reason || payload.origin_unknown_reason || "",
+    ).trim(),
     position: String(row.position || payload.position || "").trim(),
     organization: String(row.organization || payload.organization || "").trim(),
     country: String(row.country || payload.country || "").trim(),
@@ -1779,7 +1783,8 @@ function personValues(row) {
     person.event_date,
     person.death_date,
     person.birth_date || null,
-    person.country_of_origin || "",
+    // Unknown origin persists as SQL NULL (like birth_date), never "".
+    person.country_of_origin || null,
     person.photo,
     person.photo_credit,
     person.screenshot,
@@ -2926,6 +2931,8 @@ function addRequestValues(row) {
       extra_urls: req.extra_urls || [],
       birth_date: req.birth_date || "",
       country_of_origin: req.country_of_origin || "",
+      origin_unknown: req.origin_unknown === true,
+      origin_unknown_reason: req.origin_unknown_reason || "",
       position: req.position || "",
       organization: req.organization || "",
       country: req.country || "",
