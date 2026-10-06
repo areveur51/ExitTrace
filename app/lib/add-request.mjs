@@ -1012,8 +1012,11 @@ async function applyQueuedBoot(merged) {
     comments: comments || "Medical walking boot after documented lower-leg, ankle, or foot injury",
     reason: String(merged.reason || comments || "").trim() ||
       "Medical walking boot after documented lower-leg, ankle, or foot injury",
-    position: String(merged.position || "").trim() || "Public figure",
-    organization: String(merged.organization || "").trim() || "Public record",
+    // Never guess a role: a missing position/organization stays blank (no
+    // "Public figure" / "Public record" placeholder). A new person insert still
+    // fails closed on the lock; an existing card is annotated with blanks.
+    position: String(merged.position || "").trim(),
+    organization: String(merged.organization || "").trim(),
     // Never guess an origin: a missing origin stays empty (fail-closed lock).
     country_of_origin: String(merged.country_of_origin || "").trim(),
   });
