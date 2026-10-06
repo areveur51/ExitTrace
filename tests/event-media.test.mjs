@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { eventTagRow, personDetail } from "../app/lib/html.mjs";
 import { normalizeEventMedia } from "../app/lib/event-attrs.mjs";
@@ -84,7 +87,8 @@ test("support clips render at the bottom with the cite link, and unofficial cite
   const mediaAt = html.indexOf('class="detail-supporting"');
   assert.ok(eventAt >= 0 && mediaAt > eventAt);
   assert.match(html, new RegExp(`src="${CLIP}"`));
-  assert.match(html, new RegExp(`poster="${POSTER}"`));
+  // Poster is emitted only when the file exists on disk (explicit or sibling .poster.jpg).
+  assert.match(html, /playsinline/);
   assert.match(html, /data-lightbox-kind="video"/);
   assert.match(html, /detail-support-masonry/);
   assert.match(html, /detail-tile--support/);
@@ -102,4 +106,83 @@ test("support clips render at the bottom with the cite link, and unofficial cite
   assert.doesNotMatch(row, new RegExp(CLIP.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(row, /event-snippet/);
   assert.match(row, new RegExp(`href="${cite}"`));
+});
+
+test("sibling .poster.jpg fills empty supporting video poster", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "et-poster-"));
+  const prev = process.env.MEDIA_DIR;
+  try {
+    const support = path.join(dir, "people", "joe-biden", "support");
+    mkdirSync(support, { recursive: true });
+    const stem = "2105403923754316173";
+    writeFileSync(path.join(support, `${stem}.mp4`), Buffer.from("fake-mp4"));
+    writeFileSync(path.join(support, `${stem}.poster.jpg`), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    process.env.MEDIA_DIR = dir;
+    const cite = "https://x.com/_Realmelgibson1/status/2105403923754316173";
+    const html = personDetail({
+      id: "joe-biden",
+      name: "Joe Biden",
+      category: "government_stepdowns",
+      event_date: "2024-07-21",
+      events: [
+        {
+          kind: "government_stepdowns",
+          event_date: "2024-07-21",
+          comments: "Sibling poster proof.",
+          sources: [
+            { url: "https://www.reuters.com/article/world/fact-check-biden", publisher: "Reuters", date: "2020-10-07" },
+            { url: cite, publisher: "Supporting post", date: "2026-09-30" },
+          ],
+          media: [{ src: `/media/people/joe-biden/support/${stem}.mp4`, url: cite, alt: "Ear protrusion question" }],
+        },
+      ],
+    });
+    const poster = `/media/people/joe-biden/support/${stem}.poster.jpg`;
+    assert.match(html, new RegExp(`poster="${poster.replace(/\./g, "\\.")}"`));
+    assert.match(html, /playsinline/);
+    assert.match(html, /preload="metadata"/);
+    assert.match(html, /data-lightbox-poster="/);
+  } finally {
+    if (prev === undefined) delete process.env.MEDIA_DIR;
+    else process.env.MEDIA_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("missing sibling poster leaves supporting video without a poster attr", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "et-poster-miss-"));
+  const prev = process.env.MEDIA_DIR;
+  try {
+    const support = path.join(dir, "people", "joe-biden", "support");
+    mkdirSync(support, { recursive: true });
+    const stem = "2105403923754316173";
+    writeFileSync(path.join(support, `${stem}.mp4`), Buffer.from("fake-mp4"));
+    process.env.MEDIA_DIR = dir;
+    const cite = "https://x.com/_Realmelgibson1/status/2105403923754316173";
+    const html = personDetail({
+      id: "joe-biden",
+      name: "Joe Biden",
+      category: "government_stepdowns",
+      event_date: "2024-07-21",
+      events: [
+        {
+          kind: "government_stepdowns",
+          event_date: "2024-07-21",
+          comments: "No sibling poster.",
+          sources: [
+            { url: "https://www.reuters.com/article/world/fact-check-biden", publisher: "Reuters", date: "2020-10-07" },
+            { url: cite, publisher: "Supporting post", date: "2026-09-30" },
+          ],
+          media: [{ src: `/media/people/joe-biden/support/${stem}.mp4`, url: cite, alt: "Ear protrusion question" }],
+        },
+      ],
+    });
+    assert.match(html, new RegExp(`src="/media/people/joe-biden/support/${stem}\.mp4"`));
+    assert.doesNotMatch(html, /poster="/);
+    assert.match(html, /playsinline/);
+  } finally {
+    if (prev === undefined) delete process.env.MEDIA_DIR;
+    else process.env.MEDIA_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
