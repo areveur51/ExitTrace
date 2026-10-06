@@ -108,7 +108,8 @@ try {
   const before = await counts();
   console.log(`BEFORE ${formatCounts(before)}`);
   for (const skip of planned.skipped) {
-    console.log(`SKIP table=${skip.table} reason=${skip.reason} rows=${skip.count}`);
+    const keys = Array.isArray(skip.keys) && skip.keys.length ? ` keys=${skip.keys.join(",")}` : "";
+    console.log(`SKIP table=${skip.table} reason=${skip.reason} rows=${skip.count}${keys}`);
   }
   for (const plan of planned.plans) {
     await pool.query(plan.sql, plan.params);

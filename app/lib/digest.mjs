@@ -43,7 +43,13 @@ function feed(row) {
   };
 }
 
-/** Our public RSS list. Official news-org / .gov only. No hosted third-party digest. */
+/** Our public RSS list. Official news-org / .gov only. No hosted third-party digest.
+ * The direct USA Today feed (rssfeeds.usatoday.com now 301s to the HTML
+ * homepage) is retired; USA Today comes in through Google News like AP and
+ * Reuters. State (www.state.gov feeds answer 403) is off the list: no working
+ * official feed. See RETIRED_DIGEST_FEED_URLS.
+ * France 24 English (https://www.france24.com/en/rss) returned real RSS on
+ * 2026-10-06 (application/rss+xml, channel items), so that official URL stays. */
 export const OFFICIAL_RSS_FEEDS = [
   feed({
     handle: "bbcnews",
@@ -138,7 +144,7 @@ export const OFFICIAL_RSS_FEEDS = [
   feed({
     handle: "usatoday",
     name: "USA Today",
-    url: "https://rssfeeds.usatoday.com/usatoday-NewsTopStories",
+    url: googleNewsSite("usatoday.com", "when:1d"),
   }),
   feed({
     handle: "dwnews",
@@ -176,11 +182,6 @@ export const OFFICIAL_RSS_FEEDS = [
     url: "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=20",
   }),
   feed({
-    gov: true,
-    name: "Department of State",
-    url: "https://www.state.gov/rss-feed/press-releases/feed/",
-  }),
-  feed({
     handle: "apnews",
     name: "AP exits since 2017",
     slice: "historical",
@@ -199,6 +200,12 @@ export const OFFICIAL_RSS_FEEDS = [
     url: googleNewsSite("bbc.com", `${EXIT_QUERY} after:${DIGEST_SINCE}`),
   }),
 ];
+
+/** Official feeds that stopped serving RSS. Kept so tests block a silent re-add. */
+export const RETIRED_DIGEST_FEED_URLS = Object.freeze([
+  "https://rssfeeds.usatoday.com/usatoday-NewsTopStories",
+  "https://www.state.gov/rss-feed/press-releases/feed/",
+]);
 
 export function isGoogleNewsHost(host) {
   const h = String(host || "")
@@ -584,10 +591,42 @@ export function leadsToImportRows(leads) {
   return rows;
 }
 
-export async function fetchFeedXml(url, { fetchImpl = globalThis.fetch } = {}) {
+/** One retry, never more. A feed that fails twice is a fetch failure. */
+export const DIGEST_FETCH_RETRIES = 1;
+export const DIGEST_FETCH_RETRY_DELAY_MS = 3000;
+
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Fetch one feed, retrying ONCE after a short backoff when the first attempt
+ * answers non-OK, is not RSS, or throws. The second attempt's outcome stands:
+ * a non-OK / non-RSS answer is returned as a failure and a throw propagates,
+ * exactly as a single attempt did before.
+ */
+export async function fetchFeedXml(
+  url,
+  {
+    fetchImpl = globalThis.fetch,
+    retryDelayMs = DIGEST_FETCH_RETRY_DELAY_MS,
+    sleep = sleepMs,
+  } = {},
+) {
   if (typeof fetchImpl !== "function") {
     throw new Error("fetch is not available");
   }
+  let first = null;
+  try {
+    first = await fetchFeedXmlOnce(url, fetchImpl);
+  } catch {
+    first = null; // a first-attempt throw gets the one retry too
+  }
+  if (first?.ok) return { ...first, attempts: 1 };
+  await sleep(retryDelayMs);
+  const second = await fetchFeedXmlOnce(url, fetchImpl);
+  return { ...second, attempts: 1 + DIGEST_FETCH_RETRIES };
+}
+
+async function fetchFeedXmlOnce(url, fetchImpl) {
   const res = await fetchImpl(url, {
     headers: {
       "User-Agent": DIGEST_USER_AGENT,
@@ -614,6 +653,8 @@ export async function seedRssDigest({
   xmlByUrl,
   importPosts = true,
   queueLeads = true,
+  retryDelayMs = DIGEST_FETCH_RETRY_DELAY_MS,
+  sleep,
 } = {}) {
   assertOfficialFeedList(OFFICIAL_RSS_FEEDS);
   const selected = feeds || selectDigestFeeds(slice);
@@ -624,8 +665,14 @@ export async function seedRssDigest({
   for (const feed of selected) {
     let xml = xmlByUrl?.[feed.url] || xmlByUrl?.[feed.name] || "";
     if (!xml && fetchImpl) {
-      const got = await fetchFeedXml(feed.url, { fetchImpl });
-      fetched.push({ name: feed.name, url: feed.url, ok: got.ok, error: got.error });
+      const got = await fetchFeedXml(feed.url, { fetchImpl, retryDelayMs, sleep });
+      fetched.push({
+        name: feed.name,
+        url: feed.url,
+        ok: got.ok,
+        error: got.error,
+        attempts: got.attempts,
+      });
       if (!got.ok) {
         skipped.push({ skip: "fetch", url: feed.url, error: got.error });
         continue;
