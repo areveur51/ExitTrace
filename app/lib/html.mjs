@@ -40,6 +40,8 @@ import {
   goldMediaHref,
   DETAIL_PORTRAIT_CSS_H,
   DETAIL_PORTRAIT_CSS_W,
+  CARD_2X_W,
+  CARD_PX_W,
   LIST_THUMB_CSS_H,
   LIST_THUMB_CSS_W,
   LIST_THUMB_PX_W,
@@ -693,15 +695,25 @@ function emptyPortraitImg({ size = "list", kind = "portrait", label = "" } = {})
   return `<img class="${cls}" src="${esc(EMPTY_PORTRAIT_HREF)}" alt="${esc(label)}" width="${w}" height="${h}"${loading} decoding="async"${portraitFallbackAttr()}>`;
 }
 
+function listSrcset(src, ext) {
+  const candidates = [
+    [thumbHrefFor(src, { variant: "", ext }), LIST_THUMB_PX_W],
+    [thumbHrefFor(src, { variant: ".2x", ext }), LIST_THUMB_2X_W],
+    [thumbHrefFor(src, { variant: ".card", ext }), CARD_PX_W],
+    [thumbHrefFor(src, { variant: ".card2x", ext }), CARD_2X_W],
+  ];
+  return candidates
+    .filter(([href]) => href)
+    .map(([href, width]) => `${portraitSrc(href)} ${width}w`)
+    .join(", ");
+}
+
 function listPortraitPicture(src, label, kind = "portrait") {
   const jpg = thumbHrefFor(src, { variant: "", ext: "jpg" });
   if (!jpg) return emptyPortraitImg({ size: "list", kind, label });
-  const jpg2 = thumbHrefFor(src, { variant: ".2x", ext: "jpg" });
-  const webp = thumbHrefFor(src, { variant: "", ext: "webp" });
-  const webp2 = thumbHrefFor(src, { variant: ".2x", ext: "webp" });
-  const srcsetJpg = `${portraitSrc(jpg)} ${LIST_THUMB_PX_W}w, ${portraitSrc(jpg2)} ${LIST_THUMB_2X_W}w`;
-  const srcsetWebp = `${portraitSrc(webp)} ${LIST_THUMB_PX_W}w, ${portraitSrc(webp2)} ${LIST_THUMB_2X_W}w`;
-  return `<picture class="thumb-src">
+  const srcsetJpg = listSrcset(src, "jpg");
+  const srcsetWebp = listSrcset(src, "webp");
+  return `<picture class="thumb-src" data-result-thumb>
     <source type="image/webp" srcset="${esc(srcsetWebp)}" sizes="${LIST_THUMB_CSS_W}px">
     <img class="${kind} thumb" src="${esc(portraitSrc(jpg))}" srcset="${esc(srcsetJpg)}" sizes="${LIST_THUMB_CSS_W}px" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async"${portraitFallbackAttr()}>
   </picture>`;
@@ -1471,7 +1483,7 @@ export function operationRow(row, { selected } = {}) {
   const agencies = (row.agencies || []).filter(Boolean).join(", ") || "—";
   const portrait = operationPortraitFrom(row);
   return `<a class="tui-row operation-card${selected ? " is-selected" : ""}" href="${esc(href)}">
-    ${thumb(portrait.photo, row.name || "OP")}
+    ${classificationMediaSlot(thumb(portrait.photo, row.name || "OP"))}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.name || "—")}</div>
       <div class="tui-meta"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(tagLabel)} · ${esc(agencies)} · victims ${esc(countCell(row.victim_count))} · arrests ${esc(countCell(row.arrest_count))}</div>
@@ -1576,7 +1588,7 @@ function supportingMediaFigure(item, source) {
     : "";
   const frameInner = /\.mp4$/i.test(item.src)
     ? commVideoInner(item.src, videoPoster, alt)
-    : `<img class="detail-photo still" src="${esc(item.src)}" alt="${esc(alt)}" decoding="async">`;
+    : `<img class="detail-photo still" src="${esc(item.src)}" alt="${esc(alt)}" loading="lazy" decoding="async">`;
   const button = lightboxButton(item.src, `<span class="detail-support-frame">${frameInner}</span>`, {
     alt,
     credit,
@@ -1691,7 +1703,7 @@ export function kindListRow(kind, row, { selected } = {}) {
   const spec = commsKind(kind);
   const href = `${spec.path}/${encodeURIComponent(row.id)}`;
   return `<a class="tui-row ${spec.cardClass}${selected ? " is-selected" : ""}" href="${esc(href)}">
-    ${thumb(row.still, row.handle, "still")}
+    ${classificationMediaSlot(thumb(row.still, row.handle, "still"))}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.handle)}</div>
       <div class="tui-meta"><time datetime="${esc(row.posted_at)}">${esc(formatPosted(row.posted_at))}</time> · ${esc(spec.label)}</div>

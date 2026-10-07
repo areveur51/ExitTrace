@@ -62,7 +62,7 @@ test("dog list and search thumbs use the same portrait/thumb size markup as peop
   assert.match(person, /class="portrait thumb"/);
   assert.match(person, /width="40" height="52"/);
   assert.match(person, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=6"/);
-  assert.match(person, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=6 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=6 160w"/);
+  assert.match(person, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=6 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=6 160w, \/media\/thumbs\/people\/james-comey\.card\.jpg\?p=6 480w, \/media\/thumbs\/people\/james-comey\.card2x\.jpg\?p=6 960w"/);
   assert.match(person, /type="image\/webp"/);
   assert.match(person, /loading="lazy"/);
   assert.match(person, /decoding="async"/);
@@ -85,7 +85,7 @@ test("person list uses small thumbs + srcset; detail masonry uses the gold still
   const person = personDetail(firing());
   const dogPage = dogDetail(dog());
   assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=6"/);
-  assert.match(list, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=6 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=6 160w"/);
+  assert.match(list, /srcset="\/media\/thumbs\/people\/james-comey\.jpg\?p=6 80w, \/media\/thumbs\/people\/james-comey\.2x\.jpg\?p=6 160w, \/media\/thumbs\/people\/james-comey\.card\.jpg\?p=6 480w, \/media\/thumbs\/people\/james-comey\.card2x\.jpg\?p=6 960w"/);
   assert.match(list, /loading="lazy"/);
   assert.match(person, /class="person-header"/);
   assert.match(person, /class="detail-photo portrait"/);

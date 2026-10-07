@@ -5,6 +5,10 @@ import path from "path";
 import { test } from "node:test";
 import jpeg from "jpeg-js";
 import {
+  CARD_2X_H,
+  CARD_2X_W,
+  CARD_PX_H,
+  CARD_PX_W,
   HERO_PX_H,
   HERO_PX_W,
   LIST_THUMB_2X_H,
@@ -60,6 +64,14 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
     thumbHrefFor("/media/agencies/fbi.png", { variant: ".hero", ext: "webp" }),
     "/media/thumbs/agencies/fbi.hero.webp",
   );
+  assert.equal(
+    thumbHrefFor("/media/agencies/fbi.png", { variant: ".card", ext: "webp" }),
+    "/media/thumbs/agencies/fbi.card.webp",
+  );
+  assert.equal(
+    thumbHrefFor("/media/people/james-comey.jpg", { variant: ".card2x", ext: "jpg" }),
+    "/media/thumbs/people/james-comey.card2x.jpg",
+  );
   assert.equal(goldMediaHref("/media/agencies/fbi.png"), "/media/agencies/fbi.png");
   assert.equal(goldMediaHref("/media/thumbs/agencies/fbi.jpg"), "");
   assert.equal(
@@ -101,6 +113,11 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
     "people/james-comey.webp",
   ]);
   assert.equal(parseThumbRel("thumbs/people/james-comey.2x.jpg")?.stem, "james-comey");
+  assert.equal(parseThumbRel("thumbs/agencies/fbi.card2x.webp")?.variant, ".card2x");
+  assert.equal(CARD_PX_W, 480);
+  assert.equal(CARD_PX_H, 624);
+  assert.equal(CARD_2X_W, 960);
+  assert.equal(CARD_2X_H, 1248);
   assert.equal(PORTRAIT_CACHE, "6");
 });
 
@@ -120,6 +137,14 @@ test("renderPortraitJpeg writes a cover-cropped 80x104 list JPEG, not a 192 maso
   const denseDecoded = jpeg.decode(dense, { useTArray: true });
   assert.equal(denseDecoded.width, LIST_THUMB_2X_W);
   assert.equal(denseDecoded.height, LIST_THUMB_2X_H);
+  const card = renderPortraitJpeg(src, ".card");
+  const cardDecoded = jpeg.decode(card, { useTArray: true });
+  assert.equal(cardDecoded.width, CARD_PX_W);
+  assert.equal(cardDecoded.height, CARD_PX_H);
+  const card2 = renderPortraitJpeg(src, ".card2x");
+  const card2Decoded = jpeg.decode(card2, { useTArray: true });
+  assert.equal(card2Decoded.width, CARD_2X_W);
+  assert.equal(card2Decoded.height, CARD_2X_H);
 });
 
 test("renderPortraitWebp writes a RIFF WebP for list and hero variants", async () => {
