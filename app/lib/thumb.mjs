@@ -21,6 +21,15 @@ export const LIST_THUMB_PX_H = 104;
 /** Denser srcset density (4× CSS). */
 export const LIST_THUMB_2X_W = 160;
 export const LIST_THUMB_2X_H = 208;
+/**
+ * Card-grid cover crops. Same 80×104 frame as the list thumb, at widths that
+ * stay sharp for Small / Medium / Large columns on a 2× display. List view
+ * keeps sizes at 40px so the browser still picks the 80w file.
+ */
+export const CARD_PX_W = 480;
+export const CARD_PX_H = 624;
+export const CARD_2X_W = 960;
+export const CARD_2X_H = 1248;
 /** ≥2× the 192×250 detail CSS box — never the 80×104 / old 192 list thumb. */
 export const HERO_PX_W = 384;
 export const HERO_PX_H = 500;
@@ -50,12 +59,14 @@ const COMM_DIRS = commsThumbKinds();
 const THUMBS = "/media/thumbs/";
 const EXTS = [".jpg", ".jpeg", ".png", ".webp"];
 const THUMB_REL = new RegExp(
-  `^thumbs/(people|agencies|${COMM_DIRS.join("|")})/([a-z0-9][a-z0-9_-]*)(\\.(?:2x|hero))?\\.(jpg|webp)$`,
+  `^thumbs/(people|agencies|${COMM_DIRS.join("|")})/([a-z0-9][a-z0-9_-]*)(\\.(?:2x|card2x|card|hero))?\\.(jpg|webp)$`,
   "i",
 );
 const VARIANT_SIZE = {
   "": { w: LIST_THUMB_PX_W, h: LIST_THUMB_PX_H },
   ".2x": { w: LIST_THUMB_2X_W, h: LIST_THUMB_2X_H },
+  ".card": { w: CARD_PX_W, h: CARD_PX_H },
+  ".card2x": { w: CARD_2X_W, h: CARD_2X_H },
   ".hero": { w: HERO_PX_W, h: HERO_PX_H },
 };
 const TUI_BG = { r: 0x0d, g: 0x0d, b: 0x12 };
@@ -119,7 +130,7 @@ export function thumbHrefFor(src, { variant = "", ext = "jpg" } = {}) {
   if (!cat) return "";
   const suffix = String(variant || "").toLowerCase();
   const format = String(ext || "jpg").toLowerCase().replace(/^\./, "");
-  if (suffix && suffix !== ".2x" && suffix !== ".hero") return "";
+  if (suffix && suffix !== ".2x" && suffix !== ".hero" && suffix !== ".card" && suffix !== ".card2x") return "";
   if (format !== "jpg" && format !== "webp") return "";
   return `${THUMBS}${cat.kind}/${cat.stem}${suffix}.${format}`;
 }
@@ -403,7 +414,8 @@ export async function renderPortraitWebp(buf, variant = "") {
 }
 
 const MAX_SRC_BYTES = 4 * 1024 * 1024;
-let rebuildBusy = false;
+/** One derive at a time. Callers wait; a busy pass must not 404 the rest of a card grid. */
+let rebuildChain = Promise.resolve();
 
 function jpegSofSize(buf) {
   if (!buf || buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
@@ -502,26 +514,31 @@ export async function ensureThumbFile(mediaDir, thumbRel, { upgrade = false } = 
   const fresh = matching && fs.statSync(matching).mtimeMs >= srcStat.mtimeMs;
   if (matching && fresh) return matching;
   const existing = destIfUsable(dest);
-  if (existing && !upgrade) {
-    if (rebuildBusy || srcStat.size > MAX_SRC_BYTES) return existing;
-  }
+  if (existing && !upgrade && srcStat.size > MAX_SRC_BYTES) return existing;
   if (!existing && srcStat.size > MAX_SRC_BYTES) return null;
-  if (rebuildBusy && !upgrade) return existing;
-  rebuildBusy = true;
-  try {
-    const raw = fs.readFileSync(src);
-    const rendered =
-      parsed.ext === "webp"
-        ? await renderPortraitWebp(raw, parsed.variant)
-        : renderPortraitJpeg(raw, parsed.variant);
-    if (!rendered) return existing;
-    atomicWrite(dest, rendered);
-    return dest;
-  } catch {
-    return existing;
-  } finally {
-    rebuildBusy = false;
-  }
+
+  const render = async () => {
+    const again = existingMatches(dest, parsed);
+    if (again && fs.statSync(again).mtimeMs >= fs.statSync(src).mtimeMs) return again;
+    try {
+      const raw = fs.readFileSync(src);
+      const rendered =
+        parsed.ext === "webp"
+          ? await renderPortraitWebp(raw, parsed.variant)
+          : renderPortraitJpeg(raw, parsed.variant);
+      if (!rendered) return destIfUsable(dest);
+      atomicWrite(dest, rendered);
+      return dest;
+    } catch {
+      return destIfUsable(dest);
+    }
+  };
+  const run = rebuildChain.then(render, render);
+  rebuildChain = run.then(
+    () => {},
+    () => {},
+  );
+  return run;
 }
 
 export async function buildAllThumbs(mediaDir) {
@@ -533,7 +550,10 @@ export async function buildAllThumbs(mediaDir) {
     for (const name of fs.readdirSync(dir)) {
       if (!EXTS.includes(path.extname(name).toLowerCase())) continue;
       const stem = stemOf(name);
-      const variants = kind === "people" || kind === "agencies" ? ["", ".2x", ".hero"] : ["", ".2x"];
+      const variants =
+        kind === "people" || kind === "agencies"
+          ? ["", ".2x", ".card", ".card2x", ".hero"]
+          : ["", ".2x", ".card", ".card2x"];
       for (const variant of variants) {
         for (const ext of ["jpg", "webp"]) {
           if (variant === ".hero" && ext === "jpg") continue;

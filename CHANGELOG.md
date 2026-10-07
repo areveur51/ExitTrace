@@ -18,6 +18,10 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - The menu groups Dog, Red Folder, Eagle, Ronald, Boot, Corona, and Central Casting under a Comms section, set off the same way as Tags. Their links, routes, and shortcut keys are unchanged, and they no longer appear at the top level.
 
+### Fixed
+
+- Result cards stay sharp at Small, Medium, and Large. The grid selects a cover crop up to 960px wide; the row list still requests the 40px thumb. Operation cards use the same portrait slot as the other result lists.
+
 ## [1.2.10] - 2026-10-05
 
 ### Added

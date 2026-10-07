@@ -1,4 +1,30 @@
 // Local UI only. No third-party embed scripts. No live X, Wikimedia, or news fetches.
+
+/** List HTML ships sizes=40px. Cards need the column width before the lazy fetch. */
+const RESULT_THUMB_LIST_SIZES = "40px";
+const RESULT_THUMB_CARD_SIZES = {
+  s: "(max-width: 720px) 46vw, 14rem",
+  m: "(max-width: 720px) 72vw, 20rem",
+  l: "(max-width: 720px) 92vw, 28rem",
+};
+
+function applyResultThumbSizes(view, size) {
+  const sizes =
+    view === "cards"
+      ? RESULT_THUMB_CARD_SIZES[size] || RESULT_THUMB_CARD_SIZES.m
+      : RESULT_THUMB_LIST_SIZES;
+  for (const el of document.querySelectorAll(
+    "picture.thumb-src source[srcset], picture.thumb-src img[srcset]",
+  )) {
+    if (el.getAttribute("sizes") !== sizes) el.setAttribute("sizes", sizes);
+  }
+}
+
+applyResultThumbSizes(
+  document.documentElement.getAttribute("data-results-view") || "list",
+  document.documentElement.getAttribute("data-card-size") || "m",
+);
+
 document.addEventListener("DOMContentLoaded", () => {
   for (const img of document.querySelectorAll("img.screenshot")) {
     img.addEventListener("error", () => {
@@ -120,6 +146,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const nextSize = CARD_SIZES.includes(size) ? size : "m";
     document.documentElement.setAttribute("data-results-view", nextView);
     document.documentElement.setAttribute("data-card-size", nextSize);
+    applyResultThumbSizes(nextView, nextSize);
     for (const btn of viewButtons) {
       btn.setAttribute(
         "aria-pressed",

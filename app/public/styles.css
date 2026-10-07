@@ -821,6 +821,32 @@ body.tui-home .home-stage {
   margin: 0;
   box-sizing: border-box;
 }
+/* Same 40×52 slot for every result row (people, operations, comms). */
+.tui-row > .row-media {
+  width: 40px;
+  height: 52px;
+  min-width: 0;
+  max-width: 40px;
+  overflow: hidden;
+  display: block;
+  position: relative;
+  z-index: 1;
+  line-height: 0;
+  flex: 0 0 auto;
+}
+.tui-row > .row-media img,
+.tui-row > .row-media .thumb,
+.tui-row > .row-media .initials,
+.tui-row > .row-media .row-media-spacer {
+  display: block;
+  width: 40px;
+  height: 52px;
+  max-width: 40px;
+  margin: 0;
+  box-sizing: border-box;
+  object-fit: cover;
+  object-position: center 18%;
+}
 .tui-title {
   font-family: var(--font-ui);
   font-weight: 700;
@@ -2467,11 +2493,16 @@ html[data-theme="glass"][data-results-view="cards"] .tui-row {
 html[data-results-view="cards"] .tui-row::after {
   content: none;
 }
+html[data-results-view="cards"] .tui-row > .row-media,
 html[data-results-view="cards"] .tui-row.person-card > .row-media {
   width: 100%;
   max-width: none;
   height: var(--result-card-portrait-h);
 }
+html[data-results-view="cards"] .tui-row > .row-media img,
+html[data-results-view="cards"] .tui-row > .row-media .thumb,
+html[data-results-view="cards"] .tui-row > .row-media .initials,
+html[data-results-view="cards"] .tui-row > .row-media .row-media-spacer,
 html[data-results-view="cards"] .tui-row > .thumb,
 html[data-results-view="cards"] .tui-row > img.portrait,
 html[data-results-view="cards"] .tui-row > img.still,
@@ -2490,6 +2521,10 @@ html[data-results-view="cards"] .tui-row.person-card > .row-media .row-media-spa
   object-position: center 18%;
   flex: 0 0 auto;
 }
+html[data-results-view="cards"] .tui-row > .row-media img,
+html[data-results-view="cards"] .tui-row > .row-media .thumb,
+html[data-results-view="cards"] .tui-row > .row-media .initials,
+html[data-results-view="cards"] .tui-row > .row-media .row-media-spacer,
 html[data-results-view="cards"] .tui-row.person-card > .row-media img,
 html[data-results-view="cards"] .tui-row.person-card > .row-media .thumb,
 html[data-results-view="cards"] .tui-row.person-card > .row-media .initials,
@@ -2497,6 +2532,7 @@ html[data-results-view="cards"] .tui-row.person-card > .row-media .row-media-spa
   height: 100%;
 }
 html[data-results-view="cards"] .tui-row > .initials.thumb,
+html[data-results-view="cards"] .tui-row > .row-media .initials,
 html[data-results-view="cards"] .tui-row.person-card > .row-media .initials {
   display: flex;
 }

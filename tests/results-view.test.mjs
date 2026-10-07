@@ -12,6 +12,7 @@ import {
   RESULTS_VIEWS,
   layout,
   listSection,
+  operationRow,
   peopleList,
   resultsViewControl,
   searchBody,
@@ -174,10 +175,34 @@ test("app.js persists results view and card size without a reload", () => {
   assert.match(js, /data-results-view-set/);
   assert.match(js, /data-card-size-set/);
   assert.match(js, /localStorage\.setItem/);
+  assert.match(js, /applyResultThumbSizes/);
+  assert.match(js, /picture\.thumb-src source\[srcset\]/);
+  assert.match(js, /46vw, 14rem/);
+  assert.match(js, /92vw, 28rem/);
   assert.doesNotMatch(js, /results-view[\s\S]{0,400}location\.assign/);
   assert.match(css, /html\[data-results-view="cards"\] \.tui-group/);
+  assert.match(css, /html\[data-results-view="cards"\] \.tui-row > \.row-media/);
   assert.match(css, /html\[data-results-view="cards"\] \.card-size \{\s*display:\s*flex/);
   assert.match(css, /\.card-size \{\s*display:\s*none/);
   assert.match(css, /--result-card-min:\s*8\.25rem/);
   assert.match(css, /--result-card-min:\s*16rem/);
+});
+
+test("operation cards share the result portrait slot and the sharp srcset", () => {
+  const html = operationRow({
+    id: "operation-restore-justice",
+    name: "Operation Restore Justice",
+    event_date: "2024-08-01",
+    agencies: ["FBI"],
+  });
+  assert.match(html, /class="tui-row operation-card/);
+  assert.match(html, /<div class="row-media">/);
+  assert.match(html, /data-result-thumb/);
+  assert.match(html, /sizes="40px"/);
+  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.jpg\?p=6 80w/);
+  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.2x\.jpg\?p=6 160w/);
+  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.card\.jpg\?p=6 480w/);
+  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.card2x\.jpg\?p=6 960w/);
+  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.card2x\.webp\?p=6 960w/);
+  assert.doesNotMatch(html, /person-card/);
 });
