@@ -598,6 +598,19 @@ body.tui-home .home-stage {
   flex-direction: column;
   gap: 0.85rem;
 }
+
+/* Prose / Notable card text: wrap long unbroken URLs so they cannot blow the frost shell. */
+.event-summary,
+.detail-copy,
+.event-timeline,
+.meta-line,
+.detail-context {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+  min-width: 0;
+}
+
 .grokipedia-cite {
   margin: 0.35rem 0 0;
 }
