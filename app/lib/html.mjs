@@ -60,6 +60,7 @@ import {
   isCommsKind,
   KIND_COMMS,
   KIND_COMM_IDS,
+  linkedPersonIds,
   mediaSpec,} from "./kind-comms.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
@@ -2333,9 +2334,62 @@ function officialPostContextHtml(spec, row) {
   return `<section class="detail-context" aria-label="Context and citations">${parts.join("")}</section>`;
 }
 
+/** Resolved person rows in snapshot.person_ids order. Unknown ids are omitted. */
+function linkedPeopleForDetail(row, people) {
+  const ids = linkedPersonIds(row?.snapshot);
+  if (!ids.length) return [];
+  const byId = new Map();
+  for (const person of people || []) {
+    const id = String(person?.id || "").trim();
+    if (id && !byId.has(id)) byId.set(id, person);
+  }
+  return ids.map((id) => byId.get(id)).filter(Boolean);
+}
+
+/** Compact person cards. No post media — the shared post sits in supporting media. */
+function officialPostLinkedHtml(people) {
+  if (!people.length) return "";
+  const cards = people.map((person) => personRow(person)).join("");
+  return `<section class="detail-linked-people" aria-label="Linked individuals"><h3 class="event-h">Linked individuals</h3><div class="people-list tui-list">${cards}</div></section>`;
+}
+
+/**
+ * The comm itself as one supporting entry: X screenshot, local video, and poster.
+ * Files already claimed by the main strip are omitted by the shared seen bag.
+ */
+function officialPostOwnSupportHtml(spec, row, seen) {
+  const videoHref = localCommVideoHref(row, spec.mediaDir);
+  const stillHref = isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "";
+  const photo = videoHref
+    ? commVideoInner(videoHref, stillHref, `Stored video for ${row.handle}`)
+    : "";
+  const extras = stillHref
+    ? [{ src: stillHref, alt: `Post media for ${row.handle}`, credit: row.still_credit || "" }]
+    : [];
+  const strip = detailMediaStrip({
+    portraitHtml: photo,
+    portraitSrc: videoHref,
+    portraitAlt: videoHref ? `Stored video for ${row.handle}` : "",
+    portraitCredit: row.still_credit,
+    portraitKind: videoHref ? "video" : "image",
+    portraitPoster: videoHref ? stillHref : "",
+    screenshot: row.screenshot,
+    screenshotAlt: `X-post screenshot of ${row.handle}`,
+    screenshotCredit: row.screenshot_credit,
+    extraMedia: extras,
+    seen,
+  });
+  if (!supportingStripHasMedia(strip)) return "";
+  return `<section class="supporting-group" data-supporting-own="post">${strip}</section>`;
+}
+
 /** Supporting stills and screenshots only. Omitted when nothing stored remains. */
-function officialPostSupportHtml(spec, row, seen) {
+function officialPostSupportHtml(spec, row, seen, { includeOwnPost = false } = {}) {
   const groups = [];
+  if (includeOwnPost) {
+    const own = officialPostOwnSupportHtml(spec, row, seen);
+    if (own) groups.push(own);
+  }
   for (const entry of kindSupportingEntries(row)) {
     const strip = supportingEntryStrip(spec.id, row, entry, seen);
     if (!supportingStripHasMedia(strip)) continue;
@@ -2347,9 +2401,10 @@ function officialPostSupportHtml(spec, row, seen) {
   return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3>${groups.join("")}</section>`;
 }
 
-/** dog / red_folder / eagle / ronald / shot: main post, then context and citations, then supporting media. */
-function officialPostDetail(spec, row, { attributions } = {}) {
+/** dog / red_folder / eagle / ronald / shot: main post, context, linked people, supporting media. */
+function officialPostDetail(spec, row, { attributions, linkedPeople } = {}) {
   const seen = detailMediaSeen();
+  const people = linkedPeopleForDetail(row, linkedPeople);
   const videoHref = localCommVideoHref(row, spec.mediaDir);
   const stillHref = isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "";
   const photo = videoHref
@@ -2362,6 +2417,8 @@ function officialPostDetail(spec, row, { attributions } = {}) {
     alt: `Post media for ${row.handle}`,
     credit: row.still_credit || "",
   }));
+  // Linked people share this post once at the bottom. Leave the X screenshot
+  // unclaimed here so section 4 can draw it; the video and poster stay on top.
   const mediaHtml = detailMediaStrip({
     portraitHtml: photo,
     portraitSrc: videoHref || stillHref,
@@ -2369,9 +2426,9 @@ function officialPostDetail(spec, row, { attributions } = {}) {
     portraitCredit: row.still_credit,
     portraitKind: videoHref ? "video" : "image",
     portraitPoster: videoHref ? stillHref : "",
-    screenshot: row.screenshot,
+    screenshot: people.length ? "" : row.screenshot,
     screenshotAlt: `X-post screenshot of ${row.handle}`,
-    screenshotCredit: row.screenshot_credit,
+    screenshotCredit: people.length ? "" : row.screenshot_credit,
     extraMedia: extras,
     seen,
     metaHtml: detailMetaBlock({
@@ -2384,7 +2441,9 @@ function officialPostDetail(spec, row, { attributions } = {}) {
       title: "Metadata",
       mediaHtml: `<section class="detail-official-post" aria-label="Main post">${mediaHtml}</section>`,
       metaHtml: officialPostContextHtml(spec, row),
-      afterHtml: officialPostSupportHtml(spec, row, seen),
+      afterHtml: `${officialPostLinkedHtml(people)}${officialPostSupportHtml(spec, row, seen, {
+        includeOwnPost: people.length > 0,
+      })}`,
       active: true,
       extraClass: "meta-box",
     })}

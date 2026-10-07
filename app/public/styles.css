@@ -631,12 +631,14 @@ body.tui-home .home-stage {
 }
 .event-media { margin: 0.35rem 0 0; }
 .event-media img { display: block; width: min(100%, 320px); height: auto; }
-.detail-supporting {
+.detail-supporting,
+.detail-linked-people {
   margin: 0.85rem 0 0;
   padding: 0.55rem 0 0;
   border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
 }
-.detail-supporting .event-h { margin: 0 0 0.55rem; }
+.detail-supporting .event-h,
+.detail-linked-people .event-h { margin: 0 0 0.55rem; }
 /* Bottom supporting strip: one minimum width, height from the file. No square crop. */
 .detail-support-masonry .detail-tile--support {
   break-inside: avoid;
@@ -1245,9 +1247,9 @@ img.empty-portrait { object-position: center center; }
   width: 100%;
 }
 /* Official-post detail order (dog, red folder, eagle, ronald, shot):
-   1. detail-official-post  2. detail-context  3. detail-supporting */
+   1. detail-official-post  2. detail-context  3. detail-linked-people  4. detail-supporting */
 :is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail, .shot-detail)
-  :is(.detail-official-post, .detail-context, .detail-supporting) {
+  :is(.detail-official-post, .detail-context, .detail-linked-people, .detail-supporting) {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1975,6 +1977,7 @@ html[data-theme="glass"] .detail .career-history,
 html[data-theme="glass"] .detail .event-timeline,
 html[data-theme="glass"] .detail .detail-official-post,
 html[data-theme="glass"] .detail .detail-context,
+html[data-theme="glass"] .detail .detail-linked-people,
 html[data-theme="glass"] .detail .detail-supporting {
   position: relative;
   z-index: 1;
