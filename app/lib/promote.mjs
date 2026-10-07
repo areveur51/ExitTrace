@@ -28,6 +28,7 @@ import { mergeCentralCasting } from "./kind-comms.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
 import { mergeNicknames, normalizeNicknames } from "./nicknames.mjs";
 import { partitionCiteUrls } from "./official.mjs";
+import { normalizeScreenshotCredit, normalizeScreenshotHref } from "./screenshot.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 export const CITE_FLOOR = 2;
@@ -150,6 +151,20 @@ export function asEventDate(raw) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
 }
 
+/** Allowlisted people screenshot on an event. Header `people.screenshot` is separate. */
+function applyEventShot(event, ...candidates) {
+  if (!event || event.screenshot) return event;
+  for (const raw of candidates) {
+    const href = normalizeScreenshotHref(raw?.screenshot, "people");
+    if (!href) continue;
+    event.screenshot = href;
+    const credit = normalizeScreenshotCredit(raw?.screenshot_credit);
+    if (credit) event.screenshot_credit = credit;
+    break;
+  }
+  return event;
+}
+
 export function normalizePersonEvent(raw, fallback = {}) {
   if (!raw || typeof raw !== "object") return null;
   const kind = String(raw.kind || raw.category || fallback.kind || fallback.category || "").trim();
@@ -190,6 +205,7 @@ export function normalizePersonEvent(raw, fallback = {}) {
     ...(Array.isArray(raw.media) ? raw.media : []),
   ]);
   if (media.length) event.media = media;
+  applyEventShot(event, raw, fallback);
   return event;
 }
 
@@ -223,6 +239,7 @@ function uniqueEvents(events) {
     }
     const media = normalizeEventMedia([...(prior.media || []), ...(ev.media || [])]);
     if (media.length) merged.media = media;
+    applyEventShot(merged, prior, ev);
     byKind.set(ev.kind, merged);
   }
   return [...byKind.values()].sort((a, b) => {
@@ -396,6 +413,7 @@ export function attachPersonEvent(person, incoming) {
     }
     const media = normalizeEventMedia([...(events[i].media || []), ...(ev.media || [])]);
     if (media.length) next[i].media = media;
+    applyEventShot(next[i], events[i], ev);
     return {
       person: projectPerson({ ...person, events: next }),
       added: merged.added,
@@ -498,6 +516,7 @@ export function mergePersonAnnotate(gold, prior) {
     }
     const media = normalizeEventMedia(ev.media);
     if (media.length) row.media = media;
+    applyEventShot(row, ev);
     eventsByKind.set(ev.kind, row);
   }
   for (const ev of extra.events) {
@@ -516,6 +535,7 @@ export function mergePersonAnnotate(gold, prior) {
       }
       const media = normalizeEventMedia(ev.media);
       if (media.length) row.media = media;
+      applyEventShot(row, ev);
       eventsByKind.set(ev.kind, row);
       continue;
     }
@@ -535,6 +555,7 @@ export function mergePersonAnnotate(gold, prior) {
     }
     const media = normalizeEventMedia([...(existing.media || []), ...(ev.media || [])]);
     if (media.length) existing.media = media;
+    applyEventShot(existing, ev);
   }
   return projectPerson({
     ...keep,
@@ -767,6 +788,9 @@ export function incomingPersonEvent(input, sources) {
       input.category,
     );
   }
+  if (Array.isArray(input.media)) event.media = input.media;
+  if (input.screenshot) event.screenshot = input.screenshot;
+  if (input.screenshot_credit) event.screenshot_credit = input.screenshot_credit;
   return event;
 }
 

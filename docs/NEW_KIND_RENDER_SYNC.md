@@ -8,7 +8,7 @@ Gap-upsert is the explicit backfill for rows that already exist. It is not a sec
 
 A kind that already has its table is categories, store, HTML, and server only. Do not add a publication entry for a new label on `people`, `person_events`, `operations`, or `categories`.
 
-`notable` is that case: a person KEEP label on `person_events` (`kind = notable`). No new table, no `ALTER PUBLICATION`, and no gap-upsert column list. Worf does not have a publication script to review for this kind.
+`notable` is that case: a person KEEP label on `person_events` (`kind = notable`). No new table, no new column, no `ALTER PUBLICATION`, and no gap-upsert column list. Worf does not have a publication script to review for this kind. Detail reads `people.events[]` for that kind: `comments` is the factual context, `sources` are the cites, `media` is downloaded post media, and `screenshot` is the X-post still (`/media/screenshots/people/{file}`, not the header `people.screenshot`). Those JSON fields already ride the `people` publication. Media files stay on the media-delta path.
 
 ## New table
 

@@ -11,7 +11,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Added
 
-- Person KEEP kind `notable` (Notable event). The list is `/notable`. A stored `notable` person event renders a Notable event section on the person card. Promote and add-process accept the kind under the same fail-closed gates. No new table and no publication change.
+- Person KEEP kind `notable` (Notable event). The list is `/notable`. On the person card it is a bottom media block beside supporting media: X screenshot, downloaded post media, factual context, and cites. It is not an event-timeline row. No new table and no publication change.
 
 ### Changed
 

@@ -1539,10 +1539,11 @@ function supportingMediaFigure(item, source) {
   return `<figure class="detail-tile detail-tile--support">${button}<figcaption class="event-media-caption">${caption}</figcaption></figure>`;
 }
 
-/** Supporting clips after every event section. Empty when none are stored. */
+/** Supporting clips after every event section. Notable media stays on the Notable block. */
 function personSupportingMediaHtml(row) {
   const figures = [];
   for (const ev of personEvents(row)) {
+    if (String(ev?.kind || "").trim() === "notable") continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     for (const item of normalizeEventMedia(ev.media)) {
       const want = canonicalPublicUrl(item.url);
@@ -1916,9 +1917,74 @@ export function grokipediaBlock(row, { filled = [], cite } = {}) {
   return `<p class="meta-line grokipedia-cite">Grokipedia · ${citeLink(item.url)}</p>`;
 }
 
+function eventSectionCites(ev) {
+  return (ev?.sources || []).map((source) => ({
+    url: source?.url || "",
+    snippet: isUnofficialOrCommentarySocial(source?.url)
+      ? ""
+      : String(source?.snippet || source?.quote || source?.title || "").trim(),
+    source_label: source?.publisher || "",
+    title: source?.title || "",
+    date: source?.date || "",
+  }));
+}
+
+function xStatusSource(sources) {
+  return (sources || []).find((source) =>
+    /(?:^https?:\/\/)?(?:www\.)?(?:x|twitter)\.com\//i.test(String(source?.url || "")),
+  );
+}
+
+function notableMediaFigures(ev) {
+  const figures = [];
+  const shot = normalizeScreenshotHref(ev?.screenshot, "people");
+  if (shot) {
+    const xSource = xStatusSource(ev.sources) || null;
+    figures.push(
+      supportingMediaFigure(
+        { src: shot, alt: "X-post screenshot", url: xSource?.url || "" },
+        xSource,
+      ),
+    );
+  }
+  const sources = Array.isArray(ev?.sources) ? ev.sources : [];
+  for (const item of normalizeEventMedia(ev?.media)) {
+    const want = canonicalPublicUrl(item.url);
+    const source = sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
+    figures.push(supportingMediaFigure(item, source));
+  }
+  return figures;
+}
+
+/**
+ * Bottom Notable block. Same masonry as supporting media, plus factual context and cites.
+ * Not the header portrait strip. Empty when the event has no prose, cite, shot, or clip.
+ */
+export function notableMediaHtml(row) {
+  return personEvents(row)
+    .filter((ev) => String(ev?.kind || "").trim() === "notable")
+    .map((ev) => {
+      const figures = notableMediaFigures(ev);
+      const masonry = figures.length
+        ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
+        : "";
+      return personEventSection({
+        title: "Notable event",
+        kind: "notable",
+        bodyHtml: masonry,
+        summary: String(ev.comments || "").trim(),
+        cites: eventSectionCites(ev),
+        className: "detail-notable detail-supporting",
+        tag: "section",
+      });
+    })
+    .filter(Boolean)
+    .join("");
+}
+
 export function eventTagRow(ev, { birthDate } = {}) {
   const kind = String(ev?.kind || "").trim();
-  if (!kind || !isDisplayedEventKind(kind)) return "";
+  if (!kind || kind === "notable" || !isDisplayedEventKind(kind)) return "";
   const label =
     kind === "corona_comms"
       ? categoryById(kind)?.nav || "Corona"
@@ -1961,15 +2027,7 @@ export function eventTagRow(ev, { birthDate } = {}) {
   return personEventSection({
     headingHtml: `${esc(label)}${unsealedBadge}`,
     kind,
-    cites: (ev.sources || []).map((source) => ({
-      url: source?.url || "",
-      snippet: isUnofficialOrCommentarySocial(source?.url)
-        ? ""
-        : String(source?.snippet || source?.quote || source?.title || "").trim(),
-      source_label: source?.publisher || "",
-      title: source?.title || "",
-      date: source?.date || "",
-    })),
+    cites: eventSectionCites(ev),
     bodyHtml: `${eventLine}${announced}${ageLine}${groupLine}${attrs}`,
     className: "event-tag-row",
     tag: "article",
@@ -2025,9 +2083,10 @@ export function epsteinFlightLogSection(legs = [], { note: lead = "" } = {}) {
 
 
 function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
-  const events = personEvents(row).filter((ev) =>
-    isDisplayedEventKind(String(ev.kind || "").trim()),
-  );
+  const events = personEvents(row).filter((ev) => {
+    const kind = String(ev.kind || "").trim();
+    return kind !== "notable" && isDisplayedEventKind(kind);
+  });
   const rows = events
     .map((ev) => eventTagRow(ev, { birthDate: row.birth_date }))
     .filter(Boolean)
@@ -2069,7 +2128,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${personSupportingMediaHtml(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
       active: true,
       extraClass: "person-pane",
     })}
