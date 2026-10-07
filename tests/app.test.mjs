@@ -179,6 +179,7 @@ test("html pages render", async () => {
     "/dog-comms",
     "/eagle-comms",
     "/ronald-comms",
+    "/shot-comms",
     "/boot-comms",
     "/red-folder-comms",
     "/central-casting",
@@ -308,6 +309,7 @@ test("every category list page ships a pager", async () => {
     "/dog-comms",
     "/eagle-comms",
     "/ronald-comms",
+    "/shot-comms",
     "/boot-comms",
     "/red-folder-comms",
     "/central-casting",
@@ -427,7 +429,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(keys, ["f", "r", "g", "a", "i", "d", "m", "b", "u", "w"]);
   const commKeys = [...res.body.matchAll(/class="keychip keymap-comm"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(commKeys, ["c", "e", "l", "n", "k", "o", "t"]);
+  assert.deepEqual(commKeys, ["c", "e", "l", "n", "s", "k", "o", "t"]);
   assert.match(res.body, /class="keymap-group keymap-comms" aria-label="Comms"><p class="keymap-section">Comms</);
   assert.match(res.body, /class="keymap-group keymap-tags" aria-label="Fact tags"/);
   assert.match(res.body, /class="keymap-section">Tags</);
@@ -436,7 +438,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /class="keychip keymap-tag" href="\/tags\/epstein-clients">Epstein Clients</);
   assert.doesNotMatch(res.body, /keymap-tag[^>]*data-key=/);
   assert.doesNotMatch(res.body, /home-tag-pill/);
-  assert.doesNotMatch(res.body, /data-key="s"/);
+  assert.match(res.body, /class="keychip keymap-comm" href="\/shot-comms" data-key="s"/);
   assert.doesNotMatch(res.body, /\]<\/span> Add</);
   assert.doesNotMatch(res.body, /\]<\/span> Search</);
   assert.doesNotMatch(res.body, /widgets\.js/);
@@ -608,7 +610,7 @@ test("HUD palette uses red/black/gold tokens and documents phone/iPad/desktop la
   assert.match(home.body, /class="tui hud/);
   assert.match(home.body, /class="hud-stage"/);
   assert.doesNotMatch(home.body, /href="\/search"/);
-  assert.doesNotMatch(home.body, /data-key="s"/);
+  assert.match(home.body, /href="\/shot-comms" data-key="s"/);
   assert.doesNotMatch(home.body, /#c4b5fd|#4c1d95|#e6c384/);
   assert.match(list.body, /list-head/);
   assert.match(list.body, /class="hud-stage"/);

@@ -12,6 +12,7 @@ const COMMS = [
   { key: "e", href: "/red-folder-comms", label: "Red Folder" },
   { key: "l", href: "/eagle-comms", label: "Eagle" },
   { key: "n", href: "/ronald-comms", label: "Ronald" },
+  { key: "s", href: "/shot-comms", label: "Shot" },
   { key: "k", href: "/boot-comms", label: "Boot" },
   { key: "o", href: "/corona-comms", label: "Corona" },
   { key: "t", href: "/central-casting", label: "Central Casting" },
@@ -24,7 +25,7 @@ function parts(html) {
   return { top, comms, tags };
 }
 
-test("keymap Comms section uses the shared section pattern with the 7 comms links in order", () => {
+test("keymap Comms section uses the shared section pattern with the comms links in order", () => {
   assert.deepEqual(keymapCommsItems(), COMMS);
   for (const active of ["/", "/firings", "/dog-comms", "/central-casting", "/tags/masks"]) {
     const html = keymapFooter(active);

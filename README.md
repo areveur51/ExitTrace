@@ -171,7 +171,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | | |
 |--|--|
 | `GET /health` | HTML health page (counts plus public `keep_up` stamps) |
-| `GET /api/health` | `{ ok, ready, backend, people, dog_comms, eagle_comms, ronald_comms, boot_comms, red_folder_comms, central_casting, operations, source_posts, keep_up }` |
+| `GET /api/health` | `{ ok, ready, backend, people, dog_comms, eagle_comms, ronald_comms, shot_comms, boot_comms, red_folder_comms, central_casting, operations, source_posts, keep_up }` |
 | `GET /search?q=` | Local catalog search (people keep person cards; operations keep operation cards; posted hits group under Unsorted) |
 | `GET /people/:id` | One person row. Central Casting cites and X media render here when stored |
 | `GET /operations/:id` | One operation row |
@@ -179,6 +179,7 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /dog-comms/:id` | One stored dog-comm detail |
 | `GET /eagle-comms/:id` | One stored eagle-comm detail |
 | `GET /ronald-comms/:id` | One stored ronald-comm detail |
+| `GET /shot-comms/:id` | One stored shot-comm detail |
 | `GET /boot-comms/:id` | One stored boot-comm detail |
 | `GET /red-folder-comms/:id` | One stored red-folder-comm detail |
 | `GET /dashboard` | Unique-person ranks, Counts by Age, operation standing, and event-date trends |
@@ -191,10 +192,11 @@ Dog comms store the post text, poster handle, date, and a local still when one i
 | `GET /api/dog-comms` | Stored official dog posts |
 | `GET /api/eagle-comms` | Stored official eagle posts |
 | `GET /api/ronald-comms` | Stored official Ronald posts |
+| `GET /api/shot-comms` | Stored official shot posts |
 | `GET /api/boot-comms` | Stored official boot posts |
 | `GET /api/red-folder-comms` | Stored official red-folder posts |
 | `GET /api/central-casting` | Unique persons with a Central Casting membership |
-| `GET /media/...` | Files on disk. People list uses derived thumbs under `/media/thumbs/people/` (small CSS, denser srcset, lazy). Person detail / masonry / lightbox use the gold `/media/people/` still (WebP + JPEG fallback). Dog detail keeps the full `/media/dog-comms/` still. Eagle detail keeps the full `/media/eagle-comms/` still. Ronald detail keeps the full `/media/ronald-comms/` still. Boot detail keeps the full `/media/boot-comms/` still. Red-folder detail keeps the full `/media/red-folder-comms/` still. |
+| `GET /media/...` | Files on disk. People list uses derived thumbs under `/media/thumbs/people/` (small CSS, denser srcset, lazy). Person detail / masonry / lightbox use the gold `/media/people/` still (WebP + JPEG fallback). Dog detail keeps the full `/media/dog-comms/` still. Eagle detail keeps the full `/media/eagle-comms/` still. Ronald detail keeps the full `/media/ronald-comms/` still. Shot detail keeps the full `/media/shot-comms/` still. Boot detail keeps the full `/media/boot-comms/` still. Red-folder detail keeps the full `/media/red-folder-comms/` still. |
 
 ## Configuration
 

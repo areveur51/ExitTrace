@@ -208,6 +208,15 @@ export const CATEGORIES = [
     blurb: "Official and news-org posts about Ronald McDonald, or that include Ronald imagery. Stored locally; the source URL is a citation only.",
   },
   {
+    id: "shot_comms",
+    kind: "shot",
+    title: "Shot comms",
+    nav: "Shot comms",
+    path: "/shot-comms",
+    blurb:
+      "Official posts about a shooting or assassination, or that include that imagery. Stored locally; the source URL is a citation only.",
+  },
+  {
     id: "boot_comms",
     kind: "person",
     title: "Boot",
@@ -326,6 +335,9 @@ export function mapImportCategory(raw) {
     return null;
   }
   if (key === "ronald_comms" || key === "ronald" || key === "ronald_comm" || key === "ronaldcomms") {
+    return null;
+  }
+  if (key === "shot_comms" || key === "shot" || key === "shot_comm" || key === "shotcomms") {
     return null;
   }
   if (key === "boot_comms" || key === "boot" || key === "boot_comm" || key === "bootcomms") {

@@ -629,7 +629,7 @@ test("dog supporting stills merge into extras; supporting X links stay under Sou
 });
 
 test("official-post kinds render main post, then context, then supporting media", () => {
-  for (const id of ["dog", "red_folder", "eagle", "ronald"]) {
+  for (const id of ["dog", "red_folder", "eagle", "ronald", "shot"]) {
     const spec = KIND_COMMS[id];
     const html = kindDetail(id, {
       id: `${id}-order`,

@@ -35,6 +35,7 @@ test("published tables include the new comms tables and person_events", () => {
     "dog_comms",
     "eagle_comms",
     "ronald_comms",
+    "shot_comms",
     "boot_comms",
     "operations",
     "categories",

@@ -200,6 +200,22 @@ CREATE TABLE IF NOT EXISTS ronald_comms (
 
 CREATE INDEX IF NOT EXISTS ronald_comms_posted_at_idx ON ronald_comms (posted_at DESC);
 
+CREATE TABLE IF NOT EXISTS shot_comms (
+  id TEXT PRIMARY KEY,
+  posted_at TEXT NOT NULL,
+  handle TEXT NOT NULL,
+  account_name TEXT,
+  text TEXT NOT NULL,
+  still TEXT,
+  still_credit TEXT,
+  screenshot TEXT,
+  screenshot_credit TEXT,
+  source_url TEXT NOT NULL,
+  snapshot JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS shot_comms_posted_at_idx ON shot_comms (posted_at DESC);
+
 CREATE TABLE IF NOT EXISTS boot_comms (
   id TEXT PRIMARY KEY,
   posted_at TEXT NOT NULL,

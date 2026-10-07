@@ -101,6 +101,8 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
   assert.equal(categoryByPath("/dog-comms").id, "dog_comms");
   assert.equal(categoryByPath("/red-folder-comms").id, "red_folder_comms");
   assert.equal(categoryByPath("/central-casting").id, "central_casting");
+  assert.equal(categoryByPath("/shot-comms").id, "shot_comms");
+  assert.equal(categoryByPath("/shot-comms").kind, "shot");
   assert.equal(categoryByPath("/dog-comms").kind, "dog");
   assert.equal(categoryByPath("/red-folder-comms").kind, "red_folder");
   assert.equal(categoryByPath("/central-casting").kind, "central_casting");
