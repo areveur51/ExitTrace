@@ -31,6 +31,7 @@ import {
   countSourcePosts,
   getKindComm,
   getOperation,
+  getPeopleByIds,
   getPerson,
   getSourcePost,
   listCentralCastingEvidence,
@@ -1074,6 +1075,7 @@ async function handle(req, res) {
             target_kind: attributionKindForComms(commsDetail.id),
             target_id: row.id,
           }),
+          linkedPeople: await getPeopleByIds(row.snapshot?.person_ids),
         }),
       }),
     );

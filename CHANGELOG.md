@@ -11,6 +11,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Added
 
+- Official-post detail pages (Dog, Red Folder, Eagle, Ronald, Shot) list linked people from `snapshot.person_ids` as person cards between context and supporting media. The post is one shared supporting entry at the bottom. No schema change.
 - Comms catalog Shot (`shot_comms`, `/shot-comms`, keymap `s`). Official posts about a shooting or assassination use the same clip catalog as Dog, Eagle, Red Folder, and Ronald: list, detail, stills under `media/shot-comms/`, and gap-upsert. It is not a person KEEP kind. No seed rows.
 - Result lists can switch between the standing row list and a card grid (portrait, name, and the same key attributes). Card size is Small, Medium, or Large and applies only in card view. The choice is stored in localStorage (`exittrace-results-view`, `exittrace-card-size`) and restored before paint. Home, detail pages, and dashboard rank tables stay as they are.
 - Person KEEP kind `notable` (Notable event). On the person card it is a bottom media block beside supporting media: X screenshot, downloaded post media, factual context, and cites. It is not an event-timeline row, not a catalog list, and not a keymap chip. No new table and no publication change.

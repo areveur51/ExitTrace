@@ -214,6 +214,29 @@ export function mergeCentralCasting(gold, prior) {
 
 export const KIND_COMM_IDS = Object.freeze(Object.keys(KIND_COMMS));
 
+/**
+ * Ordered people.id list stored on a kind-comm snapshot (`person_ids`).
+ * Accepts the snapshot object or the array itself. Blanks, non-strings, and
+ * repeats are dropped. Order of first occurrence is kept.
+ */
+export function linkedPersonIds(snapshotOrIds) {
+  const list = Array.isArray(snapshotOrIds)
+    ? snapshotOrIds
+    : Array.isArray(snapshotOrIds?.person_ids)
+      ? snapshotOrIds.person_ids
+      : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    if (typeof item !== "string") continue;
+    const id = item.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 const TABLES = new Set(KIND_COMM_IDS.map((id) => KIND_COMMS[id].table));
 const PATHS = new Map(KIND_COMM_IDS.map((id) => [KIND_COMMS[id].path, KIND_COMMS[id]]));
 const CATEGORY_IDS = new Map(KIND_COMM_IDS.map((id) => [KIND_COMMS[id].categoryId, KIND_COMMS[id]]));

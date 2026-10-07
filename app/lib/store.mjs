@@ -43,6 +43,7 @@ import {
   assertCentralCastingClassification,
   centralCastingStoredQuote,
   commsKind,
+  linkedPersonIds,
   mediaSpec,
   normalizeCentralCasting,
   KIND_COMMS,
@@ -151,6 +152,7 @@ function normalizePerson(row) {
 function normalizeKindSnapshot(raw, kind) {
   if (!raw || typeof raw !== "object") return {};
   const snap = { ...raw };
+  snap.person_ids = linkedPersonIds(raw);
   if (!Array.isArray(raw.supporting)) return snap;
   const spec = mediaSpec(kind);
   snap.supporting = raw.supporting.map((item) => {
@@ -507,6 +509,10 @@ export function mergeKindSnapshotFillEmpty(nextSnap = {}, priorSnap = {}) {
   const nextSupp = Array.isArray(next.supporting) ? next.supporting : [];
   const priorSupp = Array.isArray(prior.supporting) ? prior.supporting : [];
   if (!nextSupp.length && priorSupp.length) next.supporting = priorSupp.map((e) => ({ ...e }));
+  const nextIds = linkedPersonIds(next.person_ids);
+  const priorIds = linkedPersonIds(prior.person_ids);
+  if (!nextIds.length && priorIds.length) next.person_ids = priorIds;
+  else next.person_ids = nextIds;
   return next;
 }
 
@@ -2784,6 +2790,23 @@ export async function getPerson(id) {
   if (!p) return getMemory().people.find((r) => r.id === id) || null;
   const q = await p.query("SELECT * FROM people WHERE id = $1", [id]);
   return q.rows[0] ? normalizePerson(q.rows[0]) : null;
+}
+
+/** People for snapshot.person_ids, in that order. Unknown ids are omitted. */
+export async function getPeopleByIds(ids) {
+  const wanted = linkedPersonIds(ids);
+  if (!wanted.length) return [];
+  const p = await getPool();
+  let rows;
+  if (!p) {
+    const byMem = new Map((getMemory().people || []).map((row) => [row.id, row]));
+    rows = wanted.map((id) => byMem.get(id)).filter(Boolean);
+  } else {
+    const q = await p.query("SELECT * FROM people WHERE id = ANY($1::text[])", [wanted]);
+    const byId = new Map(q.rows.map((row) => [row.id, normalizePerson(row)]));
+    rows = wanted.map((id) => byId.get(id)).filter(Boolean);
+  }
+  return rows;
 }
 
 export async function getKindComm(kind, id) {
