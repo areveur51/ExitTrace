@@ -12,7 +12,7 @@ import {
 import { listPathForPerson } from "../app/lib/display-check.mjs";
 import { rankDimension } from "../app/lib/dashboard.mjs";
 import { mapLeadReason } from "../app/lib/event-attrs.mjs";
-import { eventTagRow, personDetail } from "../app/lib/html.mjs";
+import { breadcrumbItems, eventTagRow, personDetail } from "../app/lib/html.mjs";
 import { projectPerson, validateIdentifiedPersonInput } from "../app/lib/promote.mjs";
 import { handle } from "../app/server.mjs";
 import { applyIdentifiedPerson, getPerson, listPeople, loadSeedFile, setMemory } from "../app/lib/store.mjs";
@@ -61,12 +61,19 @@ test("notable is a person KEEP kind with Notable event / Notable titles", () => 
   assert.equal(cat.kind, "person");
   assert.equal(cat.title, "Notable event");
   assert.equal(cat.nav, "Notable");
-  assert.equal(cat.path, "/notable");
-  assert.equal(categoryByPath("/notable").id, "notable");
+  assert.equal(cat.path, undefined);
+  assert.equal(categoryByPath("/notable"), null);
   assert.equal(PROMOTE_CATEGORY_IDS.includes("notable"), true);
   assert.equal(isDisplayedEventKind("notable"), true);
   assert.equal(isDisplayedEventKind("notable_event"), false);
-  assert.equal(listPathForPerson("notable"), "/notable");
+  assert.equal(listPathForPerson("notable"), null);
+  assert.deepEqual(
+    breadcrumbItems({ path: "/people/casey-vale", label: "Casey Vale", categoryId: "notable" }),
+    [
+      { href: "/", label: "Home" },
+      { href: "/people/casey-vale", label: "Casey Vale" },
+    ],
+  );
   assert.equal(mapLeadReason("notable"), "notable");
   assert.equal(mapLeadReason("Notable event"), null);
 });
@@ -240,19 +247,17 @@ test("person detail shows Notable event when a notable person_event exists", asy
   assert.match(page.body, /data-kind="notable"/);
 
   const list = await requestPage("/notable");
-  assert.equal(list.status, 200);
-  assert.match(list.body, /Notable event/);
-  assert.match(list.body, /href="\/notable"/);
-  assert.match(list.body, />Notable</);
-  assert.match(list.body, /Casey Vale/);
-  assert.match(list.body, /class="pager"/);
+  assert.equal(list.status, 404);
   assert.equal((await listPeople("notable")).length, before + 1);
 
   const reason = rankDimension([person], "reason");
   const notable = reason.find((row) => row.key === "notable");
   assert.equal(notable.label, "Notable event");
-  assert.equal(notable.href, "/notable");
+  assert.equal(notable.href, "");
   assert.equal(notable.count, 1);
+  assert.doesNotMatch(page.body, /href="\/notable"/);
+  assert.doesNotMatch(page.body, /data-key="v"/);
+  assert.doesNotMatch(page.body, />Notable</);
 });
 
 test("promote and add form accept notable and reject an unknown kind", async () => {
@@ -279,5 +284,7 @@ test("promote and add form accept notable and reject an unknown kind", async () 
   assert.match(add.body, /value="notable"/);
   assert.match(add.body, />Notable event</);
   const home = await requestPage("/");
-  assert.match(home.body, /data-key="v"[^>]*>[\s\S]*Notable</);
+  assert.doesNotMatch(home.body, /href="\/notable"/);
+  assert.doesNotMatch(home.body, /data-key="v"/);
+  assert.doesNotMatch(home.body, />Notable</);
 });

@@ -202,7 +202,6 @@ function keymapItems(activePath) {
     { key: "r", href: "/resignations" },
     { key: "g", href: "/government" },
     { key: "a", href: "/arrests" },
-    { key: "v", href: "/notable" },
     { key: "i", href: "/indictments" },
     { key: "d", href: "/deaths" },
     { key: "m", href: "/group-operations" },
@@ -421,7 +420,7 @@ function chromeWidgets() {
 }
 
 function categoryTrail(cat) {
-  if (!cat) return [];
+  if (!cat || cat.id === "notable" || !cat.path) return [];
   if (isDeathFamily(cat.id)) {
     if (cat.id === "death_unspecified") {
       return [{ href: "/deaths", label: "Deaths" }];
@@ -471,6 +470,10 @@ export function breadcrumbItems({
       return items;
     }
     const cat = categoryById(categoryId);
+    if (cat?.id === "notable") {
+      items.push({ href: p, label: label || "Person" });
+      return items;
+    }
     const trail = categoryTrail(cat);
     items.push(...(trail.length ? trail : [{ href: "/firings", label: "Catalog" }]));
     items.push({ href: p, label: label || "Person" });
