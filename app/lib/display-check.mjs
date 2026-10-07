@@ -23,6 +23,8 @@ const INDICTMENT_LIST_PATHS = {
 
 export function listPathForPerson(category) {
   const id = String(category || "").trim();
+  // Notable is a person-card block. It has no catalog list to assert.
+  if (id === "notable") return null;
   if (DEATH_LIST_PATHS[id]) return DEATH_LIST_PATHS[id];
   if (INDICTMENT_LIST_PATHS[id]) return INDICTMENT_LIST_PATHS[id];
   const cat = categoryById(id);
@@ -170,6 +172,23 @@ export async function checkPersonDisplayed(person) {
     throw new DisplayError("person id is required for the display check", "missing_person");
   }
   const listPath = listPathForPerson(person.category);
+  if (!listPath) {
+    const detailPath = `/people/${person.id}`;
+    const detail = await fetchCatalogHtml(detailPath);
+    if (detail.status !== 200 || !hasPersonOnDetail(detail.body, person)) {
+      throw new DisplayError(
+        `person ${person.id} is not on ${detailPath} HTML (health counts are not enough)`,
+        "detail_missing",
+      );
+    }
+    if (!detail.body.includes(">Notable event<")) {
+      throw new DisplayError(
+        `person ${person.id} detail is missing the Notable event block`,
+        "detail_missing",
+      );
+    }
+    return { list: null, detail: detailPath };
+  }
   if (listPath === "/deaths") {
     throw new DisplayError(
       "/deaths is an empty index; celebrities/officials/ceos are the list pages",

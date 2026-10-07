@@ -36,8 +36,7 @@ export const CATEGORIES = [
     kind: "person",
     title: "Notable event",
     nav: "Notable",
-    path: "/notable",
-    blurb: "Notable events attached to an identified person. One card per person; the event and its cites sit on the person detail.",
+    blurb: "Notable events attached to an identified person. The event, cites, and media sit on that person card. There is no catalog list.",
   },
   {
     id: "corona_comms",

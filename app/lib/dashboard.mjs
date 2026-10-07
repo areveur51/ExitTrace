@@ -176,8 +176,9 @@ function reasonLabel(kind) {
 }
 
 function reasonHref(kind) {
+  if (String(kind || "").trim() === "notable") return "";
   const cat = categoryById(kind);
-  return cat && cat.kind === "person" ? cat.path : "/dashboard/reason";
+  return cat && cat.kind === "person" && cat.path ? cat.path : "/dashboard/reason";
 }
 
 function compareRank(a, b) {
@@ -217,12 +218,15 @@ export function rankDimension(people, dimId, range) {
     }
   }
   return [...counts.entries()]
-    .map(([key, count]) => ({
-      key,
-      label: meta.get(key)?.label || key,
-      href: meta.get(key)?.href || dim.path,
-      count,
-    }))
+    .map(([key, count]) => {
+      const stored = meta.get(key);
+      return {
+        key,
+        label: stored?.label || key,
+        href: stored ? stored.href : dim.path,
+        count,
+      };
+    })
     .filter((row) => row.count > 0)
     .sort(compareRank);
 }

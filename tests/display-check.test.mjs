@@ -35,7 +35,7 @@ test("list paths skip the /deaths index", () => {
   assert.equal(listPathForPerson("resignations"), "/resignations");
   assert.equal(listPathForPerson("government_stepdowns"), "/government");
   assert.equal(listPathForPerson("arrests"), "/arrests");
-  assert.equal(listPathForPerson("notable"), "/notable");
+  assert.equal(listPathForPerson("notable"), null);
   assert.equal(listPathForPerson("corona_comms"), "/corona-comms");
   assert.equal(listPathForPerson("indictment_civilian"), "/indictments/civilians");
   assert.equal(listPathForPerson("indictment_non_civilian"), "/indictments/non-civilians");
