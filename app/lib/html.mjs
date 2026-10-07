@@ -220,7 +220,7 @@ function keymapItems(activePath) {
 
 /**
  * Comms section of the keymap menu (same section pattern as Tags).
- * Order: KIND_COMMS clip catalogs (Dog, Red Folder, Eagle, Ronald), then
+ * Order: KIND_COMMS clip catalogs (Dog, Red Folder, Eagle, Ronald, Shot), then
  * Boot (person), Corona, then Central Casting. Shortcut keys are unchanged.
  */
 export function keymapCommsItems() {
@@ -2292,7 +2292,7 @@ export function operationDetail(row, { attributions } = {}) {
   </article>`;
 }
 
-const OFFICIAL_POST_IDS = new Set(["dog", "red_folder", "eagle", "ronald"]);
+const OFFICIAL_POST_IDS = new Set(["dog", "red_folder", "eagle", "ronald", "shot"]);
 
 function commsAttributionSurface(specId) {
   if (specId === "dog") return "dog_comm";
@@ -2347,7 +2347,7 @@ function officialPostSupportHtml(spec, row, seen) {
   return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3>${groups.join("")}</section>`;
 }
 
-/** dog / red_folder / eagle / ronald: main post, then context and citations, then supporting media. */
+/** dog / red_folder / eagle / ronald / shot: main post, then context and citations, then supporting media. */
 function officialPostDetail(spec, row, { attributions } = {}) {
   const seen = detailMediaSeen();
   const videoHref = localCommVideoHref(row, spec.mediaDir);

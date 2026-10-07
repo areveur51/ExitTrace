@@ -450,6 +450,7 @@ async function healthPayload() {
     dog_comms: c.dog_comms,
     eagle_comms: c.eagle_comms,
     ronald_comms: c.ronald_comms,
+    shot_comms: c.shot_comms,
     boot_comms: c.boot_comms,
     red_folder_comms: c.red_folder_comms,
     central_casting: c.central_casting,

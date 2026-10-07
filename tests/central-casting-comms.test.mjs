@@ -123,6 +123,14 @@ test("central casting is a person list, not a KIND_COMMS clip catalog", () => {
   assert.equal(KIND_COMMS.ronald.keymapKey, "n");
   assert.equal(KIND_COMMS.ronald.path, "/ronald-comms");
   assert.equal(KIND_COMMS.ronald.supportingGroups, true);
+  assert.equal(KIND_COMMS.shot.keymapKey, "s");
+  assert.equal(KIND_COMMS.shot.path, "/shot-comms");
+  assert.equal(KIND_COMMS.shot.mediaDir, "shot-comms");
+  assert.equal(KIND_COMMS.shot.supportingGroups, false);
+  assert.equal(categoryByPath("/shot-comms").id, "shot_comms");
+  assert.equal(categoryByPath("/shot-comms").kind, "shot");
+  assert.equal(mapImportCategory("shot"), null);
+  assert.equal(mapImportCategory("shot_comms"), null);
   assert.equal(KIND_COMMS.boot, undefined);
   assert.equal(BOOT_COMMS_KEYMAP, "k");
   assert.equal(BOOT_COMMS_PATH, "/boot-comms");

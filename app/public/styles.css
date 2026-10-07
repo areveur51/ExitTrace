@@ -1244,9 +1244,9 @@ img.empty-portrait { object-position: center center; }
   min-width: 0;
   width: 100%;
 }
-/* Official-post detail order (dog, red folder, eagle, ronald):
+/* Official-post detail order (dog, red folder, eagle, ronald, shot):
    1. detail-official-post  2. detail-context  3. detail-supporting */
-:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail)
+:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail, .shot-detail)
   :is(.detail-official-post, .detail-context, .detail-supporting) {
   display: flex;
   flex-direction: column;
@@ -1254,7 +1254,7 @@ img.empty-portrait { object-position: center center; }
   width: 100%;
   min-width: 0;
 }
-:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail) .detail-context {
+:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail, .shot-detail) .detail-context {
   margin-top: 0.85rem;
   padding-top: 0.55rem;
   border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
@@ -2319,7 +2319,8 @@ html[data-theme="glass"] .dash-stats {
   .dog-detail,
   .red-folder-detail,
   .eagle-detail,
-  .ronald-detail {
+  .ronald-detail,
+  .shot-detail {
     display: flex;
     flex-direction: column;
   }
@@ -2575,14 +2576,14 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
    width, height from the image. Beats the shared masonry cover / 192×250
    crop and the ≤720px min-height box. People and operation portrait wells
    keep their own cover crop. */
-:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail)
+:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail, .shot-detail)
   :is(.detail-official-post, .detail-supporting, .supporting-group)
   :is(.detail-tile--portrait, .detail-tile--screenshot, .detail-tile--still) {
   min-height: 0;
   min-width: min(100%, 16rem);
   overflow: visible;
 }
-:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail)
+:is(.dog-detail, .red-folder-detail, .eagle-detail, .ronald-detail, .shot-detail)
   :is(.detail-official-post, .detail-supporting, .supporting-group)
   :is(.detail-tile--portrait, .detail-tile--screenshot, .detail-tile--still)
   :is(img, .detail-photo, .lightbox-open) {

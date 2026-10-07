@@ -85,7 +85,7 @@ People: named subject, calendar `event_date` (never copied from `posted_at`), ca
 
 Dog comms: official government handle or official post URL, plus date. Unofficial or commentary social is rejected. Snapshot text/media is copied only if it is already in the local store. The command does not fetch X.
 
-After the row is applied, the host process is not done until live HTML shows it on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; celebrities, officials, and CEOs are the death list pages. `/indictments` is an empty index; civilians and non-civilians are the indictment list pages. `/group-operations` lists every operation; missing-kids, human-smuggling, fugitives, cybercrime, drug-trafficking, violent-crime, and fraud are the tagged filters. Operation detail is `/operations/:id`. Named children are not stored. Victim and arrest counts stay blank unless a cite states them. `/corona-comms` lists every person with that tag and has no child split. Dog comms use `/dog-comms` and `/dog-comms/:id`. Eagle comms use `/eagle-comms` and `/eagle-comms/:id`. Boot comms use `/boot-comms` and `/boot-comms/:id`. Red-folder comms use `/red-folder-comms` and `/red-folder-comms/:id`. Central Casting uses `/central-casting` and the existing person detail `/people/:id`. The process script prints `display ok list=… detail=…` when that check passes.
+After the row is applied, the host process is not done until live HTML shows it on the list page and the detail page. Health counts are not enough. `/deaths` is an empty index; celebrities, officials, and CEOs are the death list pages. `/indictments` is an empty index; civilians and non-civilians are the indictment list pages. `/group-operations` lists every operation; missing-kids, human-smuggling, fugitives, cybercrime, drug-trafficking, violent-crime, and fraud are the tagged filters. Operation detail is `/operations/:id`. Named children are not stored. Victim and arrest counts stay blank unless a cite states them. `/corona-comms` lists every person with that tag and has no child split. Dog comms use `/dog-comms` and `/dog-comms/:id`. Eagle comms use `/eagle-comms` and `/eagle-comms/:id`. Ronald comms use `/ronald-comms` and `/ronald-comms/:id`. Shot comms use `/shot-comms` and `/shot-comms/:id`. Boot comms use `/boot-comms` and `/boot-comms/:id`. Red-folder comms use `/red-folder-comms` and `/red-folder-comms/:id`. Central Casting uses `/central-casting` and the existing person detail `/people/:id`. The process script prints `display ok list=… detail=…` when that check passes.
 
 Idempotent. Does not write `data/seed.json`.
 
@@ -120,6 +120,18 @@ Subscriber then:
 `ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)`
 
 Never `copy_data=true`. That refresh does not copy rows already stored. Backfill with gap-upsert after the table exists, because `COUNT_SQL` selects `ronald_comms`. Media stills (`media/ronald-comms/` and screenshots under `media/screenshots/ronald-comms/`) travel on the media-delta path.
+
+`shot_comms` is a twin of `dog_comms`. Fresh envs create it from `scripts/bootstrap-db.sql`. The page is `/shot-comms`. It is a clip catalog of official posts about a shooting or assassination, not a person KEEP kind. A video is stored as its thumbnail, not an mp4.
+
+Lab adds the table to the publication with `scripts/add-shot-comms-publication.sql` when it is not already published:
+
+That is `ALTER PUBLICATION exittrace_lab_pub ADD TABLE shot_comms` when the table is not already in the publication.
+
+Subscriber then:
+
+`ALTER SUBSCRIPTION exittrace_lab_sub REFRESH PUBLICATION WITH (copy_data = false)`
+
+Never `copy_data=true`. That refresh does not copy rows already stored. Backfill with gap-upsert after the table exists, because `COUNT_SQL` selects `shot_comms`. Media stills (`media/shot-comms/` and screenshots under `media/screenshots/shot-comms/`) travel on the media-delta path.
 
 
 ## Boot publication (lab)
