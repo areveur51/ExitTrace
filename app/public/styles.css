@@ -2374,6 +2374,167 @@ html[data-theme="glass"] .dash-stats {
   }
 }
 
+/* Result lists: list rows stay the default. Card view restyles the same rows. */
+.results-view {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1.25rem;
+  margin: 0.15rem 0 0.75rem;
+}
+.results-view-mode,
+.card-size {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.45rem;
+}
+.results-view-label,
+.card-size-label {
+  flex: 1 1 100%;
+  font-family: var(--font-ui);
+  font-size: var(--hud-label);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brick);
+}
+.results-view-btns,
+.card-size-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.results-view-btn,
+.card-size-btn {
+  font: inherit;
+  cursor: pointer;
+}
+html:not([data-results-view]) .results-view-btn[aria-pressed="true"],
+html:not([data-card-size]) .card-size-btn[aria-pressed="true"],
+html[data-results-view="list"] [data-results-view-set="list"],
+html[data-results-view="cards"] [data-results-view-set="cards"],
+html[data-card-size="s"] [data-card-size-set="s"],
+html[data-card-size="m"] [data-card-size-set="m"],
+html[data-card-size="l"] [data-card-size-set="l"] {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.card-size { display: none; }
+html[data-results-view="cards"] .card-size { display: flex; }
+
+html[data-results-view="cards"] {
+  --result-card-min: 11.5rem;
+  --result-card-portrait-h: 9.5rem;
+}
+html[data-results-view="cards"][data-card-size="s"] {
+  --result-card-min: 8.25rem;
+  --result-card-portrait-h: 6.75rem;
+}
+html[data-results-view="cards"][data-card-size="m"] {
+  --result-card-min: 11.5rem;
+  --result-card-portrait-h: 9.5rem;
+}
+html[data-results-view="cards"][data-card-size="l"] {
+  --result-card-min: 16rem;
+  --result-card-portrait-h: 13.5rem;
+}
+html[data-results-view="cards"] .tui-group,
+html[data-results-view="cards"] .tui-list.search-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--result-card-min)), 1fr));
+  gap: 0.55rem 0.65rem;
+  align-items: stretch;
+}
+html[data-results-view="cards"] .tui-group-h,
+html[data-results-view="cards"] .tui-list.search-list > .tui-group {
+  grid-column: 1 / -1;
+}
+html[data-results-view="cards"] .tui-row,
+html[data-results-view="cards"] .tui-row.person-card,
+html[data-theme="glass"][data-results-view="cards"] .tui-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.45rem;
+  height: 100%;
+  margin: 0;
+  padding: 0.55rem 0.65rem 0.7rem;
+  grid-template-columns: none;
+}
+html[data-results-view="cards"] .tui-row::after {
+  content: none;
+}
+html[data-results-view="cards"] .tui-row.person-card > .row-media {
+  width: 100%;
+  max-width: none;
+  height: var(--result-card-portrait-h);
+}
+html[data-results-view="cards"] .tui-row > .thumb,
+html[data-results-view="cards"] .tui-row > img.portrait,
+html[data-results-view="cards"] .tui-row > img.still,
+html[data-results-view="cards"] .tui-row > .initials.thumb,
+html[data-results-view="cards"] .tui-row.person-card > .row-media img,
+html[data-results-view="cards"] .tui-row.person-card > .row-media .thumb,
+html[data-results-view="cards"] .tui-row.person-card > .row-media .initials,
+html[data-results-view="cards"] .tui-row.person-card > .row-media .row-media-spacer {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: var(--result-card-portrait-h);
+  margin: 0;
+  box-sizing: border-box;
+  object-fit: cover;
+  object-position: center 18%;
+  flex: 0 0 auto;
+}
+html[data-results-view="cards"] .tui-row.person-card > .row-media img,
+html[data-results-view="cards"] .tui-row.person-card > .row-media .thumb,
+html[data-results-view="cards"] .tui-row.person-card > .row-media .initials,
+html[data-results-view="cards"] .tui-row.person-card > .row-media .row-media-spacer {
+  height: 100%;
+}
+html[data-results-view="cards"] .tui-row > .initials.thumb,
+html[data-results-view="cards"] .tui-row.person-card > .row-media .initials {
+  display: flex;
+}
+html[data-results-view="cards"] .tui-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+html[data-results-view="cards"] .tui-title,
+html[data-results-view="cards"] .tui-meta {
+  overflow-wrap: anywhere;
+}
+html[data-results-view="cards"][data-card-size="s"] .tui-row,
+html[data-theme="glass"][data-results-view="cards"][data-card-size="s"] .tui-row {
+  gap: 0.3rem;
+  padding: 0.4rem 0.45rem 0.5rem;
+}
+html[data-results-view="cards"][data-card-size="s"] .tui-title { font-size: 0.82rem; }
+html[data-results-view="cards"][data-card-size="s"] .tui-meta { font-size: 0.72rem; }
+html[data-results-view="cards"][data-card-size="l"] .tui-row,
+html[data-theme="glass"][data-results-view="cards"][data-card-size="l"] .tui-row {
+  gap: 0.55rem;
+  padding: 0.7rem 0.8rem 0.85rem;
+}
+html[data-results-view="cards"][data-card-size="l"] .tui-title { font-size: 1.05rem; }
+html[data-theme="glass"]:not([data-results-view]) .results-view-btn[aria-pressed="true"],
+html[data-theme="glass"]:not([data-card-size]) .card-size-btn[aria-pressed="true"],
+html[data-theme="glass"][data-results-view="list"] [data-results-view-set="list"],
+html[data-theme="glass"][data-results-view="cards"] [data-results-view-set="cards"],
+html[data-theme="glass"][data-card-size="s"] [data-card-size-set="s"],
+html[data-theme="glass"][data-card-size="m"] [data-card-size-set="m"],
+html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
+  border-color: var(--status-ok);
+  color: var(--label);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-ok) 45%, transparent);
+}
+
+
 /* Official-post media strips (top post + bottom supporting): one minimum
    width, height from the image. Beats the shared masonry cover / 192×250
    crop and the ≤720px min-height box. People and operation portrait wells

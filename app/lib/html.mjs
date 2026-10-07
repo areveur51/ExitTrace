@@ -255,6 +255,49 @@ function dashRangeBootScript() {
 </script>`;
 }
 
+/** Result-list display. List is the standing row. Cards restyle the same rows. */
+export const RESULTS_VIEW_STORAGE_KEY = "exittrace-results-view";
+export const CARD_SIZE_STORAGE_KEY = "exittrace-card-size";
+export const RESULTS_VIEWS = ["list", "cards"];
+export const CARD_SIZES = ["s", "m", "l"];
+export const DEFAULT_RESULTS_VIEW = "list";
+export const DEFAULT_CARD_SIZE = "m";
+
+const CARD_SIZE_LABELS = { s: "Small", m: "Medium", l: "Large" };
+
+function resultsViewBootScript() {
+  return `<script>
+(function(){try{var viewKey=${JSON.stringify(RESULTS_VIEW_STORAGE_KEY)};var sizeKey=${JSON.stringify(CARD_SIZE_STORAGE_KEY)};var views=${JSON.stringify(RESULTS_VIEWS)};var sizes=${JSON.stringify(CARD_SIZES)};var view=localStorage.getItem(viewKey);var size=localStorage.getItem(sizeKey);if(views.indexOf(view)===-1)view=${JSON.stringify(DEFAULT_RESULTS_VIEW)};if(sizes.indexOf(size)===-1)size=${JSON.stringify(DEFAULT_CARD_SIZE)};document.documentElement.setAttribute("data-results-view",view);document.documentElement.setAttribute("data-card-size",size);}catch(e){try{document.documentElement.setAttribute("data-results-view",${JSON.stringify(DEFAULT_RESULTS_VIEW)});document.documentElement.setAttribute("data-card-size",${JSON.stringify(DEFAULT_CARD_SIZE)});}catch(e2){}}})();
+</script>`;
+}
+
+/** Shared list ↔ cards control. Card size is in the markup and shown only in card view. */
+export function resultsViewControl() {
+  const viewBtns = RESULTS_VIEWS.map((id) => {
+    const on = id === DEFAULT_RESULTS_VIEW;
+    const label = id === "cards" ? "Cards" : "List";
+    return `<button type="button" class="results-view-btn keychip" data-results-view-set="${id}" aria-pressed="${
+      on ? "true" : "false"
+    }">${label}</button>`;
+  }).join("");
+  const sizeBtns = CARD_SIZES.map((id) => {
+    const on = id === DEFAULT_CARD_SIZE;
+    return `<button type="button" class="card-size-btn keychip" data-card-size-set="${id}" aria-pressed="${
+      on ? "true" : "false"
+    }">${CARD_SIZE_LABELS[id]}</button>`;
+  }).join("");
+  return `<div class="results-view" data-results-toolbar>
+    <div class="results-view-mode">
+      <span class="results-view-label" id="results-view-label">View</span>
+      <div class="results-view-btns" role="group" aria-labelledby="results-view-label">${viewBtns}</div>
+    </div>
+    <div class="card-size">
+      <span class="card-size-label" id="card-size-label">Card size</span>
+      <div class="card-size-btns" role="group" aria-labelledby="card-size-label">${sizeBtns}</div>
+    </div>
+  </div>`;
+}
+
 export function pageSizeSelector(activeSize = PAGE_SIZE) {
   const current = PAGE_SIZES.includes(Number(activeSize)) ? Number(activeSize) : PAGE_SIZE;
   return `<nav class="page-size" aria-label="Rows per page">
@@ -603,6 +646,7 @@ export function layout({
   ${themeBootScript()}
   ${pageSizeBootScript()}
   ${dashRangeBootScript()}
+  ${resultsViewBootScript()}
   <link rel="stylesheet" href="/styles.css?v=${esc(ASSET_VERSION)}">
 </head>
 <body class="tui hud${home ? " tui-home" : ""}" data-toast="${home ? "home loaded" : "page loaded"}">
@@ -1802,8 +1846,13 @@ export function pager(meta, { basePath, noun = "rows", pageSizes } = {}) {
   </nav>`;
 }
 
+function isResultList(html) {
+  return typeof html === "string" && html.includes("tui-list");
+}
+
 export function listSection(listHtml, pagerHtml, headHtml = "") {
-  return `${headHtml}${pagerHtml}${listHtml}${pagerHtml}`;
+  const toolbar = isResultList(listHtml) ? resultsViewControl() : "";
+  return `${headHtml}${toolbar}${pagerHtml}${listHtml}${pagerHtml}`;
 }
 
 export function dogRow(row) {

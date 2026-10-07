@@ -90,6 +90,77 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => applyPageSize(btn.getAttribute("data-page-size-set")));
   }
 
+  const RESULTS_VIEW_KEY = "exittrace-results-view";
+  const CARD_SIZE_KEY = "exittrace-card-size";
+  const RESULTS_VIEWS = ["list", "cards"];
+  const CARD_SIZES = ["s", "m", "l"];
+  const viewButtons = document.querySelectorAll("[data-results-view-set]");
+  const cardSizeButtons = document.querySelectorAll("[data-card-size-set]");
+
+  function storedChoice(key, allowed, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (allowed.includes(raw)) return raw;
+    } catch {
+      /* private mode / quota */
+    }
+    return fallback;
+  }
+
+  function storeChoice(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* private mode / quota */
+    }
+  }
+
+  function syncResultsView(view, size) {
+    const nextView = RESULTS_VIEWS.includes(view) ? view : "list";
+    const nextSize = CARD_SIZES.includes(size) ? size : "m";
+    document.documentElement.setAttribute("data-results-view", nextView);
+    document.documentElement.setAttribute("data-card-size", nextSize);
+    for (const btn of viewButtons) {
+      btn.setAttribute(
+        "aria-pressed",
+        btn.getAttribute("data-results-view-set") === nextView ? "true" : "false",
+      );
+    }
+    for (const btn of cardSizeButtons) {
+      btn.setAttribute(
+        "aria-pressed",
+        btn.getAttribute("data-card-size-set") === nextSize ? "true" : "false",
+      );
+    }
+  }
+
+  if (viewButtons.length || cardSizeButtons.length) {
+    const root = document.documentElement;
+    const view = RESULTS_VIEWS.includes(root.getAttribute("data-results-view"))
+      ? root.getAttribute("data-results-view")
+      : storedChoice(RESULTS_VIEW_KEY, RESULTS_VIEWS, "list");
+    const size = CARD_SIZES.includes(root.getAttribute("data-card-size"))
+      ? root.getAttribute("data-card-size")
+      : storedChoice(CARD_SIZE_KEY, CARD_SIZES, "m");
+    syncResultsView(view, size);
+    for (const btn of viewButtons) {
+      btn.addEventListener("click", () => {
+        const next = btn.getAttribute("data-results-view-set");
+        if (!RESULTS_VIEWS.includes(next)) return;
+        storeChoice(RESULTS_VIEW_KEY, next);
+        syncResultsView(next, document.documentElement.getAttribute("data-card-size"));
+      });
+    }
+    for (const btn of cardSizeButtons) {
+      btn.addEventListener("click", () => {
+        const next = btn.getAttribute("data-card-size-set");
+        if (!CARD_SIZES.includes(next)) return;
+        storeChoice(CARD_SIZE_KEY, next);
+        syncResultsView(document.documentElement.getAttribute("data-results-view"), next);
+      });
+    }
+  }
+
   const DASH_RANGE_KEY = "exittrace-dash-range";
   const DASH_RANGE_IDS = ["all", "30d", "ytd", "since-2017", "custom"];
 
