@@ -1612,7 +1612,8 @@ function supportingMediaFigure(item, source) {
 function personSupportingMediaHtml(row) {
   const figures = [];
   for (const ev of personEvents(row)) {
-    if (String(ev?.kind || "").trim() === "notable") continue;
+    const kind = String(ev?.kind || "").trim();
+    if (kind === "notable" || kind === "shot" || kind === "endorsement") continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     for (const item of normalizeEventMedia(ev.media)) {
       const want = canonicalPublicUrl(item.url);
@@ -1824,6 +1825,34 @@ export function kindList(kind, rows) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
   return `<div class="${spec.pageClass} tui-list">${groupByYear(rows, "posted_at", (row, opts) =>
     kindListRow(kind, row, opts),
+  )}</div>`;
+}
+
+/**
+ * Shot catalog: one card per person the post names. The post itself is not a card
+ * when those people resolve. A post with no resolved person still lists the post.
+ * Cards do not repeat the post media. `snapshot.named` drops anyone it does not list.
+ */
+export function shotCatalogList(posts, people) {
+  const rows = Array.isArray(posts) ? posts : [];
+  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
+  const seen = new Set();
+  const items = [];
+  for (const post of rows) {
+    const linked = linkedPeopleForDetail(post, people);
+    if (!linked.length) {
+      items.push({ date: post.posted_at, type: "post", row: post });
+      continue;
+    }
+    for (const person of linked) {
+      if (seen.has(person.id)) continue;
+      seen.add(person.id);
+      items.push({ date: post.posted_at, type: "person", row: person });
+    }
+  }
+  if (!items.length) return `<p class="empty">No rows on this page.</p>`;
+  return `<div class="shot-page tui-list">${groupByYearItems(items, (item, opts) =>
+    item.type === "person" ? personRow(item.row, opts) : kindListRow("shot", item.row, opts),
   )}</div>`;
 }
 
@@ -2065,6 +2094,47 @@ export function notableMediaHtml(row) {
     .join("");
 }
 
+/** Stored endorsement. It does not replace the card category or date. */
+export function endorsementEventHtml(row) {
+  return personEvents(row)
+    .filter((ev) => String(ev?.kind || "").trim() === "endorsement")
+    .map((ev) =>
+      personEventSection({
+        title: "Endorsement",
+        kind: "endorsement",
+        summary: String(ev.comments || "").trim(),
+        cites: eventSectionCites(ev),
+        className: "detail-endorsement detail-supporting",
+        tag: "section",
+      }),
+    )
+    .filter(Boolean)
+    .join("");
+}
+
+/** Shot comm on a person card. Summary and cites stay here; the clip is not a generic supporting tile. */
+export function shotEventHtml(row) {
+  return personEvents(row)
+    .filter((ev) => String(ev?.kind || "").trim() === "shot")
+    .map((ev) => {
+      const figures = notableMediaFigures(ev);
+      const masonry = figures.length
+        ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
+        : "";
+      return personEventSection({
+        title: "Shot",
+        kind: "shot",
+        bodyHtml: masonry,
+        summary: String(ev.comments || "").trim(),
+        cites: eventSectionCites(ev),
+        className: "detail-shot detail-supporting",
+        tag: "section",
+      });
+    })
+    .filter(Boolean)
+    .join("");
+}
+
 export function eventTagRow(ev, { birthDate } = {}) {
   const kind = String(ev?.kind || "").trim();
   if (!kind || kind === "notable" || !isDisplayedEventKind(kind)) return "";
@@ -2211,7 +2281,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
       active: true,
       extraClass: "person-pane",
     })}
@@ -2352,6 +2422,20 @@ function officialPostContextHtml(spec, row) {
   return `<section class="detail-context" aria-label="Context and citations">${parts.join("")}</section>`;
 }
 
+function namedNeedles(row) {
+  const named = row?.snapshot?.named;
+  if (!Array.isArray(named)) return [];
+  return named.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean);
+}
+
+/** A stored `snapshot.named` list is who the post mentions. The speaker stays off that list. */
+function personIsNamed(person, needles) {
+  if (!needles.length) return true;
+  const name = String(person?.name || "").trim().toLowerCase();
+  if (!name) return false;
+  return needles.some((n) => n === name || name.includes(n) || n.includes(name));
+}
+
 /** Resolved person rows in snapshot.person_ids order. Unknown ids are omitted. */
 function linkedPeopleForDetail(row, people) {
   const ids = linkedPersonIds(row?.snapshot);
@@ -2361,7 +2445,10 @@ function linkedPeopleForDetail(row, people) {
     const id = String(person?.id || "").trim();
     if (id && !byId.has(id)) byId.set(id, person);
   }
-  return ids.map((id) => byId.get(id)).filter(Boolean);
+  const needles = namedNeedles(row);
+  return ids
+    .map((id) => byId.get(id))
+    .filter((person) => person && personIsNamed(person, needles));
 }
 
 /** Compact person cards. No post media — the shared post sits in supporting media. */

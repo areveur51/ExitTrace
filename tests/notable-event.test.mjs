@@ -216,7 +216,7 @@ test("a Justice Department Epstein file is titled Epstein Files", () => {
       {
         kind: "notable",
         event_date: "2017-10-26",
-        comments: "Stored as an allegation, not a finding.",
+        comments: "Department of Justice file EFTA00975176 is an October 26, 2017 email from jeffrey E. to Michael Wolff.",
         sources: [{ url: file, publisher: "Department of Justice", date: "2017-10-26" }],
         media: [{ src: shot, url: file, alt: "Department of Justice Epstein file EFTA00975176" }],
       },
@@ -301,7 +301,7 @@ test("a notable event keeps a nickname card's category", () => {
       {
         kind: "notable",
         event_date: "2017-10-26",
-        comments: "Epstein alleged it. It is not a finding.",
+        comments: "Department of Justice file EFTA00975176 is an October 26, 2017 email from jeffrey E. to Michael Wolff.",
         sources: [{ url: MORE[0], publisher: "Department of Justice", date: "2017-10-26", snippet: "rubio" }],
       },
     ],
@@ -311,7 +311,7 @@ test("a notable event keeps a nickname card's category", () => {
   assert.equal(row.events[0].kind, "notable");
   const html = personDetail(row);
   assert.match(html, /<h3 class="event-h">Notable event<\/h3>/);
-  assert.match(html, /Epstein alleged it\. It is not a finding\./);
+  assert.match(html, /October 26, 2017 email from jeffrey E\. to Michael Wolff/);
   const sliced = projectPerson(row, ["notable"]);
   assert.equal(sliced.category, "notable");
 });

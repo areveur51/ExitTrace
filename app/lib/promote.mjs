@@ -338,11 +338,20 @@ export function personHasKind(row, kinds) {
   return events.some((ev) => allow.includes(ev.kind));
 }
 
+/** Shot and Endorsement blocks are not catalog kinds. They must not replace the stored category or its date. */
+function catalogEventKind(kind, stored) {
+  const key = String(kind || "").trim();
+  if (!key || key === "shot" || key === "endorsement") return false;
+  if (PROMOTE_CATEGORY_IDS.includes(key) || isDeathUnconfirmed(key)) return true;
+  return key === stored;
+}
+
 export function derivePersonFields(row, preferKinds) {
   const events = personEvents(row);
-  const chosen = newestPersonEvent(events, preferKinds);
-  const death = deathPersonEvent(events);
   const stored = String(row.category || "").trim();
+  const drivers = events.filter((ev) => catalogEventKind(ev.kind, stored));
+  const chosen = newestPersonEvent(preferKinds ? events : drivers, preferKinds);
+  const death = deathPersonEvent(events);
   // Notable is a block on the card. It does not replace nickname or another stored category.
   const notableOnly =
     events.length > 0 && events.every((ev) => String(ev?.kind || "") === "notable");

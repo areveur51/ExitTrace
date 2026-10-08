@@ -61,6 +61,13 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People with a stored vote against the Epstein Files Transparency Act, H.R. 4405, or against a House Rules Committee motion to consider it. The House passed the bill 427-1 on November 18, 2025. The tag is that record. It is not a charge and not an identity filter.",
   },
+  {
+    id: "endorsements",
+    nav: "Endorsements",
+    path: "/tags/endorsements",
+    lede:
+      "People with a stored endorsement from Donald Trump. The tag is that record. It is not an identity filter.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
