@@ -4,6 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { dashRankEvents } from "../app/lib/dashboard.mjs";
+import { databaseUrl } from "../app/lib/env.mjs";
 import { DisplayError, listPathForPerson } from "../app/lib/display-check.mjs";
 import { commsDetail, kindDetail, personDetail } from "../app/lib/html.mjs";
 import {
@@ -32,6 +33,7 @@ import {
   getMemory,
   getPerson,
   insertCentralCastingClip,
+  isCentralCastingTestFixtureId,
   listCentralCastingPeople,
   loadSeedFile,
   setMemory,
@@ -39,6 +41,14 @@ import {
 import { handle } from "../app/server.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Importing server.mjs loads .env. These fixtures then insert through getPool().
+if (databaseUrl()) {
+  throw new Error(
+    "central-casting-comms.test.mjs refuses to run while DATABASE_URL is set. Fixture clips write through getPool() into the live catalog. Run npm test.",
+  );
+}
+
 const CITE = "https://www.nytimes.com/2017/05/09/us/politics/james-comey-fired-fbi.html";
 const CITE_2 = "https://www.reuters.com/world/us/james-comey-2017-05-09/";
 
@@ -113,6 +123,39 @@ function requestPage(pathname) {
 function personHrefs(body) {
   return [...body.matchAll(/class="tui-row person-card[^"]*" href="([^"]+)"/g)].map((m) => m[1]);
 }
+
+test("james-comey seed detail keeps the firing cites and omits central-casting fixture stills", async () => {
+  assert.equal(isCentralCastingTestFixtureId(evidence().id), true);
+  assert.equal(isCentralCastingTestFixtureId("reuters-2026-09-18-def67890"), true);
+  assert.equal(isCentralCastingTestFixtureId("shot-clip"), true);
+  assert.equal(isCentralCastingTestFixtureId("bad-shot"), true);
+  assert.equal(isCentralCastingTestFixtureId("mattis-central-casting"), true);
+  assert.equal(isCentralCastingTestFixtureId("mattis-archived"), false);
+
+  setMemory(goldSeed());
+  const page = await requestPage("/people/james-comey");
+  assert.equal(page.status, 200);
+  assert.match(page.body, /src="\/media\/people\/james-comey\.jpg/);
+  assert.match(page.body, /https:\/\/www\.nytimes\.com\/2017\/05\/09\/us\/politics\/james-comey-fired-fbi\.html/);
+  assert.match(page.body, /https:\/\/www\.bbc\.com\/news\/world-us-canada-39866767/);
+  assert.match(page.body, /<h3 class="event-h">Firings<\/h3>/);
+  assert.doesNotMatch(page.body, /<h3 class="event-h">Central Casting<\/h3>/);
+  for (const src of [
+    "/media/central-casting-comms/nytimes-2026-09-17.jpg",
+    "/media/central-casting-comms/nytimes-2026-09-17-2.jpg",
+    "/media/central-casting-comms/nytimes-2026-09-17-3.jpg",
+    "/media/central-casting-comms/support-2026-09-17.jpg",
+    "/media/central-casting-comms/support-2026-09-17-2.jpg",
+    "/media/central-casting-comms/reuters-2026-09-18.jpg",
+    "/media/central-casting-comms/reuters-2026-09-18-2.jpg",
+    "/media/screenshots/central-casting-comms/nytimes-2026-09-17-abc12345/support/0/reuters.png",
+  ]) {
+    assert.equal(page.body.includes(src), false, src);
+  }
+  assert.doesNotMatch(page.body, /Stored central-casting snapshot/);
+  assert.doesNotMatch(page.body, /Second harvest clip under the same person/);
+  assert.doesNotMatch(page.body, /Supportive still standing on the detail/);
+});
 
 test("central casting is a person list, not a KIND_COMMS clip catalog", () => {
   assert.equal(KIND_COMMS.central_casting, undefined);

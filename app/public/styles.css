@@ -2470,28 +2470,34 @@ html[data-results-view="cards"][data-card-size="l"] {
   --result-card-min: 16rem;
   --result-card-portrait-h: 13.5rem;
 }
+/* Column masonry. A short card sits under the card above it, not in a stretched row. */
 html[data-results-view="cards"] .tui-group,
 html[data-results-view="cards"] .tui-list.search-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--result-card-min)), 1fr));
-  gap: 0.55rem 0.65rem;
-  align-items: stretch;
+  display: block;
+  column-width: var(--result-card-min);
+  column-gap: 0.65rem;
+  column-fill: balance;
 }
 html[data-results-view="cards"] .tui-group-h,
 html[data-results-view="cards"] .tui-list.search-list > .tui-group {
-  grid-column: 1 / -1;
+  column-span: all;
 }
 html[data-results-view="cards"] .tui-row,
 html[data-results-view="cards"] .tui-row.person-card,
 html[data-theme="glass"][data-results-view="cards"] .tui-row {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   gap: 0.45rem;
-  height: 100%;
-  margin: 0;
+  width: 100%;
+  height: auto;
+  margin: 0 0 0.55rem;
   padding: 0.55rem 0.65rem 0.7rem;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+  vertical-align: top;
   grid-template-columns: none;
 }
 html[data-results-view="cards"] .tui-row::after {
@@ -2501,44 +2507,37 @@ html[data-results-view="cards"] .tui-row > .row-media,
 html[data-results-view="cards"] .tui-row.person-card > .row-media {
   width: 100%;
   max-width: none;
-  height: var(--result-card-portrait-h);
+  height: auto;
+  overflow: visible;
 }
 html[data-results-view="cards"] .tui-row > .row-media img,
 html[data-results-view="cards"] .tui-row > .row-media .thumb,
-html[data-results-view="cards"] .tui-row > .row-media .initials,
-html[data-results-view="cards"] .tui-row > .row-media .row-media-spacer,
 html[data-results-view="cards"] .tui-row > .thumb,
 html[data-results-view="cards"] .tui-row > img.portrait,
 html[data-results-view="cards"] .tui-row > img.still,
-html[data-results-view="cards"] .tui-row > .initials.thumb,
 html[data-results-view="cards"] .tui-row.person-card > .row-media img,
-html[data-results-view="cards"] .tui-row.person-card > .row-media .thumb,
+html[data-results-view="cards"] .tui-row.person-card > .row-media .thumb {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  margin: 0;
+  box-sizing: border-box;
+  object-fit: contain;
+  object-position: center center;
+  flex: 0 0 auto;
+}
+html[data-results-view="cards"] .tui-row > .row-media .initials,
+html[data-results-view="cards"] .tui-row > .row-media .row-media-spacer,
+html[data-results-view="cards"] .tui-row > .initials.thumb,
 html[data-results-view="cards"] .tui-row.person-card > .row-media .initials,
 html[data-results-view="cards"] .tui-row.person-card > .row-media .row-media-spacer {
-  display: block;
+  display: flex;
   width: 100%;
   max-width: none;
   height: var(--result-card-portrait-h);
   margin: 0;
   box-sizing: border-box;
-  object-fit: cover;
-  object-position: center 18%;
-  flex: 0 0 auto;
-}
-html[data-results-view="cards"] .tui-row > .row-media img,
-html[data-results-view="cards"] .tui-row > .row-media .thumb,
-html[data-results-view="cards"] .tui-row > .row-media .initials,
-html[data-results-view="cards"] .tui-row > .row-media .row-media-spacer,
-html[data-results-view="cards"] .tui-row.person-card > .row-media img,
-html[data-results-view="cards"] .tui-row.person-card > .row-media .thumb,
-html[data-results-view="cards"] .tui-row.person-card > .row-media .initials,
-html[data-results-view="cards"] .tui-row.person-card > .row-media .row-media-spacer {
-  height: 100%;
-}
-html[data-results-view="cards"] .tui-row > .initials.thumb,
-html[data-results-view="cards"] .tui-row > .row-media .initials,
-html[data-results-view="cards"] .tui-row.person-card > .row-media .initials {
-  display: flex;
 }
 html[data-results-view="cards"] .tui-row-text {
   display: flex;

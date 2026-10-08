@@ -5,6 +5,23 @@ const BY_MAX = 80;
 const TITLE_MAX = 180;
 const PUBLISHER_MAX = 80;
 const SNIPPET_MAX = 280;
+const TRUMP_NICKNAME_LIST_URL =
+  "https://en.wikipedia.org/wiki/List_of_nicknames_used_by_Donald_Trump";
+
+function isTrumpNicknameListUrl(url) {
+  try {
+    const u = new URL(String(url || "").trim());
+    return (
+      u.protocol === "https:" &&
+      u.hostname === "en.wikipedia.org" &&
+      u.pathname === "/wiki/List_of_nicknames_used_by_Donald_Trump" &&
+      !u.search &&
+      !u.hash
+    );
+  } catch {
+    return false;
+  }
+}
 
 function clip(raw, max) {
   return String(raw || "")
@@ -28,10 +45,11 @@ function parseList(raw) {
   return [];
 }
 
-function nicknameSource(raw) {
+function nicknameSource(raw, { listException = false } = {}) {
   if (!raw || typeof raw !== "object") return null;
   const url = String(raw.url || "").trim();
-  if (!isOfficialPublisherUrl(url)) return null;
+  const official = isOfficialPublisherUrl(url);
+  if (!official && !(listException && isTrumpNicknameListUrl(url))) return null;
   const out = { url };
   const title = clip(raw.title, TITLE_MAX);
   const publisher = clip(raw.publisher, PUBLISHER_MAX);
@@ -50,7 +68,29 @@ function nicknameName(raw) {
   return name;
 }
 
-/** Cited nicknames only. Fewer than two official news or government cites drops the row. */
+function officialNicknameSources(sources) {
+  return sources.filter((source) => isOfficialPublisherUrl(source.url));
+}
+
+function absorbNickname(prior, sources, listException) {
+  const combined = [];
+  const seen = new Set();
+  for (const source of [...prior.sources, ...sources]) {
+    if (seen.has(source.url)) continue;
+    seen.add(source.url);
+    combined.push(source);
+  }
+  const official = officialNicknameSources(combined);
+  if (official.length >= 2) {
+    prior.sources = official;
+    delete prior.list_exception;
+    return;
+  }
+  prior.sources = combined;
+  if (prior.list_exception || listException) prior.list_exception = true;
+}
+
+/** Ordinary rows need two official cites. A Wikipedia-list exception does not. */
 export function normalizeNicknames(raw) {
   const out = [];
   const seen = new Map();
@@ -59,27 +99,29 @@ export function normalizeNicknames(raw) {
     const name = nicknameName(item.name);
     const by = clip(item.by, BY_MAX);
     if (!name || !by) continue;
+    const listException = item.list_exception === true;
     const sources = [];
     const urls = new Set();
     for (const source of Array.isArray(item.sources) ? item.sources : []) {
-      const next = nicknameSource(source);
+      const next = nicknameSource(source, { listException });
       if (!next || urls.has(next.url)) continue;
       urls.add(next.url);
       sources.push(next);
     }
-    if (sources.length < 2) continue;
+    const official = officialNicknameSources(sources);
+    const keepException = listException && official.length < 2;
+    if (!keepException && official.length < 2) continue;
+    const stored = keepException ? sources : official;
     const key = name.toLowerCase();
     const prior = seen.get(key);
     if (!prior) {
-      const row = { name, by, sources };
+      const row = { name, by, sources: stored };
+      if (keepException) row.list_exception = true;
       seen.set(key, row);
       out.push(row);
       continue;
     }
-    for (const source of sources) {
-      if (prior.sources.some((s) => s.url === source.url)) continue;
-      prior.sources.push(source);
-    }
+    absorbNickname(prior, stored, keepException);
   }
   return out;
 }

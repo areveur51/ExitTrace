@@ -202,6 +202,36 @@ test("notable is a bottom media block, not an event timeline row", () => {
   assert.equal(stored.events[0].screenshot_credit, "X post");
 });
 
+test("a Justice Department Epstein file is titled Epstein Files", () => {
+  const file = "https://www.justice.gov/epstein/files/DataSet%209/EFTA00975176.pdf";
+  const shot = "/media/people/marco-rubio/support/efta00975176.jpg";
+  const html = personDetail({
+    id: "marco-rubio",
+    name: "Marco Rubio",
+    category: "nickname",
+    event_date: "2017-10-26",
+    photo: "/media/people/marco-rubio.jpg",
+    tags: ["trump_nickname", "epstein_files"],
+    events: [
+      {
+        kind: "notable",
+        event_date: "2017-10-26",
+        comments: "Stored as an allegation, not a finding.",
+        sources: [{ url: file, publisher: "Department of Justice", date: "2017-10-26" }],
+        media: [{ src: shot, url: file, alt: "Department of Justice Epstein file EFTA00975176" }],
+      },
+    ],
+  });
+  const sectionAt = html.indexOf('class="detail-notable detail-supporting"');
+  assert.ok(sectionAt >= 0);
+  const section = html.slice(sectionAt);
+  assert.match(section, /<h3 class="event-h">Epstein Files<\/h3>/);
+  assert.doesNotMatch(section, /<h3 class="event-h">Notable event<\/h3>/);
+  assert.match(section, new RegExp(`src="${shot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  assert.match(section, /EFTA00975176\.pdf/);
+  assert.equal(html.indexOf('aria-label="Supporting media"'), -1);
+});
+
 test("person detail shows Notable event when a notable person_event exists", async () => {
   setMemory(goldSeed());
   const before = (await listPeople("notable")).length;
@@ -258,6 +288,32 @@ test("person detail shows Notable event when a notable person_event exists", asy
   assert.doesNotMatch(page.body, /href="\/notable"/);
   assert.doesNotMatch(page.body, /data-key="v"/);
   assert.doesNotMatch(page.body, />Notable</);
+});
+
+test("a notable event keeps a nickname card's category", () => {
+  const row = projectPerson({
+    id: "marco-rubio",
+    name: "Marco Rubio",
+    category: "nickname",
+    event_date: "2017-10-26",
+    tags: ["trump_nickname"],
+    events: [
+      {
+        kind: "notable",
+        event_date: "2017-10-26",
+        comments: "Epstein alleged it. It is not a finding.",
+        sources: [{ url: MORE[0], publisher: "Department of Justice", date: "2017-10-26", snippet: "rubio" }],
+      },
+    ],
+  });
+  assert.equal(row.category, "nickname");
+  assert.equal(row.event_date, "2017-10-26");
+  assert.equal(row.events[0].kind, "notable");
+  const html = personDetail(row);
+  assert.match(html, /<h3 class="event-h">Notable event<\/h3>/);
+  assert.match(html, /Epstein alleged it\. It is not a finding\./);
+  const sliced = projectPerson(row, ["notable"]);
+  assert.equal(sliced.category, "notable");
 });
 
 test("promote and add form accept notable and reject an unknown kind", async () => {

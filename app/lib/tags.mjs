@@ -41,6 +41,13 @@ export const ATTRIBUTE_TAGS = [
       "People named on the Epstein flight log. The tag is that fact. It is not a charge and not an identity filter.",
   },
   {
+    id: "epstein_files",
+    nav: "Epstein files",
+    path: "/tags/epstein-files",
+    lede:
+      "People named in a stored Epstein-files document. The tag is that claim. It is not a charge and not an identity filter.",
+  },
+  {
     id: "masks",
     nav: "Masks",
     path: "/tags/masks",

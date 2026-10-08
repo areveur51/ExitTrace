@@ -40,8 +40,6 @@ import {
   goldMediaHref,
   DETAIL_PORTRAIT_CSS_H,
   DETAIL_PORTRAIT_CSS_W,
-  CARD_2X_W,
-  CARD_PX_W,
   LIST_THUMB_CSS_H,
   LIST_THUMB_CSS_W,
   LIST_THUMB_PX_W,
@@ -696,13 +694,22 @@ function emptyPortraitImg({ size = "list", kind = "portrait", label = "" } = {})
   return `<img class="${cls}" src="${esc(EMPTY_PORTRAIT_HREF)}" alt="${esc(label)}" width="${w}" height="${h}"${loading} decoding="async"${portraitFallbackAttr()}>`;
 }
 
+/** Wider than the 160w list thumb, so card view selects an uncropped file. */
+const FIT_ORIGINAL_W = 960;
+
 function listSrcset(src, ext) {
   const candidates = [
     [thumbHrefFor(src, { variant: "", ext }), LIST_THUMB_PX_W],
     [thumbHrefFor(src, { variant: ".2x", ext }), LIST_THUMB_2X_W],
-    [thumbHrefFor(src, { variant: ".card", ext }), CARD_PX_W],
-    [thumbHrefFor(src, { variant: ".card2x", ext }), CARD_2X_W],
   ];
+  // .card / .card2x are 10:13 cover crops. Card view must not select them.
+  if (ext === "webp") {
+    const hero = thumbHrefFor(src, { variant: ".hero", ext: "webp" });
+    if (hero) candidates.push([hero, FIT_ORIGINAL_W]);
+  } else {
+    const gold = goldMediaHref(src);
+    if (gold) candidates.push([gold, FIT_ORIGINAL_W]);
+  }
   return candidates
     .filter(([href]) => href)
     .map(([href, width]) => `${portraitSrc(href)} ${width}w`)
@@ -714,9 +721,11 @@ function listPortraitPicture(src, label, kind = "portrait") {
   if (!jpg) return emptyPortraitImg({ size: "list", kind, label });
   const srcsetJpg = listSrcset(src, "jpg");
   const srcsetWebp = listSrcset(src, "webp");
+  const source = srcsetWebp
+    ? `<source type="image/webp" srcset="${esc(srcsetWebp)}" sizes="${LIST_THUMB_CSS_W}px">\n    `
+    : "";
   return `<picture class="thumb-src" data-result-thumb>
-    <source type="image/webp" srcset="${esc(srcsetWebp)}" sizes="${LIST_THUMB_CSS_W}px">
-    <img class="${kind} thumb" src="${esc(portraitSrc(jpg))}" srcset="${esc(srcsetJpg)}" sizes="${LIST_THUMB_CSS_W}px" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async"${portraitFallbackAttr()}>
+    ${source}<img class="${kind} thumb" src="${esc(portraitSrc(jpg))}" srcset="${esc(srcsetJpg)}" sizes="${LIST_THUMB_CSS_W}px" alt="${esc(label)}" width="${LIST_THUMB_CSS_W}" height="${LIST_THUMB_CSS_H}" loading="lazy" decoding="async"${portraitFallbackAttr()}>
   </picture>`;
 }
 
@@ -1484,7 +1493,7 @@ export function operationRow(row, { selected } = {}) {
   const agencies = (row.agencies || []).filter(Boolean).join(", ") || "—";
   const portrait = operationPortraitFrom(row);
   return `<a class="tui-row operation-card${selected ? " is-selected" : ""}" href="${esc(href)}">
-    ${classificationMediaSlot(thumb(portrait.photo, row.name || "OP"))}
+    ${classificationMediaSlot(thumb(portrait.photo, row.name || "OP", "portrait"))}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.name || "—")}</div>
       <div class="tui-meta"><time datetime="${esc(row.event_date || "")}">${esc(formatDate(row.event_date))}</time> · ${esc(tagLabel)} · ${esc(agencies)} · victims ${esc(countCell(row.victim_count))} · arrests ${esc(countCell(row.arrest_count))}</div>
@@ -2000,6 +2009,15 @@ function xStatusSource(sources) {
   );
 }
 
+/** A Justice Department Epstein-file cite is that record, not a generic notable event. */
+function notableSectionTitle(ev) {
+  const sources = Array.isArray(ev?.sources) ? ev.sources : [];
+  const epsteinFile = sources.some((source) =>
+    /(?:^https?:\/\/)?(?:www\.)?justice\.gov\/epstein\//i.test(String(source?.url || "")),
+  );
+  return epsteinFile ? "Epstein Files" : "Notable event";
+}
+
 function notableMediaFigures(ev) {
   const figures = [];
   const shot = normalizeScreenshotHref(ev?.screenshot, "people");
@@ -2034,7 +2052,7 @@ export function notableMediaHtml(row) {
         ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
         : "";
       return personEventSection({
-        title: "Notable event",
+        title: notableSectionTitle(ev),
         kind: "notable",
         bodyHtml: masonry,
         summary: String(ev.comments || "").trim(),
