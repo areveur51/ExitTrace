@@ -13,10 +13,16 @@ function applyResultThumbSizes(view, size) {
     view === "cards"
       ? RESULT_THUMB_CARD_SIZES[size] || RESULT_THUMB_CARD_SIZES.m
       : RESULT_THUMB_LIST_SIZES;
+  // Column masonry reports the wrong distance for lazy images, so a visible
+  // card stays blank. Card view loads the row images with the page.
+  const loading = view === "cards" ? "eager" : "lazy";
   for (const el of document.querySelectorAll(
     "picture.thumb-src source[srcset], picture.thumb-src img[srcset]",
   )) {
     if (el.getAttribute("sizes") !== sizes) el.setAttribute("sizes", sizes);
+  }
+  for (const img of document.querySelectorAll("picture.thumb-src img")) {
+    if (img.getAttribute("loading") !== loading) img.setAttribute("loading", loading);
   }
 }
 

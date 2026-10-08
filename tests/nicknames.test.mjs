@@ -64,6 +64,75 @@ test("a nickname without two official cites is dropped", () => {
   assert.equal(normalizeNicknames([{ name: "Newscum", sources: CITES }]).length, 0);
 });
 
+const LIST_URL = "https://en.wikipedia.org/wiki/List_of_nicknames_used_by_Donald_Trump";
+
+test("a Wikipedia list exception is kept without two news cites", () => {
+  const kept = normalizeNicknames([
+    {
+      name: "Slow Joe",
+      by: "Donald Trump",
+      list_exception: true,
+      sources: [{ url: LIST_URL, publisher: "Wikipedia", title: "List of nicknames used by Donald Trump" }],
+    },
+  ]);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].name, "Slow Joe");
+  assert.equal(kept[0].list_exception, true);
+  assert.equal(kept[0].sources.length, 1);
+  assert.equal(kept[0].sources[0].url, LIST_URL);
+  assert.equal(kept[0].sources[0].publisher, "Wikipedia");
+  assert.equal(kept[0].sources[0].snippet, undefined);
+
+  const noQuote = normalizeNicknames([
+    {
+      name: "Slow Joe",
+      by: "Donald Trump",
+      list_exception: true,
+      sources: [{ url: "https://example.com/not-a-cite", publisher: "Example" }],
+    },
+  ]);
+  assert.equal(noQuote.length, 1);
+  assert.equal(noQuote[0].list_exception, true);
+  assert.deepEqual(noQuote[0].sources, []);
+
+  assert.deepEqual(
+    normalizeNicknames([
+      {
+        name: "Slow Joe",
+        by: "Donald Trump",
+        list_exception: "true",
+        sources: [{ url: LIST_URL, publisher: "Wikipedia" }],
+      },
+    ]),
+    [],
+  );
+});
+
+test("a list exception does not downgrade a nickname that already has two official cites", () => {
+  const merged = normalizeNicknames([
+    { name: "Sleepy Joe", by: "Donald Trump", sources: CITES },
+    {
+      name: "Sleepy Joe",
+      by: "Donald Trump",
+      list_exception: true,
+      sources: [{ url: LIST_URL, publisher: "Wikipedia", title: "List of nicknames used by Donald Trump" }],
+    },
+    {
+      name: "Slow Joe",
+      by: "Donald Trump",
+      list_exception: true,
+      sources: [{ url: LIST_URL, publisher: "Wikipedia" }],
+    },
+  ]);
+  const sleepy = merged.find((row) => row.name === "Sleepy Joe");
+  const slow = merged.find((row) => row.name === "Slow Joe");
+  assert.equal(sleepy.list_exception, undefined);
+  assert.equal(sleepy.sources.length, 2);
+  assert.ok(sleepy.sources.every((source) => !source.url.includes("wikipedia")));
+  assert.equal(slow.list_exception, true);
+  assert.equal(slow.sources[0].url, LIST_URL);
+});
+
 test("detail page shows a cited Trump nickname and hides the line when empty", async () => {
   setMemory({ people: [], operations: [], source_posts: [] });
   await applyIdentifiedPerson({
@@ -184,4 +253,53 @@ test("nickname update leaves the exit card alone and creates a card when the per
   assert.doesNotMatch(kept, /datetime="2019-06-11"/);
   assert.match(personDetail(created.person), /Trump nickname · Newscum/);
   assert.match(personDetail(created.person), /data-kind="nickname"/);
+});
+
+test("an existing card keeps its cites when a list-exception nickname is added", async () => {
+  setMemory({
+    people: [
+      {
+        id: "joe-biden",
+        category: "government_stepdowns",
+        name: "Joe Biden",
+        role: "President",
+        event_date: "2021-01-20",
+        death_date: null,
+        country_of_origin: "United States",
+        photo: "/media/people/joe-biden.jpg",
+        events: [{ kind: "government_stepdowns", event_date: "2021-01-20", sources: [] }],
+        sources: [],
+        tags: ["official"],
+        career: [],
+        nicknames: NICK,
+      },
+    ],
+    operations: [],
+    source_posts: [],
+  });
+  const updated = await ensurePersonNicknames({
+    subject: "Joe Biden",
+    nicknames: [
+      {
+        name: "Slow Joe",
+        by: "Donald Trump",
+        list_exception: true,
+        sources: [{ url: LIST_URL, publisher: "Wikipedia", title: "List of nicknames used by Donald Trump" }],
+      },
+    ],
+  });
+  assert.equal(updated.action, "updated");
+  assert.equal(updated.person.category, "government_stepdowns");
+  assert.equal(updated.person.photo, "/media/people/joe-biden.jpg");
+  const sleepy = updated.person.nicknames.find((row) => row.name === "Sleepy Joe");
+  const slow = updated.person.nicknames.find((row) => row.name === "Slow Joe");
+  assert.equal(sleepy.sources.length, 2);
+  assert.equal(sleepy.list_exception, undefined);
+  assert.equal(slow.list_exception, true);
+  const html = personDetail(updated.person);
+  assert.match(html, /Trump nicknames · Sleepy Joe, Slow Joe/);
+  const slowStart = html.indexOf(">Slow Joe<");
+  const slowSection = html.slice(slowStart, html.indexOf('data-kind="government_stepdowns"'));
+  assert.match(slowSection, /wikipedia.org\/wiki\/List_of_nicknames_used_by_Donald_Trump/);
+  assert.doesNotMatch(slowSection, /event-snippet/);
 });

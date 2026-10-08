@@ -9,8 +9,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.11] - 2026-10-07
+
 ### Added
 
+- Fact tag Epstein files (`/tags/epstein-files`). It records a stored claim from a Justice Department Epstein file. It is not a charge and not an identity filter.
+- A notable event whose cite is a justice.gov Epstein file is titled Epstein Files. Other notable events stay Notable event.
+- A nickname taken from the Wikipedia list of nicknames used by Donald Trump can be kept when that list is its only cite. Two official news cites replace the list cite.
 - Official-post detail pages (Dog, Red Folder, Eagle, Ronald, Shot) list linked people from `snapshot.person_ids` as person cards between context and supporting media. The post is one shared supporting entry at the bottom. No schema change.
 - Comms catalog Shot (`shot_comms`, `/shot-comms`, keymap `s`). Official posts about a shooting or assassination use the same clip catalog as Dog, Eagle, Red Folder, and Ronald: list, detail, stills under `media/shot-comms/`, and gap-upsert. It is not a person KEEP kind. No seed rows.
 - Result lists can switch between the standing row list and a card grid (portrait, name, and the same key attributes). Card size is Small, Medium, or Large and applies only in card view. The choice is stored in localStorage (`exittrace-results-view`, `exittrace-card-size`) and restored before paint. Home, detail pages, and dashboard rank tables stay as they are.
@@ -22,7 +27,9 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Fixed
 
-- Result cards stay sharp at Small, Medium, and Large. The grid selects a cover crop up to 960px wide; the row list still requests the 40px thumb. Operation cards use the same portrait slot as the other result lists.
+- Central-casting test fixtures are not written when `DATABASE_URL` is set. A direct run of that test file was loading the lab URL and attaching missing stills to James Comey's detail.
+- A notable event on an existing card keeps that card's category. The notable block still sits on the person page.
+- Card view packs result cards in a column masonry. Each image fills the card width and keeps its own height, so a seal or a wide still is not cropped. Small, Medium, and Large still set the column width. The row list stays the 40px thumb.
 
 ## [1.2.10] - 2026-10-05
 

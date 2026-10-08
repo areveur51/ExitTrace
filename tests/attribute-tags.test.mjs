@@ -31,8 +31,8 @@ function requestPage(pathname) {
 
 test("fact tags stay on the person and are not identity filters", () => {
   assert.deepEqual(
-    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "masks", "nope"]),
-    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "masks"],
+    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "nope"]),
+    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks"],
   );
   assert.deepEqual(
     personTags({
@@ -61,6 +61,8 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/clearance-revoked"/);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/epstein-clients"/);
   assert.match(facts, />Epstein Clients</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/epstein-files"/);
+  assert.match(facts, />Epstein files</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/masks"/);
   assert.match(facts, />Masks</);
   assert.doesNotMatch(facts, /keymap-tag[^>]*data-key=/);
@@ -161,6 +163,14 @@ test("fact-tag lists include only people who already have that tag", async () =>
         tags: ["epstein_clients"],
         events: [],
       },
+      {
+        id: "marco-rubio",
+        name: "Marco Rubio",
+        category: "nickname",
+        event_date: "2017-10-26",
+        tags: ["trump_nickname", "epstein_files"],
+        events: [],
+      },
     ],
   });
 
@@ -188,6 +198,7 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.doesNotMatch(firings.body, /<option[^>]*>Revoked clearances<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Trump nicknames<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Epstein Clients<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>Epstein files<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Masks<\/option>/);
   assert.match(firings.body, /href="\/tags\/masks"/);
 
@@ -201,6 +212,14 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.doesNotMatch(clients.body, /href="\/people\/other-person"/);
   assert.match(clients.body, /href="\/tags\/epstein-clients" aria-current="page"/);
   assert.doesNotMatch(clients.body, /id="fact-tag-filter"/);
+
+  const files = await requestPage("/tags/epstein-files");
+  assert.equal(files.status, 200);
+  assert.match(files.body, /href="\/people\/marco-rubio"/);
+  assert.match(files.body, /not a charge/);
+  assert.doesNotMatch(files.body, /href="\/people\/adam-perrylang"/);
+  assert.doesNotMatch(files.body, /href="\/people\/gavin-newsom"/);
+  assert.match(files.body, /href="\/tags\/epstein-files" aria-current="page"/);
 
   const row = personRow({
     id: "adam-perrylang",

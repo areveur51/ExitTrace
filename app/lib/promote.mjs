@@ -342,9 +342,18 @@ export function derivePersonFields(row, preferKinds) {
   const events = personEvents(row);
   const chosen = newestPersonEvent(events, preferKinds);
   const death = deathPersonEvent(events);
+  const stored = String(row.category || "").trim();
+  // Notable is a block on the card. It does not replace nickname or another stored category.
+  const notableOnly =
+    events.length > 0 && events.every((ev) => String(ev?.kind || "") === "notable");
+  const category = preferKinds
+    ? chosen?.kind || stored
+    : notableOnly && stored && stored !== "notable"
+      ? stored
+      : chosen?.kind || stored;
   return {
     events,
-    category: chosen?.kind || row.category || "",
+    category,
     event_date: chosen?.event_date || asEventDate(row.event_date),
     death_date: death?.event_date || (isDeathCategory(row.category) ? asEventDate(row.death_date) : null),
     sources: flattenEventSources(events),

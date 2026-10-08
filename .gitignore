@@ -22,6 +22,10 @@ var/
 # In-progress thumb writes
 media/thumbs/**/*.tmp
 
+# Local portrait review downloads and helper packages. Not catalog source.
+scratch/portrait-review/
+scratch/pydeps/
+
 # Packaged release zip — published via GitHub Releases, not git
 dist/
 *.zip

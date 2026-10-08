@@ -374,6 +374,19 @@ export function loadFileStore(dataDir) {
   };
 }
 
+/** Ids used only by tests/central-casting-comms.test.mjs. Never write them when a catalog URL is set. */
+const CENTRAL_CASTING_TEST_FIXTURE_IDS = new Set([
+  "nytimes-2026-09-17-abc12345",
+  "reuters-2026-09-18-def67890",
+  "shot-clip",
+  "bad-shot",
+  "mattis-central-casting",
+]);
+
+export function isCentralCastingTestFixtureId(id) {
+  return CENTRAL_CASTING_TEST_FIXTURE_IDS.has(String(id || "").trim());
+}
+
 function normalizeCentralCastingClip(row = {}) {
   const role = String(row.role || "").trim();
   if (role === "glossary") {
@@ -2587,6 +2600,12 @@ export async function annotateCentralCasting(personId, classification) {
 /** Harvest/evidence under an existing person. Not a parent-list card. */
 export async function insertCentralCastingClip(row) {
   const clip = normalizeCentralCastingClip(row);
+  if (isCentralCastingTestFixtureId(clip.id) && databaseUrl()) {
+    throw new CentralCastingClassifyError(
+      `refusing live catalog write of test fixture ${clip.id}`,
+      "test_fixture",
+    );
+  }
   const person = await getPerson(clip.person_id);
   if (!person) {
     throw new CentralCastingClassifyError(`person not found: ${clip.person_id}`, "missing_person");
