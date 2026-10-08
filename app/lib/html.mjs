@@ -2256,7 +2256,6 @@ function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
 
 function personTagChips(row) {
   const tags = personTags(row);
-  if (!tags.length) return "";
   const cat = categoryById(row.category);
   const main = catalogMainPath(cat?.path || "/firings");
   const chips = tags
@@ -2269,9 +2268,13 @@ function personTagChips(row) {
       if (!tag) return "";
       return `<a class="keychip" href="${esc(filterPath(main, { tags: [id] }))}">${esc(tag.nav)}</a>`;
     })
-    .filter(Boolean)
-    .join("");
-  return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips}</p>`;
+    .filter(Boolean);
+  // dog_comms is a post catalog, not a people.tags id. The chip is the event.
+  if (personEvents(row).some((ev) => String(ev?.kind || "").trim() === "dog_comms")) {
+    chips.push(`<a class="keychip" href="/dog-comms">Dog comms</a>`);
+  }
+  if (!chips.length) return "";
+  return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips.join("")}</p>`;
 }
 
 export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
