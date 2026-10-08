@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { kindDetail } from "../app/lib/html.mjs";
+import { kindDetail, personDetail, shotCatalogList } from "../app/lib/html.mjs";
+import { projectPerson } from "../app/lib/promote.mjs";
 import { linkedPersonIds } from "../app/lib/kind-comms.mjs";
 import { buildUpsertSql, pickRow, PUBLISHED_TABLES } from "../app/lib/gap-upsert.mjs";
 import {
@@ -277,6 +278,149 @@ test("dog official posts reuse the same linked-person block", () => {
   assert.equal((html.match(/detail-tile--screenshot/g) || []).length, 1);
   assert.ok(html.indexOf("ezra.png") > supportAt);
   assert.doesNotMatch(html.slice(mainAt, contextAt), /ezra\.png/);
+});
+
+test("shot detail omits the speaker when named lists the targets", () => {
+  const row = shotRow({
+    snapshot: {
+      ...shotRow().snapshot,
+      named: ["Joe Biden", "Hillary Clinton", "Barack Obama"],
+      speaker: "Donald Trump",
+    },
+  });
+  const html = kindDetail("shot", row, { linkedPeople: PEOPLE });
+  const linked = sliceBetween(html, 'class="detail-linked-people"', 'class="detail-supporting"');
+  const hrefs = [...linked.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(hrefs, [
+    "/people/joe-biden",
+    "/people/hillary-clinton",
+    "/people/barack-obama",
+  ]);
+  assert.doesNotMatch(linked, /donald-trump|newstreason\.(png|mp4|jpg)/);
+});
+
+test("shot list shows only the named people", async () => {
+  const row = shotRow({
+    snapshot: {
+      ...shotRow().snapshot,
+      named: ["Joe Biden", "Hillary Clinton", "Barack Obama"],
+      speaker: "Donald Trump",
+    },
+  });
+  setMemory({ people: PEOPLE, shot_comms: [row] });
+  const page = await requestPage("/shot-comms");
+  assert.equal(page.status, 200);
+  const html = page.body;
+  const biden = html.indexOf('href="/people/joe-biden"');
+  const hillary = html.indexOf('href="/people/hillary-clinton"');
+  const obama = html.indexOf('href="/people/barack-obama"');
+  assert.ok(biden >= 0 && hillary > biden && obama > hillary);
+  assert.doesNotMatch(html, /href="\/shot-comms\/newstreason-2026-10-07-792caf90"/);
+  assert.doesNotMatch(html, /href="\/people\/donald-trump"/);
+  assert.doesNotMatch(html, /newstreason\.(png|mp4|jpg)/);
+  const direct = shotCatalogList([row], PEOPLE);
+  assert.match(direct, /href="\/people\/joe-biden"/);
+  assert.doesNotMatch(direct, /donald-trump|shot-comms\/newstreason/);
+  const bare = shotCatalogList([shotRow({ snapshot: { video: VIDEO } })], []);
+  assert.match(bare, /href="\/shot-comms\/newstreason-2026-10-07-792caf90"/);
+});
+
+test("a shot event is its own section and does not replace the card category", () => {
+  const row = projectPerson({
+    id: "joe-biden",
+    name: "Joe Biden",
+    category: "government_stepdowns",
+    event_date: "2024-07-21",
+    events: [
+      {
+        kind: "government_stepdowns",
+        event_date: "2024-07-21",
+        comments: "Announced he would not seek re-election.",
+        sources: [{ url: "https://apnews.com/article/biden-step-down", publisher: "Associated Press", date: "2024-07-21" }],
+      },
+      {
+        kind: "shot",
+        event_date: "2026-10-07",
+        comments:
+          "On October 7, 2026, Donald Trump said, “I’ve had my shot, and STILL DO…at Biden, at Hillary Clinton, and Barack Hussein Obama.”",
+        sources: [
+          {
+            url: "https://x.com/NewsTreason/status/2107892293160386907",
+            publisher: "NewsTreason",
+            date: "2026-10-07",
+          },
+          {
+            url: "https://thehill.com/homenews/administration/6134441-democrats-potential-impeachment-efforts",
+            publisher: "The Hill",
+            date: "2026-10-07",
+          },
+        ],
+        media: [
+          {
+            src: "/media/people/joe-biden/support/2107892293160386907.mp4",
+            poster: "/media/people/joe-biden/support/2107892293160386907-poster.jpg",
+            url: "https://x.com/NewsTreason/status/2107892293160386907",
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(row.category, "government_stepdowns");
+  assert.equal(row.event_date, "2024-07-21");
+  const html = personDetail(row);
+  const shotAt = html.indexOf('class="detail-shot');
+  const supportAt = html.indexOf('class="detail-supporting"');
+  assert.ok(shotAt >= 0);
+  const shot = html.slice(shotAt, supportAt >= 0 ? supportAt : undefined);
+  assert.match(shot, />Shot</);
+  assert.match(shot, /I’ve had my shot/);
+  assert.match(shot, /2107892293160386907/);
+  assert.match(shot, /thehill\.com/);
+  assert.match(shot, /2107892293160386907\.mp4/);
+  if (supportAt >= 0) {
+    assert.doesNotMatch(html.slice(supportAt), /2107892293160386907\.mp4/);
+  }
+});
+
+test("an endorsement event is its own section and does not replace the card category", () => {
+  const row = projectPerson({
+    id: "ted-cruz",
+    name: "Ted Cruz",
+    category: "nickname",
+    event_date: "2016-05-03",
+    events: [
+      {
+        kind: "nickname",
+        event_date: "2016-05-03",
+        comments: "Lyin' Ted.",
+        sources: [{ url: "https://www.cnn.com/ted-cruz-nickname", publisher: "CNN", date: "2016-05-03" }],
+      },
+      {
+        kind: "endorsement",
+        event_date: "2024-10-15",
+        comments:
+          "On October 15, 2024, Donald Trump wrote that Ted Cruz had his complete and total endorsement.",
+        sources: [
+          {
+            url: "https://truthsocial.com/@realDonaldTrump/example",
+            publisher: "Supporting post",
+            date: "2024-10-15",
+            snippet: "Ted Cruz has my Complete and Total Endorsement!",
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(row.category, "nickname");
+  assert.equal(row.event_date, "2016-05-03");
+  const html = personDetail(row);
+  const at = html.indexOf('data-kind="endorsement"');
+  assert.ok(at >= 0);
+  const block = html.slice(at, at + 900);
+  assert.match(block, />Endorsement</);
+  assert.match(block, /complete and total endorsement/);
+  assert.match(block, /truthsocial\.com\/@realDonaldTrump\/example/);
+  assert.doesNotMatch(block, /Ted Cruz has my Complete and Total Endorsement/);
 });
 
 test("shot detail route resolves linked people and does not repeat post media on cards", async () => {

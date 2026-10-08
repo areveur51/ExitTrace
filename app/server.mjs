@@ -58,6 +58,7 @@ import {
   dashboardRankBody,
   kindDetail,
   kindList,
+  shotCatalogList,
   downloadsBody,
   healthBody,
   homeBody,
@@ -1264,6 +1265,13 @@ async function handle(req, res) {
       offset: meta.offset,
     });
     const listPath = cat.path;
+    let listHtml = kindList(spec.id, rows);
+    if (spec.id === "shot") {
+      const ids = rows.flatMap((row) =>
+        Array.isArray(row?.snapshot?.person_ids) ? row.snapshot.person_ids : [],
+      );
+      listHtml = shotCatalogList(rows, await getPeopleByIds(ids));
+    }
     return sendHtml(
       res,
       layout({
@@ -1274,7 +1282,7 @@ async function handle(req, res) {
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: `${listSection(
-          kindList(spec.id, rows),
+          listHtml,
           pager(meta, { basePath: listPath, noun: "posts" }),
           listHead({
             title: cat.title,

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The source of truth is the `version` field in `package.json`. An app tag is `v` plus that version (`vX.Y.Z`). Data releases (`data-*` and `data-latest`) are not app versions.
 
+## [Unreleased]
+
+## [1.2.13] - 2026-10-08
+
+### Added
+
+- Fact tag Endorsements (`/tags/endorsements`). It records a stored endorsement from Donald Trump. It is not an identity filter.
+- An Endorsement section on a person card shows that stored endorsement. It does not replace the card category or date.
+
+### Changed
+
+- The Shot catalog lists a card for each person a post names, and does not also list the post. When the post records who was named, the speaker is not given a card. Each named person has a Shot section with the summary and the citation. The post detail still shows the clip. Cards do not repeat the post media.
+
 ## [1.2.12] - 2026-10-07
 
 ### Added
