@@ -54,6 +54,13 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People stored with a mask, body-double, or impersonation claim. Impersonation is part of what this tag records. The tag is that claim. It is not a finding that a mask was used, and it is not an identity filter.",
   },
+  {
+    id: "epstein_transparency_act",
+    nav: "Transparency Act",
+    path: "/tags/transparency-act",
+    lede:
+      "People with a stored vote against the Epstein Files Transparency Act, H.R. 4405, or against a House Rules Committee motion to consider it. The House passed the bill 427-1 on November 18, 2025. The tag is that record. It is not a charge and not an identity filter.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
