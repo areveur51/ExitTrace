@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The source of truth is the `version` field in `package.json`. An app tag is `v` plus that version (`vX.Y.Z`). Data releases (`data-*` and `data-latest`) are not app versions.
 
-## [Unreleased]
+## [1.2.12] - 2026-10-07
+
+### Added
+
+- Fact tag Transparency Act (`/tags/transparency-act`). It records a stored vote against the Epstein Files Transparency Act, H.R. 4405, or against a House Rules Committee motion to consider that bill. The House passed the bill 427-1 on November 18, 2025. It is not a charge and not an identity filter.
 
 ## [1.2.11] - 2026-10-07
 
