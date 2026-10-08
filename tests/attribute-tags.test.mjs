@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { breadcrumbItems, epsteinFlightLogSection, identityFilterNav, keymapFooter, personDetail, personRow } from "../app/lib/html.mjs";
+import { projectPerson } from "../app/lib/promote.mjs";
 import { handle } from "../app/server.mjs";
 import { setMemory } from "../app/lib/store.mjs";
 import { normalizeTags, personTags } from "../app/lib/tags.mjs";
@@ -155,6 +156,54 @@ test("a stored fact tag is a chip to that list, not a kind", () => {
   assert.match(endorsed, /href="\/tags\/endorsements"/);
   assert.match(endorsed, />Endorsements</);
   assert.doesNotMatch(endorsed, /href="\/tags\/trump-nicknames"/);
+});
+
+test("a dog comms event is a Dog comms chip and supporting media", () => {
+  const post = "https://x.com/GovTimWalz/status/2003307743932002380";
+  const still = "/media/people/tim-walz/support/govtimwalz-christmas-2025.jpg";
+  const row = {
+    id: "tim-walz",
+    name: "Tim Walz",
+    category: "notable",
+    event_date: "2025-03-19",
+    tags: ["trump_nickname"],
+    events: [
+      {
+        kind: "notable",
+        event_date: "2025-03-19",
+        comments: "On March 19, 2025, a Minneapolis federal jury convicted Feeding Our Future founder Aimee Bock.",
+        sources: [{ url: "https://www.justice.gov/opa/pr/example", date: "2025-03-19", publisher: "Department of Justice" }],
+        media: [{ src: "/media/people/tim-walz/support/HT98q7GacAA2jNm.jpg", alt: "Notable still" }],
+      },
+      {
+        kind: "dog_comms",
+        event_date: "2025-12-22",
+        comments: 'On December 22, 2025, Governor Tim Walz posted a photograph of himself with a dog. He wrote, "Getting ready for Christmas."',
+        sources: [{ url: post, date: "2025-12-22", title: "Governor Tim Walz", publisher: "Supporting post", snippet: "" }],
+        media: [{ src: still, alt: "Governor Tim Walz with a dog", url: post }],
+      },
+    ],
+  };
+  const html = personDetail(row);
+  assert.match(html, /href="\/tags\/trump-nicknames"/);
+  assert.match(html, /href="\/dog-comms">Dog comms</);
+  assert.match(html, /aria-label="Supporting media"/);
+  assert.match(html, /govtimwalz-christmas-2025\.jpg/);
+  assert.match(html, /datetime="2025-12-22"/);
+  assert.match(html, /2003307743932002380/);
+  const projected = projectPerson(row);
+  assert.equal(projected.category, "notable");
+  assert.equal(String(projected.event_date).slice(0, 10), "2025-03-19");
+  assert.equal(projected.events.find((ev) => ev.kind === "notable").media[0].src, "/media/people/tim-walz/support/HT98q7GacAA2jNm.jpg");
+
+  const only = personDetail({
+    id: "tim-walz",
+    name: "Tim Walz",
+    category: "notable",
+    tags: [],
+    events: [{ kind: "dog_comms", event_date: "2025-12-22", sources: [], media: [{ src: still }] }],
+  });
+  assert.match(only, /href="\/dog-comms">Dog comms</);
 });
 
 test("fact-tag lists include only people who already have that tag", async () => {

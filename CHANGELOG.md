@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.14] - 2026-10-08
+
+### Added
+
+- A person card with a stored dog comm shows a Dog comms chip. The chip links to the dog comm list. It does not replace the card category or date.
+
 ## [1.2.13] - 2026-10-08
 
 ### Added
