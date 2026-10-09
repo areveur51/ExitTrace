@@ -19,6 +19,7 @@ import { storedAgeAtEvent } from "./age.mjs";
 import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount, normalizeEventMedia, originText } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
+import { standardizePosition } from "./position-format.mjs";
 import {
   clearanceMetaLabel,
   clearanceStatusLabel,
@@ -1335,15 +1336,37 @@ export function personListDate(row) {
   return asEventDate(row?.event_date) || nicknameCatalogDate(row) || "";
 }
 
+/** Office title for a card. Abbreviations are spelled out. A case caption is not an office. */
+export function officePosition(raw) {
+  return standardizePosition(raw);
+}
+
+/**
+ * Title on a person result card. The event this card is about supplies
+ * position. Role is the person-level title when that event has none.
+ * Another event's position is not borrowed.
+ */
+export function personCardPosition(row) {
+  const events = personEvents(row);
+  const kind = String(row?.category || "").trim();
+  const match = kind ? events.find((ev) => String(ev?.kind || "") === kind) : null;
+  const position = officePosition(match?.position);
+  if (position) return position;
+  return officePosition(row?.role);
+}
+
 /** Shared KEEP person row: dashboard slices, category lists, and search. */
 export function personRow(row, { selected, showDeath, badges = "", date } = {}) {
   const href = `/people/${encodeURIComponent(row.id)}`;
   const previewDate =
     date !== undefined ? date : showDeath && row.death_date ? row.death_date : personListDate(row);
+  const position = personCardPosition(row);
+  const positionHtml = position ? `<div class="tui-position">${esc(position)}</div>` : "";
   return `<a class="tui-row person-card${selected ? " is-selected" : ""}" href="${esc(href)}">
     ${classificationMediaSlot(thumb(row.photo, row.name))}
     <div class="tui-row-text">
       <div class="tui-title">${esc(row.name || "—")}</div>
+      ${positionHtml}
       <div class="tui-meta">${badges}<time datetime="${esc(previewDate || "")}">${esc(formatDate(previewDate))}</time> · ${esc(kindLabel(row))} · ${esc(formatUsd(row.net_worth_usd))}</div>
     </div>
   </a>`;
@@ -2183,6 +2206,7 @@ export function eventTagRow(ev, { birthDate } = {}) {
     let value = String(ev[field] || "").trim();
     if (!value) return "";
     if (field === "status") value = coronaStatusLabel(value) || value;
+    if (field === "position") value = standardizePosition(value);
     const name =
       kind === DEATH_UNCONFIRMED_ID && field === "comments"
         ? "Footnote"

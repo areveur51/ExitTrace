@@ -1,5 +1,7 @@
 /** Person-level occupation / service history. Not event-tag attrs. */
 
+import { standardizePosition } from "./position-format.mjs";
+
 const YEAR_MIN = 1000;
 const YEAR_MAX = 2100;
 
@@ -137,7 +139,7 @@ function containsFold(hay, needle) {
 
 /** Role/org; branch only when the row is military and not already in the label. */
 export function careerLabel(row) {
-  const title = String(row?.title || "").trim();
+  const title = standardizePosition(row?.title);
   const organization = String(row?.organization || "").trim();
   const branch = String(row?.branch || "").trim();
   const parts = [];

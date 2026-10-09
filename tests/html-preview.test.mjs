@@ -4,7 +4,7 @@ import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
 import { formatDate } from "../app/lib/categories.mjs";
-import { dogDetail, dogListRow, personDetail, personRow, searchBody } from "../app/lib/html.mjs";
+import { dogDetail, dogListRow, officePosition, personCardPosition, personDetail, personRow, searchBody } from "../app/lib/html.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -210,6 +210,77 @@ test("non-death list previews keep date · category and do not add a died suffix
   assert.match(row, new RegExp(`<time datetime="2017-05-09">${fired}</time>`));
   assert.match(row, /Firings/);
   assert.doesNotMatch(row, /died /);
+});
+
+test("person result cards show the event position, then role", () => {
+  const loftis = {
+    id: "mark-loftis",
+    category: "indictment_civilian",
+    name: "Mark Loftis",
+    role: "Chiropractor and owner of Back Pain Home Supplies LLC",
+    event_date: "2026-10-08",
+    events: [
+      { kind: "indictment_civilian", position: "Chiropractor", event_date: "2026-10-08" },
+      { kind: "notable", position: "Producer", event_date: "2020-01-01" },
+    ],
+  };
+  assert.equal(personCardPosition(loftis), "Chiropractor");
+  const positioned = personRow(loftis);
+  assert.match(positioned, /<div class="tui-position">Chiropractor<\/div>/);
+  assert.doesNotMatch(positioned, /Producer/);
+  assert.doesNotMatch(positioned, /Back Pain Home Supplies/);
+
+  const roleOnly = personRow(firing());
+  assert.equal(personCardPosition(firing()), "Federal Bureau of Investigation Director");
+  assert.match(roleOnly, /<div class="tui-position">Federal Bureau of Investigation Director<\/div>/);
+
+  const untitled = {
+    id: "unnamed-role",
+    category: "arrests",
+    name: "No Title",
+    role: "   ",
+    event_date: "2026-01-01",
+    events: [{ kind: "arrests", position: "  ", event_date: "2026-01-01" }],
+  };
+  assert.equal(personCardPosition(untitled), "");
+  assert.doesNotMatch(personRow(untitled), /tui-position/);
+
+  const escaped = personRow({
+    id: "amp-role",
+    category: "firings",
+    name: "Amp",
+    role: "A & B <Director>",
+    event_date: "2026-01-02",
+  });
+  assert.match(escaped, /<div class="tui-position">A and B &lt;Director&gt;<\/div>/);
+
+  const trump = {
+    id: "donald-trump",
+    category: "notable",
+    name: "Donald Trump",
+    role: "Former President of the United States",
+    event_date: "2024-07-09",
+    events: [
+      {
+        kind: "notable",
+        position:
+          "President of the United States (45th/47th); defendant People v. Trump (NY County)",
+        event_date: "2024-07-09",
+      },
+    ],
+  };
+  assert.equal(
+    officePosition(trump.events[0].position),
+    "President of the United States (45th/47th)",
+  );
+  assert.equal(personCardPosition(trump), "President of the United States (45th/47th)");
+  assert.doesNotMatch(personRow(trump), /defendant/);
+  assert.equal(
+    officePosition(
+      "Vice Chairman of the Central Military Commission; Member of the Political Bureau of the CPC Central Committee",
+    ),
+    "Vice Chairman of the Central Military Commission; Member of the Political Bureau of the Communist Party of China Central Committee",
+  );
 });
 
 test("identified people use officials-style person-card markup", () => {

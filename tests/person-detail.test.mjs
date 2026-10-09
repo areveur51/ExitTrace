@@ -166,7 +166,7 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   assert.match(html, /Age at event · 39/);
   assert.match(html, /Announced/);
   assert.match(html, /datetime="2024-06-01"/);
-  assert.match(html, /Position · Anchor, CNN/);
+  assert.match(html, /Position · Anchor, Cable News Network/);
   assert.match(html, /Organization · Example Desk/);
   assert.match(html, /Country · USA/);
   assert.match(html, /Branch · News/);
@@ -256,7 +256,7 @@ test("person detail renders career/service years when stored and does not copy e
   assert.match(html, /class="person-header"/);
   assert.match(html, /class="career-history"/);
   assert.match(html, /class="event-timeline"/);
-  assert.match(html, /Position · Anchor, CNN/);
+  assert.match(html, /Position · Anchor, Cable News Network/);
   const tags = html.match(/<article class="event-tag-row"[\s\S]*?<\/article>/g) || [];
   assert.equal(tags.length, 1);
   assert.doesNotMatch(tags[0], /1953–1954|2010–2024|Career \/ Service/);
