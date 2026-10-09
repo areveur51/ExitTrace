@@ -9,6 +9,16 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.16] - 2026-10-09
+
+### Added
+
+- Person result cards show that person's position under the name. The line is the position on the event the card is about. When that event has no position, the line is the person's role. A blank position and a blank role omit the line.
+
+### Changed
+
+- Position and role titles use one spelling. Abbreviations are spelled out. U.S., (D), and (R) stay as written.
+
 ## [1.2.15] - 2026-10-08
 
 ### Added

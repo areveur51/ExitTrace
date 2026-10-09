@@ -28,6 +28,7 @@ function skeleton(html) {
     .replace(/ is-selected/g, "")
     .replace(/href="[^"]*"/g, 'href=""')
     .replace(/<div class="tui-title">[\s\S]*?<\/div>/, '<div class="tui-title"></div>')
+    .replace(/<div class="tui-position">[\s\S]*?<\/div>/, "")
     .replace(/<div class="tui-meta">[\s\S]*?<\/div>/, '<div class="tui-meta"></div>');
 }
 
