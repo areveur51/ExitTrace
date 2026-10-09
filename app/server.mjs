@@ -24,7 +24,6 @@ import {
   getPool,
   importSeed,
   migrateUniquePeople,
-  countCentralCastingPeople,
   countKindComms,
   countOperations,
   countPeople,
@@ -36,6 +35,7 @@ import {
   getSourcePost,
   listCentralCastingEvidence,
   listEpsteinLegsForPerson,
+  earliestEpsteinFlights,
   listCentralCastingPeople,
   listKindComms,
   listOperations,
@@ -76,6 +76,7 @@ import {
   tuiCount,
 } from "./lib/html.mjs";
 import { AddError, queueAddRequest } from "./lib/add-request.mjs";
+import { orderPeopleByMenuDate, personMenuDate } from "./lib/menu-date.mjs";
 import {
   DOG_PAGE_SIZE,
   PAGE_SIZES,
@@ -896,18 +897,21 @@ async function handle(req, res) {
   if (factTag) {
     const tags = [factTag.id];
     const pageSize = parseCookiePageSize(req.headers.cookie);
-    const listOpts = { tags };
-    const total = await countPeople(listOpts);
+    const matched = await listPeople({ tags });
+    const flightDates =
+      factTag.id === "epstein_clients"
+        ? await earliestEpsteinFlights(matched.map((row) => row.id))
+        : null;
+    const { ordered, dateOf } = orderPeopleByMenuDate(matched, {
+      tag: factTag.id,
+      flightDates,
+    });
     const meta = paginate({
-      total,
+      total: ordered.length,
       page: parsePage(url.searchParams),
       pageSize,
     });
-    const rows = await listPeople({
-      ...listOpts,
-      limit: meta.limit,
-      offset: meta.offset,
-    });
+    const rows = ordered.slice(meta.offset, meta.offset + meta.limit);
     return sendHtml(
       res,
       layout({
@@ -920,7 +924,7 @@ async function handle(req, res) {
         countLabel: countText(factTag.nav, meta, rows.length),
         lede: factTag.lede,
         body: `${listSection(
-          peopleList(rows),
+          peopleList(rows, { listDate: dateOf }),
           pager(meta, { basePath: factTag.path, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({
             title: factTag.nav,
@@ -1109,6 +1113,7 @@ async function handle(req, res) {
       ...listOpts,
       limit: meta.limit,
       offset: meta.offset,
+      cardOrder: gov,
     });
     const heading = gov ? "Officials" : cat.title;
     const listPath = filterPath(cat.path, { tags, unsealed });
@@ -1125,7 +1130,12 @@ async function handle(req, res) {
           ? "People tagged official — government, appointed, military, or law-enforcement roles. One card per person; tags are not exclusive."
           : `${cat.blurb} One card per person. Identity tags are independent of the event. Seeded rows only — not exhaustive.`,
         body: `${identityFilterNav(cat.path, { tags, unsealed })}${listSection(
-          peopleList(rows, { showDeath: deaths }),
+          peopleList(rows, {
+            showDeath: deaths,
+            ...(kinds.length
+              ? { listDate: (row) => personMenuDate(row, { kinds }) }
+              : {}),
+          }),
           pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({
             title: heading,
@@ -1219,16 +1229,14 @@ async function handle(req, res) {
   }
   if (cat && cat.kind === "central_casting") {
     const pageSize = parseCookiePageSize(req.headers.cookie);
-    const total = await countCentralCastingPeople();
+    const matched = await listCentralCastingPeople();
+    const { ordered, dateOf } = orderPeopleByMenuDate(matched, { centralCasting: true });
     const meta = paginate({
-      total,
+      total: ordered.length,
       page: parsePage(url.searchParams),
       pageSize,
     });
-    const rows = await listCentralCastingPeople({
-      limit: meta.limit,
-      offset: meta.offset,
-    });
+    const rows = ordered.slice(meta.offset, meta.offset + meta.limit);
     return sendHtml(
       res,
       layout({
@@ -1240,7 +1248,7 @@ async function handle(req, res) {
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: listSection(
-          peopleList(rows),
+          peopleList(rows, { listDate: dateOf }),
           pager(meta, { basePath: cat.path, noun: "rows", pageSizes: PAGE_SIZES }),
           listHead({
             title: cat.title,

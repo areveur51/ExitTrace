@@ -472,8 +472,10 @@ export function normalizeEventMedia(raw) {
     if (item && typeof item === "object") {
       const alt = eventMediaCaption(item.alt);
       const credit = eventMediaCaption(item.credit);
+      const context = eventMediaCaption(item.context);
       if (alt) row.alt = alt;
       if (credit) row.credit = credit;
+      if (context) row.context = context;
       if (/\.mp4$/i.test(src)) {
         const poster = eventMediaHref(item.poster);
         if (poster && !/\.mp4$/i.test(poster)) row.poster = poster;
