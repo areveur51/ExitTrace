@@ -243,6 +243,22 @@ function byteRange(header, size) {
   return { start, end: Math.min(end, size - 1) };
 }
 
+/** Stream a static file. Production responses pipe. Test doubles only implement end(body). */
+function streamFile(res, filePath) {
+  const stream = fs.createReadStream(filePath);
+  if (typeof res.write === "function" && typeof res.on === "function") {
+    stream.on("error", () => {
+      if (typeof res.destroy === "function") res.destroy();
+    });
+    stream.pipe(res);
+    return;
+  }
+  const chunks = [];
+  stream.on("data", (chunk) => chunks.push(chunk));
+  stream.on("error", () => res.end());
+  stream.on("end", () => res.end(Buffer.concat(chunks)));
+}
+
 function sendStatic(req, res, filePath, contentType, cacheControl) {
   const gzippable = gzippableType(contentType);
   if (!gzippable) {
@@ -281,9 +297,8 @@ function sendStatic(req, res, filePath, contentType, cacheControl) {
       fs.createReadStream(filePath).pipe(res);
       return;
     }
-    const body = fs.readFileSync(filePath);
-    res.writeHead(200, { ...headers, "Content-Length": body.length });
-    res.end(body);
+    res.writeHead(200, { ...headers, "Content-Length": st.size });
+    streamFile(res, filePath);
     return;
   }
   const asset = cachedFile(filePath, { gzippable: true });
@@ -939,7 +954,16 @@ async function handle(req, res) {
 
   if (p.startsWith("/people/")) {
     const id = safeId(p.slice("/people/".length));
-    const row = id ? await getPerson(id) : null;
+    if (!id) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    const [row, centralCastingClips, epsteinLegs, attributions] = await Promise.all([
+      getPerson(id),
+      listCentralCastingEvidence(id),
+      listEpsteinLegsForPerson(id),
+      listRequestAttributions({ target_kind: "person", target_id: id }),
+    ]);
     if (!row) {
       send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
@@ -955,12 +979,9 @@ async function handle(req, res) {
         crumbLabel: row.name,
         countLabel: "detail",
         body: personDetail(row, {
-          centralCastingClips: await listCentralCastingEvidence(row.id),
-          epsteinLegs: await listEpsteinLegsForPerson(row.id),
-          attributions: await listRequestAttributions({
-            target_kind: "person",
-            target_id: row.id,
-          }),
+          centralCastingClips,
+          epsteinLegs,
+          attributions,
         }),
       }),
     );
@@ -989,7 +1010,14 @@ async function handle(req, res) {
 
   if (p.startsWith("/operations/") && p !== "/operations/") {
     const id = safeId(p.slice("/operations/".length));
-    const row = id ? await getOperation(id) : null;
+    if (!id) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    const [row, attributions] = await Promise.all([
+      getOperation(id),
+      listRequestAttributions({ target_kind: "operation", target_id: id }),
+    ]);
     if (!row) {
       send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
@@ -1005,12 +1033,7 @@ async function handle(req, res) {
         categoryId: tag,
         crumbLabel: row.name,
         countLabel: "detail",
-        body: operationDetail(row, {
-          attributions: await listRequestAttributions({
-            target_kind: "operation",
-            target_id: row.id,
-          }),
-        }),
+        body: operationDetail(row, { attributions }),
       }),
     );
   }
@@ -1061,11 +1084,22 @@ async function handle(req, res) {
   const commsDetail = commsKindByPath(p);
   if (commsDetail && p !== commsDetail.path && p !== `${commsDetail.path}/`) {
     const id = safeId(p.slice(`${commsDetail.path}/`.length));
-    const row = id ? await getKindComm(commsDetail.id, id) : null;
+    if (!id) {
+      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    const [row, attributions] = await Promise.all([
+      getKindComm(commsDetail.id, id),
+      listRequestAttributions({
+        target_kind: attributionKindForComms(commsDetail.id),
+        target_id: id,
+      }),
+    ]);
     if (!row) {
       send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
       return;
     }
+    const linkedPeople = await getPeopleByIds(row.snapshot?.person_ids);
     return sendHtml(
       res,
       layout({
@@ -1075,13 +1109,7 @@ async function handle(req, res) {
         query: row.handle,
         crumbLabel: row.handle,
         countLabel: "detail",
-        body: kindDetail(commsDetail.id, row, {
-          attributions: await listRequestAttributions({
-            target_kind: attributionKindForComms(commsDetail.id),
-            target_id: row.id,
-          }),
-          linkedPeople: await getPeopleByIds(row.snapshot?.person_ids),
-        }),
+        body: kindDetail(commsDetail.id, row, { attributions, linkedPeople }),
       }),
     );
   }

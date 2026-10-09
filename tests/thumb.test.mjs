@@ -9,6 +9,7 @@ import {
   CARD_2X_W,
   CARD_PX_H,
   CARD_PX_W,
+  HERO_MAX_EDGE,
   HERO_PX_H,
   HERO_PX_W,
   LIST_THUMB_2X_H,
@@ -16,11 +17,13 @@ import {
   LIST_THUMB_PX_H,
   LIST_THUMB_PX_W,
   PORTRAIT_CACHE,
+  PORTRAIT_MAX_EDGE,
   PORTRAIT_PX_H,
   PORTRAIT_PX_W,
   detailHeroHref,
   ensureThumbFile,
   goldMediaHref,
+  outputPixelSize,
   isCommsMediaHref,
   isDogMediaHref,
   isThumbHref,
@@ -118,7 +121,7 @@ test("listThumbHref maps local stills and drops remote URLs", () => {
   assert.equal(CARD_PX_H, 624);
   assert.equal(CARD_2X_W, 960);
   assert.equal(CARD_2X_H, 1248);
-  assert.equal(PORTRAIT_CACHE, "6");
+  assert.equal(PORTRAIT_CACHE, "7");
 });
 
 test("renderPortraitJpeg writes a cover-cropped 80x104 list JPEG, not a 192 masonry hero", () => {
@@ -145,6 +148,23 @@ test("renderPortraitJpeg writes a cover-cropped 80x104 list JPEG, not a 192 maso
   const card2Decoded = jpeg.decode(card2, { useTArray: true });
   assert.equal(card2Decoded.width, CARD_2X_W);
   assert.equal(card2Decoded.height, CARD_2X_H);
+});
+
+test("hero variant fits a 960px long edge and the stored portrait cap stays 1600", () => {
+  assert.equal(HERO_MAX_EDGE, 960);
+  assert.equal(PORTRAIT_MAX_EDGE, 1600);
+  assert.deepEqual(outputPixelSize(".hero", 2000, 3000), { width: 640, height: 960 });
+  assert.deepEqual(outputPixelSize(".hero", 3000, 2000), { width: 960, height: 640 });
+  assert.deepEqual(outputPixelSize(".hero", 400, 500), { width: 400, height: 500 });
+  assert.deepEqual(outputPixelSize("", 2000, 3000), {
+    width: LIST_THUMB_PX_W,
+    height: LIST_THUMB_PX_H,
+  });
+  const src = solidJpeg({ width: 2000, height: 3000 });
+  const hero = renderPortraitJpeg(src, ".hero");
+  const decoded = jpeg.decode(hero, { useTArray: true });
+  assert.equal(decoded.width, 640);
+  assert.equal(decoded.height, 960);
 });
 
 test("renderPortraitWebp writes a RIFF WebP for list and hero variants", async () => {

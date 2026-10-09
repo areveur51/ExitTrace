@@ -253,7 +253,7 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   const shot = "/media/screenshots/people/james-comey.jpg";
   const html = personDetail(person({ screenshot: shot, screenshot_credit: "X" }));
   assert.match(html, /class="detail-photo portrait"/);
-  assert.match(html, /src="\/media\/people\/james-comey\.jpg\?p=6"/);
+  assert.match(html, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.match(html, /class="detail-photo screenshot"/);
   assert.match(html, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
   assert.match(html, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
@@ -262,7 +262,7 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   assert.doesNotMatch(html, /class="portrait thumb"/);
 
   const coronaHtml = personDetail(corona({ screenshot: shot }));
-  assert.match(coronaHtml, /src="\/media\/people\/james-comey\.jpg\?p=6"/);
+  assert.match(coronaHtml, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.match(coronaHtml, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
 
   const dogHtml = dogDetail(
@@ -278,7 +278,7 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   const opHtml = operationDetail(
     operation({ screenshot: "/media/screenshots/operations/restore.jpg" }),
   );
-  assert.match(opHtml, /src="\/media\/agencies\/doj\.jpg\?p=6"/);
+  assert.match(opHtml, /src="\/media\/agencies\/doj\.jpg\?p=7"/);
   assert.match(opHtml, /data-lightbox="\/media\/agencies\/doj\.jpg"/);
   assert.doesNotMatch(opHtml, /class="[^"]*empty-portrait/);
   assert.match(opHtml, /src="\/media\/screenshots\/operations\/restore\.jpg"/);
@@ -288,12 +288,12 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   assert.match(coronaHtml, /meta-pane--stack/);
 
   const missing = personDetail(person());
-  assert.match(missing, /src="\/media\/people\/james-comey\.jpg\?p=6"/);
+  assert.match(missing, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.doesNotMatch(missing, /screenshots\/people/);
 
   const list = personRow(person({ screenshot: shot }));
   assert.match(list, /class="portrait thumb"/);
-  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=6"/);
+  assert.match(list, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=7"/);
   assert.doesNotMatch(list, /screenshots/);
   assert.doesNotMatch(list, /lightbox/);
   assert.doesNotMatch(list, /src="\/media\/people\/james-comey\.jpg"/);
@@ -302,14 +302,14 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
     dog({ screenshot: "/media/screenshots/dog-comms/dod-k9-2020.jpg" }),
   );
   assert.match(dogList, /class="still thumb"/);
-  assert.match(dogList, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=6"/);
+  assert.match(dogList, /src="\/media\/thumbs\/dog-comms\/dod-k9-2020\.jpg\?p=7"/);
   assert.doesNotMatch(dogList, /screenshots/);
   assert.doesNotMatch(dogList, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
 
   const opList = operationRow(
     operation({ screenshot: "/media/screenshots/operations/restore.jpg" }),
   );
-  assert.match(opList, /src="\/media\/thumbs\/agencies\/doj\.jpg\?p=6"/);
+  assert.match(opList, /src="\/media\/thumbs\/agencies\/doj\.jpg\?p=7"/);
   assert.doesNotMatch(opList, /class="[^"]*empty-portrait/);
   assert.doesNotMatch(opList, /screenshots/);
 });
@@ -347,7 +347,7 @@ test("detail pages include lightbox chrome and keep list thumbs off the screensh
   const list = await requestPage("/firings");
   assert.equal(list.status, 200);
   const listHtml = list.body.toString("utf8");
-  assert.match(listHtml, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=6"/);
+  assert.match(listHtml, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=7"/);
   assert.doesNotMatch(listHtml, /screenshots\/people/);
   assert.doesNotMatch(listHtml, /class="lightbox-open"/);
 });

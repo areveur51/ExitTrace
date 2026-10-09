@@ -30,15 +30,21 @@ export const CARD_PX_W = 480;
 export const CARD_PX_H = 624;
 export const CARD_2X_W = 960;
 export const CARD_2X_H = 1248;
-/** ≥2× the 192×250 detail CSS box — never the 80×104 / old 192 list thumb. */
+/** ≥2× the 192×250 detail CSS box. The .hero file uses HERO_MAX_EDGE, not this box. */
 export const HERO_PX_W = 384;
 export const HERO_PX_H = 500;
+/**
+ * Long edge of the .hero webp. Card view's only srcset candidate above 160w
+ * is labeled 960w, and a large card at 2× is about 896 device pixels.
+ */
+export const HERO_MAX_EDGE = 960;
+export const HERO_WEBP_QUALITY = 64;
 export const PORTRAIT_PX_W = LIST_THUMB_PX_W;
 export const PORTRAIT_PX_H = LIST_THUMB_PX_H;
 export const DETAIL_PORTRAIT_CSS_W = 192;
 export const DETAIL_PORTRAIT_CSS_H = 250;
 /** Cache-bust when the derived crop pipeline changes (immutable media URLs). */
-export const PORTRAIT_CACHE = "6";
+export const PORTRAIT_CACHE = "7";
 export const LIST_THUMB_QUALITY = 78;
 export const LIST_THUMB_WEBP_QUALITY = 78;
 
@@ -338,21 +344,47 @@ export function compressPortraitBuffer(buf) {
   }
 }
 
-/** Keep gold composition. Downscale only when a side exceeds maxEdge. */
+/** Keep gold composition. Downscale only when a side exceeds the stored-portrait cap. */
 function heroFrame(src) {
-  const maxEdge = PORTRAIT_MAX_EDGE;
-  const m = Math.max(src.width, src.height);
+  return fitLongEdge(src, PORTRAIT_MAX_EDGE);
+}
+
+/** Contain fit. Does not cover-crop. Images already inside the edge stay as-is. */
+function fitLongEdge(src, maxEdge) {
+  const sw = src?.width || 0;
+  const sh = src?.height || 0;
+  if (!sw || !sh || !maxEdge) return null;
+  const m = Math.max(sw, sh);
   if (m <= maxEdge) return src;
   const scale = maxEdge / m;
   return bilinearResize(
     src,
-    Math.max(1, Math.round(src.width * scale)),
-    Math.max(1, Math.round(src.height * scale)),
+    Math.max(1, Math.round(sw * scale)),
+    Math.max(1, Math.round(sh * scale)),
   );
 }
 
+/** Pixel size a variant will encode, before the codec runs. */
+export function outputPixelSize(variant, width, height) {
+  const w = Math.round(Number(width) || 0);
+  const h = Math.round(Number(height) || 0);
+  if (w < 1 || h < 1) return null;
+  if (variant === ".hero") {
+    const m = Math.max(w, h);
+    if (m <= HERO_MAX_EDGE) return { width: w, height: h };
+    const scale = HERO_MAX_EDGE / m;
+    return {
+      width: Math.max(1, Math.round(w * scale)),
+      height: Math.max(1, Math.round(h * scale)),
+    };
+  }
+  const size = VARIANT_SIZE[variant];
+  if (!size) return null;
+  return { width: size.w, height: size.h };
+}
+
 function frameForVariant(decoded, variant) {
-  if (variant === ".hero") return heroFrame(decoded);
+  if (variant === ".hero") return fitLongEdge(decoded, HERO_MAX_EDGE);
   const { w, h } = variantSize(variant);
   return coverResize(decoded, w, h);
 }
@@ -403,9 +435,10 @@ export async function renderPortraitWebp(buf, variant = "") {
     const data = resized.data instanceof Uint8ClampedArray
       ? resized.data
       : new Uint8ClampedArray(resized.data);
+    const quality = variant === ".hero" ? HERO_WEBP_QUALITY : LIST_THUMB_WEBP_QUALITY;
     const encoded = await encode(
       { data, width: resized.width, height: resized.height },
-      { quality: LIST_THUMB_WEBP_QUALITY },
+      { quality },
     );
     return encoded && encoded.byteLength ? Buffer.from(encoded) : null;
   } catch {
