@@ -9,6 +9,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.17] - 2026-10-09
+
+### Changed
+
+- Portrait and hero images are smaller. List and detail portraits use cache key 7. The empty portrait file is smaller.
+- Person, operation, and comms pages load their independent lookups together. Static images stream.
+
 ## [1.2.16] - 2026-10-09
 
 ### Added

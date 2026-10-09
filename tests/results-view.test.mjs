@@ -206,10 +206,10 @@ test("operation cards share the result portrait slot and the sharp srcset", () =
   assert.match(html, /<div class="row-media">/);
   assert.match(html, /data-result-thumb/);
   assert.match(html, /sizes="40px"/);
-  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.jpg\?p=6 80w/);
-  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.2x\.jpg\?p=6 160w/);
-  assert.match(html, /\/media\/agencies\/fbi\.png\?p=6 960w/);
-  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.hero\.webp\?p=6 960w/);
+  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.jpg\?p=7 80w/);
+  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.2x\.jpg\?p=7 160w/);
+  assert.match(html, /\/media\/agencies\/fbi\.png\?p=7 960w/);
+  assert.match(html, /\/media\/thumbs\/agencies\/fbi\.hero\.webp\?p=7 960w/);
   assert.doesNotMatch(html, /fbi\.card/);
   assert.doesNotMatch(html, /person-card/);
 });

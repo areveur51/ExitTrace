@@ -50,7 +50,7 @@ test("classification rows keep one leading media slot with and without a portrai
   const bareSlot = slotInner(bare);
   assert.match(portraitSlot, /<img class="portrait thumb"/);
   assert.match(portraitSlot, /width="40" height="52"/);
-  assert.match(portraitSlot, /src="\/media\/thumbs\/people\/jordan-hale\.jpg\?p=6"/);
+  assert.match(portraitSlot, /src="\/media\/thumbs\/people\/jordan-hale\.jpg\?p=7"/);
   assert.doesNotMatch(portraitSlot, /src="\/empty-portrait\.jpg/);
   assert.match(bareSlot, /class="portrait thumb empty-portrait"/);
   assert.match(bareSlot, /src="\/empty-portrait\.jpg/);
