@@ -1085,6 +1085,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       maxAge: maybeOpts?.maxAge,
       tags: maybeOpts?.tags,
       unsealed: maybeOpts?.unsealed === true,
+      cardOrder: maybeOpts?.cardOrder === true,
     };
   }
   if (categoryOrOpts && typeof categoryOrOpts === "object") {
@@ -1096,6 +1097,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       maxAge: categoryOrOpts.maxAge,
       tags: categoryOrOpts.tags,
       unsealed: categoryOrOpts.unsealed === true,
+      cardOrder: categoryOrOpts.cardOrder === true,
     };
   }
   return {
@@ -1106,6 +1108,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
     maxAge: maybeOpts?.maxAge,
     tags: maybeOpts?.tags,
     unsealed: maybeOpts?.unsealed === true,
+    cardOrder: maybeOpts?.cardOrder === true,
   };
 }
 
@@ -1340,7 +1343,10 @@ function peopleWhere(categories, params, ageFilter, tags, unsealed) {
   return ` WHERE ${extra.replace(/^ AND /, "")}`;
 }
 
-function peopleKindOrder(categories, params) {
+function peopleKindOrder(categories, params, { cardDate = false } = {}) {
+  if (!categories.length && cardDate) {
+    return ` ORDER BY event_date DESC NULLS LAST, name ASC`;
+  }
   if (!categories.length) {
     return ` ORDER BY COALESCE((
       SELECT MAX(e.event_date) FROM person_events e WHERE e.person_id = people.id
@@ -1411,6 +1417,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const tags = normalizeTags(args.tags);
   const unsealed = args.unsealed === true;
+  const cardOrder = args.cardOrder === true;
   const p = await getPool();
   if (!p) {
     let rows = getMemory().people.map((r) =>
@@ -1436,7 +1443,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   }
   const params = [];
   let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed)}`;
-  sql += peopleKindOrder(categories, params);
+  sql += peopleKindOrder(categories, params, { cardDate: cardOrder });
   if (limit != null) {
     params.push(limit);
     sql += ` LIMIT $${params.length}`;
@@ -3311,6 +3318,45 @@ export async function closeStore() {
   }
 }
 
+
+function flightDay(raw) {
+  if (raw instanceof Date) {
+    const day = raw.toISOString().slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : "";
+  }
+  const day = String(raw || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : "";
+}
+
+/** Earliest stored flight day per person. Epstein-client events use that day. */
+export async function earliestEpsteinFlights(personIds) {
+  const ids = [...new Set((personIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  const out = new Map();
+  if (!ids.length) return out;
+  const p = await getPool();
+  if (!p) {
+    for (const row of getMemory().epstein_flight_legs || []) {
+      if (!ids.includes(row.person_id)) continue;
+      const day = flightDay(row.flight_date);
+      if (!day) continue;
+      const prior = out.get(row.person_id);
+      if (!prior || day < prior) out.set(row.person_id, day);
+    }
+    return out;
+  }
+  const q = await p.query(
+    `SELECT person_id, min(flight_date) AS flight_date
+       FROM epstein_flight_legs
+      WHERE person_id = ANY($1::text[])
+      GROUP BY person_id`,
+    [ids],
+  );
+  for (const row of q.rows) {
+    const day = flightDay(row.flight_date);
+    if (day) out.set(row.person_id, day);
+  }
+  return out;
+}
 
 /** Epstein legs for person detail. Empty → section hidden. */
 export async function listEpsteinLegsForPerson(personId) {

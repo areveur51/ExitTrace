@@ -9,6 +9,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.15] - 2026-10-08
+
+### Added
+
+- Catalog menus group person cards under the year of the event that menu is about. A fact tag uses that fact's date. A category list uses that category's event date. Another event on the same card does not set the year.
+- A supporting media tile can show a short context line above its cite.
+
 ## [1.2.14] - 2026-10-08
 
 ### Added

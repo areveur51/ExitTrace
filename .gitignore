@@ -26,6 +26,18 @@ media/thumbs/**/*.tmp
 scratch/portrait-review/
 scratch/pydeps/
 
+# One-shot lab export for the gap upsert, and the local helpers that copy it. Not source.
+scratch/published-gap.json
+scratch/pg-date-preload.mjs
+scratch/render-check.py
+scratch/render-ids.mjs
+scratch/remove-fixture.mjs
+scratch/stream-diag.mjs
+scratch/stream-ctl.mjs
+scratch/stream-reach.txt
+scratch/postgres-5432.yml
+scratch/stream-reset.mjs
+
 # Packaged release zip — published via GitHub Releases, not git
 dist/
 *.zip

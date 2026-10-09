@@ -1336,10 +1336,10 @@ export function personListDate(row) {
 }
 
 /** Shared KEEP person row: dashboard slices, category lists, and search. */
-export function personRow(row, { selected, showDeath, badges = "" } = {}) {
+export function personRow(row, { selected, showDeath, badges = "", date } = {}) {
   const href = `/people/${encodeURIComponent(row.id)}`;
   const previewDate =
-    showDeath && row.death_date ? row.death_date : personListDate(row);
+    date !== undefined ? date : showDeath && row.death_date ? row.death_date : personListDate(row);
   return `<a class="tui-row person-card${selected ? " is-selected" : ""}" href="${esc(href)}">
     ${classificationMediaSlot(thumb(row.photo, row.name))}
     <div class="tui-row-text">
@@ -1581,7 +1581,7 @@ export function personEventSection({
   </${el}>`;
 }
 
-/** One bottom-of-page figure. Caption is the matching cite link, not the post text. */
+/** One bottom-of-page figure. A stored context line sits before the cite link. */
 function supportingMediaFigure(item, source) {
   const alt = item.alt || "Supporting media";
   const credit = creditWithoutUrls(item.credit || "");
@@ -1590,9 +1590,13 @@ function supportingMediaFigure(item, source) {
   const dateHtml = date
     ? ` <time datetime="${esc(date)}">${esc(formatDate(date))}</time>`
     : "";
+  const context = String(item.context || "").trim();
+  const contextHtml = context
+    ? `<p class="event-snippet support-context">${esc(context)}</p>`
+    : "";
   const caption = href
-    ? `${citeLink(href)}${dateHtml}`
-    : esc(credit || alt);
+    ? `${contextHtml}${citeLink(href)}${dateHtml}`
+    : `${contextHtml}${esc(credit || alt)}`;
   const videoPoster = /\.mp4$/i.test(item.src)
     ? resolveVideoPosterHref(item.src, item.poster || "")
     : "";
@@ -1768,11 +1772,14 @@ export function peopleTable(rows, { showDeath } = {}) {
   return peopleList(rows, { showDeath });
 }
 
-export function peopleList(rows, { showDeath } = {}) {
+export function peopleList(rows, { showDeath, listDate } = {}) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
+  const menuDate = typeof listDate === "function";
+  const dateOf = (row) =>
+    menuDate ? asEventDate(listDate(row)) || "" : personListDate(row) || "";
   const ordered = rows.slice().sort((a, b) => {
-    const da = personListDate(a);
-    const db = personListDate(b);
+    const da = dateOf(a);
+    const db = dateOf(b);
     if (da !== db) {
       if (!da) return 1;
       if (!db) return -1;
@@ -1781,8 +1788,13 @@ export function peopleList(rows, { showDeath } = {}) {
     return String(a.name || "").localeCompare(String(b.name || ""));
   });
   return `<div class="people-list tui-list">${groupByYearItems(
-    ordered.map((row) => ({ date: personListDate(row), row })),
-    (item, opts) => personRow(item.row, { ...opts, showDeath }),
+    ordered.map((row) => ({ date: dateOf(row), row })),
+    (item, opts) =>
+      personRow(item.row, {
+        ...opts,
+        showDeath: menuDate ? false : showDeath,
+        date: menuDate ? dateOf(item.row) : undefined,
+      }),
   )}</div>`;
 }
 
@@ -1847,12 +1859,19 @@ export function shotCatalogList(posts, people) {
     for (const person of linked) {
       if (seen.has(person.id)) continue;
       seen.add(person.id);
-      items.push({ date: post.posted_at, type: "person", row: person });
+      items.push({
+        date: post.posted_at,
+        cardDate: asEventDate(post.posted_at) || "",
+        type: "person",
+        row: person,
+      });
     }
   }
   if (!items.length) return `<p class="empty">No rows on this page.</p>`;
   return `<div class="shot-page tui-list">${groupByYearItems(items, (item, opts) =>
-    item.type === "person" ? personRow(item.row, opts) : kindListRow("shot", item.row, opts),
+    item.type === "person"
+      ? personRow(item.row, { ...opts, date: item.cardDate })
+      : kindListRow("shot", item.row, opts),
   )}</div>`;
 }
 

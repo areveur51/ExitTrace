@@ -232,3 +232,65 @@ test("explicit poster that exists still renders on supporting video", () => {
   }
 });
 
+test("supporting tile shows stored context and leaves unofficial snippets off the event", () => {
+  const cite = "https://x.com/Saulito46107740/status/1929291227842641967";
+  const other = "https://x.com/Saulito46107740/status/1929291229197488286";
+  const context = "Meghan McCain said, “My Father, you can’t kill him again, but whatever.”";
+  const media = normalizeEventMedia([
+    {
+      src: "/media/people/john-mccain/support/1929291227842641967.png",
+      url: cite,
+      context: `${context} https://x.com/example`,
+      alt: "X post",
+    },
+    {
+      src: "/media/people/john-mccain/support/1929291229197488286.png",
+      url: other,
+      alt: "Second X post",
+    },
+  ]);
+  assert.equal(media[0].context, context);
+  assert.equal(media[1].context, undefined);
+  const html = personDetail({
+    id: "john-mccain",
+    name: "John McCain",
+    category: "death_official",
+    event_date: "2018-08-25",
+    events: [
+      {
+        kind: "boot_comms",
+        event_date: "2017-11-06",
+        comments: "Achilles tendon.",
+        sources: [
+          {
+            url: "https://www.cnn.com/2017/11/06/politics/john-mccain-treated-for-achilles-tendon",
+            date: "2017-11-06",
+            snippet: "Walking boot.",
+          },
+          {
+            url: cite,
+            publisher: "Supporting post",
+            date: "2025-06-01",
+            snippet: "This snippet stays off the boot row.",
+          },
+          { url: other, publisher: "Supporting post", date: "2025-06-01" },
+        ],
+        media,
+      },
+    ],
+  });
+  const bootAt = html.indexOf('data-kind="boot_comms"');
+  const supportAt = html.indexOf('aria-label="Supporting media"');
+  assert.ok(bootAt >= 0 && supportAt > bootAt);
+  const boot = html.slice(bootAt, supportAt);
+  const support = html.slice(supportAt);
+  assert.match(boot, /Achilles tendon\./);
+  assert.doesNotMatch(boot, /My Father/);
+  assert.doesNotMatch(boot, /This snippet stays off the boot row\./);
+  assert.equal((support.match(/support-context/g) || []).length, 1);
+  assert.match(support, /My Father, you can’t kill him again, but whatever\./);
+  assert.match(support, new RegExp(`href="${cite}"`));
+  assert.match(support, new RegExp(`href="${other}"`));
+  assert.doesNotMatch(support, /https:\/\/x\.com\/example/);
+});
+
