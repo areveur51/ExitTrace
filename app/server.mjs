@@ -669,19 +669,7 @@ async function handle(req, res) {
     const filePath = p.startsWith("/media/themes/")
       ? safeJoin(PUBLIC, p.slice(1))
       : path.join(PUBLIC, p.slice(1));
-    if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-      send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    sendStatic(
-      req,
-      res,
-      filePath,
-      MIME[ext] || "application/octet-stream",
-      "public, max-age=31536000, immutable",
-    );
-    return;
+    return serveFile(res, filePath, req);
   }
   if (p.startsWith("/media/")) {
     return await serveMedia(res, p.slice("/media/".length), req);

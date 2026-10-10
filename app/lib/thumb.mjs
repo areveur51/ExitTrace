@@ -10,8 +10,8 @@ import path from "path";
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import jpeg from "jpeg-js";
-import { PNG } from "pngjs";
 import { simd } from "wasm-feature-detect";
+import { decodeCappedRaster, jpegPixelSize } from "./raster-limit.mjs";
 
 export const LIST_THUMB_CSS_W = 40;
 export const LIST_THUMB_CSS_H = 52;
@@ -181,32 +181,6 @@ export function detailHeroHref(src, ext = "webp") {
   return thumbHrefFor(src, { variant: ".hero", ext });
 }
 
-function decodeStill(buf) {
-  if (!buf || buf.length < 24) return null;
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
-    try {
-      const png = PNG.sync.read(buf);
-      return { width: png.width, height: png.height, data: png.data };
-    } catch {
-      return null;
-    }
-  }
-  if (buf[0] === 0xff && buf[1] === 0xd8) {
-    try {
-      // Same memory ceiling as decodePortrait — large gold stills can exceed
-      // jpeg-js default and used to return null, so list thumbs 404.
-      return jpeg.decode(buf, {
-        useTArray: true,
-        formatAsRGBA: true,
-        maxMemoryUsageInMB: 2048,
-      });
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
 function bilinearResize(src, dw, dh, crop) {
   const sw = src.width;
   const sh = src.height;
@@ -300,33 +274,9 @@ function flattenOpaque(src) {
  * JPEG bytes when the still is over the edge or byte cap. Null means keep the original.
  * WebP and other undecoded types are left alone.
  */
-function decodePortrait(buf) {
-  if (!buf || buf.length < 24) return null;
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
-    try {
-      const png = PNG.sync.read(buf);
-      return { width: png.width, height: png.height, data: png.data };
-    } catch {
-      return null;
-    }
-  }
-  if (buf[0] === 0xff && buf[1] === 0xd8) {
-    try {
-      return jpeg.decode(buf, {
-        useTArray: true,
-        formatAsRGBA: true,
-        maxMemoryUsageInMB: 2048,
-      });
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
 export function compressPortraitBuffer(buf) {
   if (!buf || buf.length < 24) return null;
-  const decoded = decodePortrait(buf);
+  const decoded = decodeCappedRaster(buf);
   if (!decoded?.width || !decoded?.height) return null;
   const edge = Math.max(decoded.width, decoded.height);
   const tooWide = edge > PORTRAIT_MAX_EDGE;
@@ -390,7 +340,7 @@ function frameForVariant(decoded, variant) {
 }
 
 export function renderPortraitJpeg(buf, variant = "") {
-  const decoded = decodeStill(buf);
+  const decoded = decodeCappedRaster(buf);
   if (!decoded) return null;
   const resized = frameForVariant(decoded, variant);
   if (!resized) return null;
@@ -426,7 +376,7 @@ async function webpEncoder() {
 }
 
 export async function renderPortraitWebp(buf, variant = "") {
-  const decoded = decodeStill(buf);
+  const decoded = decodeCappedRaster(buf);
   if (!decoded) return null;
   const resized = frameForVariant(decoded, variant);
   if (!resized) return null;
@@ -450,56 +400,46 @@ const MAX_SRC_BYTES = 4 * 1024 * 1024;
 /** One derive at a time. Callers wait; a busy pass must not 404 the rest of a card grid. */
 let rebuildChain = Promise.resolve();
 
-function jpegSofSize(buf) {
-  if (!buf || buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
-  let i = 2;
-  while (i + 9 < buf.length) {
-    if (buf[i] !== 0xff) return null;
-    const marker = buf[i + 1];
-    if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
-      return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
-    }
-    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
-      i += 2;
-      continue;
-    }
-    const len = buf.readUInt16BE(i + 2);
-    if (len < 2) return null;
-    i += 2 + len;
+function readFilePrefix(file, max) {
+  let fd;
+  try {
+    fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(max);
+    const n = fs.readSync(fd, buf, 0, max, 0);
+    return buf.subarray(0, n);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
-  return null;
 }
 
 function isWebpRiff(file) {
-  try {
-    const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(12);
-    const n = fs.readSync(fd, buf, 0, buf.length, 0);
-    fs.closeSync(fd);
-    return n >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP";
-  } catch {
-    return false;
-  }
+  const buf = readFilePrefix(file, 12);
+  return Boolean(
+    buf &&
+      buf.length >= 12 &&
+      buf.toString("ascii", 0, 4) === "RIFF" &&
+      buf.toString("ascii", 8, 12) === "WEBP",
+  );
 }
 
 function jpegMatchesSize(file, w, h) {
+  const size = jpegPixelSize(readFilePrefix(file, 65536));
+  return Boolean(size && size.width === w && size.height === h);
+}
+
+function usableFile(file) {
   try {
-    const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(65536);
-    const n = fs.readSync(fd, buf, 0, buf.length, 0);
-    fs.closeSync(fd);
-    const size = jpegSofSize(buf.subarray(0, n));
-    return !!(size && size.width === w && size.height === h);
+    const st = fs.statSync(file);
+    return st.isFile() && st.size > 0;
   } catch {
     return false;
   }
 }
 
 function destIfUsable(dest) {
-  if (fs.existsSync(dest) && fs.statSync(dest).isFile() && fs.statSync(dest).size > 0) {
-    return dest;
-  }
-  return null;
+  return usableFile(dest) ? dest : null;
 }
 
 function existingMatches(dest, parsed) {
@@ -516,9 +456,7 @@ function findSourceFile(mediaDir, thumbRel) {
   for (const rel of sourceRelCandidates(thumbRel)) {
     const file = path.resolve(root, rel);
     if (file !== root && !file.startsWith(root + path.sep)) continue;
-    if (fs.existsSync(file) && fs.statSync(file).isFile() && fs.statSync(file).size > 0) {
-      return file;
-    }
+    if (usableFile(file)) return file;
   }
   return null;
 }

@@ -210,7 +210,7 @@ test("ensureThumbFile derives list, 2x, and hero files and refuses traversal", a
 
 test("large gold stills decode for list thumbs", () => {
   // High-resolution stills (multi-thousand px on a side) must still yield an 80x104 list crop.
-  // decodeStill uses the same jpeg-js memory ceiling as decodePortrait so decode does not fail closed.
+  // This still is under the in-request decode cap, so the list crop is produced.
   const src = solidJpeg({ width: 2800, height: 2200 });
   const out = renderPortraitJpeg(src);
   assert.ok(out && out.length > 0);
