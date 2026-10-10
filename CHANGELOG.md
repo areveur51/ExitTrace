@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.22] - 2026-10-10
+
+### Fixed
+
+- A large video is hashed in small chunks, and a still that would expand past the decode budget is skipped.
+
 ## [1.2.21] - 2026-10-10
 
 ### Changed

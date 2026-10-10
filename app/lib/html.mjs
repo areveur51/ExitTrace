@@ -65,6 +65,12 @@ import { isPeopleMediaHref } from "./portrait.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
 import { findPostMediaBox } from "./post-shot.mjs";
 import {
+  localMediaFile,
+  localMediaFileReady,
+  localMediaRecord,
+  mediaHrefPath,
+} from "./media-file.mjs";
+import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
 } from "./themes.mjs";
@@ -98,7 +104,7 @@ import {
   grokipediaCite,
 } from "./grokipedia.mjs";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -1031,37 +1037,6 @@ function interleaveDetailTiles(mediaTiles, metaTiles) {
 
 const mediaByteCache = new Map();
 
-function mediaRoot() {
-  return path.resolve(process.env.MEDIA_DIR || path.join(ROOT_DIR, "media"));
-}
-
-/** Local /media href with the query stripped. Empty when it is not a catalog file. */
-function mediaHrefPath(href) {
-  const text = String(href || "").trim().split(/[?#]/)[0];
-  if (!text.startsWith("/media/") || text.includes("..") || text.includes("\\")) return "";
-  return text;
-}
-
-function localMediaFile(href) {
-  const rel = mediaHrefPath(href);
-  if (!rel) return "";
-  const root = mediaRoot();
-  const file = path.resolve(root, rel.slice("/media/".length));
-  if (file !== root && !file.startsWith(root + path.sep)) return "";
-  return file;
-}
-
-/** True when a resolved local media file exists and is a non-empty regular file. */
-function localMediaFileReady(file) {
-  if (!file) return false;
-  try {
-    const st = statSync(file);
-    return st.isFile() && st.size > 0;
-  } catch {
-    return false;
-  }
-}
-
 /** Sibling `{stem}.poster.jpg` next to a local mp4. Empty when the file is missing. */
 export function siblingVideoPosterHref(src) {
   const rel = mediaHrefPath(src);
@@ -1087,27 +1062,35 @@ export function resolveVideoPosterHref(src, explicit = "") {
 
 /** sha256 of a local media file. Empty when the file is missing — that is not a duplicate. */
 function mediaByteId(href) {
-  const file = localMediaFile(href);
-  if (!file) return "";
-  let st;
-  try {
-    st = statSync(file);
-  } catch {
-    return "";
-  }
-  if (!st.isFile() || st.size <= 0) return "";
-  const key = `${file}\0${st.mtimeMs}\0${st.size}`;
-  const hit = mediaByteCache.get(key);
+  const rec = localMediaRecord(href);
+  if (!rec) return "";
+  const hit = mediaByteCache.get(rec.key);
   if (hit) return hit;
-  let buf;
+  let id = "";
   try {
-    buf = readFileSync(file);
+    id = hashFileBytes(rec.file);
   } catch {
     return "";
   }
-  const id = createHash("sha256").update(buf).digest("hex");
-  mediaByteCache.set(key, id);
+  mediaByteCache.set(rec.key, id);
   return id;
+}
+
+/** SHA-256 in fixed chunks so a long video is not one buffer. */
+export function hashFileBytes(file) {
+  const hash = createHash("sha256");
+  const fd = openSync(file, "r");
+  const buf = Buffer.alloc(64 * 1024);
+  try {
+    let n = 0;
+    do {
+      n = readSync(fd, buf, 0, buf.length, null);
+      if (n > 0) hash.update(buf.subarray(0, n));
+    } while (n > 0);
+  } finally {
+    closeSync(fd);
+  }
+  return hash.digest("hex");
 }
 
 /** One detail page shares this bag so the same bytes are drawn once. */

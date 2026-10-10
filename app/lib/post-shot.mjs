@@ -1,50 +1,11 @@
 /** Where the picture sits inside a stored post screenshot. Fractions of the file. */
 
-import { readFileSync, statSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import jpeg from "jpeg-js";
-import { PNG } from "pngjs";
+import { readFileSync } from "node:fs";
+import { localMediaRecord } from "./media-file.mjs";
+import { decodeCappedRaster } from "./raster-limit.mjs";
 
-const ROOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const boxCache = new Map();
-
-function mediaRoot() {
-  return path.resolve(process.env.MEDIA_DIR || path.join(ROOT_DIR, "media"));
-}
-
-function localMediaFile(href) {
-  const text = String(href || "").trim().split(/[?#]/)[0];
-  if (!text.startsWith("/media/") || text.includes("..") || text.includes("\\")) return "";
-  const root = mediaRoot();
-  const file = path.resolve(root, text.slice("/media/".length));
-  if (file !== root && !file.startsWith(root + path.sep)) return "";
-  return file;
-}
-
-function decodeMedia(buf) {
-  if (!buf || buf.length < 24) return null;
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
-    try {
-      const png = PNG.sync.read(buf);
-      return { width: png.width, height: png.height, data: png.data };
-    } catch {
-      return null;
-    }
-  }
-  if (buf[0] === 0xff && buf[1] === 0xd8) {
-    try {
-      return jpeg.decode(buf, {
-        useTArray: true,
-        formatAsRGBA: true,
-        maxMemoryUsageInMB: 512,
-      });
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
+const MAX_BOX_BYTES = 8 * 1024 * 1024;
 
 function round4(n) {
   return Math.round(n * 10000) / 10000;
@@ -148,24 +109,16 @@ export function mediaBoxFromRgba({ width, height, data }) {
 
 /** Cached box for a local /media screenshot. Null when the file or the block is missing. */
 export function findPostMediaBox(href) {
-  const file = localMediaFile(href);
-  if (!file) return null;
-  let st;
-  try {
-    st = statSync(file);
-  } catch {
-    return null;
-  }
-  if (!st.isFile() || st.size <= 0) return null;
-  const key = `${file}\0${st.mtimeMs}\0${st.size}`;
-  if (boxCache.has(key)) return boxCache.get(key);
+  const rec = localMediaRecord(href);
+  if (!rec || rec.size > MAX_BOX_BYTES) return null;
+  if (boxCache.has(rec.key)) return boxCache.get(rec.key);
   let box = null;
   try {
-    const img = decodeMedia(readFileSync(file));
+    const img = decodeCappedRaster(readFileSync(rec.file));
     if (img) box = mediaBoxFromRgba(img);
   } catch {
     box = null;
   }
-  boxCache.set(key, box);
+  boxCache.set(rec.key, box);
   return box;
 }
