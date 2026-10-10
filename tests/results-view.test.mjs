@@ -76,9 +76,15 @@ test("results view control is list/cards plus small/medium/large", () => {
   assert.match(html, /aria-labelledby="card-size-label"/);
   assert.match(html, />List</);
   assert.match(html, />Cards</);
-  assert.match(html, />Small</);
-  assert.match(html, />Medium</);
-  assert.match(html, />Large</);
+  assert.match(html, /data-results-view-set="list"[^>]*>[\s\S]*class="ui-icon"/);
+  assert.match(html, /data-card-size-set="s"[^>]*aria-label="Small"[^>]*>[\s\S]*ui-icon-solid/);
+  assert.match(html, /aria-label="Small"/);
+  assert.match(html, /aria-label="Medium"/);
+  assert.match(html, /aria-label="Large"/);
+  assert.match(html, /class="vh" id="card-size-label"/);
+  assert.doesNotMatch(html, />Small</);
+  assert.doesNotMatch(html, />Medium</);
+  assert.doesNotMatch(html, />Large</);
 });
 
 test("toolbar sits once above a result list and stays off empty or rank markup", () => {
@@ -135,6 +141,10 @@ test("catalog, search, and people lists include one toolbar; home, detail, and r
     "/group-operations",
     "/unsorted",
     "/dog-comms",
+    "/red-folder-comms",
+    "/eagle-comms",
+    "/ronald-comms",
+    "/shot-comms",
     "/central-casting",
     "/corona-comms",
     "/tags/trump-nicknames",
@@ -189,6 +199,9 @@ test("app.js persists results view and card size without a reload", () => {
   assert.match(css, /html\[data-results-view="cards"\] \.tui-row > \.row-media img/);
   assert.match(css, /object-fit:\s*contain/);
   assert.match(css, /height:\s*auto/);
+  assert.match(css, /\.ui-icon \{[^}]*stroke:\s*currentColor/);
+  assert.match(css, /\.ui-icon\.ui-icon-solid \{[^}]*fill:\s*currentColor/);
+  assert.match(css, /\.page-size-label \{[^}]*flex:\s*0 0 auto/);
   assert.match(css, /html\[data-results-view="cards"\] \.card-size \{\s*display:\s*flex/);
   assert.match(css, /\.card-size \{\s*display:\s*none/);
   assert.match(css, /--result-card-min:\s*8\.25rem/);

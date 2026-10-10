@@ -9,6 +9,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.20] - 2026-10-10
+
+### Changed
+
+- Dog, red folder, eagle, Ronald, and shot lists use the same 17 / 34 / 51 rows control as the other catalogs. Search stays at 10.
+- View buttons show an icon with the label. Card size, previous and next page, and the rows control are icons.
+
 ## [1.2.19] - 2026-10-09
 
 ### Changed

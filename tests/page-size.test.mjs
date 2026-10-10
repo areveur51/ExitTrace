@@ -6,7 +6,6 @@ import { fileURLToPath } from "url";
 import { DEATH_KEEP_IDS } from "../app/lib/categories.mjs";
 import { layout, pageSizeSelector, pager } from "../app/lib/html.mjs";
 import {
-  DOG_PAGE_SIZE,
   PAGE_SIZE,
   PAGE_SIZES,
   PAGE_SIZE_STORAGE_KEY,
@@ -60,6 +59,11 @@ test("page-size selector is 17/34/51 and persists under exittrace-page-size", ()
   assert.match(html, /data-page-size-set="34"/);
   assert.match(html, /data-page-size-set="51"/);
   assert.match(html, /aria-pressed="true"/);
+  assert.match(html, /aria-label="17 per page"/);
+  assert.match(html, /aria-label="34 per page"/);
+  assert.match(html, /aria-label="51 per page"/);
+  assert.match(html, /class="ui-icon"/);
+  assert.match(html, /class="vh">Rows</);
   assert.doesNotMatch(html, /data-page-size-set="10"/);
   assert.doesNotMatch(html, LARP);
   const pagerHtml = pager(
@@ -67,6 +71,11 @@ test("page-size selector is 17/34/51 and persists under exittrace-page-size", ()
     { basePath: "/firings", pageSizes: PAGE_SIZES },
   );
   assert.match(pagerHtml, /class="page-size"/);
+  assert.match(pagerHtml, /aria-label="Previous page"/);
+  assert.match(pagerHtml, /aria-label="Next page"/);
+  assert.match(pagerHtml, /class="ui-icon"/);
+  assert.doesNotMatch(pagerHtml, />Prev</);
+  assert.doesNotMatch(pagerHtml, />Next</);
   assert.match(pagerHtml, /href="\/firings\?page=2"/);
   const bare = pager(
     { page: 1, totalPages: 1, total: 7, hasPrev: false, hasNext: false, pageSize: 10 },
@@ -89,7 +98,7 @@ test("layout boot script syncs localStorage to a cookie without changing ?page="
   assert.match(page, /document\.cookie/);
 });
 
-test("person list pages default to 17 and honor the cookie; dog comms stay 10", async () => {
+test("catalog lists default to 17 and honor the cookie, including comms", async () => {
   setMemory(goldSeed());
   const firings = await requestPage("/firings");
   const resignations = await requestPage("/resignations");
@@ -104,6 +113,9 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
   const unsorted = await requestPage("/unsorted");
   const dogs = await requestPage("/dog-comms");
   const folders = await requestPage("/red-folder-comms");
+  const eagles = await requestPage("/eagle-comms");
+  const ronalds = await requestPage("/ronald-comms");
+  const shots = await requestPage("/shot-comms");
   const home = await requestPage("/");
   const add = await requestPage("/add");
   const detail = await requestPage("/people/james-comey");
@@ -119,6 +131,11 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
     deaths,
     celebs,
     unsorted,
+    dogs,
+    folders,
+    eagles,
+    ronalds,
+    shots,
   ]) {
     assert.equal(res.status, 200);
     assert.match(res.body, /data-page-size="17"/);
@@ -126,7 +143,7 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
     assert.match(res.body, /data-page-size-set="34"/);
     assert.match(res.body, /data-page-size-set="51"/);
   }
-  for (const res of [dogs, folders, home, add, detail, dash]) {
+  for (const res of [home, add, detail, dash]) {
     assert.doesNotMatch(res.body, /data-page-size=/);
     assert.doesNotMatch(res.body, /data-page-size-set=/);
     assert.doesNotMatch(res.body, /class="page-size"/);
@@ -148,9 +165,15 @@ test("person list pages default to 17 and honor the cookie; dog comms stay 10", 
   assert.equal(countClass(wide.body, "person-card"), Math.min(34, deathCount));
   assert.match(wide.body, /data-page-size-set="34" aria-pressed="true"/);
 
-  const dogCards = countClass(dogs.body, "dog-card");
-  assert.ok(dogCards <= DOG_PAGE_SIZE);
+  const dogCards = countClass(dogs.body, "dog-card") + countClass(dogs.body, "person-card");
+  assert.ok(dogCards <= PAGE_SIZE);
   assert.ok(dogCards > 0);
+  const wideDogs = await requestPage("/dog-comms", {
+    cookie: `${PAGE_SIZE_STORAGE_KEY}=34`,
+  });
+  assert.equal(wideDogs.status, 200);
+  assert.match(wideDogs.body, /data-page-size="34"/);
+  assert.match(wideDogs.body, /data-page-size-set="34" aria-pressed="true"/);
   assert.equal(folders.status, 200);
   assert.doesNotMatch(folders.body, /class="age-filter"/);
 });

@@ -904,6 +904,21 @@ img.still.thumb {
 .portrait { width: 40px; height: 52px; object-fit: cover; object-position: center 18%; }
 img.empty-portrait { object-position: center center; }
 
+.ui-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  display: block;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ui-icon.ui-icon-solid {
+  fill: currentColor;
+  stroke: none;
+}
 .pager {
   margin: 0.75rem 0 1rem;
 }
@@ -934,6 +949,10 @@ img.empty-portrait { object-position: center center; }
   color: var(--ink);
   border: 1px solid var(--rule);
   background: var(--bg-2);
+}
+.pager-btn,
+.card-size-btn {
+  padding-inline: 0.45rem;
 }
 .pager-btn.is-disabled,
 .keychip.is-disabled {
@@ -968,12 +987,9 @@ img.empty-portrait { object-position: center center; }
   margin-top: 0.45rem;
 }
 .page-size-label {
-  flex: 1 1 100%;
-  font-family: var(--font-ui);
-  font-size: var(--hud-label);
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
   color: var(--brick);
 }
 .page-size-btns {
@@ -2152,7 +2168,7 @@ html[data-theme="glass"] .dash-stats {
     margin: 0;
   }
   .pager-controls { width: 100%; }
-  .pager-btn { flex: 1 1 auto; }
+  .pager-btn { flex: 0 0 auto; }
   .keymap .keychip {
     flex: 1 1 calc(50% - 0.4rem);
     min-height: 44px;
@@ -2445,6 +2461,9 @@ html[data-theme="glass"] .dash-stats {
 .card-size-btn {
   font: inherit;
   cursor: pointer;
+}
+.results-view-btn {
+  gap: 0.35rem;
 }
 html:not([data-results-view]) .results-view-btn[aria-pressed="true"],
 html:not([data-card-size]) .card-size-btn[aria-pressed="true"],

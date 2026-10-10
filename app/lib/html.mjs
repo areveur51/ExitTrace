@@ -267,6 +267,24 @@ export const DEFAULT_CARD_SIZE = "m";
 
 const CARD_SIZE_LABELS = { s: "Small", m: "Medium", l: "Large" };
 
+const UI_ICONS = {
+  list: `<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>`,
+  cards: `<rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/>`,
+  "card-s": `<rect x="8.5" y="10" width="7" height="10" rx="1"/>`,
+  "card-m": `<rect x="6" y="6.5" width="12" height="13.5" rx="1"/>`,
+  "card-l": `<rect x="3.5" y="3" width="17" height="17" rx="1.25"/>`,
+  prev: `<path d="M14.5 5.5 8 12l6.5 6.5"/>`,
+  next: `<path d="M9.5 5.5 16 12l-6.5 6.5"/>`,
+  rows: `<path d="M4 7h16M4 12h16M4 17h16"/>`,
+};
+
+function uiIcon(name) {
+  const body = UI_ICONS[name];
+  if (!body) return "";
+  const solid = String(name).startsWith("card-") ? " ui-icon-solid" : "";
+  return `<svg class="ui-icon${solid}" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">${body}</svg>`;
+}
+
 function resultsViewBootScript() {
   return `<script>
 (function(){try{var viewKey=${JSON.stringify(RESULTS_VIEW_STORAGE_KEY)};var sizeKey=${JSON.stringify(CARD_SIZE_STORAGE_KEY)};var views=${JSON.stringify(RESULTS_VIEWS)};var sizes=${JSON.stringify(CARD_SIZES)};var view=localStorage.getItem(viewKey);var size=localStorage.getItem(sizeKey);if(views.indexOf(view)===-1)view=${JSON.stringify(DEFAULT_RESULTS_VIEW)};if(sizes.indexOf(size)===-1)size=${JSON.stringify(DEFAULT_CARD_SIZE)};document.documentElement.setAttribute("data-results-view",view);document.documentElement.setAttribute("data-card-size",size);}catch(e){try{document.documentElement.setAttribute("data-results-view",${JSON.stringify(DEFAULT_RESULTS_VIEW)});document.documentElement.setAttribute("data-card-size",${JSON.stringify(DEFAULT_CARD_SIZE)});}catch(e2){}}})();
@@ -280,13 +298,14 @@ export function resultsViewControl() {
     const label = id === "cards" ? "Cards" : "List";
     return `<button type="button" class="results-view-btn keychip" data-results-view-set="${id}" aria-pressed="${
       on ? "true" : "false"
-    }">${label}</button>`;
+    }">${uiIcon(id === "cards" ? "cards" : "list")}<span>${label}</span></button>`;
   }).join("");
   const sizeBtns = CARD_SIZES.map((id) => {
     const on = id === DEFAULT_CARD_SIZE;
+    const label = CARD_SIZE_LABELS[id];
     return `<button type="button" class="card-size-btn keychip" data-card-size-set="${id}" aria-pressed="${
       on ? "true" : "false"
-    }">${CARD_SIZE_LABELS[id]}</button>`;
+    }" aria-label="${label}">${uiIcon(`card-${id}`)}</button>`;
   }).join("");
   return `<div class="results-view" data-results-toolbar>
     <div class="results-view-mode">
@@ -294,7 +313,7 @@ export function resultsViewControl() {
       <div class="results-view-btns" role="group" aria-labelledby="results-view-label">${viewBtns}</div>
     </div>
     <div class="card-size">
-      <span class="card-size-label" id="card-size-label">Card size</span>
+      <span class="vh" id="card-size-label">Card size</span>
       <div class="card-size-btns" role="group" aria-labelledby="card-size-label">${sizeBtns}</div>
     </div>
   </div>`;
@@ -303,13 +322,13 @@ export function resultsViewControl() {
 export function pageSizeSelector(activeSize = PAGE_SIZE) {
   const current = PAGE_SIZES.includes(Number(activeSize)) ? Number(activeSize) : PAGE_SIZE;
   return `<nav class="page-size" aria-label="Rows per page">
-    <span class="page-size-label" id="page-size-label">Rows</span>
+    <span class="page-size-label" id="page-size-label">${uiIcon("rows")}<span class="vh">Rows</span></span>
     <div class="page-size-btns" role="group" aria-labelledby="page-size-label">
       ${PAGE_SIZES.map((n) => {
         const on = n === current;
         return `<button type="button" class="page-size-btn keychip" data-page-size-set="${n}" aria-pressed="${
           on ? "true" : "false"
-        }">${n}</button>`;
+        }" aria-label="${n} per page">${n}</button>`;
       }).join("")}
     </div>
   </nav>`;
@@ -1906,11 +1925,11 @@ export function pager(meta, { basePath, noun = "rows", pageSizes } = {}) {
   const { page, totalPages, total, hasPrev, hasNext } = meta;
   const status = `Page ${page} of ${totalPages} · ${total} ${noun}`;
   const prev = hasPrev
-    ? `<a class="pager-btn keychip" href="${esc(pageHref(basePath, page - 1))}" rel="prev" data-key="ArrowLeft"><span class="br">[</span>←<span class="br">]</span> Prev</a>`
-    : `<span class="pager-btn keychip is-disabled" aria-disabled="true"><span class="br">[</span>←<span class="br">]</span> Prev</span>`;
+    ? `<a class="pager-btn keychip" href="${esc(pageHref(basePath, page - 1))}" rel="prev" data-key="ArrowLeft" aria-label="Previous page">${uiIcon("prev")}</a>`
+    : `<span class="pager-btn keychip is-disabled" aria-disabled="true" aria-label="Previous page">${uiIcon("prev")}</span>`;
   const next = hasNext
-    ? `<a class="pager-btn keychip" href="${esc(pageHref(basePath, page + 1))}" rel="next" data-key="ArrowRight"><span class="br">[</span>→<span class="br">]</span> Next</a>`
-    : `<span class="pager-btn keychip is-disabled" aria-disabled="true"><span class="br">[</span>→<span class="br">]</span> Next</span>`;
+    ? `<a class="pager-btn keychip" href="${esc(pageHref(basePath, page + 1))}" rel="next" data-key="ArrowRight" aria-label="Next page">${uiIcon("next")}</a>`
+    : `<span class="pager-btn keychip is-disabled" aria-disabled="true" aria-label="Next page">${uiIcon("next")}</span>`;
   const nums = pageWindow(page, totalPages);
   const items = [];
   let prevN = 0;

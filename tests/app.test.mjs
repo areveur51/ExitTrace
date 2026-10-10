@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 import { spawn } from "node:child_process";
 import jpeg from "jpeg-js";
 import { DEATH_KEEP_IDS } from "../app/lib/categories.mjs";
-import { DOG_PAGE_SIZE, PAGE_SIZE } from "../app/lib/paginate.mjs";
+import { PAGE_SIZE } from "../app/lib/paginate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 15220;
@@ -333,8 +333,10 @@ test("dog-comms page paginates stored rows and opens TUI meta detail", async () 
   assert.doesNotMatch(res.body, /widgets\.js/);
   assert.match(res.body, /Page 1 of \d+/);
   assert.ok(countClass(res.body, "dog-card") > 0);
-  assert.ok(countClass(res.body, "dog-card") <= DOG_PAGE_SIZE);
-  assert.doesNotMatch(res.body, /data-page-size-set=/);
+  assert.ok(countClass(res.body, "dog-card") <= PAGE_SIZE);
+  assert.match(res.body, /data-page-size-set="17"/);
+  assert.match(res.body, /data-page-size-set="34"/);
+  assert.match(res.body, /data-page-size-set="51"/);
   assert.doesNotMatch(res.body, /class="age-filter"/);
   const row = dogs[0];
   const detail = await get(`/dog-comms/${row.id}`);
