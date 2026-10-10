@@ -199,11 +199,11 @@ test("dog detail masonry: one CITE tile + Source; lightbox on media only; X URL 
   const html = dogDetail(dog());
   assert.match(html, /detail-media--masonry/);
   assert.doesNotMatch(html, /detail-media--tiles-3/);
-  // Main strip: 5 media + ONE cite. Source sits in the context section.
-  assert.match(html, /data-tiles="6"/);
+  // Screenshot, one cite, and each attachment beyond the extracted still.
+  assert.match(html, /data-tiles="5"/);
   assert.match(html, /class="detail-official-post"[\s\S]*class="detail-context"/);
   assert.doesNotMatch(masonryInner(html), /detail-tile--source/);
-  assert.match(html, /detail-tile--portrait/);
+  assert.doesNotMatch(html, /detail-tile--portrait/);
   assert.match(html, /detail-tile--screenshot/);
   assert.match(html, /detail-tile--meta/);
   assert.equal(tileByKind(html, "cite").length, 1);
@@ -216,7 +216,7 @@ test("dog detail masonry: one CITE tile + Source; lightbox on media only; X URL 
   assert.equal((html.match(/detail-tile--line/g) || []).length, 0);
   assert.equal((html.match(/detail-tile--still/g) || []).length, 3);
   const inner = masonryInner(html);
-  assert.match(inner, /detail-tile--portrait/);
+  assert.match(inner, /detail-tile--screenshot/);
   assert.match(inner, /detail-tile--meta/);
   const citeTile = tileByKind(html, "cite")[0];
   assert.match(citeTile, /class="cite-block"/);
@@ -226,10 +226,10 @@ test("dog detail masonry: one CITE tile + Source; lightbox on media only; X URL 
   assert.match(citeTile, /class="post-text">Multi-still dog post\.</);
   assert.doesNotMatch(citeTile, /Source ·|https:\/\/x\.com/);
   assert.doesNotMatch(html, /Handle ·|Account ·|Posted ·|Body ·/);
-  // Interleave: first media, then first meta, then screenshot
-  assert.match(inner, /detail-tile--portrait[\s\S]*detail-tile--meta[\s\S]*detail-tile--screenshot/);
+  // Interleave: the screenshot, then the cite, then the other attachments.
+  assert.match(inner, /detail-tile--screenshot[\s\S]*detail-tile--meta/);
   assert.doesNotMatch(html, /detail-media--masonry[\s\S]*<\/div>\s*<div class="detail-copy"/);
-  assert.match(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026\.jpg"/);
+  assert.doesNotMatch(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026\.jpg"/);
   assert.match(html, /data-lightbox="\/media\/screenshots\/dog-comms\/ezraacohen-dow-2026\.png"/);
   assert.match(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026-2\.jpg"/);
   assert.match(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026-4\.jpg"/);
@@ -410,7 +410,7 @@ test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 c
   const multi = dogDetail(dog());
   assert.doesNotMatch(multi, /detail-media--tiles-3/);
   assert.match(multi, /detail-tile--screenshot/);
-  assert.match(multi, /data-tiles="6"/);
+  assert.match(multi, /data-tiles="5"/);
 
   const two = dogDetail(
     dog({
@@ -418,9 +418,9 @@ test("dense masonry counts media + cite + Source; no screenshot span / tiles-3 c
       screenshot: "/media/screenshots/dog-comms/ezraacohen-dow-2026.png",
     }),
   );
-  // portrait + screenshot + cite; Source is outside the strip
+  // screenshot + cite; the extracted still is the same picture. Source is outside the strip.
   assert.doesNotMatch(two, /detail-media--tiles-3/);
-  assert.match(two, /data-tiles="3"/);
+  assert.match(two, /data-tiles="2"/);
   assert.match(two, /detail-tile--screenshot/);
   assert.match(two, /detail-tile--meta/);
   assert.equal(tileByKind(two, "cite").length, 1);
@@ -525,7 +525,7 @@ test("detail media keeps the first tile when a later file is the same bytes", ()
         },
       }),
     );
-    assert.match(dogHtml, /data-lightbox="\/media\/dog-comms\/duprule\.jpg"/);
+    assert.doesNotMatch(dogHtml, /data-lightbox="\/media\/dog-comms\/duprule\.jpg"/);
     assert.doesNotMatch(dogHtml, /duprule-2\.jpg/);
     assert.match(dogHtml, /duprule-3\.jpg/);
     assert.match(dogHtml, /detail-tile--screenshot/);
@@ -661,7 +661,12 @@ test("official-post kinds render main post, then context, then supporting media"
     const main = html.slice(mainAt, contextAt);
     const context = html.slice(contextAt, supportAt);
     const support = html.slice(supportAt);
-    assert.match(main, /detail-tile--portrait|detail-tile--video/, id);
+    if (id === "dog") {
+      assert.match(main, /detail-tile--screenshot/, id);
+      assert.doesNotMatch(main, /\/media\/dog-comms\/main\.jpg/, id);
+    } else {
+      assert.match(main, /detail-tile--portrait|detail-tile--video/, id);
+    }
     assert.match(main, /class="cite-block"/, id);
     assert.match(main, /Official post text/, id);
     assert.match(main, /extra\.jpg/, id);

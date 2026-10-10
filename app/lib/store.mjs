@@ -3259,6 +3259,37 @@ export async function searchOperations(q) {
   return res.rows.map(normalizeOperation);
 }
 
+/**
+ * A dog post linked to a resolved person is that person's card.
+ * The post is not its own result. An id that does not resolve keeps the post.
+ */
+async function foldLinkedDogComms(people, comms) {
+  const pending = [];
+  const rest = [];
+  for (const item of comms) {
+    const ids = item.type === "dog" ? linkedPersonIds(item.row?.snapshot) : [];
+    if (!ids.length) {
+      rest.push(item);
+      continue;
+    }
+    pending.push({ item, ids });
+  }
+  if (!pending.length) return { people, comms: rest };
+  const linked = await getPeopleByIds(pending.flatMap((entry) => entry.ids));
+  const byId = new Map(linked.map((row) => [row.id, row]));
+  const seen = new Set(people.map((row) => row.id));
+  const merged = people.slice();
+  for (const row of linked) {
+    if (!row?.id || seen.has(row.id)) continue;
+    seen.add(row.id);
+    merged.push(row);
+  }
+  for (const { item, ids } of pending) {
+    if (!ids.some((id) => byId.has(id))) rest.push(item);
+  }
+  return { people: merged, comms: rest };
+}
+
 export async function searchCatalog(q) {
   const kindHits = await Promise.all([
     searchPeople(q),
@@ -3266,16 +3297,16 @@ export async function searchCatalog(q) {
     ...KIND_COMM_IDS.map((id) => searchKindComms(id, q)),
     searchSourcePosts(q),
   ]);
-  const people = kindHits[0];
   const operations = kindHits[1];
   const posts = kindHits[kindHits.length - 1];
-  const comms = KIND_COMM_IDS.map((id, i) =>
+  const rawComms = KIND_COMM_IDS.map((id, i) =>
     kindHits[i + 2].map((row) => ({
       type: KIND_COMMS[id].searchType,
       date: row.posted_at || "",
       row,
     })),
   ).flat();
+  const { people, comms } = await foldLinkedDogComms(kindHits[0], rawComms);
   return [
     ...people.map((row) => ({
       type: "person",
