@@ -96,6 +96,26 @@ test("nickname, file, transparency, and flight menus ignore the other event year
   };
   assert.equal(personMenuDate(scott, { tag: "epstein_transparency_act" }), "2025-07-17");
 
+  const adams = {
+    id: "alma-adams",
+    name: "Alma Adams",
+    category: "notable",
+    event_date: "2019-01-03",
+    tags: ["harassment_records"],
+    events: [
+      { kind: "notable", event_date: "2019-01-03", comments: "Earlier record.", sources: [] },
+      {
+        kind: "harassment_records",
+        event_date: "2026-03-04",
+        comments:
+          "On March 4, 2026, voted yea to refer H. Res. 1100 to the Committee on Ethics (House Roll Call 83).",
+        sources: [],
+      },
+    ],
+  };
+  assert.equal(personMenuDate(adams, { tag: "harassment_records" }), "2026-03-04");
+  assert.equal(personMenuDate(adams, { tag: "masks" }), "");
+
   const rubio = {
     id: "marco-rubio",
     name: "Marco Rubio",

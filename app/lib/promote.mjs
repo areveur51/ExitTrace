@@ -338,10 +338,10 @@ export function personHasKind(row, kinds) {
   return events.some((ev) => allow.includes(ev.kind));
 }
 
-/** Shot and Endorsement blocks are not catalog kinds. They must not replace the stored category or its date. */
+/** Shot, Endorsement, and the harassment-records vote are not catalog kinds. They must not replace the stored category or its date. */
 function catalogEventKind(kind, stored) {
   const key = String(kind || "").trim();
-  if (!key || key === "shot" || key === "endorsement") return false;
+  if (!key || key === "shot" || key === "endorsement" || key === "harassment_records") return false;
   if (PROMOTE_CATEGORY_IDS.includes(key) || isDeathUnconfirmed(key)) return true;
   return key === stored;
 }

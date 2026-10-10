@@ -38,6 +38,9 @@ scratch/stream-reach.txt
 scratch/postgres-5432.yml
 scratch/stream-reset.mjs
 
+# One-shot roll-call working files for the harassment-records tag. Not source.
+scratch/harassment-records/
+
 # Packaged release zip — published via GitHub Releases, not git
 dist/
 *.zip

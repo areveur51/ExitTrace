@@ -68,6 +68,13 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People with a stored endorsement from Donald Trump. The tag is that record. It is not an identity filter.",
   },
+  {
+    id: "harassment_records",
+    nav: "Harassment records",
+    path: "/tags/harassment-records",
+    lede:
+      "People who voted yea on March 4, 2026 to refer H. Res. 1100 to the House Committee on Ethics. Roll Call 83 passed 357-65, with 1 present. The resolution would have directed the committee to preserve and publicly release records of its reviews of sexual harassment and of clause 18 of House Rule XXIII. The tag is that recorded yea. It is not a finding of misconduct and not an identity filter.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);

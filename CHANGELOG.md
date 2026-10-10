@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.18] - 2026-10-09
+
+### Added
+
+- Fact tag Harassment records (`/tags/harassment-records`). It records a stored yea on the March 4, 2026 motion to refer H. Res. 1100 (House Roll Call 83, 357-65, 1 present). That motion kept the House Ethics Committee from publicly releasing records of its sexual-harassment and clause 18 reviews. The tag is that recorded yea. It is not a finding of misconduct and not an identity filter.
+
 ## [1.2.17] - 2026-10-09
 
 ### Changed
