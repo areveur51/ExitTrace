@@ -24,56 +24,56 @@ export const ATTRIBUTE_TAGS = [
     nav: "Revoked clearances",
     path: "/tags/clearance-revoked",
     lede:
-      "People with a stored security-clearance revocation. The tag is that fact. It is not a firing and not an identity filter.",
+      "People with a stored security-clearance revocation.",
   },
   {
     id: "trump_nickname",
     nav: "Trump nicknames",
     path: "/tags/trump-nicknames",
     lede:
-      "People with a stored Trump nickname. The tag is that fact. It is not an identity filter.",
+      "People with a stored Trump nickname.",
   },
   {
     id: "epstein_clients",
     nav: "Epstein Clients",
     path: "/tags/epstein-clients",
     lede:
-      "People named on the Epstein flight log. The tag is that fact. It is not a charge and not an identity filter.",
+      "People named on the Epstein flight log.",
   },
   {
     id: "epstein_files",
     nav: "Epstein files",
     path: "/tags/epstein-files",
     lede:
-      "People named in a stored Epstein-files document. The tag is that claim. It is not a charge and not an identity filter.",
+      "People named in a stored Epstein-files document.",
   },
   {
     id: "masks",
     nav: "Masks",
     path: "/tags/masks",
     lede:
-      "People stored with a mask, body-double, or impersonation claim. Impersonation is part of what this tag records. The tag is that claim. It is not a finding that a mask was used, and it is not an identity filter.",
+      "People stored with a mask, body-double, or impersonation claim. Impersonation is part of what this tag records.",
   },
   {
     id: "epstein_transparency_act",
     nav: "Transparency Act",
     path: "/tags/transparency-act",
     lede:
-      "People with a stored vote against the Epstein Files Transparency Act, H.R. 4405, or against a House Rules Committee motion to consider it. The House passed the bill 427-1 on November 18, 2025. The tag is that record. It is not a charge and not an identity filter.",
+      "People with a stored vote against the Epstein Files Transparency Act, H.R. 4405, or against a House Rules Committee motion to consider it. The House passed the bill 427-1 on November 18, 2025.",
   },
   {
     id: "endorsements",
     nav: "Endorsements",
     path: "/tags/endorsements",
     lede:
-      "People with a stored endorsement from Donald Trump. The tag is that record. It is not an identity filter.",
+      "People with a stored endorsement from Donald Trump.",
   },
   {
     id: "harassment_records",
     nav: "Harassment records",
     path: "/tags/harassment-records",
     lede:
-      "People who voted yea on March 4, 2026 to refer H. Res. 1100 to the House Committee on Ethics. Roll Call 83 passed 357-65, with 1 present. The resolution would have directed the committee to preserve and publicly release records of its reviews of sexual harassment and of clause 18 of House Rule XXIII. The tag is that recorded yea. It is not a finding of misconduct and not an identity filter.",
+      "People who voted yea on March 4, 2026 to refer H. Res. 1100 to the House Committee on Ethics. Roll Call 83 passed 357-65, with 1 present. The resolution would have directed the committee to preserve and publicly release records of its reviews of sexual harassment and of clause 18 of House Rule XXIII.",
   },
 ];
 
