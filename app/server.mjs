@@ -621,7 +621,7 @@ async function handle(req, res) {
       const meta = paginate({
         total,
         page: parsePage(url.searchParams),
-        pageSize: DOG_PAGE_SIZE,
+        pageSize: parseCookiePageSize(req.headers.cookie),
       });
       return sendJson(res, 200, {
         [apiSpec.memoryKey]: await listKindComms(kind, {
@@ -1290,11 +1290,12 @@ async function handle(req, res) {
   }
   if (cat && isCommsKind(cat.kind)) {
     const spec = commsKind(cat.kind);
+    const pageSize = parseCookiePageSize(req.headers.cookie);
     const total = await countKindComms(spec.id);
     const meta = paginate({
       total,
       page: parsePage(url.searchParams),
-      pageSize: DOG_PAGE_SIZE,
+      pageSize,
     });
     const rows = await listKindComms(spec.id, {
       limit: meta.limit,
@@ -1315,11 +1316,12 @@ async function handle(req, res) {
         path: cat.path,
         heading: cat.title,
         query: cat.title,
+        pageSize,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: `${listSection(
           listHtml,
-          pager(meta, { basePath: listPath, noun: "posts" }),
+          pager(meta, { basePath: listPath, noun: "posts", pageSizes: PAGE_SIZES }),
           listHead({
             title: cat.title,
             total: meta.total,

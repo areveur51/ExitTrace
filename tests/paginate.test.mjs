@@ -14,7 +14,7 @@ import {
   normalizePageSize,
 } from "../app/lib/paginate.mjs";
 
-test("PAGE_SIZE is the person-list default; dog comms stay at 10", () => {
+test("PAGE_SIZE is the catalog default; search stays at 10", () => {
   assert.equal(PAGE_SIZE, 17);
   assert.deepEqual(PAGE_SIZES, [17, 34, 51]);
   assert.equal(DOG_PAGE_SIZE, 10);

@@ -2,6 +2,7 @@
 
 export const PAGE_SIZE = 17;
 export const PAGE_SIZES = [17, 34, 51];
+/** Search stays on a fixed window. Catalog lists, including comms, use PAGE_SIZES. */
 export const DOG_PAGE_SIZE = 10;
 export const PAGE_SIZE_STORAGE_KEY = "exittrace-page-size";
 
