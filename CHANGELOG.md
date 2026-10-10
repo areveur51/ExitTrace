@@ -9,6 +9,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.19] - 2026-10-09
+
+### Changed
+
+- Fact-tag pages state the recorded fact.
+
 ## [1.2.18] - 2026-10-09
 
 ### Added

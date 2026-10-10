@@ -367,7 +367,9 @@ test("fact-tag lists include only people who already have that tag", async () =>
   const files = await requestPage("/tags/epstein-files");
   assert.equal(files.status, 200);
   assert.match(files.body, /href="\/people\/marco-rubio"/);
-  assert.match(files.body, /not a charge/);
+  assert.match(files.body, /named in a stored Epstein-files document/);
+  assert.doesNotMatch(files.body, /not a charge/);
+  assert.doesNotMatch(files.body, /identity filter/);
   assert.doesNotMatch(files.body, /href="\/people\/adam-perrylang"/);
   assert.doesNotMatch(files.body, /href="\/people\/gavin-newsom"/);
   assert.match(files.body, /href="\/tags\/epstein-files" aria-current="page"/);
@@ -395,7 +397,8 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.match(records.body, /href="\/people\/alma-adams"/);
   assert.match(records.body, /357-65/);
   assert.match(records.body, /H\. Res\. 1100/);
-  assert.match(records.body, /not a finding of misconduct/);
+  assert.doesNotMatch(records.body, /not a finding/);
+  assert.doesNotMatch(records.body, /identity filter/);
   assert.doesNotMatch(records.body, /href="\/people\/clay-higgins"/);
   assert.doesNotMatch(records.body, /href="\/people\/mike-rogers-michigan"/);
   assert.match(records.body, /href="\/tags\/harassment-records" aria-current="page"/);
