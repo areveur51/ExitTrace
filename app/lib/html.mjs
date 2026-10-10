@@ -1640,7 +1640,7 @@ function personSupportingMediaHtml(row) {
   const figures = [];
   for (const ev of personEvents(row)) {
     const kind = String(ev?.kind || "").trim();
-    if (kind === "notable" || kind === "shot" || kind === "endorsement") continue;
+    if (kind === "notable" || kind === "shot" || kind === "endorsement" || kind === "harassment_records") continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     for (const item of normalizeEventMedia(ev.media)) {
       const want = canonicalPublicUrl(item.url);
@@ -2154,6 +2154,36 @@ export function endorsementEventHtml(row) {
     .join("");
 }
 
+/** Recorded yea on the motion to refer H. Res. 1100. It does not replace the card category or date. */
+export function harassmentRecordsEventHtml(row) {
+  return personEvents(row)
+    .filter((ev) => String(ev?.kind || "").trim() === "harassment_records")
+    .map((ev) => {
+      const eventDate = String(ev?.event_date || "").trim();
+      const eventLine = eventDate
+        ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
+        : "";
+      const position = standardizePosition(String(ev?.position || "").trim());
+      const organization = String(ev?.organization || "").trim();
+      const bodyHtml = [
+        eventLine,
+        position ? `<p class="meta-line">Position · ${esc(position)}</p>` : "",
+        organization ? `<p class="meta-line">Organization · ${esc(organization)}</p>` : "",
+      ].join("");
+      return personEventSection({
+        title: "House vote",
+        kind: "harassment_records",
+        summary: String(ev?.comments || "").trim(),
+        cites: eventSectionCites(ev),
+        bodyHtml,
+        className: "detail-house-vote detail-supporting",
+        tag: "section",
+      });
+    })
+    .filter(Boolean)
+    .join("");
+}
+
 /** Shot comm on a person card. Summary and cites stay here; the clip is not a generic supporting tile. */
 export function shotEventHtml(row) {
   return personEvents(row)
@@ -2327,7 +2357,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
       active: true,
       extraClass: "person-pane",
     })}
