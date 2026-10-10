@@ -358,6 +358,12 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener("click", closeLightbox);
   });
 
+  for (const video of document.querySelectorAll(".post-shot-media video")) {
+    const ready = () => video.classList.add("is-ready");
+    if (video.readyState >= 2) ready();
+    else video.addEventListener("loadeddata", ready, { once: true });
+  }
+
   document.addEventListener(
     "click",
     (e) => {

@@ -670,6 +670,45 @@ body.tui-home .home-stage {
   object-fit: contain;
   object-position: center;
 }
+/* One dog post: the screenshot is the tile. A video fills the picture inside it. */
+.post-shot {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.post-shot > img.detail-photo.screenshot {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center top;
+}
+.post-shot-media {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 12px;
+  pointer-events: none;
+}
+.post-shot-media .detail-video {
+  width: 100%;
+  height: 100%;
+}
+.post-shot-media video.detail-photo {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  object-fit: cover;
+  opacity: 0;
+}
+.post-shot-media video.detail-photo.is-ready {
+  opacity: 1;
+}
 .event-media-caption {
   margin: 0.35rem 0 0;
   overflow-wrap: anywhere;

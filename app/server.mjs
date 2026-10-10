@@ -58,6 +58,7 @@ import {
   dashboardRankBody,
   kindDetail,
   kindList,
+  dogCatalogList,
   shotCatalogList,
   downloadsBody,
   healthBody,
@@ -1303,11 +1304,13 @@ async function handle(req, res) {
     });
     const listPath = cat.path;
     let listHtml = kindList(spec.id, rows);
-    if (spec.id === "shot") {
+    if (spec.id === "shot" || spec.id === "dog") {
       const ids = rows.flatMap((row) =>
         Array.isArray(row?.snapshot?.person_ids) ? row.snapshot.person_ids : [],
       );
-      listHtml = shotCatalogList(rows, await getPeopleByIds(ids));
+      const people = await getPeopleByIds(ids);
+      listHtml =
+        spec.id === "shot" ? shotCatalogList(rows, people) : dogCatalogList(rows, people);
     }
     return sendHtml(
       res,

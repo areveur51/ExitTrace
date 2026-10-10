@@ -122,6 +122,50 @@ test("searchCatalog matches local fields and invents nothing", async () => {
   assert.equal(blank.length, 0);
 });
 
+test("searchCatalog shows the linked person instead of a dog post card", async () => {
+  const laura = {
+    ...person(9, "notable"),
+    id: "laura-loomer",
+    name: "Laura Loomer",
+    role: "Activist",
+  };
+  const linked = {
+    ...dog(3),
+    id: "lauraloomer-2025-06-05-3efe140a",
+    handle: "@LauraLoomer",
+    account_name: "Laura Loomer",
+    text: "If you want a friend in Washington, get a dog.",
+    snapshot: { person_ids: ["laura-loomer"] },
+  };
+  const unresolved = {
+    ...dog(4),
+    handle: "@missingdog",
+    text: "unresolved dog post",
+    snapshot: { person_ids: ["not-a-person"] },
+  };
+  setMemory({ people: [laura, person(1, "firings")], dog_comms: [linked, unresolved, dog(8)] });
+
+  const byName = await searchCatalog("Laura Loomer");
+  assert.equal(byName.length, 1);
+  assert.equal(byName[0].type, "person");
+  assert.equal(byName[0].row.id, "laura-loomer");
+  assert.equal(byName.some((hit) => hit.type === "dog"), false);
+
+  const byText = await searchCatalog("friend in Washington");
+  assert.equal(byText.length, 1);
+  assert.equal(byText[0].type, "person");
+  assert.equal(byText[0].row.id, "laura-loomer");
+
+  const kept = await searchCatalog("unresolved dog post");
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].type, "dog");
+  assert.equal(kept[0].row.id, unresolved.id);
+
+  const plain = await searchCatalog("acct8");
+  assert.equal(plain.length, 1);
+  assert.equal(plain[0].type, "dog");
+});
+
 test("countPeople can filter by category without loading every row's page", async () => {
   setMemory({
     people: [

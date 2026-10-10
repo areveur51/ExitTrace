@@ -1,6 +1,6 @@
 {
   "name": "exittrace",
-  "version": "1.2.20",
+  "version": "1.2.21",
   "private": false,
   "type": "module",
   "description": "Sourced tracker of public-role exits and official government dog-comms since 2017.",

@@ -63,6 +63,7 @@ import {
   mediaSpec,} from "./kind-comms.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
+import { findPostMediaBox } from "./post-shot.mjs";
 import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
@@ -913,13 +914,18 @@ export function kindEntryStills(kind, row, entry) {
 /** Screenshot + stills for one supporting entry. Meta stays out unless a caller passes it. */
 function supportingEntryStrip(kind, row, entry, seen, metaHtml = "") {
   const handle = entry?.handle || row?.handle || "";
-  const extras = kindEntryStills(kind, row, entry).map((src) => ({
-    src,
-    alt: `Post media for ${handle}`,
-    credit: entry?.still_credit || "",
-  }));
+  const shot = kind === "dog" ? normalizeScreenshotHref(entry?.screenshot, "dog-comms") : "";
+  const primary = String(entry?.still || "").trim();
+  // The screenshot stands for one image or one video. Further attachments stay.
+  const extras = kindEntryStills(kind, row, entry)
+    .filter((src) => !(shot && src === primary))
+    .map((src) => ({
+      src,
+      alt: `Post media for ${handle}`,
+      credit: entry?.still_credit || "",
+    }));
   return detailMediaStrip({
-    screenshot: entry?.screenshot,
+    screenshot: shot || entry?.screenshot,
     screenshotAlt: `X-post screenshot of ${handle}`,
     screenshotCredit: entry?.screenshot_credit,
     extraMedia: extras,
@@ -1140,13 +1146,21 @@ function detailMediaStrip({
   seen,
   portraitKind = "image",
   portraitPoster = "",
+  portraitTile = "",
+  claimHrefs = [],
 } = {}) {
   const bag = seen || detailMediaSeen();
+  const portraitPath = mediaHrefPath(portraitSrc);
+  for (const href of claimHrefs || []) {
+    const claimed = mediaHrefPath(href);
+    if (!claimed || claimed === portraitPath) continue;
+    claimDetailMedia(bag, claimed);
+  }
   const media = [];
   const videoTile = portraitKind === "video";
   if (portraitHtml) {
     const tile = detailMediaTile({
-      kind: videoTile ? "video" : "portrait",
+      kind: portraitTile || (videoTile ? "video" : "portrait"),
       src: portraitSrc,
       inner: portraitHtml,
       alt: portraitAlt,
@@ -1623,6 +1637,93 @@ export function personEventSection({
   </${el}>`;
 }
 
+function postShotPercent(n) {
+  const value = Math.round(Number(n) * 10000) / 100;
+  if (!Number.isFinite(value)) return "";
+  return `${value.toFixed(2)}%`;
+}
+
+/** Screenshot of the post. A video sits in the picture area of that same screenshot. */
+function postShotFrame({ shot, video, alt }) {
+  const img = `<img class="detail-photo screenshot" src="${esc(shot)}" alt="${esc(alt)}" decoding="async">`;
+  const box = findPostMediaBox(shot);
+  const left = box ? postShotPercent(box.x) : "";
+  const top = box ? postShotPercent(box.y) : "";
+  const width = box ? postShotPercent(box.w) : "";
+  const height = box ? postShotPercent(box.h) : "";
+  const fitted = left
+    ? `<span class="post-shot-media" style="left:${left};top:${top};width:${width};height:${height}">${commVideoInner(video, "", alt)}</span>`
+    : `<span class="detail-video-play" aria-hidden="true"></span>`;
+  return `<span class="post-shot">${img}${fitted}</span>`;
+}
+
+function dogMediaStem(src) {
+  const base = String(src || "").split("/").pop().split("?")[0];
+  return base
+    .replace(/\.(mp4|jpe?g|png|webp)$/i, "")
+    .replace(/\.shot$/i, "")
+    .replace(/\.poster$/i, "");
+}
+
+function isDogShotSrc(src) {
+  return /\/screenshots\//i.test(src) || /\.shot\.(jpe?g|png|webp)$/i.test(src);
+}
+
+/**
+ * The screenshot is the post.
+ * A video is fitted into that screenshot as one tile.
+ * The extracted still of that single image or video is not drawn.
+ * Any other attachment is its own tile.
+ */
+function collapseDogPostMedia(items) {
+  const groups = new Map();
+  const order = [];
+  for (const item of items || []) {
+    const key = dogMediaStem(item?.src);
+    if (!key) continue;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key).push(item);
+  }
+  const out = [];
+  for (const key of order) {
+    const group = groups.get(key);
+    const videos = group.filter((item) => /\.mp4$/i.test(item.src));
+    const images = group.filter((item) => !/\.mp4$/i.test(item.src));
+    const namedShot = images.find((item) => isDogShotSrc(item.src));
+    const png = images.find((item) => /\.png$/i.test(item.src));
+    const shot = namedShot || (videos.length ? png : null);
+    if (videos.length && shot) {
+      const poster = images.find((item) => item !== shot && /\.jpe?g$/i.test(item.src));
+      const video = videos[0];
+      out.push({
+        ...video,
+        shot: shot.src,
+        poster: poster?.src || "",
+        alt: shot.alt || video.alt || "X-post screenshot",
+        context: shot.context || video.context || "",
+        url: shot.url || video.url || "",
+        credit: shot.credit || video.credit || "",
+      });
+      continue;
+    }
+    if (videos.length) {
+      const video = videos[0];
+      const poster = images.find((item) => /\.jpe?g$/i.test(item.src));
+      out.push({ ...video, poster: video.poster || poster?.src || "" });
+      continue;
+    }
+    if (namedShot) {
+      out.push(namedShot);
+      continue;
+    }
+    out.push(...images);
+  }
+  return out;
+}
+
 /** One bottom-of-page figure. A stored context line sits before the cite link. */
 function supportingMediaFigure(item, source) {
   const alt = item.alt || "Supporting media";
@@ -1639,16 +1740,28 @@ function supportingMediaFigure(item, source) {
   const caption = href
     ? `${contextHtml}${citeLink(href)}${dateHtml}`
     : `${contextHtml}${esc(credit || alt)}`;
-  const videoPoster = /\.mp4$/i.test(item.src)
+  const shot = String(item.shot || "").trim();
+  const videoSrc = /\.mp4$/i.test(item.src);
+  if (videoSrc && shot) {
+    const frameInner = postShotFrame({ shot, video: item.src, alt });
+    const button = lightboxButton(item.src, `<span class="detail-support-frame">${frameInner}</span>`, {
+      alt,
+      credit,
+      kind: "video",
+      poster: item.poster || "",
+    });
+    return `<figure class="detail-tile detail-tile--support detail-tile--postshot">${button}<figcaption class="event-media-caption">${caption}</figcaption></figure>`;
+  }
+  const videoPoster = videoSrc
     ? resolveVideoPosterHref(item.src, item.poster || "")
     : "";
-  const frameInner = /\.mp4$/i.test(item.src)
+  const frameInner = videoSrc
     ? commVideoInner(item.src, videoPoster, alt)
     : `<img class="detail-photo still" src="${esc(item.src)}" alt="${esc(alt)}" loading="lazy" decoding="async">`;
   const button = lightboxButton(item.src, `<span class="detail-support-frame">${frameInner}</span>`, {
     alt,
     credit,
-    kind: /\.mp4$/i.test(item.src) ? "video" : "image",
+    kind: videoSrc ? "video" : "image",
     poster: videoPoster,
   });
   return `<figure class="detail-tile detail-tile--support">${button}<figcaption class="event-media-caption">${caption}</figcaption></figure>`;
@@ -1661,7 +1774,9 @@ function personSupportingMediaHtml(row) {
     const kind = String(ev?.kind || "").trim();
     if (kind === "notable" || kind === "shot" || kind === "endorsement" || kind === "harassment_records") continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
-    for (const item of normalizeEventMedia(ev.media)) {
+    const media = normalizeEventMedia(ev.media);
+    const items = kind === "dog_comms" ? collapseDogPostMedia(media) : media;
+    for (const item of items) {
       const want = canonicalPublicUrl(item.url);
       const source =
         sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
@@ -1883,11 +1998,13 @@ export function kindList(kind, rows) {
 }
 
 /**
- * Shot catalog: one card per person the post names. The post itself is not a card
- * when those people resolve. A post with no resolved person still lists the post.
+ * One card per person a post names. The post itself is not a card when those
+ * people resolve. A post with no resolved person still lists the post.
  * Cards do not repeat the post media. `snapshot.named` drops anyone it does not list.
+ * A person already shown on this page is skipped.
  */
-export function shotCatalogList(posts, people) {
+function personCatalogList(kind, posts, people) {
+  const spec = commsKind(kind);
   const rows = Array.isArray(posts) ? posts : [];
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
   const seen = new Set();
@@ -1910,11 +2027,19 @@ export function shotCatalogList(posts, people) {
     }
   }
   if (!items.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="shot-page tui-list">${groupByYearItems(items, (item, opts) =>
+  return `<div class="${spec.pageClass} tui-list">${groupByYearItems(items, (item, opts) =>
     item.type === "person"
       ? personRow(item.row, { ...opts, date: item.cardDate })
-      : kindListRow("shot", item.row, opts),
+      : kindListRow(kind, item.row, opts),
   )}</div>`;
+}
+
+export function shotCatalogList(posts, people) {
+  return personCatalogList("shot", posts, people);
+}
+
+export function dogCatalogList(posts, people) {
+  return personCatalogList("dog", posts, people);
 }
 
 export function dogList(rows) {
@@ -2606,30 +2731,70 @@ function officialPostDetail(spec, row, { attributions, linkedPeople } = {}) {
   const seen = detailMediaSeen();
   const people = linkedPeopleForDetail(row, linkedPeople);
   const videoHref = localCommVideoHref(row, spec.mediaDir);
-  const stillHref = isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "";
-  const photo = videoHref
-    ? commVideoInner(videoHref, stillHref, `Stored video for ${row.handle}`)
-    : localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
-        commsKind: spec.id,
-      });
+  const stillHref = isCommsMediaHref(row.still, spec.mediaDir) ? String(row.still).trim() : "";
+  const shotHref = normalizeScreenshotHref(row.screenshot, spec.screenshotKind);
+  const dogOne = spec.id === "dog" && shotHref;
   const extras = kindExtraStills(spec.id, row, { includeSupporting: false }).map((src) => ({
     src,
     alt: `Post media for ${row.handle}`,
     credit: row.still_credit || "",
   }));
-  // Linked people share this post once at the bottom. Leave the X screenshot
-  // unclaimed here so section 4 can draw it; the video and poster stay on top.
+  let portraitHtml = "";
+  let portraitSrc = "";
+  let portraitAlt = "";
+  let portraitCredit = "";
+  let portraitKind = "image";
+  let portraitPoster = "";
+  let portraitTile = "";
+  let screenshot = "";
+  let screenshotCredit = "";
+  let extraMedia = extras;
+  let claimHrefs = [];
+  if (dogOne && videoHref) {
+    portraitAlt = `X-post screenshot of ${row.handle}`;
+    portraitHtml = postShotFrame({ shot: shotHref, video: videoHref, alt: portraitAlt });
+    portraitSrc = videoHref;
+    portraitCredit = row.screenshot_credit;
+    portraitKind = "video";
+    portraitPoster = stillHref;
+    portraitTile = "postshot";
+    claimHrefs = [shotHref, stillHref];
+  } else if (dogOne) {
+    portraitAlt = `X-post screenshot of ${row.handle}`;
+    portraitHtml = `<img class="detail-photo screenshot" src="${esc(shotHref)}" alt="${esc(portraitAlt)}" decoding="async">`;
+    portraitSrc = shotHref;
+    portraitCredit = row.screenshot_credit;
+    portraitTile = "screenshot";
+    claimHrefs = [stillHref];
+  } else {
+    portraitHtml = videoHref
+      ? commVideoInner(videoHref, stillHref, `Stored video for ${row.handle}`)
+      : localMediaPortrait(row.still, `Stored still for ${row.handle}`, {
+          commsKind: spec.id,
+        });
+    portraitSrc = videoHref || stillHref;
+    portraitAlt = videoHref ? `Stored video for ${row.handle}` : `Stored still for ${row.handle}`;
+    portraitCredit = row.still_credit;
+    portraitKind = videoHref ? "video" : "image";
+    portraitPoster = videoHref ? stillHref : "";
+    // Linked people share this post once at the bottom. Leave the X screenshot
+    // unclaimed here so section 4 can draw it; the video and poster stay on top.
+    screenshot = people.length ? "" : row.screenshot;
+    screenshotCredit = people.length ? "" : row.screenshot_credit;
+  }
   const mediaHtml = detailMediaStrip({
-    portraitHtml: photo,
-    portraitSrc: videoHref || stillHref,
-    portraitAlt: videoHref ? `Stored video for ${row.handle}` : `Stored still for ${row.handle}`,
-    portraitCredit: row.still_credit,
-    portraitKind: videoHref ? "video" : "image",
-    portraitPoster: videoHref ? stillHref : "",
-    screenshot: people.length ? "" : row.screenshot,
+    portraitHtml,
+    portraitSrc,
+    portraitAlt,
+    portraitCredit,
+    portraitKind,
+    portraitPoster,
+    portraitTile,
+    screenshot,
     screenshotAlt: `X-post screenshot of ${row.handle}`,
-    screenshotCredit: people.length ? "" : row.screenshot_credit,
-    extraMedia: extras,
+    screenshotCredit,
+    extraMedia,
+    claimHrefs,
     seen,
     metaHtml: detailMetaBlock({
       citeHtml: citeFromRow(row),

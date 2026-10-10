@@ -271,13 +271,13 @@ test("dog official posts reuse the same linked-person block", () => {
   const mainAt = html.indexOf('class="detail-official-post"');
   const contextAt = html.indexOf('class="detail-context"');
   const linkedAt = html.indexOf('class="detail-linked-people"');
-  const supportAt = html.indexOf('class="detail-supporting"');
-  assert.ok(mainAt >= 0 && contextAt > mainAt && linkedAt > contextAt && supportAt > linkedAt);
+  assert.ok(mainAt >= 0 && contextAt > mainAt && linkedAt > contextAt);
+  assert.doesNotMatch(html, /class="detail-supporting"/);
   assert.match(html, /href="\/people\/joe-biden"/);
   assert.doesNotMatch(html, /not-real/);
   assert.equal((html.match(/detail-tile--screenshot/g) || []).length, 1);
-  assert.ok(html.indexOf("ezra.png") > supportAt);
-  assert.doesNotMatch(html.slice(mainAt, contextAt), /ezra\.png/);
+  assert.ok(html.slice(mainAt, contextAt).includes("ezra.png"));
+  assert.doesNotMatch(html, /src="\/media\/dog-comms\/ezra\.jpg"/);
 });
 
 test("shot detail omits the speaker when named lists the targets", () => {

@@ -9,6 +9,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.21] - 2026-10-10
+
+### Changed
+
+- A dog comm linked to a person is that person's card, in the dog list and in search. The post is not its own card.
+- A dog post with one image shows the screenshot. Further attachments are shown with it. A video plays inside the screenshot as that one tile.
+
 ## [1.2.20] - 2026-10-10
 
 ### Changed

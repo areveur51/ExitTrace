@@ -271,9 +271,11 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
       screenshot_credit: "X",
     }),
   );
-  assert.match(dogHtml, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.match(dogHtml, /detail-tile--screenshot/);
   assert.match(dogHtml, /src="\/media\/screenshots\/dog-comms\/dod-k9-2020\.jpg"/);
-  assert.match(dogHtml, /data-lightbox="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.match(dogHtml, /data-lightbox="\/media\/screenshots\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.doesNotMatch(dogHtml, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.doesNotMatch(dogHtml, /data-lightbox="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
 
   const opHtml = operationDetail(
     operation({ screenshot: "/media/screenshots/operations/restore.jpg" }),
