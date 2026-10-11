@@ -897,6 +897,11 @@ async function handle(req, res) {
     );
   }
 
+  if (p === "/tags/ukraine-aid-flags") {
+    sendRedirect(res, `/tags/ukraine-aid${url.search}`);
+    return;
+  }
+
   const factTag = attributeTagByPath(p);
   if (factTag) {
     const tags = [factTag.id];

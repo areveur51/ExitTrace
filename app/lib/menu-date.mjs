@@ -73,6 +73,16 @@ function harassmentRecordsDate(row) {
   return newest(dates);
 }
 
+function ukraineAidFlagsDate(row) {
+  const dates = [];
+  for (const ev of personEvents(row)) {
+    const comments = String(ev?.comments || "");
+    if (!/h\.?\s*r\.?\s*8035/i.test(comments)) continue;
+    dates.push(ev.event_date);
+  }
+  return newest(dates);
+}
+
 /**
  * Date for the menu that is open.
  * Fact tags use that fact's own day. Category lists use that kind's event day.
@@ -107,6 +117,7 @@ export function personMenuDate(row, menu = {}) {
   if (tag === "epstein_files") return epsteinFileDate(row);
   if (tag === "epstein_transparency_act") return transparencyDate(row);
   if (tag === "harassment_records") return harassmentRecordsDate(row);
+  if (tag === "ukraine_aid_flags") return ukraineAidFlagsDate(row);
   if (tag === "masks") return "";
   if (menu.centralCasting) {
     return newest(eventsOf(row, ["central_casting"]).map((ev) => ev.event_date));

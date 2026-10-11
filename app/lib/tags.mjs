@@ -75,6 +75,13 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People who voted yea on March 4, 2026 to refer H. Res. 1100 to the House Committee on Ethics. Roll Call 83 passed 357-65, with 1 present. The resolution would have directed the committee to preserve and publicly release records of its reviews of sexual harassment and of clause 18 of House Rule XXIII.",
   },
+  {
+    id: "ukraine_aid_flags",
+    nav: "Ukraine aid",
+    path: "/tags/ukraine-aid",
+    lede:
+      "People who voted yea on April 20, 2024, on H.R. 8035, the Ukraine Security Supplemental Appropriations Act, 2024. Roll Call 151 passed 311-112, with 1 present.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
