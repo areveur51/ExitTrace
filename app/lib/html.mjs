@@ -1755,7 +1755,7 @@ function personSupportingMediaHtml(row) {
   const figures = [];
   for (const ev of personEvents(row)) {
     const kind = String(ev?.kind || "").trim();
-    if (kind === "notable" || kind === "shot" || kind === "endorsement" || kind === "harassment_records") continue;
+    if (kind === "notable" || kind === "shot" || kind === "endorsement" || kind === "harassment_records" || kind === "ukraine_aid_flags") continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     const media = normalizeEventMedia(ev.media);
     const items = kind === "dog_comms" ? collapseDogPostMedia(media) : media;
@@ -2213,7 +2213,11 @@ function notableSectionTitle(ev) {
   const epsteinFile = sources.some((source) =>
     /(?:^https?:\/\/)?(?:www\.)?justice\.gov\/epstein\//i.test(String(source?.url || "")),
   );
-  return epsteinFile ? "Epstein Files" : "Notable event";
+  if (epsteinFile) return "Epstein Files";
+  const comments = String(ev?.comments || "");
+  if (/h\.?\s*res\.?\s*1100/i.test(comments)) return "H. Res. 1100";
+  if (/h\.?\s*r\.?\s*8035/i.test(comments)) return "H.R. 8035";
+  return "Notable event";
 }
 
 function notableMediaFigures(ev) {
@@ -2298,12 +2302,42 @@ export function harassmentRecordsEventHtml(row) {
         organization ? `<p class="meta-line">Organization · ${esc(organization)}</p>` : "",
       ].join("");
       return personEventSection({
-        title: "House vote",
+        title: "H. Res. 1100",
         kind: "harassment_records",
         summary: String(ev?.comments || "").trim(),
         cites: eventSectionCites(ev),
         bodyHtml,
         className: "detail-house-vote detail-supporting",
+        tag: "section",
+      });
+    })
+    .filter(Boolean)
+    .join("");
+}
+
+/** Recorded yea on H.R. 8035. It does not replace the card category or date. */
+export function ukraineAidFlagsEventHtml(row) {
+  return personEvents(row)
+    .filter((ev) => String(ev?.kind || "").trim() === "ukraine_aid_flags")
+    .map((ev) => {
+      const eventDate = String(ev?.event_date || "").trim();
+      const eventLine = eventDate
+        ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
+        : "";
+      const position = standardizePosition(String(ev?.position || "").trim());
+      const organization = String(ev?.organization || "").trim();
+      const bodyHtml = [
+        eventLine,
+        position ? `<p class="meta-line">Position · ${esc(position)}</p>` : "",
+        organization ? `<p class="meta-line">Organization · ${esc(organization)}</p>` : "",
+      ].join("");
+      return personEventSection({
+        title: "H.R. 8035",
+        kind: "ukraine_aid_flags",
+        summary: String(ev?.comments || "").trim(),
+        cites: eventSectionCites(ev),
+        bodyHtml,
+        className: "detail-ukraine-aid detail-supporting",
         tag: "section",
       });
     })
@@ -2484,7 +2518,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
       active: true,
       extraClass: "person-pane",
     })}

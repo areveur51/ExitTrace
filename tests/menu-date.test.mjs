@@ -116,6 +116,25 @@ test("nickname, file, transparency, and flight menus ignore the other event year
   assert.equal(personMenuDate(adams, { tag: "harassment_records" }), "2026-03-04");
   assert.equal(personMenuDate(adams, { tag: "masks" }), "");
 
+  const stanton = {
+    id: "greg-stanton",
+    name: "Greg Stanton",
+    category: "notable",
+    event_date: "2026-03-04",
+    tags: ["ukraine_aid_flags"],
+    events: [
+      { kind: "notable", event_date: "2026-03-04", comments: "Later record.", sources: [] },
+      {
+        kind: "ukraine_aid_flags",
+        event_date: "2024-04-20",
+        comments:
+          "On April 20, 2024, voted yea on H.R. 8035, the Ukraine Security Supplemental Appropriations Act, 2024.",
+        sources: [],
+      },
+    ],
+  };
+  assert.equal(personMenuDate(stanton, { tag: "ukraine_aid_flags" }), "2024-04-20");
+
   const rubio = {
     id: "marco-rubio",
     name: "Marco Rubio",

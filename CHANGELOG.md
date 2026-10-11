@@ -9,6 +9,16 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.23] - 2026-10-11
+
+### Added
+
+- Fact tag Ukraine aid (`/tags/ukraine-aid`). It records a stored yea on April 20, 2024, on H.R. 8035, the Ukraine Security Supplemental Appropriations Act, 2024. Roll Call 151 passed 311-112, with 1 present. The previous path `/tags/ukraine-aid-flags` redirects here.
+
+### Changed
+
+- On a person card, a stored H. Res. 1100 vote is titled H. Res. 1100. A stored H.R. 8035 vote is titled H.R. 8035.
+
 ## [1.2.22] - 2026-10-10
 
 ### Fixed
