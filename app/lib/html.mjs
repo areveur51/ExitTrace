@@ -1333,6 +1333,10 @@ function sourceList(sources) {
   return citeList(sources);
 }
 
+function identityFact(label, valueHtml) {
+  return `<div class="identity-fact"><div class="identity-label">${esc(label)}</div><div class="identity-value">${valueHtml}</div></div>`;
+}
+
 function netWorthCell(row) {
   const value = formatUsd(row.net_worth_usd);
   const note = row.net_worth_note ? esc(row.net_worth_note) : "";
@@ -2193,9 +2197,6 @@ export function personHeader(row, extras = {}) {
     : "";
   const originValue = originText(row.country_of_origin);
   // Null origin stays blank. Never substitute a country.
-  const origin = originValue
-    ? `<p class="meta-line">Origin · ${esc(originValue)}</p>`
-    : "";
   const label = row.name || "";
   const href = isPeopleMediaHref(row.photo) ? String(row.photo || "").trim() : "";
   claimDetailMedia(extras.seen, href);
@@ -2203,13 +2204,16 @@ export function personHeader(row, extras = {}) {
   const framed = href
     ? lightboxButton(href, inner, { alt: label, credit: creditWithoutUrls(row.photo_credit) })
     : inner;
+  const facts = [
+    identityFact("Origin", originValue ? esc(originValue) : ""),
+    identityFact("Net worth", netWorthCell(row)),
+    identityFact("Tags", personTagChips(row)),
+  ].join("");
   return `<header class="person-header">
     ${classificationMediaSlot(framed)}
     <div class="detail-copy">
       <h2 class="detail-title">${esc(row.name || "—")}</h2>
-      ${origin}
-      <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
-      ${personTagChips(row)}
+      <div class="identity-facts">${facts}</div>
       ${birth}
       ${nicknameMetaLine(row)}
       ${clearanceMetaLine(row)}
@@ -2421,7 +2425,17 @@ function sourceRefHtml(sources, sourceNumbers) {
     refs.push(`<a class="source-ref" href="#source-${n}">[${n}]</a>`);
   }
   if (!refs.length) return "";
-  return `<p class="meta-line event-source-refs">${refs.join(" ")}</p>`;
+  return `<span class="event-source-refs">${refs.join(" ")}</span>`;
+}
+
+function eventSummaryLine(ev) {
+  const comments = String(ev?.comments || "").trim();
+  if (comments) return comments;
+  const position = standardizePosition(String(ev?.position || "").trim());
+  if (position) return position;
+  const organization = String(ev?.organization || "").trim();
+  if (organization) return organization;
+  return "—";
 }
 
 export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
@@ -2465,14 +2479,17 @@ export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
       ? ` <span class="keychip event-badge" data-unsealed="true">Unsealed</span>`
       : "";
   const eventLine = eventDate
-    ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
-    : `<p class="meta-line event-line">—</p>`;
+    ? `<time class="event-date" datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time>`
+    : `<span class="event-date">—</span>`;
   const refs = sourceRefHtml(ev?.sources, sourceNumbers);
+  const summary = `${esc(eventSummaryLine(ev))}${refs ? ` ${refs}` : ""}`;
+  const facts = `${announced}${ageLine}${groupLine}${attrs}`;
+  const factsHtml = facts ? `<div class="event-facts">${facts}</div>` : "";
   return personEventSection({
     headingHtml: `${esc(label)}${unsealedBadge}`,
     kind,
     cites: sourceNumbers ? [] : eventSectionCites(ev),
-    bodyHtml: `<div class="event-row">${eventLine}${announced}${ageLine}${groupLine}${attrs}${refs}</div>`,
+    bodyHtml: `<div class="event-row">${eventLine}<p class="event-oneline">${summary}</p>${factsHtml}</div>`,
     className: "event-tag-row",
     tag: "article",
   });

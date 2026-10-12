@@ -149,7 +149,7 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   assert.match(header, /Casey Vale/);
   assert.match(header, /Birth date/);
   assert.match(header, /datetime="1985-03-12"/);
-  assert.match(header, /Origin · United States/);
+  assert.match(header, /class="identity-label">Origin<\/div><div class="identity-value">United States<\/div>/);
   assert.doesNotMatch(header, /Anchor, CNN|Example Desk|USA|News|lead note/);
   assert.doesNotMatch(header, /Role ·/);
   assert.doesNotMatch(header, /Trump nickname|data-kind="nickname"/);
@@ -319,6 +319,10 @@ test("identity panel leaves null origin blank, sources are numbered, notables st
   assert.match(header, /class="row-media"/);
   assert.match(header, /class="detail-photo portrait"/);
   assert.match(header, /Casey Vale/);
+  assert.match(header, /class="identity-facts"/);
+  assert.match(header, /class="identity-label">Origin<\/div><div class="identity-value"><\/div>/);
+  assert.match(header, /class="identity-label">Net worth</);
+  assert.match(header, /class="identity-label">Tags</);
   assert.doesNotMatch(header, /Origin ·/);
   assert.doesNotMatch(header, /United States|Germany|\bUSA\b/);
   assert.doesNotMatch(header, />\s*null\s*</i);
@@ -361,7 +365,12 @@ test("identity panel leaves null origin blank, sources are numbered, notables st
 
   const rows = html.match(/<article class="event-tag-row"[\s\S]*?<\/article>/g) || [];
   assert.equal(rows.length, 2);
-  for (const row of rows) assert.doesNotMatch(row, /cite-list|source-link/);
+  for (const row of rows) {
+    assert.doesNotMatch(row, /cite-list|source-link/);
+    assert.match(row, /class="event-date"/);
+    assert.match(row, /<h3 class="event-h">/);
+    assert.match(row, /class="event-oneline"/);
+  }
   assert.match(rows[0], /href="#source-1">\[1\]<\/a>/);
   assert.match(rows[1], /href="#source-3">\[3\]<\/a>/);
 

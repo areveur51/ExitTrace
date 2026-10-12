@@ -681,7 +681,7 @@ test("person detail keeps net worth and two sources without inventing figures", 
   const res = await get("/people/james-comey");
   assert.equal(res.status, 200);
   assert.match(res.body, /James Comey/);
-  assert.match(res.body, /Net worth \(published estimate\)/);
+  assert.match(res.body, /class="identity-label">Net worth</);
   assert.match(res.body, /The New York Times/);
   assert.match(res.body, /BBC News/);
   assert.match(res.body, /source-link/);

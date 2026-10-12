@@ -11,8 +11,8 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Changed
 
-- A person card opens with an identity panel: a head-and-chest portrait, the name, origin, net worth, and tags. A null origin stays blank. A missing net worth is an em dash (—).
-- Events on a person card are compact rows in date order. Each row points at its source number. The full link appears once, in the numbered Sources list. Notable events and supporting media stay at the bottom of the card. A stored person screenshot renders only in that bottom supporting-media block.
+- A person card opens with a glass identity panel: a square head-and-chest portrait, the name in large type, and a labeled grid for origin, net worth, and tags. A null origin stays blank. A missing net worth is an em dash (—). On a narrow screen the portrait stacks above the name.
+- Events on a person card are separated rows in date order: a fixed date column, a type pill, and a one-line summary, with a source number such as [1]. The full link appears once, in a boxed Sources list. Notable events and supporting media stay at the bottom of the card. A stored person screenshot renders only in that bottom supporting-media block.
 - A cite or net-worth source is a link only when its scheme is http or https. Any other scheme is plain text.
 
 ## [1.2.23] - 2026-10-11
