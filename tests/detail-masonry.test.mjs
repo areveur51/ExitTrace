@@ -299,15 +299,24 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
     ],
     events: [],
   });
-  assert.match(person, /detail-media--masonry/);
-  assert.match(person, /detail-tile--portrait/);
-  assert.match(person, /detail-tile--screenshot/);
-  assert.match(person, /detail-tile--meta/);
-  assert.match(masonryInner(person), /detail-tile--meta[\s\S]*James Comey/);
+  assert.match(person, /class="person-header"/);
+  assert.match(person, /class="row-media"/);
+  assert.match(person, /class="detail-photo portrait"/);
+  const personSupport = person.indexOf('aria-label="Supporting media"');
+  assert.ok(personSupport > person.indexOf('class="person-header"'));
+  assert.doesNotMatch(person.slice(0, personSupport), /detail-media--masonry/);
+  assert.match(person.slice(personSupport), /detail-media--masonry/);
+  assert.match(person.slice(personSupport), /screenshots\/people\/james-comey\.jpg/);
+  assert.doesNotMatch(person.slice(0, personSupport), /screenshots\/people/);
+  assert.doesNotMatch(person, /detail-tile--portrait/);
+  assert.doesNotMatch(person, /detail-tile--screenshot/);
+  assert.match(person, /James Comey/);
   assert.match(person, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.match(person, /james-comey\.hero\.webp\?p=7/);
   assert.doesNotMatch(person, /<img[^>]+src="\/media\/thumbs\/people\/james-comey\.jpg/);
   assert.match(person, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
+  assert.match(person, /aria-label="Sources"/);
+  assert.match(person, /<ol class="sources cite-list">/);
   assert.equal(tileByKind(person, "cite").length, 0);
   for (const tile of metaTiles(person)) {
     assert.doesNotMatch(tile, /lightbox-open/);
@@ -324,8 +333,9 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
     sources: [],
     events: [],
   });
-  assert.match(corona, /detail-media--masonry/);
-  assert.match(corona, /detail-tile--meta/);
+  assert.match(corona, /class="person-header"/);
+  assert.match(corona, /class="row-media"/);
+  assert.doesNotMatch(corona, /detail-media--masonry/);
   assert.equal(tileByKind(corona, "cite").length, 0);
   assert.doesNotMatch(corona, /Batcave/i);
 
@@ -342,10 +352,10 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
     sources: [],
     events: [],
   });
-  assert.equal(tileByKind(coronaCite, "cite").length, 1);
-  assert.match(tileByKind(coronaCite, "cite")[0], /class="cite-block"/);
-  assert.match(tileByKind(coronaCite, "cite")[0], /11:04 AM · Jul 20, 2024/);
-  assert.match(tileByKind(coronaCite, "cite")[0], /Official corona note/);
+  assert.equal(tileByKind(coronaCite, "cite").length, 0);
+  assert.match(coronaCite, /class="cite-block"/);
+  assert.match(coronaCite, /11:04 AM · Jul 20, 2024/);
+  assert.match(coronaCite, /Official corona note/);
 
   const op = operationDetail({
     id: "operation-restore-justice",
@@ -487,7 +497,8 @@ test("detail media keeps the first tile when a later file is the same bytes", ()
         ],
       },
     );
-    assert.match(dup, /detail-tile--portrait/);
+    assert.match(dup, /class="row-media"/);
+    assert.match(dup, /class="detail-photo portrait"/);
     assert.equal((dup.match(/detail-tile--screenshot/g) || []).length, 0);
     assert.doesNotMatch(dup, /screenshots\/people\/duprule\.jpg/);
     assert.doesNotMatch(dup, /Lead still from the same post/);
@@ -500,17 +511,25 @@ test("detail media keeps the first tile when a later file is the same bytes", ()
       ...person,
       screenshot: "/media/screenshots/people/duprule-other.jpg",
     });
-    assert.match(distinct, /detail-tile--portrait/);
-    assert.match(distinct, /detail-tile--screenshot/);
-    assert.match(distinct, /screenshots\/people\/duprule-other\.jpg/);
+    const distinctSupport = distinct.indexOf('aria-label="Supporting media"');
+    assert.match(distinct, /class="row-media"/);
+    assert.match(distinct, /class="detail-photo portrait"/);
+    assert.ok(distinctSupport > distinct.indexOf('class="person-header"'));
+    assert.doesNotMatch(distinct, /detail-tile--screenshot/);
+    assert.doesNotMatch(distinct.slice(0, distinctSupport), /screenshots\/people\/duprule-other\.jpg/);
+    assert.match(distinct.slice(distinctSupport), /screenshots\/people\/duprule-other\.jpg/);
 
     const missing = personDetail({
       ...person,
       screenshot: "/media/screenshots/people/duprule-missing.jpg",
     });
-    assert.match(missing, /detail-tile--portrait/);
-    assert.match(missing, /detail-tile--screenshot/);
-    assert.match(missing, /screenshots\/people\/duprule-missing\.jpg/);
+    const missingSupport = missing.indexOf('aria-label="Supporting media"');
+    assert.match(missing, /class="row-media"/);
+    assert.match(missing, /class="detail-photo portrait"/);
+    assert.ok(missingSupport > missing.indexOf('class="person-header"'));
+    assert.doesNotMatch(missing, /detail-tile--screenshot/);
+    assert.doesNotMatch(missing.slice(0, missingSupport), /screenshots\/people\/duprule-missing\.jpg/);
+    assert.match(missing.slice(missingSupport), /screenshots\/people\/duprule-missing\.jpg/);
 
     const dogHtml = dogDetail(
       dog({

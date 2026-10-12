@@ -149,7 +149,7 @@ test("person detail is one card with identity once and a KEEP tag timeline", asy
   assert.match(header, /Casey Vale/);
   assert.match(header, /Birth date/);
   assert.match(header, /datetime="1985-03-12"/);
-  assert.match(header, /Origin · United States/);
+  assert.match(header, /class="identity-label">Origin<\/div><div class="identity-value">United States<\/div>/);
   assert.doesNotMatch(header, /Anchor, CNN|Example Desk|USA|News|lead note/);
   assert.doesNotMatch(header, /Role ·/);
   assert.doesNotMatch(header, /Trump nickname|data-kind="nickname"/);
@@ -268,4 +268,208 @@ test("person detail renders career/service years when stored and does not copy e
 
   assert.equal(careerHistory({ name: "Empty", role: "Actor" }), "");
   assert.equal(careerHistory({ career: [{ title: "U.S. Army" }] }), "");
+});
+
+test("identity panel leaves null origin blank, sources are numbered, notables stay at the bottom", () => {
+  const early = "https://www.example.com/news/casey-vale-fired";
+  const later = "https://www.example.net/world/casey-vale-quit";
+  const notableUrl = "https://www.example.com/news/casey-vale-notable";
+  const headerShot = "/media/screenshots/people/casey-vale.jpg";
+  const notableShot = "/media/screenshots/people/casey-vale-notable.jpg";
+  const clip = "/media/people/casey-vale/support/rally.jpg";
+  const hearing = "/media/people/casey-vale/support/hearing.jpg";
+  const html = personDetail({
+    id: "casey-vale",
+    name: "Casey Vale",
+    category: "resignations",
+    event_date: "2021-01-20",
+    birth_date: null,
+    country_of_origin: null,
+    photo: "/media/people/james-comey.jpg",
+    screenshot: headerShot,
+    net_worth_usd: null,
+    tags: ["official"],
+    events: [
+      {
+        kind: "resignations",
+        event_date: "2021-01-20",
+        position: "Director",
+        sources: [{ url: later, publisher: "Reuters", date: "2021-01-20" }],
+      },
+      {
+        kind: "firings",
+        event_date: "2017-05-09",
+        sources: [{ url: early, publisher: "The New York Times", date: "2017-05-09" }],
+        media: [{ src: hearing, url: early, alt: "Hearing still" }],
+      },
+      {
+        kind: "notable",
+        event_date: "2019-06-01",
+        comments: "Named in a published poll of public figures.",
+        screenshot: notableShot,
+        sources: [{ url: notableUrl, date: "2019-06-01", snippet: "Named in the poll lead" }],
+        media: [{ src: clip, url: notableUrl, alt: "Downloaded post still" }],
+      },
+    ],
+  });
+
+  const timelineAt = html.indexOf('class="event-timeline"');
+  const header = html.slice(0, timelineAt);
+  assert.match(header, /class="person-header"/);
+  assert.match(header, /class="row-media"/);
+  assert.match(header, /class="detail-photo portrait"/);
+  assert.match(header, /Casey Vale/);
+  assert.match(header, /class="identity-facts"/);
+  assert.match(header, /class="identity-label">Origin<\/div><div class="identity-value"><\/div>/);
+  assert.match(header, /class="identity-label">Net worth</);
+  assert.match(header, /class="identity-label">Tags</);
+  assert.doesNotMatch(header, /Origin ·/);
+  assert.doesNotMatch(header, /United States|Germany|\bUSA\b/);
+  assert.doesNotMatch(header, />\s*null\s*</i);
+  assert.match(header, /<span class="nw">—<\/span>/);
+  assert.match(header, /class="person-tags"/);
+  assert.match(header, />Officials</);
+  assert.doesNotMatch(header, /detail-tile--screenshot|detail-notable|detail-tile--support/);
+  assert.doesNotMatch(header, /screenshots\/people/);
+
+  const firingAt = html.indexOf('data-kind="firings"');
+  const resignationAt = html.indexOf('data-kind="resignations"');
+  assert.ok(firingAt > timelineAt && resignationAt > firingAt);
+
+  const sourcesAt = html.indexOf('aria-label="Sources"');
+  const notableAt = html.indexOf('class="detail-notable detail-supporting"');
+  const supportAt = html.indexOf('aria-label="Supporting media"');
+  assert.ok(sourcesAt > resignationAt && notableAt > sourcesAt && supportAt > notableAt);
+  const sources = html.slice(sourcesAt, notableAt);
+  assert.match(sources, /<ol class="sources cite-list">/);
+  const link = (url) =>
+    new RegExp(
+      `<a class="source-link" href="${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}" title="${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}" target="_blank" rel="noopener noreferrer">${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</a>`,
+    );
+  assert.match(sources, link(early));
+  assert.match(sources, link(later));
+  assert.match(sources, link(notableUrl));
+  assert.match(sources, /id="source-1"/);
+  assert.match(sources, /id="source-2"/);
+  assert.match(sources, /id="source-3"/);
+  const earlyAt = sources.indexOf(`>${early}<`);
+  const notableLinkAt = sources.indexOf(`>${notableUrl}<`);
+  const laterAt = sources.indexOf(`>${later}<`);
+  assert.ok(earlyAt >= 0 && notableLinkAt > earlyAt && laterAt > notableLinkAt);
+  assert.equal((sources.match(/<li\b/g) || []).length, 3);
+  const sourceLinkCount = (slice, url) =>
+    (slice.match(new RegExp(`class="source-link" href="${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`, "g")) || []).length;
+  assert.equal(sourceLinkCount(sources, early), 1);
+  assert.equal(sourceLinkCount(sources, later), 1);
+  assert.equal(sourceLinkCount(sources, notableUrl), 1);
+
+  const rows = html.match(/<article class="event-tag-row"[\s\S]*?<\/article>/g) || [];
+  assert.equal(rows.length, 2);
+  for (const row of rows) {
+    assert.doesNotMatch(row, /cite-list|source-link/);
+    assert.match(row, /class="event-date"/);
+    assert.match(row, /<h3 class="event-h">/);
+    assert.match(row, /class="event-oneline"/);
+  }
+  assert.match(rows[0], /href="#source-1">\[1\]<\/a>/);
+  assert.match(rows[1], /href="#source-3">\[3\]<\/a>/);
+
+  assert.match(html.slice(notableAt, supportAt), /<h3 class="event-h">Notable event<\/h3>/);
+  assert.match(html.slice(notableAt, supportAt), /rally\.jpg/);
+  assert.match(html.slice(supportAt), /hearing\.jpg/);
+  assert.match(html.slice(supportAt), /src="\/media\/screenshots\/people\/casey-vale\.jpg"/);
+  assert.match(html.slice(supportAt), /data-lightbox="\/media\/screenshots\/people\/casey-vale\.jpg"/);
+  assert.doesNotMatch(html.slice(0, supportAt), /screenshots\/people\/casey-vale\.jpg/);
+  assert.doesNotMatch(html.slice(0, notableAt), /detail-tile--support/);
+  assert.doesNotMatch(html.slice(0, notableAt), /casey-vale-notable\.jpg/);
+});
+
+test("timeline row count keeps dated, undated, nickname, boot, death, and shot", () => {
+  const html = personDetail({
+    id: "timeline-fixture",
+    name: "Timeline Fixture",
+    category: "government_stepdowns",
+    event_date: "2024-07-21",
+    nicknames: [
+      {
+        name: "Sleepy Joe",
+        by: "Donald Trump",
+        sources: [
+          {
+            url: "https://www.reuters.com/world/us/sleepy-joe",
+            publisher: "Reuters",
+            date: "2019-06-11",
+            snippet: "Sleepy Joe",
+          },
+          {
+            url: "https://www.nytimes.com/2019/06/11/us/politics/sleepy-joe.html",
+            publisher: "The New York Times",
+            date: "2019-06-11",
+          },
+        ],
+      },
+      {
+        name: "Autopen",
+        by: "Donald Trump",
+        sources: [
+          { url: "https://www.reuters.com/world/us/autopen", publisher: "Reuters" },
+          { url: "https://www.nytimes.com/2024/01/01/us/autopen.html", publisher: "The New York Times" },
+        ],
+      },
+    ],
+    events: [
+      {
+        kind: "boot_comms",
+        event_date: "2020-12-01",
+        comments: "Walking boot.",
+        sources: [{ url: "https://www.reuters.com/boot", date: "2020-12-01" }],
+      },
+      {
+        kind: "government_stepdowns",
+        event_date: "2024-07-21",
+        comments: "Stepped aside.",
+        sources: [{ url: "https://apnews.com/officials", date: "2024-07-21" }],
+      },
+      {
+        kind: "dog_comms",
+        event_date: "2022-10-11",
+        comments: "Dog post.",
+        sources: [{ url: "https://x.com/POTUS46Archive/status/1", date: "2022-10-11" }],
+      },
+      {
+        kind: "shot",
+        event_date: "2026-10-07",
+        comments: "Had my shot.",
+        sources: [{ url: "https://thehill.com/shot", date: "2026-10-07" }],
+      },
+      {
+        kind: "death_unconfirmed",
+        event_date: null,
+        comments: "Unconfirmed claim.",
+        sources: [{ url: "https://www.reuters.com/death-claim" }],
+      },
+    ],
+  });
+  const rows = html.match(/<article class="[^"]*\bevent-tag-row\b[^"]*"[\s\S]*?<\/article>/g) || [];
+  assert.equal(rows.length, 6);
+  assert.deepEqual(
+    rows.map((row) => row.match(/data-kind="([^"]+)"/)[1]),
+    ["nickname", "boot_comms", "government_stepdowns", "shot", "death_unconfirmed", "nickname"],
+  );
+  assert.match(rows[0], /<h3 class="event-h">Trump nickname<\/h3>/);
+  assert.match(rows[0], /datetime="2019-06-11"/);
+  assert.match(rows[0], /Sleepy Joe/);
+  assert.match(rows[1], /<h3 class="event-h">Boot<\/h3>/);
+  assert.match(rows[1], /datetime="2020-12-01"/);
+  assert.match(rows[2], /<h3 class="event-h">Officials<\/h3>/);
+  assert.match(rows[2], /datetime="2024-07-21"/);
+  assert.match(rows[3], /<h3 class="event-h">Shot<\/h3>/);
+  assert.match(rows[3], /datetime="2026-10-07"/);
+  assert.match(rows[4], /class="event-date">—</);
+  assert.match(rows[4], /<h3 class="event-h">Death\*<\/h3>/);
+  assert.match(rows[5], /<h3 class="event-h">Trump nickname<\/h3>/);
+  assert.match(rows[5], /class="event-date">—</);
+  assert.match(rows[5], /Autopen/);
+  assert.doesNotMatch(html, /data-kind="dog_comms"/);
+  assert.doesNotMatch(html, /nickname-section/);
 });

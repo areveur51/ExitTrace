@@ -382,8 +382,9 @@ test("people and operations detail reuse detailShell stack; no Sources · N chro
   const personPage = await get(`/people/${person.id}`);
   assert.equal(personPage.status, 200);
   assert.match(personPage.body, /meta-pane--stack/);
-  assert.match(personPage.body, /detail-media--masonry/);
   assert.match(personPage.body, /class="person-header"/);
+  assert.match(personPage.body, /class="row-media"/);
+  assert.doesNotMatch(personPage.body.split('class="event-timeline"')[0], /detail-tile--screenshot/);
   assert.doesNotMatch(personPage.body, /Batcave/i);
   assert.doesNotMatch(personPage.body, /Sources · \d+ available/);
   assert.doesNotMatch(personPage.body, /sources-pane/);
@@ -680,7 +681,7 @@ test("person detail keeps net worth and two sources without inventing figures", 
   const res = await get("/people/james-comey");
   assert.equal(res.status, 200);
   assert.match(res.body, /James Comey/);
-  assert.match(res.body, /Net worth \(published estimate\)/);
+  assert.match(res.body, /class="identity-label">Net worth</);
   assert.match(res.body, /The New York Times/);
   assert.match(res.body, /BBC News/);
   assert.match(res.body, /source-link/);

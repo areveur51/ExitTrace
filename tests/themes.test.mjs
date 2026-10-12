@@ -160,7 +160,8 @@ test("CSS tokens cover Glass only and keep schematic HUD chrome", () => {
   assert.doesNotMatch(css, /Batcave/i);
   assert.match(css, /html\[data-theme="glass"\] \.detail \.box-pane/);
   assert.match(css, /html\[data-theme="glass"\] \.detail \.meta-pane--stack::before/);
-  assert.match(css, /\.meta-pane--stack > \.person-header \{[^}]*display:\s*contents/);
+  assert.match(css, /\.meta-pane--stack > \.person-header \{[^}]*display:\s*flex/);
+  assert.doesNotMatch(css, /\.meta-pane--stack > \.person-header \{[^}]*display:\s*contents/);
   assert.match(css, /city-wireframe|city still|glass-bg\.webp/);
   assert.doesNotMatch(css, /\.theme-switch/);
   assert.doesNotMatch(css, /\.theme-btn/);

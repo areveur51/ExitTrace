@@ -1283,12 +1283,25 @@ function thumb(src, label, kind = "portrait") {
   return localMediaThumb(src, label, kind);
 }
 
+/** True only for an absolute http or https URL. Other schemes are not links. */
+function isHttpUrl(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return false;
+  try {
+    const parsed = new URL(text);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Shared cite link. One place decides the markup:
- * URL → `<a class="source-link">` whose visible text is that URL
+ * http(s) URL → `<a class="source-link">` whose visible text is that URL
  * (href and title stay the full URL; CSS may truncate the display).
  * Optional muted outlet sits after the anchor so a leading snippet
- * stays flush against the link. No URL → plain text, no anchor.
+ * stays flush against the link. Any other scheme is escaped plain text
+ * with no href. No URL → plain text, no anchor.
  */
 export function citeLink(url, { label = "" } = {}) {
   const href = String(url || "").trim();
@@ -1296,6 +1309,10 @@ export function citeLink(url, { label = "" } = {}) {
   const outletHtml =
     outlet && outlet !== href ? `<span class="cite-outlet">${esc(outlet)}</span>` : "";
   if (!href) return outletHtml;
+  if (!isHttpUrl(href)) {
+    const text = esc(href);
+    return outletHtml ? `${text} ${outletHtml}` : text;
+  }
   const anchor = `<a class="source-link" href="${esc(href)}" title="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(href)}</a>`;
   return outletHtml ? `${anchor} ${outletHtml}` : anchor;
 }
@@ -1316,12 +1333,19 @@ function sourceList(sources) {
   return citeList(sources);
 }
 
+function identityFact(label, valueHtml) {
+  return `<div class="identity-fact"><div class="identity-label">${esc(label)}</div><div class="identity-value">${valueHtml}</div></div>`;
+}
+
 function netWorthCell(row) {
   const value = formatUsd(row.net_worth_usd);
   const note = row.net_worth_note ? esc(row.net_worth_note) : "";
-  const src = row.net_worth_source
-    ? ` <a class="nw-src" href="${esc(row.net_worth_source)}" rel="noopener noreferrer">source</a>`
-    : "";
+  const source = String(row.net_worth_source || "").trim();
+  const src = !source
+    ? ""
+    : isHttpUrl(source)
+      ? ` <a class="nw-src" href="${esc(source)}" rel="noopener noreferrer">source</a>`
+      : ` ${esc(source)}`;
   return `<span class="nw">${esc(value)}</span>${
     note ? `<span class="nw-note">${note}${src}</span>` : src
   }`;
@@ -1564,9 +1588,9 @@ function sectionCites(raw) {
   return out;
 }
 
-function sectionCiteList(cites) {
+function sectionCiteList(cites, { anchor = false } = {}) {
   return `<ol class="sources cite-list">${cites
-    .map((s) => {
+    .map((s, i) => {
       const label = s.source_label || s.title || "";
       const date = s.date
         ? ` <time datetime="${esc(s.date)}">${esc(formatDate(s.date))}</time>`
@@ -1575,9 +1599,10 @@ function sectionCiteList(cites) {
         ? `<blockquote class="event-snippet">${esc(s.snippet)}</blockquote>`
         : "";
       const link = citeLink(s.url, { label });
+      const id = anchor ? ` id="source-${i + 1}"` : "";
       // Standing rule (all kinds): each stored quote sits immediately before its own cite.
       // Cites without a snippet render exactly as before: link, then date.
-      return `<li>${snippet}${link}${date}</li>`;
+      return `<li${id}>${snippet}${link}${date}</li>`;
     })
     .join("")}</ol>`;
 }
@@ -1751,7 +1776,7 @@ function supportingMediaFigure(item, source) {
 }
 
 /** Supporting clips after every event section. Notable media stays on the Notable block. */
-function personSupportingMediaHtml(row) {
+function personSupportingMediaHtml(row, seen) {
   const figures = [];
   for (const ev of personEvents(row)) {
     const kind = String(ev?.kind || "").trim();
@@ -1765,6 +1790,19 @@ function personSupportingMediaHtml(row) {
         sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
       figures.push(supportingMediaFigure(item, source));
     }
+  }
+  const shot = normalizeScreenshotHref(row?.screenshot, "people");
+  if (shot && !claimDetailMedia(seen, shot)) {
+    figures.push(
+      supportingMediaFigure(
+        {
+          src: shot,
+          alt: "Screenshot",
+          credit: row.screenshot_credit || "",
+        },
+        null,
+      ),
+    );
   }
   if (!figures.length) return "";
   return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3><div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div></section>`;
@@ -2158,27 +2196,31 @@ export function personHeader(row, extras = {}) {
     ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
     : "";
   const originValue = originText(row.country_of_origin);
-  const origin = originValue
-    ? `<p class="meta-line">Origin · ${esc(originValue)}</p>`
-    : "";
+  // Null origin stays blank. Never substitute a country.
+  const label = row.name || "";
+  const href = isPeopleMediaHref(row.photo) ? String(row.photo || "").trim() : "";
+  claimDetailMedia(extras.seen, href);
+  const inner = localMediaPortrait(row.photo, label);
+  const framed = href
+    ? lightboxButton(href, inner, { alt: label, credit: creditWithoutUrls(row.photo_credit) })
+    : inner;
+  const facts = [
+    identityFact("Origin", originValue ? esc(originValue) : ""),
+    identityFact("Net worth", netWorthCell(row)),
+    identityFact("Tags", personTagChips(row)),
+  ].join("");
   return `<header class="person-header">
-    ${detailMediaStrip({
-      portraitHtml: localMediaPortrait(row.photo, row.name),
-      portraitSrc: isPeopleMediaHref(row.photo) ? row.photo : "",
-      portraitAlt: row.name,
-      portraitCredit: row.photo_credit,
-      screenshot: row.screenshot,
-      screenshotAlt: `X-post screenshot of ${row.name}`,
-      screenshotCredit: row.screenshot_credit,
-      seen: extras.seen,
-      metaHtml: detailMetaBlock({
-        title: row.name || "—",
-        ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
-        lines: [birth, origin, nicknameMetaLine(row), clearanceMetaLine(row), personTagChips(row), grokipediaBlock(row, extras)],
-        citeHtml: citeFromRow(row),
-        attributionHtml: attributionFrom(row, extras.attributions, "person"),
-      }),
-    })}
+    ${classificationMediaSlot(framed)}
+    <div class="detail-copy">
+      <h2 class="detail-title">${esc(row.name || "—")}</h2>
+      <div class="identity-facts">${facts}</div>
+      ${birth}
+      ${nicknameMetaLine(row)}
+      ${clearanceMetaLine(row)}
+      ${grokipediaBlock(row, extras)}
+      ${attributionFrom(row, extras.attributions, "person")}
+      ${citeFromRow(row)}
+    </div>
   </header>`;
 }
 
@@ -2368,15 +2410,49 @@ export function shotEventHtml(row) {
     .join("");
 }
 
-export function eventTagRow(ev, { birthDate } = {}) {
+/** In-page pointers at the numbered Sources list. The full URL stays there once. */
+function sourceRefHtml(sources, sourceNumbers) {
+  if (!sourceNumbers) return "";
+  const refs = [];
+  const seen = new Set();
+  for (const source of sources || []) {
+    const url = String(source?.url || "").trim();
+    if (!url) continue;
+    const key = canonicalPublicUrl(url) || url;
+    const n = sourceNumbers.get(key);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    refs.push(`<a class="source-ref" href="#source-${n}">[${n}]</a>`);
+  }
+  if (!refs.length) return "";
+  return `<span class="event-source-refs">${refs.join(" ")}</span>`;
+}
+
+function eventSummaryLine(ev) {
+  const comments = String(ev?.comments || "").trim();
+  if (comments) return comments;
+  const position = standardizePosition(String(ev?.position || "").trim());
+  if (position) return position;
+  const organization = String(ev?.organization || "").trim();
+  if (organization) return organization;
+  return "—";
+}
+
+export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const kind = String(ev?.kind || "").trim();
-  if (!kind || kind === "notable" || !isDisplayedEventKind(kind)) return "";
+  if (!isPersonTimelineKind(kind)) return "";
   const label =
-    kind === "corona_comms"
-      ? categoryById(kind)?.nav || "Corona"
-      : kind === "boot_comms"
-        ? categoryById(kind)?.nav || "Boot"
-        : eventKindTitle(kind);
+    kind === "nickname"
+      ? isTrumpNickname(ev)
+        ? "Trump nickname"
+        : "Nickname"
+      : kind === "shot"
+        ? "Shot"
+        : kind === "corona_comms"
+          ? categoryById(kind)?.nav || "Corona"
+          : kind === "boot_comms"
+            ? categoryById(kind)?.nav || "Boot"
+            : eventKindTitle(kind);
   const eventDate = String(ev.event_date || "").trim();
   const announcedRaw = String(ev.announced_date || "").trim();
   const announced =
@@ -2396,6 +2472,7 @@ export function eventTagRow(ev, { birthDate } = {}) {
   const attrs = EVENT_ATTR_FIELDS.map((field) => {
     let value = String(ev[field] || "").trim();
     if (!value) return "";
+    if (kind === "nickname" && field === "comments") return "";
     if (field === "status") value = coronaStatusLabel(value) || value;
     if (field === "position") value = standardizePosition(value);
     const name =
@@ -2409,14 +2486,23 @@ export function eventTagRow(ev, { birthDate } = {}) {
       ? ` <span class="keychip event-badge" data-unsealed="true">Unsealed</span>`
       : "";
   const eventLine = eventDate
-    ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
-    : `<p class="meta-line event-line">—</p>`;
+    ? `<time class="event-date" datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time>`
+    : `<span class="event-date">—</span>`;
+  const refs = sourceRefHtml(ev?.sources, sourceNumbers);
+  const summary = `${esc(eventSummaryLine(ev))}${refs ? ` ${refs}` : ""}`;
+  const facts = `${announced}${ageLine}${groupLine}${attrs}`;
+  const factsHtml = facts ? `<div class="event-facts">${facts}</div>` : "";
+  const figures = kind === "shot" ? notableMediaFigures(ev) : [];
+  const mediaHtml = figures.length
+    ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
+    : "";
   return personEventSection({
     headingHtml: `${esc(label)}${unsealedBadge}`,
     kind,
-    cites: eventSectionCites(ev),
-    bodyHtml: `${eventLine}${announced}${ageLine}${groupLine}${attrs}`,
-    className: "event-tag-row",
+    cites: sourceNumbers ? [] : eventSectionCites(ev),
+    bodyHtml: `<div class="event-row">${eventLine}<p class="event-oneline">${summary}</p>${factsHtml}</div>`,
+    mediaHtml,
+    className: kind === "shot" ? "event-tag-row detail-shot" : "event-tag-row",
     tag: "article",
   });
 }
@@ -2469,23 +2555,157 @@ export function epsteinFlightLogSection(legs = [], { note: lead = "" } = {}) {
 }
 
 
-function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
-  const events = personEvents(row).filter((ev) => {
-    const kind = String(ev.kind || "").trim();
-    return kind !== "notable" && isDisplayedEventKind(kind);
+function compareTimelineEvents(a, b) {
+  const da = asEventDate(a?.event_date) || "";
+  const db = asEventDate(b?.event_date) || "";
+  if (da !== db) {
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.localeCompare(db);
+  }
+  return String(a?.kind || "").localeCompare(String(b?.kind || ""));
+}
+
+/** Event date ascending. Undated events stay last. Kind is the tie-break. */
+function datedPersonEvents(row) {
+  return personEvents(row).slice().sort(compareTimelineEvents);
+}
+
+function earliestSourceDate(sources) {
+  let date = "";
+  for (const source of sources || []) {
+    const next = asEventDate(source?.date) || "";
+    if (next && (!date || next < date)) date = next;
+  }
+  return date;
+}
+
+/** Nicknames are timeline rows. The date is the earliest cite day, or blank. */
+function nicknameTimelineEvents(row) {
+  return normalizeNicknames(row?.nicknames).map((item) => ({
+    kind: "nickname",
+    by: item.by,
+    event_date: earliestSourceDate(item.sources),
+    comments: item.name,
+    sources: item.sources || [],
+  }));
+}
+
+/** Rows on the person timeline. Notable stays at the bottom. dog_comms stays a tag, not a row. */
+function isPersonTimelineKind(kind) {
+  if (!kind || kind === "notable" || kind === "dog_comms") return false;
+  if (kind === "shot" || kind === "nickname") return true;
+  return isDisplayedEventKind(kind);
+}
+
+/** Dated and undated events, plus nickname rows, in one order. Nothing dated is dropped. */
+function personTimelineEvents(row) {
+  const events = personEvents(row).filter((ev) => isPersonTimelineKind(String(ev?.kind || "").trim()));
+  return events.concat(nicknameTimelineEvents(row)).sort(compareTimelineEvents);
+}
+
+function pushPersonSource(items, seen, source) {
+  const url = String(typeof source === "string" ? source : source?.url || "").trim();
+  if (!url) return;
+  const key = canonicalPublicUrl(url) || url;
+  if (seen.has(key)) return;
+  seen.add(key);
+  if (typeof source === "string") {
+    items.push({ url });
+    return;
+  }
+  const snippet = isUnofficialOrCommentarySocial(url)
+    ? ""
+    : String(source.snippet || source.quote || "").trim();
+  items.push({
+    url,
+    publisher: source.publisher || source.source_label || "",
+    title: source.title || "",
+    date: source.date || "",
+    snippet,
   });
-  const rows = events
-    .map((ev) => eventTagRow(ev, { birthDate: row.birth_date }))
+}
+
+/** Title fills an empty stored quote the same way an event row used to. */
+function eventSourceForList(source) {
+  if (!source || typeof source !== "object") return source;
+  const snippet = isUnofficialOrCommentarySocial(source.url)
+    ? ""
+    : String(source.snippet || source.quote || source.title || "").trim();
+  return { ...source, snippet };
+}
+
+/** Every cite on the card, once, in the same order the page reads them. */
+function personSourceItems(row, { events = [], centralCastingClips = [], cite } = {}) {
+  const items = [];
+  const seen = new Set();
+  const push = (source) => pushPersonSource(items, seen, source);
+  for (const item of normalizeNicknames(row?.nicknames)) {
+    for (const source of item.sources || []) push(source);
+  }
+  for (const item of normalizeClearances(row?.clearances)) {
+    for (const source of item.sources || []) push(source);
+  }
+  for (const ev of events) {
+    for (const source of ev?.sources || []) push(eventSourceForList(source));
+  }
+  for (const url of row?.central_casting || []) push(url);
+  for (const clip of centralCastingClipsFor(row, centralCastingClips)) {
+    if (clip?.source_url) {
+      push({
+        url: clip.source_url,
+        publisher: String(clip.account_name || clip.handle || "").trim(),
+        date: clip.posted_at || "",
+      });
+    }
+    for (const entry of kindSupportingEntries(clip)) {
+      push({
+        url: entry.source_url,
+        publisher: String(entry.account_name || entry.handle || "").trim(),
+        date: entry.posted_at || "",
+      });
+    }
+  }
+  if (cite?.url) push(cite);
+  if (row?.net_worth_source) push({ url: row.net_worth_source });
+  return items;
+}
+
+function sourceNumberMap(items) {
+  const map = new Map();
+  items.forEach((item, i) => {
+    const url = String(item?.url || "").trim();
+    const key = canonicalPublicUrl(url) || url;
+    if (key && !map.has(key)) map.set(key, i + 1);
+  });
+  return map;
+}
+
+function personSourcesHtml(items) {
+  if (!items?.length) return "";
+  const cites = items.map((s) => ({
+    url: s.url,
+    snippet: s.snippet || "",
+    source_label: s.publisher || "",
+    title: s.title || "",
+    date: s.date || "",
+  }));
+  return `<section class="person-sources" aria-label="Sources"><h3 class="event-h">Sources</h3>${sectionCiteList(cites, { anchor: true })}</section>`;
+}
+
+function eventTimeline(row, events, clips = [], epsteinLegs = [], seen, sourceNumbers) {
+  const rows = (events || [])
+    .filter((ev) => isPersonTimelineKind(String(ev.kind || "").trim()))
+    .map((ev) => eventTagRow(ev, { birthDate: row.birth_date, sourceNumbers }))
     .filter(Boolean)
     .join("");
-  const nicknames = nicknameSections(row);
   const clearances = clearanceSections(row);
   const centralCasting = centralCastingDetailHtml(row, clips, seen);
   const flightNote =
     row.category === EPSTEIN_CLIENTS_CATEGORY ? String(row.summary || "").trim() : "";
   const epstein = epsteinFlightLogSection(epsteinLegs, { note: flightNote });
-  if (!rows && !nicknames && !clearances && !centralCasting && !epstein) return "";
-  return `<section class="event-timeline" aria-label="Event timeline">${nicknames}${clearances}${rows}${centralCasting}${epstein}</section>`;
+  if (!rows && !clearances && !centralCasting && !epstein) return "";
+  return `<section class="event-timeline" aria-label="Event timeline">${clearances}${rows}${centralCasting}${epstein}</section>`;
 }
 
 function personTagChips(row) {
@@ -2514,11 +2734,15 @@ function personTagChips(row) {
 export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   const seen = detailMediaSeen();
+  const events = datedPersonEvents(filled);
+  const timeline = personTimelineEvents(filled);
+  const sourceItems = personSourceItems(filled, { events, centralCastingClips, cite });
+  const sourceNumbers = sourceNumberMap(sourceItems);
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, timeline, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${personSourcesHtml(sourceItems)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled, seen)}`,
       active: true,
       extraClass: "person-pane",
     })}
