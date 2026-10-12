@@ -2440,13 +2440,19 @@ function eventSummaryLine(ev) {
 
 export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const kind = String(ev?.kind || "").trim();
-  if (!kind || kind === "notable" || !isDisplayedEventKind(kind)) return "";
+  if (!isPersonTimelineKind(kind)) return "";
   const label =
-    kind === "corona_comms"
-      ? categoryById(kind)?.nav || "Corona"
-      : kind === "boot_comms"
-        ? categoryById(kind)?.nav || "Boot"
-        : eventKindTitle(kind);
+    kind === "nickname"
+      ? isTrumpNickname(ev)
+        ? "Trump nickname"
+        : "Nickname"
+      : kind === "shot"
+        ? "Shot"
+        : kind === "corona_comms"
+          ? categoryById(kind)?.nav || "Corona"
+          : kind === "boot_comms"
+            ? categoryById(kind)?.nav || "Boot"
+            : eventKindTitle(kind);
   const eventDate = String(ev.event_date || "").trim();
   const announcedRaw = String(ev.announced_date || "").trim();
   const announced =
@@ -2466,6 +2472,7 @@ export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const attrs = EVENT_ATTR_FIELDS.map((field) => {
     let value = String(ev[field] || "").trim();
     if (!value) return "";
+    if (kind === "nickname" && field === "comments") return "";
     if (field === "status") value = coronaStatusLabel(value) || value;
     if (field === "position") value = standardizePosition(value);
     const name =
@@ -2485,12 +2492,17 @@ export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const summary = `${esc(eventSummaryLine(ev))}${refs ? ` ${refs}` : ""}`;
   const facts = `${announced}${ageLine}${groupLine}${attrs}`;
   const factsHtml = facts ? `<div class="event-facts">${facts}</div>` : "";
+  const figures = kind === "shot" ? notableMediaFigures(ev) : [];
+  const mediaHtml = figures.length
+    ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
+    : "";
   return personEventSection({
     headingHtml: `${esc(label)}${unsealedBadge}`,
     kind,
     cites: sourceNumbers ? [] : eventSectionCites(ev),
     bodyHtml: `<div class="event-row">${eventLine}<p class="event-oneline">${summary}</p>${factsHtml}</div>`,
-    className: "event-tag-row",
+    mediaHtml,
+    className: kind === "shot" ? "event-tag-row detail-shot" : "event-tag-row",
     tag: "article",
   });
 }
@@ -2543,20 +2555,53 @@ export function epsteinFlightLogSection(legs = [], { note: lead = "" } = {}) {
 }
 
 
+function compareTimelineEvents(a, b) {
+  const da = asEventDate(a?.event_date) || "";
+  const db = asEventDate(b?.event_date) || "";
+  if (da !== db) {
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.localeCompare(db);
+  }
+  return String(a?.kind || "").localeCompare(String(b?.kind || ""));
+}
+
 /** Event date ascending. Undated events stay last. Kind is the tie-break. */
 function datedPersonEvents(row) {
-  return personEvents(row)
-    .slice()
-    .sort((a, b) => {
-      const da = asEventDate(a?.event_date) || "";
-      const db = asEventDate(b?.event_date) || "";
-      if (da !== db) {
-        if (!da) return 1;
-        if (!db) return -1;
-        return da.localeCompare(db);
-      }
-      return String(a?.kind || "").localeCompare(String(b?.kind || ""));
-    });
+  return personEvents(row).slice().sort(compareTimelineEvents);
+}
+
+function earliestSourceDate(sources) {
+  let date = "";
+  for (const source of sources || []) {
+    const next = asEventDate(source?.date) || "";
+    if (next && (!date || next < date)) date = next;
+  }
+  return date;
+}
+
+/** Nicknames are timeline rows. The date is the earliest cite day, or blank. */
+function nicknameTimelineEvents(row) {
+  return normalizeNicknames(row?.nicknames).map((item) => ({
+    kind: "nickname",
+    by: item.by,
+    event_date: earliestSourceDate(item.sources),
+    comments: item.name,
+    sources: item.sources || [],
+  }));
+}
+
+/** Rows on the person timeline. Notable stays at the bottom. dog_comms stays a tag, not a row. */
+function isPersonTimelineKind(kind) {
+  if (!kind || kind === "notable" || kind === "dog_comms") return false;
+  if (kind === "shot" || kind === "nickname") return true;
+  return isDisplayedEventKind(kind);
+}
+
+/** Dated and undated events, plus nickname rows, in one order. Nothing dated is dropped. */
+function personTimelineEvents(row) {
+  const events = personEvents(row).filter((ev) => isPersonTimelineKind(String(ev?.kind || "").trim()));
+  return events.concat(nicknameTimelineEvents(row)).sort(compareTimelineEvents);
 }
 
 function pushPersonSource(items, seen, source) {
@@ -2650,21 +2695,17 @@ function personSourcesHtml(items) {
 
 function eventTimeline(row, events, clips = [], epsteinLegs = [], seen, sourceNumbers) {
   const rows = (events || [])
-    .filter((ev) => {
-      const kind = String(ev.kind || "").trim();
-      return kind !== "notable" && isDisplayedEventKind(kind);
-    })
+    .filter((ev) => isPersonTimelineKind(String(ev.kind || "").trim()))
     .map((ev) => eventTagRow(ev, { birthDate: row.birth_date, sourceNumbers }))
     .filter(Boolean)
     .join("");
-  const nicknames = nicknameSections(row);
   const clearances = clearanceSections(row);
   const centralCasting = centralCastingDetailHtml(row, clips, seen);
   const flightNote =
     row.category === EPSTEIN_CLIENTS_CATEGORY ? String(row.summary || "").trim() : "";
   const epstein = epsteinFlightLogSection(epsteinLegs, { note: flightNote });
-  if (!rows && !nicknames && !clearances && !centralCasting && !epstein) return "";
-  return `<section class="event-timeline" aria-label="Event timeline">${nicknames}${clearances}${rows}${centralCasting}${epstein}</section>`;
+  if (!rows && !clearances && !centralCasting && !epstein) return "";
+  return `<section class="event-timeline" aria-label="Event timeline">${clearances}${rows}${centralCasting}${epstein}</section>`;
 }
 
 function personTagChips(row) {
@@ -2694,13 +2735,14 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   const seen = detailMediaSeen();
   const events = datedPersonEvents(filled);
+  const timeline = personTimelineEvents(filled);
   const sourceItems = personSourceItems(filled, { events, centralCastingClips, cite });
   const sourceNumbers = sourceNumberMap(sourceItems);
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, events, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${personSourcesHtml(sourceItems)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled, seen)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, timeline, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${personSourcesHtml(sourceItems)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled, seen)}`,
       active: true,
       extraClass: "person-pane",
     })}

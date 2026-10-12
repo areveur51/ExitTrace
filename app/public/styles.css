@@ -747,7 +747,8 @@ body.tui-home .home-stage {
 .person-detail .source-ref {
   white-space: nowrap;
 }
-.person-detail .event-tag-row .cite-list {
+.person-detail .event-tag-row .cite-list,
+.person-detail .event-tag-row > .detail-media {
   grid-column: 1 / -1;
   margin-top: 0.2rem;
 }

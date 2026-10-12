@@ -383,3 +383,93 @@ test("identity panel leaves null origin blank, sources are numbered, notables st
   assert.doesNotMatch(html.slice(0, notableAt), /detail-tile--support/);
   assert.doesNotMatch(html.slice(0, notableAt), /casey-vale-notable\.jpg/);
 });
+
+test("timeline row count keeps dated, undated, nickname, boot, death, and shot", () => {
+  const html = personDetail({
+    id: "timeline-fixture",
+    name: "Timeline Fixture",
+    category: "government_stepdowns",
+    event_date: "2024-07-21",
+    nicknames: [
+      {
+        name: "Sleepy Joe",
+        by: "Donald Trump",
+        sources: [
+          {
+            url: "https://www.reuters.com/world/us/sleepy-joe",
+            publisher: "Reuters",
+            date: "2019-06-11",
+            snippet: "Sleepy Joe",
+          },
+          {
+            url: "https://www.nytimes.com/2019/06/11/us/politics/sleepy-joe.html",
+            publisher: "The New York Times",
+            date: "2019-06-11",
+          },
+        ],
+      },
+      {
+        name: "Autopen",
+        by: "Donald Trump",
+        sources: [
+          { url: "https://www.reuters.com/world/us/autopen", publisher: "Reuters" },
+          { url: "https://www.nytimes.com/2024/01/01/us/autopen.html", publisher: "The New York Times" },
+        ],
+      },
+    ],
+    events: [
+      {
+        kind: "boot_comms",
+        event_date: "2020-12-01",
+        comments: "Walking boot.",
+        sources: [{ url: "https://www.reuters.com/boot", date: "2020-12-01" }],
+      },
+      {
+        kind: "government_stepdowns",
+        event_date: "2024-07-21",
+        comments: "Stepped aside.",
+        sources: [{ url: "https://apnews.com/officials", date: "2024-07-21" }],
+      },
+      {
+        kind: "dog_comms",
+        event_date: "2022-10-11",
+        comments: "Dog post.",
+        sources: [{ url: "https://x.com/POTUS46Archive/status/1", date: "2022-10-11" }],
+      },
+      {
+        kind: "shot",
+        event_date: "2026-10-07",
+        comments: "Had my shot.",
+        sources: [{ url: "https://thehill.com/shot", date: "2026-10-07" }],
+      },
+      {
+        kind: "death_unconfirmed",
+        event_date: null,
+        comments: "Unconfirmed claim.",
+        sources: [{ url: "https://www.reuters.com/death-claim" }],
+      },
+    ],
+  });
+  const rows = html.match(/<article class="[^"]*\bevent-tag-row\b[^"]*"[\s\S]*?<\/article>/g) || [];
+  assert.equal(rows.length, 6);
+  assert.deepEqual(
+    rows.map((row) => row.match(/data-kind="([^"]+)"/)[1]),
+    ["nickname", "boot_comms", "government_stepdowns", "shot", "death_unconfirmed", "nickname"],
+  );
+  assert.match(rows[0], /<h3 class="event-h">Trump nickname<\/h3>/);
+  assert.match(rows[0], /datetime="2019-06-11"/);
+  assert.match(rows[0], /Sleepy Joe/);
+  assert.match(rows[1], /<h3 class="event-h">Boot<\/h3>/);
+  assert.match(rows[1], /datetime="2020-12-01"/);
+  assert.match(rows[2], /<h3 class="event-h">Officials<\/h3>/);
+  assert.match(rows[2], /datetime="2024-07-21"/);
+  assert.match(rows[3], /<h3 class="event-h">Shot<\/h3>/);
+  assert.match(rows[3], /datetime="2026-10-07"/);
+  assert.match(rows[4], /class="event-date">—</);
+  assert.match(rows[4], /<h3 class="event-h">Death\*<\/h3>/);
+  assert.match(rows[5], /<h3 class="event-h">Trump nickname<\/h3>/);
+  assert.match(rows[5], /class="event-date">—</);
+  assert.match(rows[5], /Autopen/);
+  assert.doesNotMatch(html, /data-kind="dog_comms"/);
+  assert.doesNotMatch(html, /nickname-section/);
+});

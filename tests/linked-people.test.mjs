@@ -368,7 +368,7 @@ test("a shot event is its own section and does not replace the card category", (
   assert.equal(row.category, "government_stepdowns");
   assert.equal(row.event_date, "2024-07-21");
   const html = personDetail(row);
-  const shotAt = html.indexOf('class="detail-shot');
+  const shotAt = html.indexOf("detail-shot");
   const supportAt = html.indexOf('class="detail-supporting"');
   assert.ok(shotAt >= 0);
   const shot = html.slice(shotAt, supportAt >= 0 ? supportAt : undefined);
