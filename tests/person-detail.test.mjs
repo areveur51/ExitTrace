@@ -269,3 +269,91 @@ test("person detail renders career/service years when stored and does not copy e
   assert.equal(careerHistory({ name: "Empty", role: "Actor" }), "");
   assert.equal(careerHistory({ career: [{ title: "U.S. Army" }] }), "");
 });
+
+test("identity panel leaves null origin blank, sources are numbered, notables stay at the bottom", () => {
+  const early = "https://www.example.com/news/casey-vale-fired";
+  const later = "https://www.example.net/world/casey-vale-quit";
+  const notableUrl = "https://www.example.com/news/casey-vale-notable";
+  const headerShot = "/media/screenshots/people/casey-vale.jpg";
+  const notableShot = "/media/screenshots/people/casey-vale-notable.jpg";
+  const clip = "/media/people/casey-vale/support/rally.jpg";
+  const hearing = "/media/people/casey-vale/support/hearing.jpg";
+  const html = personDetail({
+    id: "casey-vale",
+    name: "Casey Vale",
+    category: "resignations",
+    event_date: "2021-01-20",
+    birth_date: null,
+    country_of_origin: null,
+    photo: "/media/people/james-comey.jpg",
+    screenshot: headerShot,
+    net_worth_usd: null,
+    tags: ["official"],
+    events: [
+      {
+        kind: "resignations",
+        event_date: "2021-01-20",
+        position: "Director",
+        sources: [{ url: later, publisher: "Reuters", date: "2021-01-20" }],
+      },
+      {
+        kind: "firings",
+        event_date: "2017-05-09",
+        sources: [{ url: early, publisher: "The New York Times", date: "2017-05-09" }],
+        media: [{ src: hearing, url: early, alt: "Hearing still" }],
+      },
+      {
+        kind: "notable",
+        event_date: "2019-06-01",
+        comments: "Named in a published poll of public figures.",
+        screenshot: notableShot,
+        sources: [{ url: notableUrl, date: "2019-06-01", snippet: "Named in the poll lead" }],
+        media: [{ src: clip, url: notableUrl, alt: "Downloaded post still" }],
+      },
+    ],
+  });
+
+  const timelineAt = html.indexOf('class="event-timeline"');
+  const header = html.slice(0, timelineAt);
+  assert.match(header, /class="person-header"/);
+  assert.match(header, /class="row-media"/);
+  assert.match(header, /class="detail-photo portrait"/);
+  assert.match(header, /Casey Vale/);
+  assert.doesNotMatch(header, /Origin ·/);
+  assert.doesNotMatch(header, /United States|Germany|\bUSA\b/);
+  assert.doesNotMatch(header, />\s*null\s*</i);
+  assert.match(header, /<span class="nw">—<\/span>/);
+  assert.match(header, /class="person-tags"/);
+  assert.match(header, />Officials</);
+  assert.doesNotMatch(header, /detail-tile--screenshot|detail-notable|detail-tile--support/);
+  assert.doesNotMatch(header, /screenshots\/people/);
+
+  const firingAt = html.indexOf('data-kind="firings"');
+  const resignationAt = html.indexOf('data-kind="resignations"');
+  assert.ok(firingAt > timelineAt && resignationAt > firingAt);
+
+  const sourcesAt = html.indexOf('aria-label="Sources"');
+  const notableAt = html.indexOf('class="detail-notable detail-supporting"');
+  const supportAt = html.indexOf('aria-label="Supporting media"');
+  assert.ok(sourcesAt > resignationAt && notableAt > sourcesAt && supportAt > notableAt);
+  const sources = html.slice(sourcesAt, notableAt);
+  assert.match(sources, /<ol class="sources cite-list">/);
+  const link = (url) =>
+    new RegExp(
+      `<a class="source-link" href="${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}" title="${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}" target="_blank" rel="noopener noreferrer">${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</a>`,
+    );
+  assert.match(sources, link(early));
+  assert.match(sources, link(later));
+  assert.match(sources, link(notableUrl));
+  const earlyAt = sources.indexOf(`>${early}<`);
+  const notableLinkAt = sources.indexOf(`>${notableUrl}<`);
+  const laterAt = sources.indexOf(`>${later}<`);
+  assert.ok(earlyAt >= 0 && notableLinkAt > earlyAt && laterAt > notableLinkAt);
+  assert.equal((sources.match(/<li>/g) || []).length, 3);
+
+  assert.match(html.slice(notableAt, supportAt), /<h3 class="event-h">Notable event<\/h3>/);
+  assert.match(html.slice(notableAt, supportAt), /rally\.jpg/);
+  assert.match(html.slice(supportAt), /hearing\.jpg/);
+  assert.doesNotMatch(html.slice(0, notableAt), /detail-tile--support/);
+  assert.doesNotMatch(html.slice(0, notableAt), /casey-vale-notable\.jpg/);
+});

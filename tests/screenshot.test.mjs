@@ -253,17 +253,18 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   const shot = "/media/screenshots/people/james-comey.jpg";
   const html = personDetail(person({ screenshot: shot, screenshot_credit: "X" }));
   assert.match(html, /class="detail-photo portrait"/);
+  assert.match(html, /class="row-media"/);
   assert.match(html, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
-  assert.match(html, /class="detail-photo screenshot"/);
-  assert.match(html, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(html, /class="detail-photo screenshot"/);
+  assert.doesNotMatch(html, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
   assert.match(html, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
-  assert.match(html, /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(html, /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg"/);
   assert.doesNotMatch(html, /<img class="detail-photo portrait"[^>]+src="\/media\/screenshots\//);
   assert.doesNotMatch(html, /class="portrait thumb"/);
 
   const coronaHtml = personDetail(corona({ screenshot: shot }));
   assert.match(coronaHtml, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
-  assert.match(coronaHtml, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(coronaHtml, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
 
   const dogHtml = dogDetail(
     dog({
@@ -344,7 +345,13 @@ test("detail pages include lightbox chrome and keep list thumbs off the screensh
     const html = page.body.toString("utf8");
     assert.match(html, /id="tui-lightbox"/);
     assert.match(html, /class="lightbox-open"/);
-    assert.match(html, /data-lightbox="\/media\/screenshots\//);
+  }
+  for (const page of pages.slice(0, 2)) {
+    assert.match(page.body.toString("utf8"), /data-lightbox="\/media\/people\//);
+    assert.doesNotMatch(page.body.toString("utf8"), /data-lightbox="\/media\/screenshots\//);
+  }
+  for (const page of pages.slice(2)) {
+    assert.match(page.body.toString("utf8"), /data-lightbox="\/media\/screenshots\//);
   }
   const list = await requestPage("/firings");
   assert.equal(list.status, 200);

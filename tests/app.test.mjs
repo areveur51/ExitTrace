@@ -382,8 +382,9 @@ test("people and operations detail reuse detailShell stack; no Sources · N chro
   const personPage = await get(`/people/${person.id}`);
   assert.equal(personPage.status, 200);
   assert.match(personPage.body, /meta-pane--stack/);
-  assert.match(personPage.body, /detail-media--masonry/);
   assert.match(personPage.body, /class="person-header"/);
+  assert.match(personPage.body, /class="row-media"/);
+  assert.doesNotMatch(personPage.body.split('class="event-timeline"')[0], /detail-tile--screenshot/);
   assert.doesNotMatch(personPage.body, /Batcave/i);
   assert.doesNotMatch(personPage.body, /Sources · \d+ available/);
   assert.doesNotMatch(personPage.body, /sources-pane/);

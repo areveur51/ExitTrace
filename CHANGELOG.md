@@ -9,6 +9,11 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+### Changed
+
+- A person card opens with an identity panel: a head-and-chest portrait, the name, origin, net worth, and tags. A null origin stays blank. A missing net worth is an em dash (—).
+- Events on a person card are compact rows in date order. Sources are one numbered list of full links. Notable events and supporting media stay at the bottom of the card. The person screenshot is not shown beside the portrait.
+
 ## [1.2.23] - 2026-10-11
 
 ### Added

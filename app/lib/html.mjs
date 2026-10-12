@@ -2158,27 +2158,31 @@ export function personHeader(row, extras = {}) {
     ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
     : "";
   const originValue = originText(row.country_of_origin);
+  // Null origin stays blank. Never substitute a country.
   const origin = originValue
     ? `<p class="meta-line">Origin · ${esc(originValue)}</p>`
     : "";
+  const label = row.name || "";
+  const href = isPeopleMediaHref(row.photo) ? String(row.photo || "").trim() : "";
+  claimDetailMedia(extras.seen, href);
+  const inner = localMediaPortrait(row.photo, label);
+  const framed = href
+    ? lightboxButton(href, inner, { alt: label, credit: creditWithoutUrls(row.photo_credit) })
+    : inner;
   return `<header class="person-header">
-    ${detailMediaStrip({
-      portraitHtml: localMediaPortrait(row.photo, row.name),
-      portraitSrc: isPeopleMediaHref(row.photo) ? row.photo : "",
-      portraitAlt: row.name,
-      portraitCredit: row.photo_credit,
-      screenshot: row.screenshot,
-      screenshotAlt: `X-post screenshot of ${row.name}`,
-      screenshotCredit: row.screenshot_credit,
-      seen: extras.seen,
-      metaHtml: detailMetaBlock({
-        title: row.name || "—",
-        ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
-        lines: [birth, origin, nicknameMetaLine(row), clearanceMetaLine(row), personTagChips(row), grokipediaBlock(row, extras)],
-        citeHtml: citeFromRow(row),
-        attributionHtml: attributionFrom(row, extras.attributions, "person"),
-      }),
-    })}
+    ${classificationMediaSlot(framed)}
+    <div class="detail-copy">
+      <h2 class="detail-title">${esc(row.name || "—")}</h2>
+      ${origin}
+      <p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>
+      ${personTagChips(row)}
+      ${birth}
+      ${nicknameMetaLine(row)}
+      ${clearanceMetaLine(row)}
+      ${grokipediaBlock(row, extras)}
+      ${attributionFrom(row, extras.attributions, "person")}
+      ${citeFromRow(row)}
+    </div>
   </header>`;
 }
 
@@ -2415,7 +2419,7 @@ export function eventTagRow(ev, { birthDate } = {}) {
     headingHtml: `${esc(label)}${unsealedBadge}`,
     kind,
     cites: eventSectionCites(ev),
-    bodyHtml: `${eventLine}${announced}${ageLine}${groupLine}${attrs}`,
+    bodyHtml: `<div class="event-row">${eventLine}${announced}${ageLine}${groupLine}${attrs}</div>`,
     className: "event-tag-row",
     tag: "article",
   });
@@ -2469,8 +2473,84 @@ export function epsteinFlightLogSection(legs = [], { note: lead = "" } = {}) {
 }
 
 
+/** Event date ascending. Undated events stay last. Kind is the tie-break. */
+function datedPersonEvents(row) {
+  return personEvents(row)
+    .slice()
+    .sort((a, b) => {
+      const da = asEventDate(a?.event_date) || "";
+      const db = asEventDate(b?.event_date) || "";
+      if (da !== db) {
+        if (!da) return 1;
+        if (!db) return -1;
+        return da.localeCompare(db);
+      }
+      return String(a?.kind || "").localeCompare(String(b?.kind || ""));
+    });
+}
+
+function pushPersonSource(items, seen, source) {
+  const url = String(typeof source === "string" ? source : source?.url || "").trim();
+  if (!url) return;
+  const key = canonicalPublicUrl(url) || url;
+  if (seen.has(key)) return;
+  seen.add(key);
+  if (typeof source === "string") {
+    items.push({ url });
+    return;
+  }
+  items.push({
+    url,
+    publisher: source.publisher || source.source_label || "",
+    title: source.title || "",
+    date: source.date || "",
+  });
+}
+
+/** Every cite on the card, once, in the same order the page reads them. */
+function personSourceItems(row, { centralCastingClips = [], cite } = {}) {
+  const items = [];
+  const seen = new Set();
+  const push = (source) => pushPersonSource(items, seen, source);
+  for (const item of normalizeNicknames(row?.nicknames)) {
+    for (const source of item.sources || []) push(source);
+  }
+  for (const item of normalizeClearances(row?.clearances)) {
+    for (const source of item.sources || []) push(source);
+  }
+  for (const ev of datedPersonEvents(row)) {
+    for (const source of ev?.sources || []) push(source);
+  }
+  for (const url of row?.central_casting || []) push(url);
+  for (const clip of centralCastingClipsFor(row, centralCastingClips)) {
+    if (clip?.source_url) {
+      push({
+        url: clip.source_url,
+        publisher: String(clip.account_name || clip.handle || "").trim(),
+        date: clip.posted_at || "",
+      });
+    }
+    for (const entry of kindSupportingEntries(clip)) {
+      push({
+        url: entry.source_url,
+        publisher: String(entry.account_name || entry.handle || "").trim(),
+        date: entry.posted_at || "",
+      });
+    }
+  }
+  if (cite?.url) push(cite);
+  if (row?.net_worth_source) push({ url: row.net_worth_source });
+  return items;
+}
+
+function personSourcesHtml(row, extras) {
+  const items = personSourceItems(row, extras);
+  if (!items.length) return "";
+  return `<section class="person-sources" aria-label="Sources"><h3 class="event-h">Sources</h3>${citeList(items)}</section>`;
+}
+
 function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
-  const events = personEvents(row).filter((ev) => {
+  const events = datedPersonEvents(row).filter((ev) => {
     const kind = String(ev.kind || "").trim();
     return kind !== "notable" && isDisplayedEventKind(kind);
   });
@@ -2518,7 +2598,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${personSourcesHtml(filled, { centralCastingClips, cite })}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
       active: true,
       extraClass: "person-pane",
     })}

@@ -577,6 +577,7 @@ body.tui-home .home-stage {
   object-fit: contain;
   object-position: top center;
 }
+.person-header > .row-media,
 .person-header .detail-photo.portrait,
 .person-header .initials.detail-photo,
 .meta-pane .detail-photo.portrait,
@@ -588,6 +589,16 @@ body.tui-home .home-stage {
   object-fit: cover;
   object-position: center 18%;
 }
+.person-header > .row-media {
+  overflow: hidden;
+  line-height: 0;
+}
+.person-header > .row-media .lightbox-open,
+.person-header > .row-media picture.detail-portrait {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
 .person-header .initials.detail-photo,
 .meta-pane .initials.detail-photo.portrait {
   font-size: 2.4rem;
@@ -596,7 +607,7 @@ body.tui-home .home-stage {
   margin: 0.85rem 0 0;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.35rem;
 }
 
 /* Prose / Notable card text: wrap long unbroken URLs so they cannot blow the frost shell. */
@@ -622,6 +633,24 @@ body.tui-home .home-stage {
 }
 .event-tag-row .cite-list,
 .person-event-section .cite-list { margin-top: 0.35rem; }
+.person-detail .event-tag-row {
+  padding: 0.35rem 0 0.4rem;
+}
+.person-detail .event-tag-row .event-h {
+  margin: 0 0 0.15rem;
+}
+.person-detail .event-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.12rem 0.85rem;
+}
+.person-detail .event-row .meta-line {
+  margin: 0;
+}
+.person-detail .event-tag-row .cite-list {
+  margin-top: 0.2rem;
+}
 .event-snippet {
   margin: 0.25rem 0 0.45rem;
   white-space: pre-wrap;
@@ -632,13 +661,15 @@ body.tui-home .home-stage {
 .event-media { margin: 0.35rem 0 0; }
 .event-media img { display: block; width: min(100%, 320px); height: auto; }
 .detail-supporting,
-.detail-linked-people {
+.detail-linked-people,
+.person-sources {
   margin: 0.85rem 0 0;
   padding: 0.55rem 0 0;
   border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
 }
 .detail-supporting .event-h,
-.detail-linked-people .event-h { margin: 0 0 0.55rem; }
+.detail-linked-people .event-h,
+.person-sources .event-h { margin: 0 0 0.55rem; }
 /* Bottom supporting strip: one minimum width, height from the file. No square crop. */
 .detail-support-masonry .detail-tile--support {
   break-inside: avoid;
@@ -1327,15 +1358,18 @@ img.empty-portrait { object-position: center center; }
   gap: 1rem;
   align-items: flex-start;
 }
-/* Detail shell: one interleaved masonry (media + text/meta tiles).
-   Shared by dog / people (incl. corona) / operations. */
+/* Detail shell: official posts and operations use one interleaved masonry.
+   A person card uses the identity header, then the sections under it. */
 .meta-pane--stack {
   flex-direction: column;
   align-items: stretch;
 }
-/* person-header wraps the shared masonry; lift it into the pane. */
 .meta-pane--stack > .person-header {
-  display: contents;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
 }
 .meta-pane--stack .detail-media {
   flex: 1 1 auto;
@@ -2032,10 +2066,12 @@ html[data-theme="glass"] .detail .meta-pane--stack::before {
   background-repeat: no-repeat;
   opacity: 0.8;
 }
+html[data-theme="glass"] .detail .person-header,
 html[data-theme="glass"] .detail .detail-media,
 html[data-theme="glass"] .detail .detail-copy,
 html[data-theme="glass"] .detail .career-history,
 html[data-theme="glass"] .detail .event-timeline,
+html[data-theme="glass"] .detail .person-sources,
 html[data-theme="glass"] .detail .detail-official-post,
 html[data-theme="glass"] .detail .detail-context,
 html[data-theme="glass"] .detail .detail-linked-people,
@@ -2164,6 +2200,7 @@ html[data-theme="glass"] .dash-stats {
     width: 90px;
     height: 160px;
   }
+  .person-header > .row-media,
   .person-header .detail-photo.portrait,
   .person-header .initials.detail-photo,
   .meta-pane .detail-photo.portrait,
