@@ -345,15 +345,32 @@ test("identity panel leaves null origin blank, sources are numbered, notables st
   assert.match(sources, link(early));
   assert.match(sources, link(later));
   assert.match(sources, link(notableUrl));
+  assert.match(sources, /id="source-1"/);
+  assert.match(sources, /id="source-2"/);
+  assert.match(sources, /id="source-3"/);
   const earlyAt = sources.indexOf(`>${early}<`);
   const notableLinkAt = sources.indexOf(`>${notableUrl}<`);
   const laterAt = sources.indexOf(`>${later}<`);
   assert.ok(earlyAt >= 0 && notableLinkAt > earlyAt && laterAt > notableLinkAt);
-  assert.equal((sources.match(/<li>/g) || []).length, 3);
+  assert.equal((sources.match(/<li\b/g) || []).length, 3);
+  const sourceLinkCount = (slice, url) =>
+    (slice.match(new RegExp(`class="source-link" href="${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`, "g")) || []).length;
+  assert.equal(sourceLinkCount(sources, early), 1);
+  assert.equal(sourceLinkCount(sources, later), 1);
+  assert.equal(sourceLinkCount(sources, notableUrl), 1);
+
+  const rows = html.match(/<article class="event-tag-row"[\s\S]*?<\/article>/g) || [];
+  assert.equal(rows.length, 2);
+  for (const row of rows) assert.doesNotMatch(row, /cite-list|source-link/);
+  assert.match(rows[0], /href="#source-1">\[1\]<\/a>/);
+  assert.match(rows[1], /href="#source-3">\[3\]<\/a>/);
 
   assert.match(html.slice(notableAt, supportAt), /<h3 class="event-h">Notable event<\/h3>/);
   assert.match(html.slice(notableAt, supportAt), /rally\.jpg/);
   assert.match(html.slice(supportAt), /hearing\.jpg/);
+  assert.match(html.slice(supportAt), /src="\/media\/screenshots\/people\/casey-vale\.jpg"/);
+  assert.match(html.slice(supportAt), /data-lightbox="\/media\/screenshots\/people\/casey-vale\.jpg"/);
+  assert.doesNotMatch(html.slice(0, supportAt), /screenshots\/people\/casey-vale\.jpg/);
   assert.doesNotMatch(html.slice(0, notableAt), /detail-tile--support/);
   assert.doesNotMatch(html.slice(0, notableAt), /casey-vale-notable\.jpg/);
 });

@@ -302,10 +302,14 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
   assert.match(person, /class="person-header"/);
   assert.match(person, /class="row-media"/);
   assert.match(person, /class="detail-photo portrait"/);
-  assert.doesNotMatch(person, /detail-media--masonry/);
+  const personSupport = person.indexOf('aria-label="Supporting media"');
+  assert.ok(personSupport > person.indexOf('class="person-header"'));
+  assert.doesNotMatch(person.slice(0, personSupport), /detail-media--masonry/);
+  assert.match(person.slice(personSupport), /detail-media--masonry/);
+  assert.match(person.slice(personSupport), /screenshots\/people\/james-comey\.jpg/);
+  assert.doesNotMatch(person.slice(0, personSupport), /screenshots\/people/);
   assert.doesNotMatch(person, /detail-tile--portrait/);
   assert.doesNotMatch(person, /detail-tile--screenshot/);
-  assert.doesNotMatch(person, /screenshots\/people/);
   assert.match(person, /James Comey/);
   assert.match(person, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.match(person, /james-comey\.hero\.webp\?p=7/);
@@ -507,19 +511,25 @@ test("detail media keeps the first tile when a later file is the same bytes", ()
       ...person,
       screenshot: "/media/screenshots/people/duprule-other.jpg",
     });
+    const distinctSupport = distinct.indexOf('aria-label="Supporting media"');
     assert.match(distinct, /class="row-media"/);
     assert.match(distinct, /class="detail-photo portrait"/);
+    assert.ok(distinctSupport > distinct.indexOf('class="person-header"'));
     assert.doesNotMatch(distinct, /detail-tile--screenshot/);
-    assert.doesNotMatch(distinct, /screenshots\/people\/duprule-other\.jpg/);
+    assert.doesNotMatch(distinct.slice(0, distinctSupport), /screenshots\/people\/duprule-other\.jpg/);
+    assert.match(distinct.slice(distinctSupport), /screenshots\/people\/duprule-other\.jpg/);
 
     const missing = personDetail({
       ...person,
       screenshot: "/media/screenshots/people/duprule-missing.jpg",
     });
+    const missingSupport = missing.indexOf('aria-label="Supporting media"');
     assert.match(missing, /class="row-media"/);
     assert.match(missing, /class="detail-photo portrait"/);
+    assert.ok(missingSupport > missing.indexOf('class="person-header"'));
     assert.doesNotMatch(missing, /detail-tile--screenshot/);
-    assert.doesNotMatch(missing, /screenshots\/people\/duprule-missing\.jpg/);
+    assert.doesNotMatch(missing.slice(0, missingSupport), /screenshots\/people\/duprule-missing\.jpg/);
+    assert.match(missing.slice(missingSupport), /screenshots\/people\/duprule-missing\.jpg/);
 
     const dogHtml = dogDetail(
       dog({

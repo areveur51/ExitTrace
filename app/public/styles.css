@@ -648,6 +648,9 @@ body.tui-home .home-stage {
 .person-detail .event-row .meta-line {
   margin: 0;
 }
+.person-detail .source-ref {
+  white-space: nowrap;
+}
 .person-detail .event-tag-row .cite-list {
   margin-top: 0.2rem;
 }

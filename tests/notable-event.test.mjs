@@ -158,6 +158,8 @@ test("notable is a bottom media block, not an event timeline row", () => {
   assert.doesNotMatch(support, new RegExp(SHOT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(support, /poll-clip\.jpg/);
   assert.match(support, /arrest-clip\.jpg/);
+  assert.match(support, new RegExp(HEADER_SHOT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(html.slice(0, supportAt), new RegExp(HEADER_SHOT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(header, /class="row-media"/);
   assert.doesNotMatch(header, /detail-tile--support|detail-notable/);
   assert.doesNotMatch(header, new RegExp(HEADER_SHOT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));

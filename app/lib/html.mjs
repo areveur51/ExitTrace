@@ -1564,9 +1564,9 @@ function sectionCites(raw) {
   return out;
 }
 
-function sectionCiteList(cites) {
+function sectionCiteList(cites, { anchor = false } = {}) {
   return `<ol class="sources cite-list">${cites
-    .map((s) => {
+    .map((s, i) => {
       const label = s.source_label || s.title || "";
       const date = s.date
         ? ` <time datetime="${esc(s.date)}">${esc(formatDate(s.date))}</time>`
@@ -1575,9 +1575,10 @@ function sectionCiteList(cites) {
         ? `<blockquote class="event-snippet">${esc(s.snippet)}</blockquote>`
         : "";
       const link = citeLink(s.url, { label });
+      const id = anchor ? ` id="source-${i + 1}"` : "";
       // Standing rule (all kinds): each stored quote sits immediately before its own cite.
       // Cites without a snippet render exactly as before: link, then date.
-      return `<li>${snippet}${link}${date}</li>`;
+      return `<li${id}>${snippet}${link}${date}</li>`;
     })
     .join("")}</ol>`;
 }
@@ -1751,7 +1752,7 @@ function supportingMediaFigure(item, source) {
 }
 
 /** Supporting clips after every event section. Notable media stays on the Notable block. */
-function personSupportingMediaHtml(row) {
+function personSupportingMediaHtml(row, seen) {
   const figures = [];
   for (const ev of personEvents(row)) {
     const kind = String(ev?.kind || "").trim();
@@ -1765,6 +1766,19 @@ function personSupportingMediaHtml(row) {
         sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
       figures.push(supportingMediaFigure(item, source));
     }
+  }
+  const shot = normalizeScreenshotHref(row?.screenshot, "people");
+  if (shot && !claimDetailMedia(seen, shot)) {
+    figures.push(
+      supportingMediaFigure(
+        {
+          src: shot,
+          alt: "Screenshot",
+          credit: row.screenshot_credit || "",
+        },
+        null,
+      ),
+    );
   }
   if (!figures.length) return "";
   return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3><div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div></section>`;
@@ -2372,7 +2386,25 @@ export function shotEventHtml(row) {
     .join("");
 }
 
-export function eventTagRow(ev, { birthDate } = {}) {
+/** In-page pointers at the numbered Sources list. The full URL stays there once. */
+function sourceRefHtml(sources, sourceNumbers) {
+  if (!sourceNumbers) return "";
+  const refs = [];
+  const seen = new Set();
+  for (const source of sources || []) {
+    const url = String(source?.url || "").trim();
+    if (!url) continue;
+    const key = canonicalPublicUrl(url) || url;
+    const n = sourceNumbers.get(key);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    refs.push(`<a class="source-ref" href="#source-${n}">[${n}]</a>`);
+  }
+  if (!refs.length) return "";
+  return `<p class="meta-line event-source-refs">${refs.join(" ")}</p>`;
+}
+
+export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const kind = String(ev?.kind || "").trim();
   if (!kind || kind === "notable" || !isDisplayedEventKind(kind)) return "";
   const label =
@@ -2415,11 +2447,12 @@ export function eventTagRow(ev, { birthDate } = {}) {
   const eventLine = eventDate
     ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
     : `<p class="meta-line event-line">—</p>`;
+  const refs = sourceRefHtml(ev?.sources, sourceNumbers);
   return personEventSection({
     headingHtml: `${esc(label)}${unsealedBadge}`,
     kind,
-    cites: eventSectionCites(ev),
-    bodyHtml: `<div class="event-row">${eventLine}${announced}${ageLine}${groupLine}${attrs}</div>`,
+    cites: sourceNumbers ? [] : eventSectionCites(ev),
+    bodyHtml: `<div class="event-row">${eventLine}${announced}${ageLine}${groupLine}${attrs}${refs}</div>`,
     className: "event-tag-row",
     tag: "article",
   });
@@ -2499,16 +2532,29 @@ function pushPersonSource(items, seen, source) {
     items.push({ url });
     return;
   }
+  const snippet = isUnofficialOrCommentarySocial(url)
+    ? ""
+    : String(source.snippet || source.quote || "").trim();
   items.push({
     url,
     publisher: source.publisher || source.source_label || "",
     title: source.title || "",
     date: source.date || "",
+    snippet,
   });
 }
 
+/** Title fills an empty stored quote the same way an event row used to. */
+function eventSourceForList(source) {
+  if (!source || typeof source !== "object") return source;
+  const snippet = isUnofficialOrCommentarySocial(source.url)
+    ? ""
+    : String(source.snippet || source.quote || source.title || "").trim();
+  return { ...source, snippet };
+}
+
 /** Every cite on the card, once, in the same order the page reads them. */
-function personSourceItems(row, { centralCastingClips = [], cite } = {}) {
+function personSourceItems(row, { events = [], centralCastingClips = [], cite } = {}) {
   const items = [];
   const seen = new Set();
   const push = (source) => pushPersonSource(items, seen, source);
@@ -2518,8 +2564,8 @@ function personSourceItems(row, { centralCastingClips = [], cite } = {}) {
   for (const item of normalizeClearances(row?.clearances)) {
     for (const source of item.sources || []) push(source);
   }
-  for (const ev of datedPersonEvents(row)) {
-    for (const source of ev?.sources || []) push(source);
+  for (const ev of events) {
+    for (const source of ev?.sources || []) push(eventSourceForList(source));
   }
   for (const url of row?.central_casting || []) push(url);
   for (const clip of centralCastingClipsFor(row, centralCastingClips)) {
@@ -2543,19 +2589,35 @@ function personSourceItems(row, { centralCastingClips = [], cite } = {}) {
   return items;
 }
 
-function personSourcesHtml(row, extras) {
-  const items = personSourceItems(row, extras);
-  if (!items.length) return "";
-  return `<section class="person-sources" aria-label="Sources"><h3 class="event-h">Sources</h3>${citeList(items)}</section>`;
+function sourceNumberMap(items) {
+  const map = new Map();
+  items.forEach((item, i) => {
+    const url = String(item?.url || "").trim();
+    const key = canonicalPublicUrl(url) || url;
+    if (key && !map.has(key)) map.set(key, i + 1);
+  });
+  return map;
 }
 
-function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
-  const events = datedPersonEvents(row).filter((ev) => {
-    const kind = String(ev.kind || "").trim();
-    return kind !== "notable" && isDisplayedEventKind(kind);
-  });
-  const rows = events
-    .map((ev) => eventTagRow(ev, { birthDate: row.birth_date }))
+function personSourcesHtml(items) {
+  if (!items?.length) return "";
+  const cites = items.map((s) => ({
+    url: s.url,
+    snippet: s.snippet || "",
+    source_label: s.publisher || "",
+    title: s.title || "",
+    date: s.date || "",
+  }));
+  return `<section class="person-sources" aria-label="Sources"><h3 class="event-h">Sources</h3>${sectionCiteList(cites, { anchor: true })}</section>`;
+}
+
+function eventTimeline(row, events, clips = [], epsteinLegs = [], seen, sourceNumbers) {
+  const rows = (events || [])
+    .filter((ev) => {
+      const kind = String(ev.kind || "").trim();
+      return kind !== "notable" && isDisplayedEventKind(kind);
+    })
+    .map((ev) => eventTagRow(ev, { birthDate: row.birth_date, sourceNumbers }))
     .filter(Boolean)
     .join("");
   const nicknames = nicknameSections(row);
@@ -2594,11 +2656,14 @@ function personTagChips(row) {
 export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   const seen = detailMediaSeen();
+  const events = datedPersonEvents(filled);
+  const sourceItems = personSourceItems(filled, { events, centralCastingClips, cite });
+  const sourceNumbers = sourceNumberMap(sourceItems);
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${personSourcesHtml(filled, { centralCastingClips, cite })}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, events, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${personSourcesHtml(sourceItems)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled, seen)}`,
       active: true,
       extraClass: "person-pane",
     })}

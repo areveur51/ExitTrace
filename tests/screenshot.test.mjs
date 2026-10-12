@@ -252,19 +252,25 @@ test("store columns stay optional and do not invent or replace gold stills", asy
 test("detail pages render portrait/still and screenshot; list thumbs stay unchanged", () => {
   const shot = "/media/screenshots/people/james-comey.jpg";
   const html = personDetail(person({ screenshot: shot, screenshot_credit: "X" }));
+  const supportAt = html.indexOf('aria-label="Supporting media"');
+  assert.ok(supportAt > html.indexOf('class="person-header"'));
   assert.match(html, /class="detail-photo portrait"/);
   assert.match(html, /class="row-media"/);
   assert.match(html, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.doesNotMatch(html, /class="detail-photo screenshot"/);
-  assert.doesNotMatch(html, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(html.slice(0, supportAt), /screenshots\/people/);
+  assert.match(html.slice(supportAt), /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
   assert.match(html, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
-  assert.doesNotMatch(html, /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.match(html.slice(supportAt), /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg"/);
   assert.doesNotMatch(html, /<img class="detail-photo portrait"[^>]+src="\/media\/screenshots\//);
   assert.doesNotMatch(html, /class="portrait thumb"/);
 
   const coronaHtml = personDetail(corona({ screenshot: shot }));
+  const coronaSupport = coronaHtml.indexOf('aria-label="Supporting media"');
+  assert.ok(coronaSupport > coronaHtml.indexOf('class="person-header"'));
   assert.match(coronaHtml, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
-  assert.doesNotMatch(coronaHtml, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.doesNotMatch(coronaHtml.slice(0, coronaSupport), /screenshots\/people/);
+  assert.match(coronaHtml.slice(coronaSupport), /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
 
   const dogHtml = dogDetail(
     dog({
@@ -347,8 +353,12 @@ test("detail pages include lightbox chrome and keep list thumbs off the screensh
     assert.match(html, /class="lightbox-open"/);
   }
   for (const page of pages.slice(0, 2)) {
-    assert.match(page.body.toString("utf8"), /data-lightbox="\/media\/people\//);
-    assert.doesNotMatch(page.body.toString("utf8"), /data-lightbox="\/media\/screenshots\//);
+    const body = page.body.toString("utf8");
+    const supportAt = body.indexOf('aria-label="Supporting media"');
+    assert.ok(supportAt > body.indexOf('class="person-header"'));
+    assert.match(body, /data-lightbox="\/media\/people\//);
+    assert.doesNotMatch(body.slice(0, supportAt), /data-lightbox="\/media\/screenshots\//);
+    assert.match(body.slice(supportAt), /data-lightbox="\/media\/screenshots\//);
   }
   for (const page of pages.slice(2)) {
     assert.match(page.body.toString("utf8"), /data-lightbox="\/media\/screenshots\//);
@@ -359,6 +369,24 @@ test("detail pages include lightbox chrome and keep list thumbs off the screensh
   assert.match(listHtml, /src="\/media\/thumbs\/people\/james-comey\.jpg\?p=7"/);
   assert.doesNotMatch(listHtml, /screenshots\/people/);
   assert.doesNotMatch(listHtml, /class="lightbox-open"/);
+});
+
+test("legacy people.screenshot renders only in the bottom supporting-media block", () => {
+  const shot = "/media/screenshots/people/james-comey.jpg";
+  const html = personDetail(person({ screenshot: shot, screenshot_credit: "X" }));
+  const supportAt = html.indexOf('aria-label="Supporting media"');
+  assert.ok(supportAt > html.indexOf('class="person-header"'));
+  const support = html.slice(supportAt);
+  assert.match(support, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.match(support, /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.match(support, /detail-tile--support/);
+  assert.doesNotMatch(support, /detail-tile--screenshot/);
+  assert.doesNotMatch(html.slice(0, supportAt), /screenshots\/people|detail-tile--support/);
+  assert.equal((html.match(/\/media\/screenshots\/people\/james-comey\.jpg/g) || []).length, 2);
+
+  const dropped = personDetail(person({ screenshot: "https://example.com/not-a-local-shot.jpg" }));
+  assert.doesNotMatch(dropped, /example\.com\/not-a-local-shot/);
+  assert.doesNotMatch(dropped, /aria-label="Supporting media"/);
 });
 
 test("GET /media/screenshots/... serves the new tree the same as other media", async () => {
