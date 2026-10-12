@@ -1283,12 +1283,25 @@ function thumb(src, label, kind = "portrait") {
   return localMediaThumb(src, label, kind);
 }
 
+/** True only for an absolute http or https URL. Other schemes are not links. */
+function isHttpUrl(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return false;
+  try {
+    const parsed = new URL(text);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Shared cite link. One place decides the markup:
- * URL → `<a class="source-link">` whose visible text is that URL
+ * http(s) URL → `<a class="source-link">` whose visible text is that URL
  * (href and title stay the full URL; CSS may truncate the display).
  * Optional muted outlet sits after the anchor so a leading snippet
- * stays flush against the link. No URL → plain text, no anchor.
+ * stays flush against the link. Any other scheme is escaped plain text
+ * with no href. No URL → plain text, no anchor.
  */
 export function citeLink(url, { label = "" } = {}) {
   const href = String(url || "").trim();
@@ -1296,6 +1309,10 @@ export function citeLink(url, { label = "" } = {}) {
   const outletHtml =
     outlet && outlet !== href ? `<span class="cite-outlet">${esc(outlet)}</span>` : "";
   if (!href) return outletHtml;
+  if (!isHttpUrl(href)) {
+    const text = esc(href);
+    return outletHtml ? `${text} ${outletHtml}` : text;
+  }
   const anchor = `<a class="source-link" href="${esc(href)}" title="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(href)}</a>`;
   return outletHtml ? `${anchor} ${outletHtml}` : anchor;
 }
@@ -1319,9 +1336,12 @@ function sourceList(sources) {
 function netWorthCell(row) {
   const value = formatUsd(row.net_worth_usd);
   const note = row.net_worth_note ? esc(row.net_worth_note) : "";
-  const src = row.net_worth_source
-    ? ` <a class="nw-src" href="${esc(row.net_worth_source)}" rel="noopener noreferrer">source</a>`
-    : "";
+  const source = String(row.net_worth_source || "").trim();
+  const src = !source
+    ? ""
+    : isHttpUrl(source)
+      ? ` <a class="nw-src" href="${esc(source)}" rel="noopener noreferrer">source</a>`
+      : ` ${esc(source)}`;
   return `<span class="nw">${esc(value)}</span>${
     note ? `<span class="nw-note">${note}${src}</span>` : src
   }`;
