@@ -249,7 +249,10 @@ test("originText reads null-safe and never yields a 'null' string", () => {
     assert.doesNotMatch(header, />\s*null\s*</i);
     assert.equal(personMissingField({ id: "x", country_of_origin: v, events: [] }, "origin"), true);
   }
-  assert.match(personHeader({ id: "x", name: "X", country_of_origin: "Germany", photo: "" }), /Origin · Germany/);
+  assert.match(
+    personHeader({ id: "x", name: "X", country_of_origin: "Germany", photo: "" }),
+    /class="identity-label">Origin<\/div><div class="identity-value">Germany<\/div>/,
+  );
   // A literal "null" origin is not accepted as a value on insert either.
   assert.throws(
     () => assertNewPersonInsertLock({ ...NEW_PERSON_LOCK, country_of_origin: "null" }),

@@ -27,7 +27,8 @@ import {
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
 import { asEventDate, personEvents } from "./promote.mjs";
-import { isUnofficialOrCommentarySocial } from "./official.mjs";
+import { renderEventGraph } from "./event-graph.mjs";
+import { hostOf, isUnofficialOrCommentarySocial } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import {
   PAGE_SIZE,
@@ -1283,12 +1284,25 @@ function thumb(src, label, kind = "portrait") {
   return localMediaThumb(src, label, kind);
 }
 
+/** True only for an absolute http or https URL. Other schemes are not links. */
+function isHttpUrl(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return false;
+  try {
+    const parsed = new URL(text);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Shared cite link. One place decides the markup:
- * URL → `<a class="source-link">` whose visible text is that URL
+ * http(s) URL → `<a class="source-link">` whose visible text is that URL
  * (href and title stay the full URL; CSS may truncate the display).
  * Optional muted outlet sits after the anchor so a leading snippet
- * stays flush against the link. No URL → plain text, no anchor.
+ * stays flush against the link. Any other scheme is escaped plain text
+ * with no href. No URL → plain text, no anchor.
  */
 export function citeLink(url, { label = "" } = {}) {
   const href = String(url || "").trim();
@@ -1296,6 +1310,10 @@ export function citeLink(url, { label = "" } = {}) {
   const outletHtml =
     outlet && outlet !== href ? `<span class="cite-outlet">${esc(outlet)}</span>` : "";
   if (!href) return outletHtml;
+  if (!isHttpUrl(href)) {
+    const text = esc(href);
+    return outletHtml ? `${text} ${outletHtml}` : text;
+  }
   const anchor = `<a class="source-link" href="${esc(href)}" title="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(href)}</a>`;
   return outletHtml ? `${anchor} ${outletHtml}` : anchor;
 }
@@ -1316,12 +1334,19 @@ function sourceList(sources) {
   return citeList(sources);
 }
 
+function identityFact(label, valueHtml) {
+  return `<div class="identity-fact"><div class="identity-label">${esc(label)}</div><div class="identity-value">${valueHtml}</div></div>`;
+}
+
 function netWorthCell(row) {
   const value = formatUsd(row.net_worth_usd);
   const note = row.net_worth_note ? esc(row.net_worth_note) : "";
-  const src = row.net_worth_source
-    ? ` <a class="nw-src" href="${esc(row.net_worth_source)}" rel="noopener noreferrer">source</a>`
-    : "";
+  const source = String(row.net_worth_source || "").trim();
+  const src = !source
+    ? ""
+    : isHttpUrl(source)
+      ? ` <a class="nw-src" href="${esc(source)}" rel="noopener noreferrer">source</a>`
+      : ` ${esc(source)}`;
   return `<span class="nw">${esc(value)}</span>${
     note ? `<span class="nw-note">${note}${src}</span>` : src
   }`;
@@ -1564,9 +1589,11 @@ function sectionCites(raw) {
   return out;
 }
 
-function sectionCiteList(cites) {
-  return `<ol class="sources cite-list">${cites
-    .map((s) => {
+function sectionCiteList(cites, { anchor = false, start = 1 } = {}) {
+  const from = Number(start) > 0 ? Number(start) : 1;
+  const startAttr = from > 1 ? ` start="${from}"` : "";
+  return `<ol class="sources cite-list"${startAttr}>${cites
+    .map((s, i) => {
       const label = s.source_label || s.title || "";
       const date = s.date
         ? ` <time datetime="${esc(s.date)}">${esc(formatDate(s.date))}</time>`
@@ -1575,11 +1602,39 @@ function sectionCiteList(cites) {
         ? `<blockquote class="event-snippet">${esc(s.snippet)}</blockquote>`
         : "";
       const link = citeLink(s.url, { label });
+      const id = anchor ? ` id="source-${from + i}"` : "";
       // Standing rule (all kinds): each stored quote sits immediately before its own cite.
       // Cites without a snippet render exactly as before: link, then date.
-      return `<li>${snippet}${link}${date}</li>`;
+      return `<li${id}>${snippet}${link}${date}</li>`;
     })
     .join("")}</ol>`;
+}
+
+/** The event note, as one paragraph. */
+function commitProseHtml(text) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  return `<p class="event-oneline">${esc(clean)}</p>`;
+}
+
+/** Date and title on one row. Title HTML is already escaped, plus an optional badge. */
+function eventHeadHtml(titleHtml, date) {
+  const when = String(date || "").trim().slice(0, 10);
+  const time = when
+    ? `<time class="event-date" datetime="${esc(when)}">${esc(formatDate(when))}</time>`
+    : `<span class="event-date">—</span>`;
+  return `<header class="person-event-head">${time}<h3 class="event-h">${titleHtml}</h3></header>`;
+}
+
+/** Position and organization for this event, on one line. */
+function eventOfficeHtml(ev) {
+  const position = standardizePosition(String(ev?.position || "").trim());
+  const organization = String(ev?.organization || "").trim();
+  const bits = [];
+  if (position) bits.push(`Position · ${esc(position)}`);
+  if (organization) bits.push(`Organization · ${esc(organization)}`);
+  if (!bits.length) return "";
+  return `<p class="event-facts">${bits.join(" · ")}</p>`;
 }
 
 /**
@@ -1590,34 +1645,47 @@ function sectionCiteList(cites) {
 export function personEventSection({
   title = "",
   headingHtml = "",
+  headHtml = "",
   kind = "",
   cites = [],
   summary = "",
   mediaHtml = "",
   bodyHtml = "",
+  footHtml = "",
   className = "person-event-section",
   tag = "section",
   personId = "",
 } = {}) {
   const heading = String(headingHtml || "").trim() || (String(title || "").trim() ? esc(String(title).trim()) : "");
-  if (!heading) return "";
+  const head = String(headHtml || "").trim();
+  if (!head && !heading) return "";
   const items = sectionCites(cites);
   const summaryText = String(summary || "").trim();
   const media = String(mediaHtml || "").trim();
   const body = String(bodyHtml || "").trim();
-  if (!items.length && !summaryText && !media && !body) return "";
+  const foot = String(footHtml || "").trim();
+  if (!items.length && !summaryText && !media && !body && !foot) return "";
   const el = tag === "article" ? "article" : "section";
   const summaryHtml = summaryText ? `<p class="event-summary">${esc(summaryText)}</p>` : "";
   const citeHtml = items.length ? sectionCiteList(items) : "";
   const kindAttr = kind ? ` data-kind="${esc(kind)}"` : "";
   const personAttr = personId ? ` data-person-id="${esc(personId)}"` : "";
+  const headBlock = head || `<h3 class="event-h">${heading}</h3>`;
+  // Claim, then the source numbers that belong to it, then this event's media.
   return `<${el} class="${esc(className)}"${kindAttr}${personAttr} data-section="person-event">
-    <h3 class="event-h">${heading}</h3>
+    ${headBlock}
     ${body}
     ${summaryHtml}
-    ${citeHtml}
+    ${foot}
     ${media}
+    ${citeHtml}
   </${el}>`;
+}
+
+/** Full cites, or the numbered source refs when the page has one source list. */
+function eventCiteParts(ev, sourceNumbers) {
+  if (!sourceNumbers) return { cites: eventSectionCites(ev), footHtml: "" };
+  return { cites: [], footHtml: sourceRefHtml(ev?.sources, sourceNumbers) };
 }
 
 function postShotPercent(n) {
@@ -1720,8 +1788,9 @@ function supportingMediaFigure(item, source) {
   const contextHtml = context
     ? `<p class="event-snippet support-context">${esc(context)}</p>`
     : "";
+  const outlet = String(source?.publisher || source?.source_label || "").trim();
   const caption = href
-    ? `${contextHtml}${citeLink(href)}${dateHtml}`
+    ? `${contextHtml}${mediaCaptionLink(href, outlet)}${dateHtml}`
     : `${contextHtml}${esc(credit || alt)}`;
   const shot = String(item.shot || "").trim();
   const videoSrc = /\.mp4$/i.test(item.src);
@@ -1751,7 +1820,7 @@ function supportingMediaFigure(item, source) {
 }
 
 /** Supporting clips after every event section. Notable media stays on the Notable block. */
-function personSupportingMediaHtml(row) {
+function personSupportingMediaHtml(row, seen) {
   const figures = [];
   for (const ev of personEvents(row)) {
     const kind = String(ev?.kind || "").trim();
@@ -1765,6 +1834,19 @@ function personSupportingMediaHtml(row) {
         sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
       figures.push(supportingMediaFigure(item, source));
     }
+  }
+  const shot = normalizeScreenshotHref(row?.screenshot, "people");
+  if (shot && !claimDetailMedia(seen, shot)) {
+    figures.push(
+      supportingMediaFigure(
+        {
+          src: shot,
+          alt: "Screenshot",
+          credit: row.screenshot_credit || "",
+        },
+        null,
+      ),
+    );
   }
   if (!figures.length) return "";
   return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3><div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div></section>`;
@@ -2117,7 +2199,7 @@ function clearanceMetaLine(row) {
   return `<p class="meta-line">${esc(clearanceMetaLabel(items.length))} · ${esc(bits.join("; "))}</p>`;
 }
 
-export function clearanceSections(row) {
+function clearanceSectionList(row) {
   return normalizeClearances(row?.clearances)
     .map((item) => {
       const label = clearanceStatusLabel(item.status);
@@ -2135,7 +2217,11 @@ export function clearanceSections(row) {
         className: "person-event-section clearance-section",
       });
     })
-    .join("");
+    .filter(Boolean);
+}
+
+export function clearanceSections(row) {
+  return clearanceSectionList(row).join("");
 }
 
 export function nicknameSections(row) {
@@ -2158,27 +2244,31 @@ export function personHeader(row, extras = {}) {
     ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
     : "";
   const originValue = originText(row.country_of_origin);
-  const origin = originValue
-    ? `<p class="meta-line">Origin · ${esc(originValue)}</p>`
-    : "";
+  // Null origin stays blank. Never substitute a country.
+  const label = row.name || "";
+  const href = isPeopleMediaHref(row.photo) ? String(row.photo || "").trim() : "";
+  claimDetailMedia(extras.seen, href);
+  const inner = localMediaPortrait(row.photo, label);
+  const framed = href
+    ? lightboxButton(href, inner, { alt: label, credit: creditWithoutUrls(row.photo_credit) })
+    : inner;
+  const facts = [
+    identityFact("Origin", originValue ? esc(originValue) : ""),
+    identityFact("Net worth", netWorthCell(row)),
+    identityFact("Tags", personTagChips(row)),
+  ].join("");
   return `<header class="person-header">
-    ${detailMediaStrip({
-      portraitHtml: localMediaPortrait(row.photo, row.name),
-      portraitSrc: isPeopleMediaHref(row.photo) ? row.photo : "",
-      portraitAlt: row.name,
-      portraitCredit: row.photo_credit,
-      screenshot: row.screenshot,
-      screenshotAlt: `X-post screenshot of ${row.name}`,
-      screenshotCredit: row.screenshot_credit,
-      seen: extras.seen,
-      metaHtml: detailMetaBlock({
-        title: row.name || "—",
-        ratingHtml: `<p class="rating">★ ${netWorthCell(row)} <span class="muted">Net worth (published estimate)</span></p>`,
-        lines: [birth, origin, nicknameMetaLine(row), clearanceMetaLine(row), personTagChips(row), grokipediaBlock(row, extras)],
-        citeHtml: citeFromRow(row),
-        attributionHtml: attributionFrom(row, extras.attributions, "person"),
-      }),
-    })}
+    ${classificationMediaSlot(framed)}
+    <div class="detail-copy">
+      <h2 class="detail-title">${esc(row.name || "—")}</h2>
+      <div class="identity-facts">${facts}</div>
+      ${birth}
+      ${nicknameMetaLine(row)}
+      ${clearanceMetaLine(row)}
+      ${grokipediaBlock(row, extras)}
+      ${attributionFrom(row, extras.attributions, "person")}
+      ${citeFromRow(row)}
+    </div>
   </header>`;
 }
 
@@ -2245,104 +2335,115 @@ function notableMediaFigures(ev) {
  * Bottom Notable block. Same masonry as supporting media, plus factual context and cites.
  * Not the header portrait strip. Empty when the event has no prose, cite, shot, or clip.
  */
-export function notableMediaHtml(row) {
+function notableEventSection(ev, sourceNumbers) {
+  const figures = notableMediaFigures(ev);
+  const masonry = figures.length
+    ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
+    : "";
+  const cites = eventCiteParts(ev, sourceNumbers);
+  return personEventSection({
+    headHtml: eventHeadHtml(esc(notableSectionTitle(ev)), ev.event_date),
+    kind: "notable",
+    bodyHtml: `${commitProseHtml(ev.comments)}${eventOfficeHtml(ev)}`,
+    mediaHtml: masonry,
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    className: "detail-notable detail-supporting",
+    tag: "section",
+  });
+}
+
+export function notableMediaHtml(row, sourceNumbers) {
   return personEvents(row)
     .filter((ev) => String(ev?.kind || "").trim() === "notable")
-    .map((ev) => {
-      const figures = notableMediaFigures(ev);
-      const masonry = figures.length
-        ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
-        : "";
-      return personEventSection({
-        title: notableSectionTitle(ev),
-        kind: "notable",
-        bodyHtml: masonry,
-        summary: String(ev.comments || "").trim(),
-        cites: eventSectionCites(ev),
-        className: "detail-notable detail-supporting",
-        tag: "section",
-      });
-    })
+    .map((ev) => notableEventSection(ev, sourceNumbers))
     .filter(Boolean)
     .join("");
 }
 
 /** Stored endorsement. It does not replace the card category or date. */
-export function endorsementEventHtml(row) {
+function endorsementEventSection(ev, sourceNumbers) {
+  const cites = eventCiteParts(ev, sourceNumbers);
+  return personEventSection({
+    headHtml: eventHeadHtml("Endorsement", ev.event_date),
+    kind: "endorsement",
+    bodyHtml: `${commitProseHtml(ev.comments)}${eventOfficeHtml(ev)}`,
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    className: "detail-endorsement detail-supporting",
+    tag: "section",
+  });
+}
+
+export function endorsementEventHtml(row, sourceNumbers) {
   return personEvents(row)
     .filter((ev) => String(ev?.kind || "").trim() === "endorsement")
-    .map((ev) =>
-      personEventSection({
-        title: "Endorsement",
-        kind: "endorsement",
-        summary: String(ev.comments || "").trim(),
-        cites: eventSectionCites(ev),
-        className: "detail-endorsement detail-supporting",
-        tag: "section",
-      }),
-    )
+    .map((ev) => endorsementEventSection(ev, sourceNumbers))
     .filter(Boolean)
     .join("");
 }
 
 /** Recorded yea on the motion to refer H. Res. 1100. It does not replace the card category or date. */
-export function harassmentRecordsEventHtml(row) {
+function harassmentEventSection(ev, sourceNumbers) {
+  const cites = eventCiteParts(ev, sourceNumbers);
+  return personEventSection({
+    headHtml: eventHeadHtml("H. Res. 1100", ev?.event_date),
+    kind: "harassment_records",
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    bodyHtml: `${commitProseHtml(ev?.comments)}${eventOfficeHtml(ev)}`,
+    className: "detail-house-vote detail-supporting",
+    tag: "section",
+  });
+}
+
+export function harassmentRecordsEventHtml(row, sourceNumbers) {
   return personEvents(row)
     .filter((ev) => String(ev?.kind || "").trim() === "harassment_records")
-    .map((ev) => {
-      const eventDate = String(ev?.event_date || "").trim();
-      const eventLine = eventDate
-        ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
-        : "";
-      const position = standardizePosition(String(ev?.position || "").trim());
-      const organization = String(ev?.organization || "").trim();
-      const bodyHtml = [
-        eventLine,
-        position ? `<p class="meta-line">Position · ${esc(position)}</p>` : "",
-        organization ? `<p class="meta-line">Organization · ${esc(organization)}</p>` : "",
-      ].join("");
-      return personEventSection({
-        title: "H. Res. 1100",
-        kind: "harassment_records",
-        summary: String(ev?.comments || "").trim(),
-        cites: eventSectionCites(ev),
-        bodyHtml,
-        className: "detail-house-vote detail-supporting",
-        tag: "section",
-      });
-    })
+    .map((ev) => harassmentEventSection(ev, sourceNumbers))
     .filter(Boolean)
     .join("");
 }
 
 /** Recorded yea on H.R. 8035. It does not replace the card category or date. */
-export function ukraineAidFlagsEventHtml(row) {
+function ukraineEventSection(ev, sourceNumbers) {
+  const cites = eventCiteParts(ev, sourceNumbers);
+  return personEventSection({
+    headHtml: eventHeadHtml("H.R. 8035", ev?.event_date),
+    kind: "ukraine_aid_flags",
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    bodyHtml: `${commitProseHtml(ev?.comments)}${eventOfficeHtml(ev)}`,
+    className: "detail-ukraine-aid detail-supporting",
+    tag: "section",
+  });
+}
+
+export function ukraineAidFlagsEventHtml(row, sourceNumbers) {
   return personEvents(row)
     .filter((ev) => String(ev?.kind || "").trim() === "ukraine_aid_flags")
-    .map((ev) => {
-      const eventDate = String(ev?.event_date || "").trim();
-      const eventLine = eventDate
-        ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
-        : "";
-      const position = standardizePosition(String(ev?.position || "").trim());
-      const organization = String(ev?.organization || "").trim();
-      const bodyHtml = [
-        eventLine,
-        position ? `<p class="meta-line">Position · ${esc(position)}</p>` : "",
-        organization ? `<p class="meta-line">Organization · ${esc(organization)}</p>` : "",
-      ].join("");
-      return personEventSection({
-        title: "H.R. 8035",
-        kind: "ukraine_aid_flags",
-        summary: String(ev?.comments || "").trim(),
-        cites: eventSectionCites(ev),
-        bodyHtml,
-        className: "detail-ukraine-aid detail-supporting",
-        tag: "section",
-      });
-    })
+    .map((ev) => ukraineEventSection(ev, sourceNumbers))
     .filter(Boolean)
     .join("");
+}
+
+/** Vote, endorsement, and notable cards in date order, oldest first. */
+function specialEventNodes(row, sourceNumbers) {
+  const render = {
+    endorsement: endorsementEventSection,
+    harassment_records: harassmentEventSection,
+    ukraine_aid_flags: ukraineEventSection,
+    notable: notableEventSection,
+  };
+  return personEvents(row)
+    .filter((ev) => render[String(ev?.kind || "").trim()])
+    .sort(compareTimelineEvents)
+    .map((ev) => {
+      const kind = String(ev.kind).trim();
+      const html = render[kind](ev, sourceNumbers);
+      return html ? { kind, html } : null;
+    })
+    .filter(Boolean);
 }
 
 /** Shot comm on a person card. Summary and cites stay here; the clip is not a generic supporting tile. */
@@ -2368,15 +2469,58 @@ export function shotEventHtml(row) {
     .join("");
 }
 
-export function eventTagRow(ev, { birthDate } = {}) {
+/** Outlet name on a clip. The full URL stays in the Sources list. */
+function mediaCaptionLink(url, label) {
+  const href = String(url || "").trim();
+  if (!isHttpUrl(href)) return esc(label || href);
+  let text = String(label || "").trim();
+  if (!text || text === href) text = hostOf(href) || href;
+  return `<a class="source-link" href="${esc(href)}" title="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`;
+}
+
+/** In-page pointers at the numbered Sources list. The full URL stays there once. */
+function sourceRefHtml(sources, sourceNumbers) {
+  if (!sourceNumbers) return "";
+  const refs = [];
+  const seen = new Set();
+  for (const source of sources || []) {
+    const url = String(source?.url || "").trim();
+    if (!url) continue;
+    const key = canonicalPublicUrl(url) || url;
+    const n = sourceNumbers.get(key);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    refs.push(`<a class="source-ref" href="#source-${n}">[${n}]</a>`);
+  }
+  if (!refs.length) return "";
+  return `<p class="event-source-refs"><span class="event-sources-label">Sources</span> ${refs.join(" ")}</p>`;
+}
+
+function eventSummaryLine(ev) {
+  const comments = String(ev?.comments || "").trim();
+  if (comments) return comments;
+  const position = standardizePosition(String(ev?.position || "").trim());
+  if (position) return position;
+  const organization = String(ev?.organization || "").trim();
+  if (organization) return organization;
+  return "—";
+}
+
+export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const kind = String(ev?.kind || "").trim();
-  if (!kind || kind === "notable" || !isDisplayedEventKind(kind)) return "";
+  if (!isPersonTimelineKind(kind)) return "";
   const label =
-    kind === "corona_comms"
-      ? categoryById(kind)?.nav || "Corona"
-      : kind === "boot_comms"
-        ? categoryById(kind)?.nav || "Boot"
-        : eventKindTitle(kind);
+    kind === "nickname"
+      ? isTrumpNickname(ev)
+        ? "Trump nickname"
+        : "Nickname"
+      : kind === "shot"
+        ? "Shot"
+        : kind === "corona_comms"
+          ? categoryById(kind)?.nav || "Corona"
+          : kind === "boot_comms"
+            ? categoryById(kind)?.nav || "Boot"
+            : eventKindTitle(kind);
   const eventDate = String(ev.event_date || "").trim();
   const announcedRaw = String(ev.announced_date || "").trim();
   const announced =
@@ -2393,9 +2537,17 @@ export function eventTagRow(ev, { birthDate } = {}) {
     groupSize > 1
       ? `<p class="meta-line">Group size · ${esc(String(groupSize))}</p>`
       : "";
+  const summaryLine = eventSummaryLine(ev);
+  const shownAsSummary = new Set();
+  if (sourceNumbers) {
+    if (String(ev?.comments || "").trim()) shownAsSummary.add("comments");
+    else if (standardizePosition(String(ev?.position || "").trim())) shownAsSummary.add("position");
+    else if (String(ev?.organization || "").trim()) shownAsSummary.add("organization");
+  }
   const attrs = EVENT_ATTR_FIELDS.map((field) => {
     let value = String(ev[field] || "").trim();
-    if (!value) return "";
+    if (!value || shownAsSummary.has(field)) return "";
+    if (kind === "nickname" && field === "comments") return "";
     if (field === "status") value = coronaStatusLabel(value) || value;
     if (field === "position") value = standardizePosition(value);
     const name =
@@ -2408,15 +2560,21 @@ export function eventTagRow(ev, { birthDate } = {}) {
     isIndictmentKeepKind(kind) && ev.unsealed === true
       ? ` <span class="keychip event-badge" data-unsealed="true">Unsealed</span>`
       : "";
-  const eventLine = eventDate
-    ? `<p class="meta-line event-line"><time datetime="${esc(eventDate)}">${esc(formatDate(eventDate))}</time></p>`
-    : `<p class="meta-line event-line">—</p>`;
+  const prose = commitProseHtml(summaryLine || "—");
+  const facts = `${announced}${ageLine}${groupLine}${attrs}`;
+  const factsHtml = facts ? `<div class="event-facts">${facts}</div>` : "";
+  const refs = sourceRefHtml(ev?.sources, sourceNumbers);
+  const figures = kind === "shot" ? notableMediaFigures(ev) : [];
+  const mediaHtml = figures.length
+    ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
+    : "";
   return personEventSection({
-    headingHtml: `${esc(label)}${unsealedBadge}`,
+    headHtml: eventHeadHtml(`${esc(label)}${unsealedBadge}`, eventDate),
     kind,
-    cites: eventSectionCites(ev),
-    bodyHtml: `${eventLine}${announced}${ageLine}${groupLine}${attrs}`,
-    className: "event-tag-row",
+    cites: sourceNumbers ? [] : eventSectionCites(ev),
+    bodyHtml: `${prose}${factsHtml}${refs}`,
+    mediaHtml,
+    className: kind === "shot" ? "event-tag-row detail-shot" : "event-tag-row",
     tag: "article",
   });
 }
@@ -2469,23 +2627,199 @@ export function epsteinFlightLogSection(legs = [], { note: lead = "" } = {}) {
 }
 
 
-function eventTimeline(row, clips = [], epsteinLegs = [], seen) {
-  const events = personEvents(row).filter((ev) => {
-    const kind = String(ev.kind || "").trim();
-    return kind !== "notable" && isDisplayedEventKind(kind);
+function compareTimelineEvents(a, b) {
+  const da = asEventDate(a?.event_date) || "";
+  const db = asEventDate(b?.event_date) || "";
+  if (da !== db) {
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.localeCompare(db);
+  }
+  return String(a?.kind || "").localeCompare(String(b?.kind || ""));
+}
+
+/** Event date ascending. Undated events stay last. Kind is the tie-break. */
+function datedPersonEvents(row) {
+  return personEvents(row).slice().sort(compareTimelineEvents);
+}
+
+function earliestSourceDate(sources) {
+  let date = "";
+  for (const source of sources || []) {
+    const next = asEventDate(source?.date) || "";
+    if (next && (!date || next < date)) date = next;
+  }
+  return date;
+}
+
+/** Nicknames are timeline rows. The date is the earliest cite day, or blank. */
+function nicknameTimelineEvents(row) {
+  return normalizeNicknames(row?.nicknames).map((item) => ({
+    kind: "nickname",
+    by: item.by,
+    event_date: earliestSourceDate(item.sources),
+    comments: item.name,
+    sources: item.sources || [],
+  }));
+}
+
+/** Rows on the person timeline. Notable stays at the bottom. dog_comms stays a tag, not a row. */
+function isPersonTimelineKind(kind) {
+  if (!kind || kind === "notable" || kind === "dog_comms") return false;
+  if (kind === "shot" || kind === "nickname") return true;
+  return isDisplayedEventKind(kind);
+}
+
+/** Dated and undated events, plus nickname rows, in one order. Nothing dated is dropped. */
+function personTimelineEvents(row) {
+  const events = personEvents(row).filter((ev) => isPersonTimelineKind(String(ev?.kind || "").trim()));
+  return events.concat(nicknameTimelineEvents(row)).sort(compareTimelineEvents);
+}
+
+function pushPersonSource(items, seen, source) {
+  const url = String(typeof source === "string" ? source : source?.url || "").trim();
+  if (!url) return;
+  const key = canonicalPublicUrl(url) || url;
+  if (seen.has(key)) return;
+  seen.add(key);
+  if (typeof source === "string") {
+    items.push({ url });
+    return;
+  }
+  const snippet = isUnofficialOrCommentarySocial(url)
+    ? ""
+    : String(source.snippet || source.quote || "").trim();
+  items.push({
+    url,
+    publisher: source.publisher || source.source_label || "",
+    title: source.title || "",
+    date: source.date || "",
+    snippet,
   });
-  const rows = events
-    .map((ev) => eventTagRow(ev, { birthDate: row.birth_date }))
-    .filter(Boolean)
-    .join("");
-  const nicknames = nicknameSections(row);
-  const clearances = clearanceSections(row);
+}
+
+/** Title fills an empty stored quote the same way an event row used to. */
+function eventSourceForList(source) {
+  if (!source || typeof source !== "object") return source;
+  const snippet = isUnofficialOrCommentarySocial(source.url)
+    ? ""
+    : String(source.snippet || source.quote || source.title || "").trim();
+  return { ...source, snippet };
+}
+
+/** Label for the source group that belongs to one stored event. */
+function eventSourceLabel(ev) {
+  const kind = String(ev?.kind || "").trim();
+  const date = String(ev?.event_date || "").trim().slice(0, 10);
+  let title = eventKindTitle(kind);
+  if (kind === "notable") title = notableSectionTitle(ev);
+  else if (kind === "harassment_records") title = "H. Res. 1100";
+  else if (kind === "ukraine_aid_flags") title = "H.R. 8035";
+  else if (kind === "endorsement") title = "Endorsement";
+  else if (kind === "shot") title = "Shot";
+  else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
+  const when = date ? formatDate(date) : "";
+  return when ? `${when} · ${title}` : title;
+}
+
+/** Every cite on the card, once, grouped by the event that owns it. */
+function personSourceItems(row, { events = [], centralCastingClips = [], cite } = {}) {
+  const items = [];
+  const groups = [];
+  const seen = new Set();
+  const push = (source, label) => {
+    const before = items.length;
+    pushPersonSource(items, seen, source);
+    if (items.length === before) return;
+    let group = groups[groups.length - 1];
+    if (!group || group.label !== label) {
+      group = { label, items: [] };
+      groups.push(group);
+    }
+    group.items.push(items[items.length - 1]);
+  };
+  for (const item of normalizeNicknames(row?.nicknames)) {
+    const label = isTrumpNickname(item) ? "Trump nickname" : "Nickname";
+    for (const source of item.sources || []) push(source, label);
+  }
+  for (const item of normalizeClearances(row?.clearances)) {
+    for (const source of item.sources || []) push(source, "Security clearance");
+  }
+  for (const ev of events) {
+    const label = eventSourceLabel(ev);
+    for (const source of ev?.sources || []) push(eventSourceForList(source), label);
+  }
+  for (const url of row?.central_casting || []) push(url, "Central casting");
+  for (const clip of centralCastingClipsFor(row, centralCastingClips)) {
+    if (clip?.source_url) {
+      push({
+        url: clip.source_url,
+        publisher: String(clip.account_name || clip.handle || "").trim(),
+        date: clip.posted_at || "",
+      }, "Central casting");
+    }
+    for (const entry of kindSupportingEntries(clip)) {
+      push({
+        url: entry.source_url,
+        publisher: String(entry.account_name || entry.handle || "").trim(),
+        date: entry.posted_at || "",
+      }, "Central casting");
+    }
+  }
+  if (cite?.url) push(cite, "Grokipedia");
+  if (row?.net_worth_source) push({ url: row.net_worth_source }, "Net worth");
+  return { items, groups };
+}
+
+function sourceNumberMap(items) {
+  const map = new Map();
+  items.forEach((item, i) => {
+    const url = String(item?.url || "").trim();
+    const key = canonicalPublicUrl(url) || url;
+    if (key && !map.has(key)) map.set(key, i + 1);
+  });
+  return map;
+}
+
+function personSourcesHtml(groups) {
+  const list = Array.isArray(groups) ? groups.filter((group) => group?.items?.length) : [];
+  if (!list.length) return "";
+  let n = 1;
+  const blocks = list.map((group) => {
+    const cites = group.items.map((s) => ({
+      url: s.url,
+      snippet: s.snippet || "",
+      source_label: s.publisher || "",
+      title: s.title || "",
+      date: s.date || "",
+    }));
+    const html = sectionCiteList(cites, { anchor: true, start: n });
+    n += cites.length;
+    const label = String(group.label || "").trim();
+    const head = label ? `<h4 class="source-group-h">${esc(label)}</h4>` : "";
+    return `<section class="source-group">${head}${html}</section>`;
+  }).join("");
+  return `<section class="person-sources" aria-label="Sources"><h3 class="event-h">Sources</h3>${blocks}</section>`;
+}
+
+function eventTimeline(row, events, clips = [], epsteinLegs = [], seen, sourceNumbers) {
+  const nodes = clearanceSectionList(row).map((html) => ({ kind: "clearance", html }));
+  for (const ev of events || []) {
+    const kind = String(ev.kind || "").trim();
+    if (!isPersonTimelineKind(kind)) continue;
+    const html = eventTagRow(ev, { birthDate: row.birth_date, sourceNumbers });
+    if (html) nodes.push({ kind, html });
+  }
   const centralCasting = centralCastingDetailHtml(row, clips, seen);
+  if (centralCasting) nodes.push({ kind: "central_casting", html: centralCasting });
   const flightNote =
     row.category === EPSTEIN_CLIENTS_CATEGORY ? String(row.summary || "").trim() : "";
   const epstein = epsteinFlightLogSection(epsteinLegs, { note: flightNote });
-  if (!rows && !nicknames && !clearances && !centralCasting && !epstein) return "";
-  return `<section class="event-timeline" aria-label="Event timeline">${nicknames}${clearances}${rows}${centralCasting}${epstein}</section>`;
+  if (epstein) nodes.push({ kind: "epstein_flight_log", html: epstein });
+  nodes.push(...specialEventNodes(row, sourceNumbers));
+  const graph = renderEventGraph(nodes);
+  if (!graph) return "";
+  return `<section class="event-timeline" aria-label="Event timeline">${graph}</section>`;
 }
 
 function personTagChips(row) {
@@ -2514,11 +2848,15 @@ function personTagChips(row) {
 export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   const seen = detailMediaSeen();
+  const events = datedPersonEvents(filled);
+  const timeline = personTimelineEvents(filled);
+  const sourceBundle = personSourceItems(filled, { events, centralCastingClips, cite });
+  const sourceNumbers = sourceNumberMap(sourceBundle.items);
   return `<article class="detail person-detail">
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, centralCastingClips, epsteinLegs, seen)}${shotEventHtml(filled)}${endorsementEventHtml(filled)}${harassmentRecordsEventHtml(filled)}${ukraineAidFlagsEventHtml(filled)}${notableMediaHtml(filled)}${personSupportingMediaHtml(filled)}`,
+      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, timeline, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${personSourcesHtml(sourceBundle.groups)}${personSupportingMediaHtml(filled, seen)}`,
       active: true,
       extraClass: "person-pane",
     })}

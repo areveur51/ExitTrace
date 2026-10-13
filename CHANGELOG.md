@@ -9,6 +9,15 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+## [1.2.24] - 2026-10-13
+
+### Changed
+
+- A person card opens with the name, a rectangular portrait, and origin, net worth, and tags. A blank origin stays blank. A missing net worth is an em dash (—). On a narrow screen the portrait stacks above the name.
+- Events on a person card are commits on one gold line, oldest first. The date is on the left and the event name is a gold tag on the right. The note sits underneath at the width of the row. Age, position, and organization sit under a gold line. Nicknames, Shot, and undated events are on that line. Notable events, endorsements, harassment records, and Ukraine aid follow the other events.
+- Each event points at its source numbers. The full link appears once, in Sources. A stored person screenshot stays in supporting media.
+- A cite or net-worth source is a link only when its scheme is http or https.
+
 ## [1.2.23] - 2026-10-11
 
 ### Added

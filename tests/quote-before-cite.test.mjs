@@ -22,7 +22,7 @@ test("resignation cite with a snippet renders the quote immediately before its l
   const esc = NEWS.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   assert.match(
     html,
-    new RegExp(`<li><blockquote class="event-snippet">He was an innocent man</blockquote><a class="source-link" href="${esc}"`),
+    new RegExp(`<li id="source-1"><blockquote class="event-snippet">He was an innocent man</blockquote><a class="source-link" href="${esc}"`),
   );
   assert.doesNotMatch(html, new RegExp(`<a class="source-link" href="${esc}"[^<]*</a>[^<]*(<span[^>]*>[^<]*</span>)?\\s*(<time[^>]*>[^<]*</time>)?<blockquote`));
 });
@@ -32,7 +32,7 @@ test("resignation cite without a snippet renders unchanged: link then date, no b
   const esc = PLAIN.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   assert.match(
     html,
-    new RegExp(`<li><a class="source-link" href="${esc}" title="${esc}" target="_blank" rel="noopener noreferrer">${esc}</a> <time datetime="2017-02-13">Feb 13, 2017</time></li>`),
+    new RegExp(`<li id="source-1"><a class="source-link" href="${esc}" title="${esc}" target="_blank" rel="noopener noreferrer">${esc}</a> <time datetime="2017-02-13">Feb 13, 2017</time></li>`),
   );
   assert.doesNotMatch(html, /event-snippet/);
 });

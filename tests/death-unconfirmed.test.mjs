@@ -321,7 +321,7 @@ test("one person card holds the firing and the unconfirmed claim", () => {
   assert.match(html, /data-kind="firings"/);
   assert.match(html, /data-kind="death_unconfirmed"/);
   assert.match(html, />Death\*</);
-  assert.match(html, /Footnote/);
+  assert.match(html, /class="event-oneline">Trump Truth Social claim; no media confirmation yet\./);
   assert.match(html, /Trump Truth Social claim; no media confirmation yet\./);
   assert.match(html, /truthsocial\.com/);
   assert.doesNotMatch(html, /data-kind="death_celebrity"/);
@@ -428,7 +428,7 @@ test("confirmed death counts and /deaths exclude death_unconfirmed", async () =>
   const detail = await requestPage("/people/claim-only");
   assert.equal(detail.status, 200);
   assert.match(detail.body, />Death\*</);
-  assert.match(detail.body, /Footnote/);
+  assert.match(detail.body, /class="event-oneline">Trump Truth Social claim; no media confirmation yet\./);
   assert.match(detail.body, /Trump Truth Social claim; no media confirmation yet\./);
   assert.match(detail.body, new RegExp(CLAIM_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(detail.body, /href="\/deaths\/unconfirmed"/);
