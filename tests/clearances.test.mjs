@@ -170,7 +170,7 @@ test("clearance update leaves the exit card alone and creates a card when the pe
   assert.equal(created.person.events[0].sources.length, 0);
   const detail = personDetail(created.person);
   assert.match(detail, /Security clearance · Revoked · Jan 20, 2025/);
-  assert.equal(detail.match(/data-kind="clearance"/g).length, 1);
+  assert.equal((detail.match(/clearance-section/g) || []).length, 1);
   assert.match(personDetail(created.person), /data-kind="clearance"/);
   assert.doesNotMatch(personDetail(created.person), /lied/);
 });

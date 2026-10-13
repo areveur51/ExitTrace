@@ -8,6 +8,7 @@ import {
   kindSourceHtml,
   operationDetail,
   personEventSection,
+  personHeader,
 } from "../app/lib/html.mjs";
 
 const URL = "https://www.washingtonpost.com/politics/example";
@@ -34,6 +35,74 @@ test("cite link text is the full URL when a URL is present", () => {
   const same = citeLink(URL, { label: URL });
   assert.equal(anchorText(same), URL);
   assert.doesNotMatch(same, /cite-outlet/);
+});
+
+test("cite link allows only http and https schemes", () => {
+  const https = citeLink("https://example.com/story", { label: "Desk" });
+  assert.match(
+    https,
+    /^<a class="source-link" href="https:\/\/example\.com\/story" title="https:\/\/example\.com\/story" target="_blank" rel="noopener noreferrer">https:\/\/example\.com\/story<\/a> <span class="cite-outlet">Desk<\/span>$/,
+  );
+  const http = citeLink("http://example.com/story");
+  assert.equal(
+    http,
+    `<a class="source-link" href="http://example.com/story" title="http://example.com/story" target="_blank" rel="noopener noreferrer">http://example.com/story</a>`,
+  );
+
+  const script = "javascript:alert(1)";
+  const js = citeLink(script, { label: "Desk" });
+  assert.equal(js, `${script} <span class="cite-outlet">Desk</span>`);
+  assert.doesNotMatch(js, /<a\b|href=/);
+
+  const data = `data:text/html,<script>alert("x")</script>`;
+  const dataHtml = citeLink(data);
+  assert.equal(dataHtml, "data:text/html,&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
+  assert.doesNotMatch(dataHtml, /<a\b|href=|<script/);
+
+  const mixed = citeLink("JavaScript:alert(1)");
+  assert.equal(mixed, "JavaScript:alert(1)");
+  assert.doesNotMatch(mixed, /<a\b|href=/);
+});
+
+test("net-worth source link allows only http and https schemes", () => {
+  const ok = personHeader({
+    name: "Casey Vale",
+    photo: "",
+    net_worth_usd: 100,
+    net_worth_note: "Forbes estimate.",
+    net_worth_source: "https://www.forbes.com/profile/casey-vale/",
+  });
+  assert.match(
+    ok,
+    /<a class="nw-src" href="https:\/\/www\.forbes\.com\/profile\/casey-vale\/" rel="noopener noreferrer">source<\/a>/,
+  );
+
+  const http = personHeader({
+    name: "Casey Vale",
+    photo: "",
+    net_worth_source: "http://www.forbes.com/profile/casey-vale/",
+  });
+  assert.match(
+    http,
+    /<a class="nw-src" href="http:\/\/www\.forbes\.com\/profile\/casey-vale\/" rel="noopener noreferrer">source<\/a>/,
+  );
+
+  const js = personHeader({
+    name: "Casey Vale",
+    photo: "",
+    net_worth_note: "Stored note.",
+    net_worth_source: "javascript:alert(1)",
+  });
+  assert.match(js, /Stored note\. javascript:alert\(1\)/);
+  assert.doesNotMatch(js, /<a class="nw-src"|href="javascript:|href=/);
+
+  const data = personHeader({
+    name: "Casey Vale",
+    photo: "",
+    net_worth_source: `data:text/html,<script>alert("x")</script>`,
+  });
+  assert.match(data, /data:text\/html,&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
+  assert.doesNotMatch(data, /<a class="nw-src"|href=|<script/);
 });
 
 test("cite link with no URL is plain text and not an anchor", () => {

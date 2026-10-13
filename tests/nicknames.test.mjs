@@ -298,8 +298,11 @@ test("an existing card keeps its cites when a list-exception nickname is added",
   assert.equal(slow.list_exception, true);
   const html = personDetail(updated.person);
   assert.match(html, /Trump nicknames · Sleepy Joe, Slow Joe/);
-  const slowStart = html.indexOf(">Slow Joe<");
-  const slowSection = html.slice(slowStart, html.indexOf('data-kind="government_stepdowns"'));
-  assert.match(slowSection, /wikipedia.org\/wiki\/List_of_nicknames_used_by_Donald_Trump/);
-  assert.doesNotMatch(slowSection, /event-snippet/);
+  const rows = html.match(/<article class="[^"]*\bevent-tag-row\b[^"]*"[\s\S]*?<\/article>/g) || [];
+  const slowRow = rows.find((row) => row.includes("Slow Joe"));
+  assert.ok(slowRow);
+  assert.match(slowRow, /Trump nickname/);
+  assert.match(slowRow, /class="event-date">—</);
+  assert.doesNotMatch(slowRow, /event-snippet/);
+  assert.match(html, /wikipedia.org\/wiki\/List_of_nicknames_used_by_Donald_Trump/);
 });

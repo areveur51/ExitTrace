@@ -453,9 +453,58 @@ body.tui-home .home-stage {
 }
 .person-header {
   display: flex;
-  gap: 1rem;
+  gap: 1.15rem;
   align-items: flex-start;
 }
+.person-detail .person-header,
+.person-detail .event-tag-row,
+.person-detail .detail-supporting,
+.person-detail .career-history,
+.person-detail .person-sources {
+  padding: 0.95rem 1.05rem;
+  background: rgba(10, 16, 24, 0.78);
+  border: 1px solid rgba(255, 176, 0, 0.62);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.person-header .detail-title {
+  font-size: clamp(1.55rem, 4vw, 2.15rem);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+}
+.identity-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem 1.1rem;
+  margin: 0.9rem 0 0.45rem;
+}
+.identity-fact { min-width: 0; }
+.identity-facts .identity-fact:last-child { grid-column: 1 / -1; }
+.person-header .identity-value,
+.person-header .person-tags,
+.person-header .keychip {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.person-header .keychip { white-space: nowrap; }
+.identity-label {
+  margin: 0 0 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.identity-value {
+  min-height: 1.35rem;
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+.identity-value .person-tags { margin: 0; }
+.identity-value .person-tags-label { display: none; }
 .detail-media {
   display: flex;
   gap: 0.75rem;
@@ -588,6 +637,35 @@ body.tui-home .home-stage {
   object-fit: cover;
   object-position: center 18%;
 }
+/* Detail portrait is the 192×250 frame, not a square crop. */
+.person-header > .row-media {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  width: min(192px, 46vw);
+  max-width: 192px;
+  height: auto;
+  aspect-ratio: 192 / 250;
+  overflow: hidden;
+  line-height: 0;
+  border-radius: 14px;
+}
+.person-header > .row-media .lightbox-open,
+.person-header > .row-media picture.detail-portrait,
+.person-header > .row-media .detail-photo.portrait,
+.person-header > .row-media .initials.detail-photo {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  aspect-ratio: 192 / 250;
+  object-fit: cover;
+  object-position: center 18%;
+}
+.person-header > .row-media .lightbox-open,
+.person-header > .row-media picture.detail-portrait {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
 .person-header .initials.detail-photo,
 .meta-pane .initials.detail-photo.portrait {
   font-size: 2.4rem;
@@ -596,7 +674,46 @@ body.tui-home .home-stage {
   margin: 0.85rem 0 0;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.35rem;
+}
+.person-detail .event-timeline { gap: 0.65rem; }
+
+/* Git-graph rail. The cap holds the commit dots at a fixed size.
+   The stem is the only piece that stretches with the card. */
+.event-graph {
+  --graph-gap: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--graph-gap);
+  color: var(--amber);
+}
+.event-graph-row {
+  display: grid;
+  grid-template-columns: var(--graph-w) minmax(0, 1fr);
+  column-gap: 0.75rem;
+  align-items: stretch;
+  min-width: 0;
+}
+.event-graph-rail {
+  position: relative;
+  width: var(--graph-w);
+  min-height: 40px;
+}
+.graph-cap {
+  display: block;
+  width: var(--graph-w);
+  height: 40px;
+}
+.event-graph-row:not(:last-child) .graph-stem {
+  position: absolute;
+  left: 0;
+  top: 40px;
+  width: var(--graph-w);
+  height: calc(100% - 40px + var(--graph-gap));
+  display: block;
+}
+.event-graph-card {
+  min-width: 0;
 }
 
 /* Prose / Notable card text: wrap long unbroken URLs so they cannot blow the frost shell. */
@@ -622,6 +739,206 @@ body.tui-home .home-stage {
 }
 .event-tag-row .cite-list,
 .person-event-section .cite-list { margin-top: 0.35rem; }
+.person-detail .meta-pane--stack { gap: 0.75rem; }
+.person-detail .event-timeline,
+.person-detail .detail-supporting,
+.person-detail .career-history,
+.person-detail .person-sources {
+  margin: 0;
+  border-top: 0;
+}
+.person-detail .event-tag-row,
+.person-detail .detail-supporting {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+/* Commit row. The date and gold tag share the line the dot sits on.
+   The note is the body. Facts and sources sit under a hairline. */
+.person-detail .event-graph-card > .event-tag-row,
+.person-detail .event-graph-card > .person-event-section,
+.person-detail .event-graph-card > .detail-supporting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 0.35rem;
+  align-items: start;
+  margin: 0;
+  padding: 0 0.1rem 0.45rem;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.event-graph-row:hover .event-graph-card > .event-tag-row,
+.event-graph-row:hover .event-graph-card > .person-event-section,
+.event-graph-row:hover .event-graph-card > .detail-supporting {
+  background: rgba(255, 176, 0, 0.045);
+}
+.person-detail .event-graph-card .person-event-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  grid-row: 1;
+  min-height: 28px;
+}
+.person-detail .event-graph-card > .event-tag-row > *,
+.person-detail .event-graph-card > .person-event-section > *,
+.person-detail .event-graph-card > .detail-supporting > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.person-detail .event-graph-card > .event-tag-row > .event-oneline,
+.person-detail .event-graph-card > .detail-supporting > .event-oneline,
+.person-detail .event-graph-card > .person-event-section > .event-oneline {
+  grid-row: 2;
+  max-width: none;
+  margin: 0.12rem 0 0.05rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.person-detail .event-graph-card .person-event-head .event-h {
+  margin: 0 0 0 auto;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 0.16rem 0.6rem;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+}
+.person-detail .event-graph-card .person-event-head .event-date {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+.person-detail .event-graph-card .event-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0;
+  margin: 0.2rem 0 0;
+  padding-top: 0.45rem;
+  border-top: 1px solid color-mix(in srgb, var(--amber) 32%, transparent);
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.person-detail .event-graph-card .event-facts .meta-line {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.person-detail .event-graph-card .event-facts .meta-line:not(:last-child)::after {
+  content: "·";
+  margin: 0 0.5rem;
+  color: var(--amber);
+}
+.person-detail .event-graph-card .event-source-refs,
+.person-detail .event-graph-card .cite-list {
+  margin: 0;
+}
+.person-detail .event-graph-card .event-oneline + .event-source-refs,
+.person-detail .event-graph-card .event-oneline + .cite-list {
+  margin-top: 0.2rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid color-mix(in srgb, var(--amber) 32%, transparent);
+}
+.person-detail .person-event-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+}
+.person-detail .person-event-head .event-h,
+.person-detail .event-tag-row .event-h {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.18rem 0.62rem;
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  color: var(--amber);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: normal;
+}
+.person-detail .event-date {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--cyan);
+  white-space: nowrap;
+}
+.person-detail .event-oneline,
+.person-detail .event-summary {
+  margin: 0;
+  min-width: 0;
+  overflow: visible;
+  white-space: normal;
+  line-height: 1.45;
+}
+.person-detail .event-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.85rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.person-detail .event-facts .meta-line,
+.person-detail .event-row .meta-line {
+  margin: 0;
+  font-size: 0.8rem;
+}
+.person-detail .event-source-refs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.45rem;
+  margin: 0;
+  font-size: 0.86rem;
+}
+.person-detail .event-sources-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.person-detail .source-ref {
+  color: var(--cyan);
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.person-detail .source-link { overflow-wrap: anywhere; }
+.source-group { margin: 0 0 0.85rem; }
+.source-group:last-child { margin-bottom: 0; }
+.source-group-h {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
 .event-snippet {
   margin: 0.25rem 0 0.45rem;
   white-space: pre-wrap;
@@ -632,13 +949,23 @@ body.tui-home .home-stage {
 .event-media { margin: 0.35rem 0 0; }
 .event-media img { display: block; width: min(100%, 320px); height: auto; }
 .detail-supporting,
-.detail-linked-people {
+.detail-linked-people,
+.person-sources {
   margin: 0.85rem 0 0;
   padding: 0.55rem 0 0;
   border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
 }
 .detail-supporting .event-h,
-.detail-linked-people .event-h { margin: 0 0 0.55rem; }
+.detail-linked-people .event-h,
+.person-sources .event-h { margin: 0 0 0.55rem; }
+.person-sources .event-h {
+  margin: 0 0 0.7rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.person-sources .cite-list > li { margin: 0 0 0.55rem; }
 /* Bottom supporting strip: one minimum width, height from the file. No square crop. */
 .detail-support-masonry .detail-tile--support {
   break-inside: avoid;
@@ -1327,15 +1654,18 @@ img.empty-portrait { object-position: center center; }
   gap: 1rem;
   align-items: flex-start;
 }
-/* Detail shell: one interleaved masonry (media + text/meta tiles).
-   Shared by dog / people (incl. corona) / operations. */
+/* Detail shell: official posts and operations use one interleaved masonry.
+   A person card uses the identity header, then the sections under it. */
 .meta-pane--stack {
   flex-direction: column;
   align-items: stretch;
 }
-/* person-header wraps the shared masonry; lift it into the pane. */
 .meta-pane--stack > .person-header {
-  display: contents;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
 }
 .meta-pane--stack .detail-media {
   flex: 1 1 auto;
@@ -2032,10 +2362,12 @@ html[data-theme="glass"] .detail .meta-pane--stack::before {
   background-repeat: no-repeat;
   opacity: 0.8;
 }
+html[data-theme="glass"] .detail .person-header,
 html[data-theme="glass"] .detail .detail-media,
 html[data-theme="glass"] .detail .detail-copy,
 html[data-theme="glass"] .detail .career-history,
 html[data-theme="glass"] .detail .event-timeline,
+html[data-theme="glass"] .detail .person-sources,
 html[data-theme="glass"] .detail .detail-official-post,
 html[data-theme="glass"] .detail .detail-context,
 html[data-theme="glass"] .detail .detail-linked-people,
@@ -2055,6 +2387,11 @@ html[data-theme="glass"] .detail .detail-copy {
   padding: 0.7rem 0.8rem;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+html[data-theme="glass"] .person-header .detail-copy {
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 html[data-theme="glass"] .detail .detail-photo {
   border-color: rgba(255, 176, 0, 0.38);
@@ -2144,6 +2481,11 @@ html[data-theme="glass"] .dash-stats {
     column-count: 3;
   }
 }
+/* One clip stays a wide frame. A multi-tile strip still uses the columns above. */
+.person-detail .detail-support-masonry[data-tiles="1"] {
+  column-count: 1;
+  max-width: 40rem;
+}
 
 @media (max-width: 720px) {
   .supporting-group .detail-media--masonry {
@@ -2164,8 +2506,6 @@ html[data-theme="glass"] .dash-stats {
     width: 90px;
     height: 160px;
   }
-  .person-header .detail-photo.portrait,
-  .person-header .initials.detail-photo,
   .meta-pane .detail-photo.portrait,
   .meta-pane .initials.detail-photo.portrait {
     width: 160px;
@@ -2174,6 +2514,35 @@ html[data-theme="glass"] .dash-stats {
     object-fit: cover;
     object-position: center 18%;
   }
+  .person-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .person-header > .row-media {
+    width: min(160px, 42vw);
+    max-width: 160px;
+    height: auto;
+    aspect-ratio: 192 / 250;
+  }
+  .person-header > .row-media .detail-photo.portrait,
+  .person-header > .row-media .initials.detail-photo {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    aspect-ratio: 192 / 250;
+  }
+  .identity-facts { grid-template-columns: 1fr; }
+  .person-detail .person-header,
+  .person-detail .event-tag-row,
+  .person-detail .detail-supporting,
+  .person-detail .career-history,
+  .person-detail .person-sources {
+    padding: 0.75rem 0.8rem;
+  }
+  .person-detail .event-graph-card .person-event-head {
+    align-items: center;
+  }
+  .person-detail .person-event-head { align-items: flex-start; }
   .detail-media--masonry .detail-tile--portrait .detail-photo.portrait,
   .detail-media--masonry .detail-tile--portrait .initials.detail-photo {
     width: 100%;
@@ -2377,6 +2746,19 @@ html[data-theme="glass"] .dash-stats {
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
     gap: 1rem;
     align-items: start;
+  }
+  /* A person card is one shell. The 2-column track left an empty column. */
+  .person-detail {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: min(72rem, 100%);
+  }
+  .person-detail .detail-copy,
+  .person-detail .event-summary,
+  .person-detail .event-oneline,
+  .person-detail .cite-list {
+    max-width: 90ch;
   }
   /* Official-post pages stay one column so context and supporting media
      cannot sit beside the portrait between 1280 and 1400. */

@@ -191,7 +191,7 @@ test("keymap drops grokipedia nav; person cite is not a synopsis dump", () => {
   });
   assert.match(html, /grokipedia-cite/);
   assert.match(html, /Birth date/);
-  assert.match(html, /Origin · United States/);
+  assert.match(html, /class="identity-label">Origin<\/div><div class="identity-value">United States<\/div>/);
   assert.match(html, /One/);
   assert.match(html, /Two/);
   assert.doesNotMatch(html, /Held after a public-role arrest/);
