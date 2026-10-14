@@ -39,6 +39,14 @@ export const CATEGORIES = [
     blurb: "Notable events attached to an identified person. The event, cites, and media sit on that person card. There is no catalog list.",
   },
   {
+    id: "unconfirmed",
+    kind: "person",
+    title: "Unconfirmed",
+    nav: "Unconfirmed",
+    blurb:
+      "An unconfirmed claim on an identified person. The subject names what is unconfirmed. There is no catalog list.",
+  },
+  {
     id: "corona_comms",
     kind: "person",
     title: "Corona Comms",
@@ -291,6 +299,13 @@ export const DEATH_KEEP_IDS = [
  */
 export const DEATH_UNCONFIRMED_ID = "death_unconfirmed";
 
+/**
+ * General unconfirmed claim. Any person, not a death and not a catalog page.
+ * The subject (what is unconfirmed) is person_events.comments — no new column.
+ * event_date may be NULL. Not a promote kind. death_unconfirmed is unchanged.
+ */
+export const UNCONFIRMED_ID = "unconfirmed";
+
 /** KEEP kinds classify may write for identified indictment rows. */
 export const INDICTMENT_KEEP_IDS = [
   "indictment_civilian",
@@ -376,6 +391,15 @@ export function isDeathUnconfirmed(id) {
   return String(id) === DEATH_UNCONFIRMED_ID;
 }
 
+export function isUnconfirmed(id) {
+  return String(id) === UNCONFIRMED_ID;
+}
+
+/** Kinds that may store a null event_date. The date is not invented. */
+export function mayOmitEventDate(id) {
+  return isDeathUnconfirmed(id) || isUnconfirmed(id);
+}
+
 /**
  * Confirmed death catalog ids and the /deaths parent index.
  * death_unconfirmed is excluded so startsWith("death_") count paths
@@ -392,10 +416,10 @@ export function isDeathFamily(id) {
   return isDeathCategory(id) || isDeathUnconfirmed(id);
 }
 
-/** Person-detail event rows. death_unconfirmed is shown; it is not a promote kind. */
+/** Person-detail event rows. death_unconfirmed and unconfirmed are shown; neither is a promote kind. */
 export function isDisplayedEventKind(id) {
   const key = String(id || "").trim();
-  return PROMOTE_CATEGORY_IDS.includes(key) || isDeathUnconfirmed(key);
+  return PROMOTE_CATEGORY_IDS.includes(key) || isDeathUnconfirmed(key) || isUnconfirmed(key);
 }
 
 export function isIndictmentKeepKind(id) {

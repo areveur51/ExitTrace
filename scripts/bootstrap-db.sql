@@ -84,7 +84,7 @@ CREATE INDEX IF NOT EXISTS person_events_kind_idx ON person_events (kind);
 CREATE INDEX IF NOT EXISTS person_events_event_date_idx ON person_events (event_date DESC);
 
 -- death_unconfirmed is not a confirmed death. death_date stays NULL.
--- event_date may be NULL on that kind only. Cause and location are not columns.
+-- event_date may be NULL on death_unconfirmed and on unconfirmed. Cause and location are not columns.
 -- The asterisk is a UI label (Death* / Unconfirmed*), not a column.
 -- Existing databases keep their rows; this only relaxes the confirmed-death checks.
 DO $$
@@ -130,7 +130,7 @@ ALTER TABLE people ADD CONSTRAINT people_event_date_required CHECK (
 ALTER TABLE person_events ALTER COLUMN event_date DROP NOT NULL;
 ALTER TABLE person_events DROP CONSTRAINT IF EXISTS person_events_event_date_kind;
 ALTER TABLE person_events ADD CONSTRAINT person_events_event_date_kind CHECK (
-  event_date IS NOT NULL OR kind = 'death_unconfirmed'
+  event_date IS NOT NULL OR kind = 'death_unconfirmed' OR kind = 'unconfirmed'
 );
 
 UPDATE people

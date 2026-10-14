@@ -4,6 +4,8 @@ import {
   isDeathUnconfirmed,
   isGroupOpsCategory,
   isIndictmentKeepKind,
+  isUnconfirmed,
+  mayOmitEventDate,
 } from "./categories.mjs";
 import { parseStoredAge, stampEventAge } from "./age.mjs";
 import {
@@ -14,6 +16,7 @@ import {
   mergeEventAttrs,
   normalizeEventAttrs,
   normalizeEventMedia,
+  normalizeUnconfirmedSubject,
   parseHeadcount,
   parseOriginCountry,
   parseOriginUnknown,
@@ -169,16 +172,16 @@ export function normalizePersonEvent(raw, fallback = {}) {
   if (!raw || typeof raw !== "object") return null;
   const kind = String(raw.kind || raw.category || fallback.kind || fallback.category || "").trim();
   if (!kind || isGroupOpsCategory(kind)) return null;
-  // death_unconfirmed may omit event_date. Do not copy another event's date onto it.
-  const unconfirmed = isDeathUnconfirmed(kind);
+  // death_unconfirmed and unconfirmed may omit event_date. Do not copy another event's date onto them.
+  const undated = mayOmitEventDate(kind);
   const rawDate =
     raw.event_date != null && String(raw.event_date).trim() !== ""
       ? raw.event_date
-      : unconfirmed
+      : undated
         ? null
         : fallback.event_date;
   const event_date = asEventDate(rawDate);
-  if (!event_date && !unconfirmed) return null;
+  if (!event_date && !undated) return null;
   const sources = Array.isArray(raw.sources)
     ? raw.sources
     : Array.isArray(fallback.sources)
@@ -206,6 +209,13 @@ export function normalizePersonEvent(raw, fallback = {}) {
   ]);
   if (media.length) event.media = media;
   applyEventShot(event, raw, fallback);
+  if (isUnconfirmed(kind)) {
+    const subject = normalizeUnconfirmedSubject(
+      raw.subject || raw.comments || fallback.subject || fallback.comments,
+    );
+    if (!subject) return null;
+    event.comments = subject;
+  }
   return event;
 }
 
@@ -249,9 +259,9 @@ function uniqueEvents(events) {
   });
 }
 
-/** Keep a stored calendar date. Fill a null death_unconfirmed date only from an explicit one. */
+/** Keep a stored calendar date. Fill a null death_unconfirmed or unconfirmed date only from an explicit one. */
 function keptEventDate(prior, incoming) {
-  if (!isDeathUnconfirmed(prior?.kind)) return prior.event_date;
+  if (!mayOmitEventDate(prior?.kind)) return prior.event_date;
   return prior.event_date || incoming.event_date || null;
 }
 
@@ -341,7 +351,16 @@ export function personHasKind(row, kinds) {
 /** Shot, Endorsement, and recorded House-vote facts are not catalog kinds. They must not replace the stored category or its date. */
 function catalogEventKind(kind, stored) {
   const key = String(kind || "").trim();
-  if (!key || key === "shot" || key === "endorsement" || key === "harassment_records" || key === "ukraine_aid_flags") return false;
+  if (
+    !key ||
+    key === "shot" ||
+    key === "endorsement" ||
+    key === "harassment_records" ||
+    key === "ukraine_aid_flags" ||
+    isUnconfirmed(key)
+  ) {
+    return false;
+  }
   if (PROMOTE_CATEGORY_IDS.includes(key) || isDeathUnconfirmed(key)) return true;
   return key === stored;
 }
@@ -404,6 +423,9 @@ export function resolveEventKind(person, kind) {
 export function attachPersonEvent(person, incoming) {
   const ev = normalizePersonEvent(incoming);
   if (!ev) {
+    if (isUnconfirmed(incoming?.kind)) {
+      throw new PromoteError("unconfirmed event requires a subject", "missing_subject");
+    }
     throw new PromoteError("event kind and event_date are required", "missing_event");
   }
   ev.kind = resolveEventKind(person, ev.kind);
