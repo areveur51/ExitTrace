@@ -377,6 +377,8 @@ export function normalizeUnconfirmedSubject(raw) {
     .replace(/\s+/g, " ");
   if (!text || text.length > UNCONFIRMED_SUBJECT_MAX) return "";
   if (!UNCONFIRMED_SUBJECT_RE.test(text)) return "";
+  // A subject is a short label, not a disclaimer sentence.
+  if (text.split(/[ -]/).filter(Boolean).length > 3) return "";
   return text;
 }
 
