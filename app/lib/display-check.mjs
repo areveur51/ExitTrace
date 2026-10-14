@@ -1,6 +1,6 @@
 /** After insert/promote, live list + detail HTML must show the row. Counts are not enough. */
 
-import { categoryById, isGroupOpsKeepKind } from "./categories.mjs";
+import { categoryById, isGroupOpsKeepKind, UNCONFIRMED_ID } from "./categories.mjs";
 
 export class DisplayError extends Error {
   constructor(message, code = "display_failed") {
@@ -24,7 +24,7 @@ const INDICTMENT_LIST_PATHS = {
 export function listPathForPerson(category) {
   const id = String(category || "").trim();
   // Notable is a person-card block. It has no catalog list to assert.
-  if (id === "notable") return null;
+  if (id === "notable" || id === UNCONFIRMED_ID) return null;
   if (DEATH_LIST_PATHS[id]) return DEATH_LIST_PATHS[id];
   if (INDICTMENT_LIST_PATHS[id]) return INDICTMENT_LIST_PATHS[id];
   const cat = categoryById(id);

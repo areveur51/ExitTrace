@@ -138,6 +138,8 @@ const OP_COLS = Object.freeze([
   "screenshot",
 ]);
 
+// kind `unconfirmed` stores its subject in comments (already in this list).
+// No new column. death_unconfirmed keeps comments as its footnote.
 const EVENT_COLS = Object.freeze([
   "person_id",
   "kind",

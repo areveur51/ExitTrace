@@ -5,7 +5,9 @@ import {
   DEATH_KEEP_IDS,
   DEATH_UNCONFIRMED_ID,
   PROMOTE_CATEGORY_IDS,
+  UNCONFIRMED_ID,
   isIndictmentKeepKind,
+  isUnconfirmed,
 } from "./categories.mjs";
 import { normalizeTags } from "./tags.mjs";
 import { coronaStatusLabel, normalizeCoronaStatus } from "./corona-status.mjs";
@@ -358,6 +360,65 @@ export function deathUnconfirmedEvent({
 /** Generic footnote the death_unconfirmed comments field can store. Not a column. */
 export const DEATH_UNCONFIRMED_FOOTNOTE =
   "Trump Truth Social claim; no media confirmation yet.";
+
+/** Subject token stored in person_events.comments for kind unconfirmed. */
+const UNCONFIRMED_SUBJECT_MAX = 40;
+const UNCONFIRMED_SUBJECT_RE = /^[a-z0-9]+(?:[ -][a-z0-9]+)*$/;
+
+/**
+ * What is unconfirmed, for example "masks".
+ * Reuses comments. Empty, long, or punctuated text stays empty — it is not a footnote.
+ */
+export function normalizeUnconfirmedSubject(raw) {
+  const text = String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_]+/g, " ")
+    .replace(/\s+/g, " ");
+  if (!text || text.length > UNCONFIRMED_SUBJECT_MAX) return "";
+  if (!UNCONFIRMED_SUBJECT_RE.test(text)) return "";
+  return text;
+}
+
+/** Card label. "masks" → "Masks". */
+export function unconfirmedSubjectLabel(raw) {
+  const key = normalizeUnconfirmedSubject(raw);
+  if (!key) return "";
+  return key.replace(/(^|[\s-])([a-z])/g, (_, sep, ch) => sep + ch.toUpperCase());
+}
+
+/** Stored subject on an unconfirmed event. Other kinds stay empty. */
+export function unconfirmedSubject(ev) {
+  if (!isUnconfirmed(ev?.kind)) return "";
+  return normalizeUnconfirmedSubject(ev?.subject || ev?.comments);
+}
+
+/**
+ * Park one unconfirmed event on an existing person. Not a second card.
+ * comments holds the subject. event_date stays NULL unless the caller has YYYY-MM-DD.
+ * Returns null when the subject is missing.
+ */
+export function unconfirmedEvent({
+  subject = "",
+  comments = "",
+  sources = [],
+  event_date = null,
+} = {}) {
+  const key = normalizeUnconfirmedSubject(subject || comments);
+  if (!key) return null;
+  return {
+    kind: UNCONFIRMED_ID,
+    event_date: parseLeadDate(event_date),
+    announced_date: "",
+    position: "",
+    organization: "",
+    country: "",
+    branch: "",
+    comments: key,
+    sources: Array.isArray(sources) ? sources : [],
+    age_at_event: null,
+  };
+}
 
 /**
  * Map a lead Reason onto existing KEEP kinds only.

@@ -6,6 +6,7 @@ import {
   formatUsd,
   postedAtValue,
   DEATH_UNCONFIRMED_ID,
+  UNCONFIRMED_ID,
   isDeathCategory,
   isDeathFamily,
   isDisplayedEventKind,
@@ -16,7 +17,15 @@ import {
 } from "./categories.mjs";
 import { normalizeOperationTags, operationPortraitFrom, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
-import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount, normalizeEventMedia, originText } from "./event-attrs.mjs";
+import {
+  EVENT_ATTR_FIELDS,
+  EVENT_ATTR_LABELS,
+  eventHeadcount,
+  normalizeEventMedia,
+  originText,
+  unconfirmedSubject,
+  unconfirmedSubjectLabel,
+} from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
 import { standardizePosition } from "./position-format.mjs";
@@ -2506,9 +2515,18 @@ function eventSummaryLine(ev) {
   return "—";
 }
 
+/** Neutral Unconfirmed chip plus the subject. Not a disclaimer. */
+function unconfirmedHeadHtml(ev) {
+  const key = unconfirmedSubject(ev);
+  const subject = unconfirmedSubjectLabel(key);
+  const badge = `<span class="event-badge" data-unconfirmed="${esc(key)}">Unconfirmed</span>`;
+  return subject ? `${badge}: ${esc(subject)}` : badge;
+}
+
 export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const kind = String(ev?.kind || "").trim();
   if (!isPersonTimelineKind(kind)) return "";
+  const claim = kind === UNCONFIRMED_ID;
   const label =
     kind === "nickname"
       ? isTrumpNickname(ev)
@@ -2537,9 +2555,9 @@ export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
     groupSize > 1
       ? `<p class="meta-line">Group size · ${esc(String(groupSize))}</p>`
       : "";
-  const summaryLine = eventSummaryLine(ev);
+  const summaryLine = claim ? "" : eventSummaryLine(ev);
   const shownAsSummary = new Set();
-  if (sourceNumbers) {
+  if (sourceNumbers && !claim) {
     if (String(ev?.comments || "").trim()) shownAsSummary.add("comments");
     else if (standardizePosition(String(ev?.position || "").trim())) shownAsSummary.add("position");
     else if (String(ev?.organization || "").trim()) shownAsSummary.add("organization");
@@ -2548,6 +2566,7 @@ export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
     let value = String(ev[field] || "").trim();
     if (!value || shownAsSummary.has(field)) return "";
     if (kind === "nickname" && field === "comments") return "";
+    if (claim && field === "comments") return "";
     if (field === "status") value = coronaStatusLabel(value) || value;
     if (field === "position") value = standardizePosition(value);
     const name =
@@ -2560,7 +2579,7 @@ export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
     isIndictmentKeepKind(kind) && ev.unsealed === true
       ? ` <span class="keychip event-badge" data-unsealed="true">Unsealed</span>`
       : "";
-  const prose = commitProseHtml(summaryLine || "—");
+  const prose = claim ? "" : commitProseHtml(summaryLine || "—");
   const facts = `${announced}${ageLine}${groupLine}${attrs}`;
   const factsHtml = facts ? `<div class="event-facts">${facts}</div>` : "";
   const refs = sourceRefHtml(ev?.sources, sourceNumbers);
@@ -2568,11 +2587,14 @@ export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const mediaHtml = figures.length
     ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
     : "";
+  let bodyHtml = `${prose}${factsHtml}${refs}`;
+  if (claim && !bodyHtml.trim()) bodyHtml = `<span class="vh">Unconfirmed</span>`;
+  const titleHtml = claim ? unconfirmedHeadHtml(ev) : `${esc(label)}${unsealedBadge}`;
   return personEventSection({
-    headHtml: eventHeadHtml(`${esc(label)}${unsealedBadge}`, eventDate),
+    headHtml: eventHeadHtml(titleHtml, eventDate),
     kind,
     cites: sourceNumbers ? [] : eventSectionCites(ev),
-    bodyHtml: `${prose}${factsHtml}${refs}`,
+    bodyHtml,
     mediaHtml,
     className: kind === "shot" ? "event-tag-row detail-shot" : "event-tag-row",
     tag: "article",
@@ -2718,6 +2740,10 @@ function eventSourceLabel(ev) {
   else if (kind === "endorsement") title = "Endorsement";
   else if (kind === "shot") title = "Shot";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
+  else if (kind === UNCONFIRMED_ID) {
+    const subject = unconfirmedSubjectLabel(unconfirmedSubject(ev));
+    title = subject ? `Unconfirmed: ${subject}` : "Unconfirmed";
+  }
   const when = date ? formatDate(date) : "";
   return when ? `${when} · ${title}` : title;
 }
@@ -3472,6 +3498,37 @@ export function dashRangeNav(range, { path = "/dashboard", extra = {} } = {}) {
   </nav>`;
 }
 
+/** Deaths plus each other subject. The total is the sum of those counts. */
+function unconfirmedStandingBlock(standing) {
+  const model = standing && typeof standing === "object" ? standing : { total: 0, deaths: 0, subjects: [] };
+  const rows = [
+    {
+      key: "deaths",
+      label: "Deaths",
+      count: Math.max(0, Number(model.deaths) || 0),
+      href: "/deaths/unconfirmed",
+    },
+    ...(Array.isArray(model.subjects) ? model.subjects : []).map((row) => ({
+      key: row.key,
+      label: row.label,
+      count: Math.max(0, Number(row.count) || 0),
+      href: "",
+    })),
+  ];
+  const total = Math.max(0, Number(model.total) || 0);
+  return `<section class="dash-block" data-dash-dim="unconfirmed" data-unconfirmed-total="${total}" aria-label="Unconfirmed">
+    ${boxFrame(
+      `Unconfirmed · ${total}`,
+      dashRankTable(rows, {
+        empty: "No unconfirmed claims",
+        rowData: (row) =>
+          ` data-unconfirmed-subject="${esc(row.key)}" data-unconfirmed-count="${Math.max(0, Number(row.count) || 0)}"`,
+      }),
+      { extraClass: "dash-box" },
+    )}
+  </section>`;
+}
+
 export function dashboardBody(model, { path = "/dashboard", range } = {}) {
   const active = resolveDashRange(range || model.range);
   const dims = (model.dimensions || [])
@@ -3499,6 +3556,7 @@ export function dashboardBody(model, { path = "/dashboard", range } = {}) {
       <a class="dash-stat" href="/deaths/unconfirmed" data-death-unconfirmed="${Math.max(0, Number(model.unconfirmed) || 0)}"><span class="dash-stat-label">Unconfirmed*</span> ${dashCount(model.unconfirmed ?? 0)}</a>
     </section>
     <div class="dash-standings">
+      ${unconfirmedStandingBlock(model.unconfirmedAll)}
       ${operationStandingBlock(model.operations)}
       ${ageStandingBlock(model.age, active)}
       ${missingStandingBlock(model.missing, model.operationsMissing, active)}

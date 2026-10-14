@@ -9,6 +9,10 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+### Added
+
+- A person card can show an Unconfirmed event. The subject names what is unconfirmed, for example Unconfirmed: Masks. The dashboard Unconfirmed total adds unconfirmed death claims and these subjects.
+
 ## [1.2.24] - 2026-10-13
 
 ### Changed

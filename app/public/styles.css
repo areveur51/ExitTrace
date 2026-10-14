@@ -880,6 +880,23 @@ body.tui-home .home-stage {
   text-transform: uppercase;
   white-space: normal;
 }
+.person-detail .event-h .event-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0.28rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-transform: inherit;
+}
 .person-detail .event-date {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
