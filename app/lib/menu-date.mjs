@@ -35,7 +35,10 @@ function trumpNicknameDate(row) {
   const cites = [];
   for (const item of normalizeNicknames(row?.nicknames)) {
     if (!isTrumpNickname(item)) continue;
-    for (const source of item.sources || []) cites.push(source?.date);
+    for (const source of item.sources || []) {
+      if (source?.supporting === true) continue;
+      cites.push(source?.date);
+    }
   }
   // One card. The year is the newest stored Trump-nickname cite, not another event.
   return newest(cites) || newest(eventsOf(row, ["nickname"]).map((ev) => ev.event_date));

@@ -2652,12 +2652,14 @@ function earliestSourceDate(sources) {
   return date;
 }
 
-/** Nicknames are timeline rows. The date is the earliest cite day, or blank. */
+/** Nicknames are timeline rows. The date is the earliest official cite day, or blank. */
 function nicknameTimelineEvents(row) {
   return normalizeNicknames(row?.nicknames).map((item) => ({
     kind: "nickname",
     by: item.by,
-    event_date: earliestSourceDate(item.sources),
+    event_date: earliestSourceDate(
+      (item.sources || []).filter((source) => source?.supporting !== true),
+    ),
     comments: item.name,
     sources: item.sources || [],
   }));
