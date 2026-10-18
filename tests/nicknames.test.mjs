@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { peopleList, personDetail, personHeader } from "../app/lib/html.mjs";
-import { nicknameCatalogDate, normalizeNicknames, trumpNicknameReportDate } from "../app/lib/nicknames.mjs";
+import {
+  mergeNicknames,
+  nicknameCatalogDate,
+  nicknameJson,
+  normalizeNicknames,
+  trumpNicknameReportDate,
+} from "../app/lib/nicknames.mjs";
 import { applyIdentifiedPerson, ensurePersonNicknames, getPerson, setMemory } from "../app/lib/store.mjs";
 import { LOCK_MEDIA_DIR, LOCK_PORTRAIT, NEW_PERSON_LOCK } from "./new-person-lock.mjs";
 
@@ -305,4 +311,252 @@ test("an existing card keeps its cites when a list-exception nickname is added",
   assert.match(slowRow, /class="event-date">—</);
   assert.doesNotMatch(slowRow, /event-snippet/);
   assert.match(html, /wikipedia.org\/wiki\/List_of_nicknames_used_by_Donald_Trump/);
+});
+
+const TRUMP_X = "https://x.com/realDonaldTrump/status/2111516431141540160";
+const FOX_LIVE = "https://www.foxnews.com/live-news/sleepy-joe";
+
+test("a kept nickname stores the namer's post and an accepted news cite after the official sources", () => {
+  const kept = normalizeNicknames([
+    {
+      name: "Sleepy Joe",
+      by: "Donald Trump",
+      sources: [
+        {
+          url: CITES[0].url,
+          publisher: "Reuters",
+          date: "2019-06-11",
+          title: "Sleepy Joe Biden",
+          snippet: "Sleepy Joe",
+        },
+        {
+          url: TRUMP_X,
+          publisher: "Donald Trump",
+          title: "Post",
+          snippet: "Sleepy Joe Biden",
+          date: "2018-01-02",
+        },
+        {
+          url: CITES[1].url,
+          publisher: "The New York Times",
+          date: "2019-06-11",
+          snippet: "Same thing is happening with Sleepy Joe.",
+        },
+        {
+          url: FOX_LIVE,
+          publisher: "Fox News",
+          title: "Live blog",
+          snippet: "Live coverage",
+          date: "2020-03-04",
+        },
+      ],
+    },
+  ]);
+  assert.equal(kept.length, 1);
+  assert.deepEqual(
+    kept[0].sources.map((source) => source.url),
+    [CITES[0].url, CITES[1].url, TRUMP_X, FOX_LIVE],
+  );
+  assert.equal(kept[0].sources[0].supporting, undefined);
+  assert.equal(kept[0].sources[1].supporting, undefined);
+  assert.equal(kept[0].sources[2].supporting, true);
+  assert.equal(kept[0].sources[3].supporting, true);
+  assert.equal(kept[0].sources[2].publisher, "Donald Trump");
+  assert.equal(kept[0].sources[2].title, "Post");
+  assert.equal(kept[0].sources[2].snippet, "Sleepy Joe Biden");
+  assert.equal(kept[0].sources[2].date, "2018-01-02");
+  assert.equal(kept[0].sources[3].publisher, "Fox News");
+  assert.equal(kept[0].sources[3].snippet, "Live coverage");
+  assert.equal(kept[0].list_exception, undefined);
+});
+
+test("one official cite plus the namer's post and a news cite is still dropped", () => {
+  assert.deepEqual(
+    normalizeNicknames([
+      {
+        name: "Sleepy Joe",
+        by: "Donald Trump",
+        sources: [CITES[0], { url: TRUMP_X, date: "2018-01-02" }, { url: FOX_LIVE, date: "2020-03-04" }],
+      },
+    ]),
+    [],
+  );
+});
+
+test("another account's X status is not a supporting nickname cite", () => {
+  const kept = normalizeNicknames([
+    {
+      name: "Sleepy Joe",
+      by: "Donald Trump",
+      sources: [...CITES, { url: "https://x.com/someoneElse/status/1", publisher: "Someone Else" }],
+    },
+  ]);
+  assert.equal(kept.length, 1);
+  assert.deepEqual(
+    kept[0].sources.map((source) => source.url),
+    CITES.map((source) => source.url),
+  );
+  assert.ok(kept[0].sources.every((source) => source.supporting !== true));
+});
+
+test("a list exception row does not gain supporting sources", () => {
+  assert.deepEqual(
+    normalizeNicknames([
+      {
+        name: "Slow Joe",
+        by: "Donald Trump",
+        list_exception: true,
+        sources: [
+          { url: LIST_URL, publisher: "Wikipedia", title: "List of nicknames used by Donald Trump" },
+          { url: TRUMP_X, publisher: "Donald Trump", snippet: "post", date: "2024-01-01" },
+          { url: FOX_LIVE, publisher: "Fox News", snippet: "live", date: "2024-02-02" },
+        ],
+      },
+    ]),
+    [
+      {
+        name: "Slow Joe",
+        by: "Donald Trump",
+        list_exception: true,
+        sources: [{ url: LIST_URL, publisher: "Wikipedia", title: "List of nicknames used by Donald Trump" }],
+      },
+    ],
+  );
+});
+
+test("merge keeps supporting cites from both sides", () => {
+  const prior = [
+    {
+      name: "Sleepy Joe",
+      by: "Donald Trump",
+      sources: [
+        ...CITES,
+        { url: TRUMP_X, publisher: "Donald Trump", snippet: "From the prior post", date: "2018-01-02" },
+      ],
+    },
+  ];
+  const incoming = [
+    {
+      name: "Sleepy Joe",
+      by: "Donald Trump",
+      sources: [
+        ...CITES,
+        { url: TRUMP_X, publisher: "Duplicate" },
+        { url: FOX_LIVE, publisher: "Fox News", date: "2020-03-04", snippet: "Live blog" },
+      ],
+    },
+  ];
+  const merged = mergeNicknames(incoming, prior);
+  assert.equal(merged.length, 1);
+  assert.deepEqual(
+    merged[0].sources.map((source) => source.url),
+    [CITES[0].url, CITES[1].url, TRUMP_X, FOX_LIVE],
+  );
+  assert.equal(merged[0].sources[2].supporting, true);
+  assert.equal(merged[0].sources[2].snippet, "From the prior post");
+  assert.equal(merged[0].sources[2].publisher, "Donald Trump");
+  assert.equal(merged[0].sources[3].supporting, true);
+  assert.equal(merged[0].sources[3].publisher, "Fox News");
+  assert.equal(merged[0].sources[0].supporting, undefined);
+  assert.equal(merged[0].list_exception, undefined);
+});
+
+test("nicknameJson keeps supporting through a round trip", () => {
+  const input = [
+    {
+      name: "Sleepy Joe",
+      by: "Donald Trump",
+      sources: [
+        ...CITES,
+        { url: TRUMP_X, title: "Post", publisher: "Donald Trump", snippet: "Sleepy Joe", date: "2018-01-02" },
+        { url: FOX_LIVE, publisher: "Fox News", date: "2020-03-04" },
+      ],
+    },
+  ];
+  const once = nicknameJson(input);
+  assert.equal(nicknameJson(JSON.parse(once)), once);
+  const row = JSON.parse(once)[0];
+  assert.equal(row.sources[2].supporting, true);
+  assert.equal(row.sources[2].url, TRUMP_X);
+  assert.equal(row.sources[3].supporting, true);
+  assert.equal(row.sources[3].url, FOX_LIVE);
+  assert.equal(Object.hasOwn(row.sources[0], "supporting"), false);
+  assert.equal(Object.hasOwn(row.sources[1], "supporting"), false);
+});
+
+test("trumpNicknameReportDate ignores supporting sources", () => {
+  assert.equal(
+    trumpNicknameReportDate([
+      {
+        name: "Sleepy Joe",
+        by: "Donald Trump",
+        sources: [
+          { url: CITES[0].url, date: "2019-06-11" },
+          { url: CITES[1].url, date: "2019-06-12" },
+          { url: TRUMP_X, date: "2010-01-01" },
+          { url: FOX_LIVE, date: "2024-08-08" },
+        ],
+      },
+    ]),
+    "2019-06-11",
+  );
+  assert.equal(
+    trumpNicknameReportDate([
+      {
+        name: "Sleepy Joe",
+        by: "Donald Trump",
+        sources: [{ url: CITES[0].url }, { url: CITES[1].url }, { url: FOX_LIVE, date: "2011-02-02" }],
+      },
+    ]),
+    null,
+  );
+});
+
+test("a kept nickname stores at most three supporting cites", () => {
+  const third = "https://www.thedailybeast.com/sleepy-joe";
+  const fourth = "https://www.newsweek.com/sleepy-joe";
+  const kept = normalizeNicknames([
+    {
+      name: "Sleepy Joe",
+      by: "Donald Trump",
+      sources: [
+        ...CITES,
+        { url: TRUMP_X },
+        { url: FOX_LIVE },
+        { url: third },
+        { url: fourth },
+      ],
+    },
+  ]);
+  assert.deepEqual(
+    kept[0].sources.map((source) => source.url),
+    [CITES[0].url, CITES[1].url, TRUMP_X, FOX_LIVE, third],
+  );
+  assert.equal(kept[0].sources.filter((source) => source.supporting === true).length, 3);
+});
+
+test("the namer status allowlist is https status paths for that account", () => {
+  const base = [{ url: "https://www.reuters.com/world/us/a" }, { url: "https://www.nytimes.com/a" }];
+  const kept = (url) =>
+    normalizeNicknames([{ name: "Sleepy Joe", by: "Donald Trump", sources: [...base, { url }] }]);
+  for (const url of [
+    "https://twitter.com/RealDonaldTrump/status/99",
+    "https://www.x.com/realdonaldtrump/status/100",
+    "https://truthsocial.com/@realDonaldTrump/555",
+    "https://www.truthsocial.com/@REALDONALDTRUMP/556/",
+  ]) {
+    const row = kept(url);
+    assert.equal(row[0].sources[2].url, url);
+    assert.equal(row[0].sources[2].supporting, true);
+  }
+  for (const url of [
+    "http://x.com/realDonaldTrump/status/1",
+    "https://x.com/realDonaldTrump",
+    "https://x.com/realDonaldTrump/status/1/photo/2",
+    "https://mobile.twitter.com/realDonaldTrump/status/1",
+    "https://truthsocial.com/@realDonaldTrump",
+    "https://truthsocial.com/realDonaldTrump/1",
+  ]) {
+    assert.equal(kept(url)[0].sources.length, 2, url);
+  }
 });

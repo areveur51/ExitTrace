@@ -9,6 +9,10 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+### Changed
+
+- A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
+
 ## [1.2.24] - 2026-10-13
 
 ### Changed

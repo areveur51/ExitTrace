@@ -77,6 +77,21 @@ test("nickname, file, transparency, and flight menus ignore the other event year
   assert.equal(personMenuDate(biden, { tag: "trump_nickname" }), "2026-09-21");
   assert.equal(personMenuDate(biden, { tag: "masks" }), "");
 
+  const withSupporting = {
+    ...biden,
+    nicknames: [
+      {
+        ...biden.nicknames[0],
+        sources: [
+          ...biden.nicknames[0].sources,
+          { url: "https://x.com/realDonaldTrump/status/2111516431141540160", date: "2026-12-01" },
+          { url: "https://www.foxnews.com/live-news/sleepy", publisher: "Fox News", date: "2010-01-01" },
+        ],
+      },
+    ],
+  };
+  assert.equal(personMenuDate(withSupporting, { tag: "trump_nickname" }), "2026-09-21");
+
   const scott = {
     id: "austin-scott",
     name: "Austin Scott",
