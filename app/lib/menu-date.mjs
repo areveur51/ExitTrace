@@ -121,7 +121,7 @@ export function personMenuDate(row, menu = {}) {
   if (tag === "epstein_transparency_act") return transparencyDate(row);
   if (tag === "harassment_records") return harassmentRecordsDate(row);
   if (tag === "ukraine_aid_flags") return ukraineAidFlagsDate(row);
-  if (tag === "masks") return "";
+  if (tag === "masks" || tag === "former_intel_agency_personnel") return "";
   if (menu.centralCasting) {
     return newest(eventsOf(row, ["central_casting"]).map((ev) => ev.event_date));
   }

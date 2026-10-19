@@ -13,6 +13,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
 
+## [1.2.25] - 2026-10-19
+
+### Added
+
+- Fact tag Former intel (`/tags/former-intel-agency-personnel`). It records stored former employment at a U.S. intelligence agency. It is not an identity filter.
+
 ## [1.2.24] - 2026-10-13
 
 ### Changed

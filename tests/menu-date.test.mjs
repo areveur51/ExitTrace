@@ -45,6 +45,7 @@ test("a menu date is the event that menu is about", () => {
   assert.equal(personMenuDate(rogers, { tag: "endorsements" }), "2026-05-18");
   assert.equal(personMenuDate(rogers, { kinds: ["corona_comms"] }), "2021-01-03");
   assert.equal(personMenuDate(rogers, { tag: "masks" }), "");
+  assert.equal(personMenuDate(rogers, { tag: "former_intel_agency_personnel" }), "");
   const list = peopleList([rogers], {
     listDate: (row) => personMenuDate(row, { tag: "endorsements" }),
   });
@@ -76,6 +77,7 @@ test("nickname, file, transparency, and flight menus ignore the other event year
   };
   assert.equal(personMenuDate(biden, { tag: "trump_nickname" }), "2026-09-21");
   assert.equal(personMenuDate(biden, { tag: "masks" }), "");
+  assert.equal(personMenuDate(biden, { tag: "former_intel_agency_personnel" }), "");
 
   const withSupporting = {
     ...biden,
@@ -130,6 +132,7 @@ test("nickname, file, transparency, and flight menus ignore the other event year
   };
   assert.equal(personMenuDate(adams, { tag: "harassment_records" }), "2026-03-04");
   assert.equal(personMenuDate(adams, { tag: "masks" }), "");
+  assert.equal(personMenuDate(adams, { tag: "former_intel_agency_personnel" }), "");
 
   const stanton = {
     id: "greg-stanton",

@@ -82,6 +82,13 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People who voted yea on April 20, 2024, on H.R. 8035, the Ukraine Security Supplemental Appropriations Act, 2024. Roll Call 151 passed 311-112, with 1 present.",
   },
+  {
+    id: "former_intel_agency_personnel",
+    nav: "Former intel",
+    path: "/tags/former-intel-agency-personnel",
+    lede:
+      "People with stored former employment at a U.S. intelligence agency.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
