@@ -2274,6 +2274,13 @@ export async function ensurePersonClearances({
   return { action: "created", person: created };
 }
 
+/** Celebrity deaths may be inserted with a blank portrait. Every other promote kind still requires one. */
+export const PORTRAIT_OPTIONAL_KINDS = new Set(["death_celebrity"]);
+
+export function portraitRequiredFor(kind) {
+  return !PORTRAIT_OPTIONAL_KINDS.has(String(kind || "").trim());
+}
+
 export async function applyIdentifiedPerson(input) {
   const parsed = validateIdentifiedPersonInput(input);
   const people = await listPeople();
@@ -2343,7 +2350,8 @@ export async function applyIdentifiedPerson(input) {
     supplied: parsed.photo,
     photo_credit: parsed.photo_credit,
   });
-  if (!isStoredPeoplePortrait(resolved?.href)) {
+  const hasPortrait = isStoredPeoplePortrait(resolved?.href);
+  if (portraitRequiredFor(parsed.category) && !hasPortrait) {
     throw new PromoteError(
       "a portrait is required on a new person insert",
       "missing_portrait",
@@ -2351,8 +2359,8 @@ export async function applyIdentifiedPerson(input) {
   }
   const created = await insertPerson({
     ...draft,
-    photo: resolved.href,
-    photo_credit: resolved.credit || parsed.photo_credit || "",
+    photo: hasPortrait ? resolved.href : "",
+    photo_credit: hasPortrait ? resolved.credit || parsed.photo_credit || "" : "",
   });
   const person = await attachPersonNetWorth(created, extras);
   return {

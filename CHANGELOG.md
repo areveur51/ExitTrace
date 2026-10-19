@@ -13,6 +13,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
 
+## [1.2.26] - 2026-10-19
+
+### Changed
+
+- A celebrity death can be recorded without a portrait. The card shows the blank portrait. A later approved still fills that blank. Other new people still require a portrait.
+
 ## [1.2.25] - 2026-10-19
 
 ### Added
