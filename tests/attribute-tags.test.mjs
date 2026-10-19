@@ -33,8 +33,8 @@ function requestPage(pathname) {
 
 test("fact tags stay on the person and are not identity filters", () => {
   assert.deepEqual(
-    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "nope"]),
-    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags"],
+    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "former_intel_agency_personnel", "nope"]),
+    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "former_intel_agency_personnel"],
   );
   assert.deepEqual(
     personTags({
@@ -75,6 +75,8 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.match(facts, />Harassment records</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/ukraine-aid"/);
   assert.match(facts, />Ukraine aid</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/former-intel-agency-personnel"/);
+  assert.match(facts, />Former intel</);
   assert.doesNotMatch(facts, /keymap-tag[^>]*data-key=/);
   assert.doesNotMatch(facts, /Civilians/);
   assert.deepEqual(
@@ -357,6 +359,14 @@ test("fact-tag lists include only people who already have that tag", async () =>
           },
         ],
       },
+      {
+        id: "gina-haspel",
+        name: "Gina Haspel",
+        category: "notable",
+        event_date: "2018-05-21",
+        tags: ["former_intel_agency_personnel"],
+        events: [],
+      },
     ],
   });
 
@@ -390,11 +400,13 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.doesNotMatch(firings.body, /<option[^>]*>Endorsements<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Harassment records<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Ukraine aid<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>Former intel<\/option>/);
   assert.match(firings.body, /href="\/tags\/masks"/);
   assert.match(firings.body, /href="\/tags\/transparency-act"/);
   assert.match(firings.body, /href="\/tags\/endorsements"/);
   assert.match(firings.body, /href="\/tags\/harassment-records"/);
   assert.match(firings.body, /href="\/tags\/ukraine-aid"/);
+  assert.match(firings.body, /href="\/tags\/former-intel-agency-personnel"/);
 
   const clients = await requestPage("/tags/epstein-clients");
   assert.equal(clients.status, 200);
@@ -457,6 +469,18 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.match(flagsPage.body, /href="\/tags\/ukraine-aid" aria-current="page"/);
   const oldFlags = await requestPage("/tags/ukraine-aid-flags");
   assert.equal(oldFlags.status, 302);
+
+  const formerIntel = await requestPage("/tags/former-intel-agency-personnel");
+  assert.equal(formerIntel.status, 200);
+  assert.match(formerIntel.body, /href="\/people\/gina-haspel"/);
+  assert.match(formerIntel.body, /stored former employment at a U\.S\. intelligence agency/);
+  assert.doesNotMatch(formerIntel.body, /identity filter/);
+  assert.doesNotMatch(formerIntel.body, /href="\/people\/gavin-newsom"/);
+  assert.doesNotMatch(formerIntel.body, /href="\/people\/james-clapper"/);
+  assert.doesNotMatch(formerIntel.body, /href="\/people\/alma-adams"/);
+  assert.match(formerIntel.body, /href="\/tags\/former-intel-agency-personnel" aria-current="page"/);
+  assert.match(formerIntel.body, /class="keychip keymap-tag" href="\/tags\/former-intel-agency-personnel"/);
+  assert.doesNotMatch(formerIntel.body, /id="fact-tag-filter"/);
 
   const row = personRow({
     id: "adam-perrylang",
