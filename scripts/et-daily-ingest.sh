@@ -45,7 +45,8 @@
 #   ET_DAILY_HELPER [scripts/process-add-request.mjs]
 #   ET_DAILY_SEED_JS [scripts/seed-rss-digest.mjs]
 #   ET_DAILY_SEED_TIMEOUT [900] seconds per seed slice (timeout -k 10).
-#     Default covers two ~3-minute outbound-net retries plus fetch time.
+#     Default covers a 3-feed net-down probe per pass, two ~3-minute
+#     outbound-net waits, and fetch time.
 #   ET_DAILY_APPLY_JS [scripts/et-daily-apply.mjs]
 #   ET_DAILY_STAMP [unset: no keep-up stamp]  ET_DAILY_HEALTH_URL
 #   ET_DAILY_REPORT_TAG [unset] extra key=value appended to day= and prove= lines

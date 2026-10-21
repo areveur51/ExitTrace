@@ -597,6 +597,8 @@ export const DIGEST_FETCH_RETRY_DELAY_MS = 3000;
 /** Extra whole-pass retries when every feed failed with a network error. */
 export const DIGEST_NET_RETRIES = 2;
 export const DIGEST_NET_RETRY_DELAY_MS = 180000;
+/** Fetch this many feeds; if all are network errors, skip the rest of the pass. 0 disables. */
+export const DIGEST_NET_PROBE_FEEDS = 3;
 
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -644,7 +646,7 @@ export function digestFetchErrorCode(err) {
 
 export function isDigestNetworkError(code) {
   const c = String(code || "");
-  if (c === "fetch_error") return true;
+  if (c === "fetch_error" || c === "net_down") return true;
   return DIGEST_NET_ERROR_RE.test(c);
 }
 
@@ -706,10 +708,26 @@ async function fetchFeedXmlOnce(url, fetchImpl) {
 
 async function fetchFeedsPass(
   selected,
-  { fetchImpl, xmlByUrl, retryDelayMs, sleep },
+  { fetchImpl, xmlByUrl, retryDelayMs, sleep, netProbeFeeds },
 ) {
   const fetched = [];
   const xmlFor = {};
+  const probeN = asNonNegInt(netProbeFeeds, DIGEST_NET_PROBE_FEEDS);
+  let probed = 0;
+  let probeOk = 0;
+  let probeNet = 0;
+  let probeOther = 0;
+  let netDown = false;
+  const noteProbe = (row) => {
+    if (probeN <= 0 || probed >= probeN) return;
+    probed += 1;
+    if (row.ok) probeOk += 1;
+    else if (isDigestNetworkError(row.error)) probeNet += 1;
+    else probeOther += 1;
+    if (probed >= probeN && probeOk === 0 && probeOther === 0 && probeNet === probeN) {
+      netDown = true;
+    }
+  };
   for (const feed of selected) {
     const preset = xmlByUrl?.[feed.url] || xmlByUrl?.[feed.name] || "";
     if (preset) {
@@ -717,24 +735,38 @@ async function fetchFeedsPass(
       continue;
     }
     if (!fetchImpl) continue;
+    if (netDown) {
+      fetched.push({
+        name: feed.name,
+        url: feed.url,
+        ok: false,
+        error: "net_down",
+        attempts: 0,
+      });
+      continue;
+    }
     try {
       const got = await fetchFeedXml(feed.url, { fetchImpl, retryDelayMs, sleep });
-      fetched.push({
+      const row = {
         name: feed.name,
         url: feed.url,
         ok: got.ok,
         error: got.error || "",
         attempts: got.attempts,
-      });
+      };
+      fetched.push(row);
       if (got.ok) xmlFor[feed.url] = got.xml;
+      noteProbe(row);
     } catch (err) {
-      fetched.push({
+      const row = {
         name: feed.name,
         url: feed.url,
         ok: false,
         error: digestFetchErrorCode(err),
         attempts: 1 + DIGEST_FETCH_RETRIES,
-      });
+      };
+      fetched.push(row);
+      noteProbe(row);
     }
   }
   return { fetched, xmlFor };
@@ -752,6 +784,7 @@ export async function seedRssDigest({
   sleep,
   netRetries = DIGEST_NET_RETRIES,
   netRetryDelayMs = DIGEST_NET_RETRY_DELAY_MS,
+  netProbeFeeds = DIGEST_NET_PROBE_FEEDS,
 } = {}) {
   assertOfficialFeedList(OFFICIAL_RSS_FEEDS);
   const selected = feeds || selectDigestFeeds(slice);
@@ -761,6 +794,7 @@ export async function seedRssDigest({
   const sleeper = sleep || sleepMs;
   const netRetryN = asNonNegInt(netRetries, DIGEST_NET_RETRIES);
   const netDelayMs = asNonNegInt(netRetryDelayMs, DIGEST_NET_RETRY_DELAY_MS);
+  const probeN = asNonNegInt(netProbeFeeds, DIGEST_NET_PROBE_FEEDS);
   let fetched = [];
   let xmlFor = {};
   let netRetriesUsed = 0;
@@ -770,6 +804,7 @@ export async function seedRssDigest({
       xmlByUrl,
       retryDelayMs,
       sleep,
+      netProbeFeeds: probeN,
     });
     fetched = pass.fetched;
     xmlFor = pass.xmlFor;
@@ -781,6 +816,7 @@ export async function seedRssDigest({
         xmlByUrl,
         retryDelayMs,
         sleep,
+        netProbeFeeds: probeN,
       });
       fetched = again.fetched;
       xmlFor = again.xmlFor;

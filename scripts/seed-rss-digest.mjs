@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import {
+  DIGEST_NET_PROBE_FEEDS,
   DIGEST_NET_RETRIES,
   DIGEST_NET_RETRY_DELAY_MS,
   digestNonNegInt,
@@ -93,6 +94,10 @@ const result = await seedRssDigest({
   netRetryDelayMs: digestNonNegInt(
     process.env.ET_DIGEST_NET_RETRY_DELAY_MS,
     DIGEST_NET_RETRY_DELAY_MS,
+  ),
+  netProbeFeeds: digestNonNegInt(
+    process.env.ET_DIGEST_NET_PROBE_FEEDS,
+    DIGEST_NET_PROBE_FEEDS,
   ),
 });
 

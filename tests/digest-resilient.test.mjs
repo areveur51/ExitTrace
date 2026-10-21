@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "url";
 import {
   DIGEST_FETCH_RETRY_DELAY_MS,
+  DIGEST_NET_PROBE_FEEDS,
   DIGEST_NET_RETRY_DELAY_MS,
   OFFICIAL_RSS_FEEDS,
   digestFetchErrorCode,
@@ -46,6 +47,12 @@ function currentFeeds() {
       url: "https://rss.apnews.com/test-current",
     }),
   ];
+}
+
+function manyFeeds(n) {
+  const current = OFFICIAL_RSS_FEEDS.filter((f) => f.slice === "current");
+  assert.ok(current.length >= n, `need ${n} current official feeds`);
+  return current.slice(0, n).map((f) => ({ ...f }));
 }
 
 function fetchByUrl(map) {
@@ -213,4 +220,104 @@ test("digest: Washington Post stays on the official RSS list", () => {
   assert.ok(wapo);
   assert.equal(wapo.name, "Washington Post");
   assert.equal(wapo.url, "https://feeds.washingtonpost.com/rss/national");
+});
+
+test("digest: net down short-circuits the pass after netProbeFeeds network failures", async () => {
+  const feeds = manyFeeds(6);
+  const map = Object.fromEntries(feeds.map((f) => [f.url, [netErr("ETIMEDOUT")]]));
+  const { seen, fetchImpl } = fetchByUrl(map);
+  const { sleep } = recordSleep();
+  const out = await seedRssDigest({
+    people: [],
+    feeds,
+    fetchImpl,
+    sleep,
+    importPosts: false,
+    queueLeads: false,
+    netRetries: 0,
+    netProbeFeeds: DIGEST_NET_PROBE_FEEDS,
+  });
+  assert.equal(DIGEST_NET_PROBE_FEEDS, 3);
+  assert.equal(out.fetched.length, 6);
+  assert.ok(out.fetched.every((f) => !f.ok));
+  for (let i = 0; i < 3; i++) {
+    assert.equal(seen[feeds[i].url], 2);
+    assert.equal(out.fetched[i].error, "ETIMEDOUT");
+    assert.equal(out.fetched[i].attempts, 2);
+  }
+  for (let i = 3; i < 6; i++) {
+    assert.equal(seen[feeds[i].url], undefined);
+    assert.equal(out.fetched[i].error, "net_down");
+    assert.equal(out.fetched[i].attempts, 0);
+    assert.equal(out.fetched[i].ok, false);
+  }
+  assert.equal(Object.values(seen).reduce((a, b) => a + b, 0), 6);
+});
+
+test("digest: an HTTP 502 among the first feeds does not short-circuit", async () => {
+  const feeds = manyFeeds(6);
+  const map = Object.fromEntries(
+    feeds.map((f, i) => [f.url, i === 0 ? [502, 502] : [netErr("ETIMEDOUT")]]),
+  );
+  const { seen, fetchImpl } = fetchByUrl(map);
+  const { sleep } = recordSleep();
+  const out = await seedRssDigest({
+    people: [],
+    feeds,
+    fetchImpl,
+    sleep,
+    importPosts: false,
+    queueLeads: false,
+    netRetries: 0,
+    netProbeFeeds: DIGEST_NET_PROBE_FEEDS,
+  });
+  for (const f of feeds) {
+    assert.equal(seen[f.url], 2, `attempted ${f.name}`);
+  }
+  assert.equal(out.fetched.length, 6);
+  assert.equal(out.fetched[0].error, "502");
+  assert.ok(out.fetched.slice(1).every((f) => f.error === "ETIMEDOUT"));
+  assert.ok(!out.fetched.some((f) => f.error === "net_down"));
+});
+
+test("digest: net-down-then-up with the probe retries and fetches every feed", async () => {
+  const feeds = manyFeeds(6);
+  const apXml = fixtureXml("ap-current.xml");
+  let pass = 1;
+  const seen = {};
+  const fetchImpl = async (url) => {
+    seen[url] = (seen[url] || 0) + 1;
+    if (pass === 1) throw netErr("ENETUNREACH");
+    return { ok: true, status: 200, text: async () => apXml };
+  };
+  const { waits, sleep: recSleep } = recordSleep();
+  const sleep = async (ms) => {
+    await recSleep(ms);
+    if (ms === DIGEST_NET_RETRY_DELAY_MS) pass = 2;
+  };
+  const out = await seedRssDigest({
+    people: [],
+    feeds,
+    fetchImpl,
+    sleep,
+    importPosts: false,
+    queueLeads: false,
+    netRetries: 2,
+    netProbeFeeds: DIGEST_NET_PROBE_FEEDS,
+    netRetryDelayMs: DIGEST_NET_RETRY_DELAY_MS,
+  });
+  assert.equal(out.net_retries_used, 1);
+  assert.ok(waits.includes(DIGEST_NET_RETRY_DELAY_MS));
+  assert.equal(out.fetched.length, 6);
+  assert.ok(out.fetched.every((f) => f.ok));
+  assert.equal(Object.keys(seen).length, 6);
+  for (const f of feeds) {
+    assert.ok(seen[f.url] >= 1, `second pass fetched ${f.name}`);
+  }
+  assert.equal(seen[feeds[0].url], 3);
+  assert.equal(seen[feeds[1].url], 3);
+  assert.equal(seen[feeds[2].url], 3);
+  assert.equal(seen[feeds[3].url], 1);
+  assert.equal(seen[feeds[4].url], 1);
+  assert.equal(seen[feeds[5].url], 1);
 });
