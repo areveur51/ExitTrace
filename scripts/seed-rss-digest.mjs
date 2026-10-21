@@ -2,7 +2,14 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { seedRssDigest, selectDigestFeeds } from "../app/lib/digest.mjs";
+import {
+  DIGEST_NET_PROBE_FEEDS,
+  DIGEST_NET_RETRIES,
+  DIGEST_NET_RETRY_DELAY_MS,
+  digestNonNegInt,
+  seedRssDigest,
+  selectDigestFeeds,
+} from "../app/lib/digest.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "../app/lib/env.mjs";
 import {
   closeStore,
@@ -83,6 +90,15 @@ const result = await seedRssDigest({
   fetchImpl: globalThis.fetch,
   importPosts: !args.dry_run,
   queueLeads: !args.dry_run && args.queue,
+  netRetries: digestNonNegInt(process.env.ET_DIGEST_NET_RETRIES, DIGEST_NET_RETRIES),
+  netRetryDelayMs: digestNonNegInt(
+    process.env.ET_DIGEST_NET_RETRY_DELAY_MS,
+    DIGEST_NET_RETRY_DELAY_MS,
+  ),
+  netProbeFeeds: digestNonNegInt(
+    process.env.ET_DIGEST_NET_PROBE_FEEDS,
+    DIGEST_NET_PROBE_FEEDS,
+  ),
 });
 
 const jsonlPath = path.resolve(
@@ -98,12 +114,13 @@ if (!databaseUrl() && !args.dry_run) {
 }
 
 const feeds = selectDigestFeeds(args.slice);
-// fetch_failed / fetch_errors let the daily ingest fail closed on a feed that
-// answered with a non-OK status or non-RSS body (a thrown fetch exits non-zero).
+// A failed feed is recorded and skipped. The daily ingest fails the run only
+// when every feed failed, or a slice crashed without reporting feed counts.
 const fetchFailed = (result.fetched || []).filter((f) => !f.ok);
+const fetchOk = (result.fetched || []).filter((f) => f.ok);
 const clean = (v) => String(v || "").replace(/[\s,:=]+/g, "_");
 console.log(
-  `digest slice=${args.slice} feeds=${feeds.length} leads=${result.leads.length} import_rows=${result.import_rows.length} inserted=${result.imported.inserted || 0} updated=${result.imported.updated || 0} annotated=${result.imported.annotated || 0} queued=${result.queued.length} skipped=${result.skipped.length} fetch_failed=${fetchFailed.length} jsonl=${jsonlPath}`,
+  `digest slice=${args.slice} feeds=${feeds.length} leads=${result.leads.length} import_rows=${result.import_rows.length} inserted=${result.imported.inserted || 0} updated=${result.imported.updated || 0} annotated=${result.imported.annotated || 0} queued=${result.queued.length} skipped=${result.skipped.length} fetch_ok=${fetchOk.length} fetch_failed=${fetchFailed.length} net_retries_used=${result.net_retries_used || 0} jsonl=${jsonlPath}`,
 );
 if (fetchFailed.length) {
   console.log(`fetch_errors=${fetchFailed.map((f) => `${clean(f.name)}:${clean(f.error)}`).join(",")}`);

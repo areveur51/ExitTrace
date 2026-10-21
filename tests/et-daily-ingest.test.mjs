@@ -53,7 +53,7 @@ else console.error("stub helper failure");
 process.exit(code);
 `,
   );
-  // Seed stub: STUB_SEED_<SLICE>=ok|hang|etimedout|http503.
+  // Seed stub: STUB_SEED_<SLICE>=ok|hang|etimedout|http502|allfail|netretry.
   const seed = path.join(dir, "seed-stub.mjs");
   fs.writeFileSync(
     seed,
@@ -68,14 +68,28 @@ if (mode === "hang") {
 } else if (mode === "etimedout") {
   console.error("TypeError: fetch failed");
   console.error("  [cause]: AggregateError [ETIMEDOUT]:");
-  console.error("      Error: connect ETIMEDOUT 23.33.40.88:443");
+  console.error("      Error: connect ETIMEDOUT");
   console.error("        code: 'ETIMEDOUT',");
   process.exit(1);
 } else {
   fs.writeFileSync(out, "");
-  const failed = mode === "http503" ? 1 : 0;
-  console.log("digest slice=" + slice + " feeds=3 leads=0 import_rows=0 inserted=0 updated=0 annotated=0 queued=0 skipped=" + failed + " fetch_failed=" + failed + " jsonl=" + out);
-  if (failed) console.log("fetch_errors=Reuters_World:503");
+  let ok = 3;
+  let failed = 0;
+  let retries = 0;
+  let errors = "";
+  if (mode === "http502") {
+    ok = 2;
+    failed = 1;
+    errors = "Washington_Post:502";
+  } else if (mode === "allfail") {
+    ok = 0;
+    failed = 3;
+    errors = "AP_News:502,Reuters:502,BBC_News:502";
+  } else if (mode === "netretry") {
+    retries = 1;
+  }
+  console.log("digest slice=" + slice + " feeds=3 leads=0 import_rows=0 inserted=0 updated=0 annotated=0 queued=0 skipped=" + failed + " fetch_ok=" + ok + " fetch_failed=" + failed + " net_retries_used=" + retries + " jsonl=" + out);
+  if (errors) console.log("fetch_errors=" + errors);
 }
 `,
   );
@@ -393,16 +407,64 @@ test("daily: a seed fetch ETIMEDOUT crash -> prove=FAIL seed_failed:current:ETIM
   assert.equal(calls(sb, "stamp-calls").length, 0);
 });
 
-test("daily: a feed fetch failure reported by the seeder -> prove=FAIL seed_failed:historical:fetch_503", async () => {
+test("daily: a feed 502 is skipped, other feeds run, run passes", async () => {
   const sb = sandbox();
   const r = await runDaily(sb, liveEnv(sb, {
-    STUB_SEED_HISTORICAL: "http503",
+    STUB_SEED_CURRENT: "http502",
+    STUB_APPLY_JSON: JSON.stringify({ rows: [ROW], skipped: [] }),
+  }));
+  const rep = report(sb);
+  assert.equal(r.code, 0, rep);
+  assert.match(rep, /feed_skipped slice=current feed=Washington_Post error=502/);
+  assert.match(lastProve(rep), /^prove=PASS picked=1 inserted=1 failed=0 /);
+  assert.match(lastProve(rep), /feeds_failed=1/);
+  assert.match(lastProve(rep), /feeds_skipped=current:Washington_Post:502/);
+  assert.doesNotMatch(lastProve(rep), /seed_failed/);
+  assert.equal(calls(sb, "helper-calls").length, 1, "rows from the good feeds are still applied");
+  assert.deepEqual(calls(sb, "stamp-calls"), ["keep_up.daily_ingest.last_pass"]);
+});
+
+test("daily: every feed fails -> prove=FAIL all_feeds_failed", async () => {
+  const sb = sandbox();
+  const r = await runDaily(sb, liveEnv(sb, {
+    STUB_SEED_CURRENT: "allfail",
+    STUB_SEED_HISTORICAL: "allfail",
+    STUB_APPLY_JSON: JSON.stringify({ rows: [], skipped: [] }),
+  }));
+  const rep = report(sb);
+  assert.equal(r.code, 1, rep);
+  assert.match(lastProve(rep), /^prove=FAIL reason=all_feeds_failed/);
+  assert.match(rep, /feed_skipped slice=current feed=Washington_Post error=502|feed_skipped slice=current feed=AP_News error=502/);
+  assert.doesNotMatch(lastProve(rep), /prove=PASS/);
+  assert.equal(calls(sb, "stamp-calls").length, 0, "all feeds failed never stamps");
+});
+
+test("daily: net down then up -> retry succeeds", async () => {
+  const sb = sandbox();
+  const r = await runDaily(sb, liveEnv(sb, {
+    STUB_SEED_CURRENT: "netretry",
+    STUB_APPLY_JSON: JSON.stringify({ rows: [ROW], skipped: [] }),
+  }));
+  const rep = report(sb);
+  assert.equal(r.code, 0, rep);
+  assert.match(rep, /net_retries_used=1/);
+  assert.match(lastProve(rep), /^prove=PASS /);
+  assert.doesNotMatch(lastProve(rep), /seed_failed|all_feeds_failed/);
+  assert.deepEqual(calls(sb, "stamp-calls"), ["keep_up.daily_ingest.last_pass"]);
+});
+
+test("daily: all feeds failed is listed first on another FAIL", async () => {
+  const sb = sandbox();
+  const r = await runDaily(sb, liveEnv(sb, {
+    STUB_SEED_CURRENT: "allfail",
+    STUB_SEED_HISTORICAL: "allfail",
+    STUB_HELPER_EXIT: "1",
     STUB_APPLY_JSON: JSON.stringify({ rows: [ROW], skipped: [] }),
   }));
   const rep = report(sb);
   assert.equal(r.code, 1, rep);
-  assert.match(lastProve(rep), /^prove=FAIL reason=seed_failed:historical:fetch_503 picked=1 inserted=1 failed=0 /);
-  assert.equal(calls(sb, "helper-calls").length, 1, "rows from the good slice are still applied");
+  assert.match(lastProve(rep), /^prove=FAIL reason=all_feeds_failed/);
+  assert.match(lastProve(rep), /;apply_failed /);
   assert.equal(calls(sb, "stamp-calls").length, 0);
 });
 

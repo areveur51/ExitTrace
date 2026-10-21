@@ -13,6 +13,16 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
 
+## [1.2.27] - 2026-10-21
+
+### Changed
+
+- A failed RSS feed is logged and skipped. The daily ingest fails only when every feed fails.
+
+### Fixed
+
+- A daily run that starts with no outbound network waits about three minutes and retries the seed fetch.
+
 ## [1.2.26] - 2026-10-19
 
 ### Changed
