@@ -14,12 +14,20 @@
 #   PASS         grok picked >=1 row, >=1 applied, and no apply failed
 #   PASS_EMPTY   grok picked 0 rows (a truly empty day)
 #   FAIL         apply.json missing or unparseable, apply driver exited non-zero,
-#                any row failed, rows were picked but 0 were applied, or a news
-#                seed failed or timed out (reason=seed_failed:<slice>:<code>,
-#                e.g. seed_failed:current:ETIMEDOUT). A seed failure is never
-#                PASS_EMPTY and never stamps, so a network failure does not look
-#                like an empty day. The run still goes on to grok and apply
-#                with whatever leads the other slice produced.
+#                any row failed, rows were picked but 0 were applied, every feed
+#                fetched across all seeded slices failed
+#                (reason=all_feeds_failed:<slice:Feed:code,...>), or a seed
+#                slice crashed or timed out without reporting feed counts
+#                (reason=seed_failed:<slice>:<code>, e.g.
+#                seed_failed:current:ETIMEDOUT). A failed feed is logged as
+#                feed_skipped and skipped; remaining feeds still run. A partial
+#                feed failure does not fail the run. prove= also carries
+#                feeds_failed=<n> and, when any feed was skipped,
+#                feeds_skipped=<slice:Feed:code,...>. An all-feeds or seed
+#                crash failure is never PASS_EMPTY and never stamps. The run
+#                still goes on to grok and apply with whatever leads the other
+#                feeds produced. A seed/all-feeds failure is listed first on
+#                another FAIL.
 #   SKIP_LOCKED  another et-daily run holds the lock (appended, report kept)
 #   DRY_RUN      ET_DAILY_DRY_RUN=1 with no helper override (nothing written)
 #
@@ -36,7 +44,8 @@
 #     owned by the caller, and must not be group/other writable.
 #   ET_DAILY_HELPER [scripts/process-add-request.mjs]
 #   ET_DAILY_SEED_JS [scripts/seed-rss-digest.mjs]
-#   ET_DAILY_SEED_TIMEOUT [300] seconds per seed slice (timeout -k 10)
+#   ET_DAILY_SEED_TIMEOUT [900] seconds per seed slice (timeout -k 10).
+#     Default covers two ~3-minute outbound-net retries plus fetch time.
 #   ET_DAILY_APPLY_JS [scripts/et-daily-apply.mjs]
 #   ET_DAILY_STAMP [unset: no keep-up stamp]  ET_DAILY_HEALTH_URL
 #   ET_DAILY_REPORT_TAG [unset] extra key=value appended to day= and prove= lines
@@ -54,7 +63,7 @@ DRY=${ET_DAILY_DRY_RUN:-0}
 HELPER=${ET_DAILY_HELPER:-$ROOT/scripts/process-add-request.mjs}
 APPLY_JS=${ET_DAILY_APPLY_JS:-$ROOT/scripts/et-daily-apply.mjs}
 SEED_JS=${ET_DAILY_SEED_JS:-$ROOT/scripts/seed-rss-digest.mjs}
-SEED_TIMEOUT=${ET_DAILY_SEED_TIMEOUT:-300}
+SEED_TIMEOUT=${ET_DAILY_SEED_TIMEOUT:-900}
 STAMP=${ET_DAILY_STAMP:-}
 HEALTH_URL=${ET_DAILY_HEALTH_URL:-http://127.0.0.1:5220/api/health}
 TAG=${ET_DAILY_REPORT_TAG:-}
@@ -138,10 +147,14 @@ mkdir -p "$ROOT/var"
 # the run lock after this script exits.
 
 # One news seed slice. Records <slice>:<code> in SEED_FAIL when the seeder
-# exits non-zero, times out, or reports a failed feed fetch (fetch_failed=N).
+# exits non-zero or times out without reporting feed counts. Each failed feed
+# is logged as feed_skipped and does not fail the slice.
 SEED_FAIL=""
+FEEDS_OK=0
+FEEDS_FAILED=0
+FEEDS_SKIPPED=""
 seed_slice() {
-  local slice="$1" out="$2" log="$TMPD/et-daily-${DAY}-seed-$1.log" rc code nfail
+  local slice="$1" out="$2" log="$TMPD/et-daily-${DAY}-seed-$1.log" rc code nfail nok errs item rest fname ferr
   echo "seed $slice" >> "$REPORT"
   timeout -k 10 "$SEED_TIMEOUT" "$NODE" "$SEED_JS" --slice "$slice" --jsonl "$out" > "$log" 2>&1 9>&-
   rc=$?
@@ -153,11 +166,33 @@ seed_slice() {
     code=$(grep -oE '\b(ETIMEDOUT|ENOTFOUND|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|EAI_AGAIN|UND_ERR_[A-Z_]+|ABORT_ERR)\b' "$log" | head -n 1)
     code=${code:-exit$rc}
   else
+    nok=$(grep -oE 'fetch_ok=[0-9]+' "$log" | tail -n 1 | cut -d= -f2)
     nfail=$(grep -oE 'fetch_failed=[0-9]+' "$log" | tail -n 1 | cut -d= -f2)
-    if [[ -n "$nfail" && "$nfail" != "0" ]]; then
-      code=$(grep -oE '^fetch_errors=[^ ]+' "$log" | tail -n 1 | cut -d= -f2 | cut -d, -f1 | cut -d: -f2)
-      code="fetch_${code:-error}"
-    fi
+    nok=$(printf '%s' "${nok:-}" | tr -cd '0-9')
+    nfail=$(printf '%s' "${nfail:-}" | tr -cd '0-9')
+    nok=${nok:-0}
+    nfail=${nfail:-0}
+    FEEDS_OK=$((FEEDS_OK + nok))
+    FEEDS_FAILED=$((FEEDS_FAILED + nfail))
+    errs=$(grep -oE '^fetch_errors=[^[:space:]]+' "$log" | tail -n 1 | cut -d= -f2-)
+    rest=${errs:-}
+    while [[ -n "$rest" ]]; do
+      if [[ "$rest" == *,* ]]; then
+        item=${rest%%,*}
+        rest=${rest#*,}
+      else
+        item=$rest
+        rest=""
+      fi
+      fname=${item%%:*}
+      ferr=${item#*:}
+      fname=$(printf '%s' "$fname" | tr -cd 'A-Za-z0-9_.-')
+      ferr=$(printf '%s' "$ferr" | tr -cd 'A-Za-z0-9_.-')
+      if [[ -n "$fname" && -n "$ferr" ]]; then
+        echo "feed_skipped slice=$slice feed=$fname error=$ferr" >> "$REPORT"
+        FEEDS_SKIPPED="${FEEDS_SKIPPED:+$FEEDS_SKIPPED,}$slice:$fname:$ferr"
+      fi
+    done
   fi
   code=$(printf '%s' "$code" | tr -cd 'A-Za-z0-9_.-')
   if [[ -n "$code" ]]; then
@@ -294,8 +329,9 @@ else:
 PY
 )
 read -r PROVE WHY PICKED INSERTED FAILED <<< "$VERDICT"
-# A failed or timed-out seed overrides PASS/PASS_EMPTY (and is listed first
-# on another FAIL), so a network failure never stamps as an empty day.
+# A crashed or timed-out seed overrides PASS/PASS_EMPTY (and is listed first
+# on another FAIL). Every-feed-failed does the same. A partial feed skip does
+# not fail the run, so a single 502 never looks like an empty day.
 if [[ -n "$SEED_FAIL" ]]; then
   if [[ "$PROVE" == "FAIL" ]]; then
     WHY="seed_failed:$SEED_FAIL;$WHY"
@@ -303,8 +339,25 @@ if [[ -n "$SEED_FAIL" ]]; then
     WHY="seed_failed:$SEED_FAIL"
   fi
   PROVE=FAIL
+elif [[ "$DRY" != "1" && "$FEEDS_OK" -eq 0 && "$FEEDS_FAILED" -gt 0 ]]; then
+  ALL_WHY="all_feeds_failed"
+  if [[ -n "$FEEDS_SKIPPED" ]]; then
+    ALL_WHY="all_feeds_failed:$FEEDS_SKIPPED"
+  fi
+  if [[ "$PROVE" == "FAIL" ]]; then
+    WHY="$ALL_WHY;$WHY"
+  else
+    WHY="$ALL_WHY"
+  fi
+  PROVE=FAIL
 fi
 COUNTS="picked=$PICKED inserted=$INSERTED failed=$FAILED grok_exit=$GRC apply_exit=$ARC"
+if [[ "$DRY" != "1" ]]; then
+  COUNTS="$COUNTS feeds_failed=$FEEDS_FAILED"
+  if [[ -n "$FEEDS_SKIPPED" ]]; then
+    COUNTS="$COUNTS feeds_skipped=$FEEDS_SKIPPED"
+  fi
+fi
 
 case "$PROVE" in
   PASS|PASS_EMPTY)

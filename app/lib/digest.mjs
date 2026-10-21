@@ -594,8 +594,67 @@ export function leadsToImportRows(leads) {
 /** One retry, never more. A feed that fails twice is a fetch failure. */
 export const DIGEST_FETCH_RETRIES = 1;
 export const DIGEST_FETCH_RETRY_DELAY_MS = 3000;
+/** Extra whole-pass retries when every feed failed with a network error. */
+export const DIGEST_NET_RETRIES = 2;
+export const DIGEST_NET_RETRY_DELAY_MS = 180000;
 
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const DIGEST_NET_ERROR_RE =
+  /^(ETIMEDOUT|ENETUNREACH|ENOTFOUND|ECONNREFUSED|ECONNRESET|EHOSTUNREACH|EAI_AGAIN|ABORT_ERR|UND_ERR_[A-Z0-9_]+)$/;
+const DIGEST_NET_ERROR_FIND_RE =
+  /\b(ETIMEDOUT|ENETUNREACH|ENOTFOUND|ECONNREFUSED|ECONNRESET|EHOSTUNREACH|EAI_AGAIN|ABORT_ERR|UND_ERR_[A-Z0-9_]+)\b/;
+
+export function digestNonNegInt(raw, fallback) {
+  const s = String(raw ?? "").trim();
+  if (!/^(0|[1-9][0-9]*)$/.test(s)) return fallback;
+  const n = Number(s);
+  if (!Number.isSafeInteger(n) || n < 0) return fallback;
+  return n;
+}
+
+function asNonNegInt(value, fallback) {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  return digestNonNegInt(value, fallback);
+}
+
+/** Short code from a thrown fetch. Never a URL, host, or message. */
+export function digestFetchErrorCode(err) {
+  const parts = [];
+  const walk = (value, depth) => {
+    if (value == null || depth > 5) return;
+    if (typeof value === "string" || typeof value === "number") {
+      parts.push(String(value));
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (value.code) parts.push(String(value.code));
+    if (value.errno) parts.push(String(value.errno));
+    if (value.message) parts.push(String(value.message));
+    if (value.cause) walk(value.cause, depth + 1);
+    if (Array.isArray(value.errors)) {
+      for (const inner of value.errors) walk(inner, depth + 1);
+    }
+  };
+  walk(err, 0);
+  const m = parts.join(" ").match(DIGEST_NET_ERROR_FIND_RE);
+  if (m) return m[1].slice(0, 40);
+  return "fetch_error";
+}
+
+export function isDigestNetworkError(code) {
+  const c = String(code || "");
+  if (c === "fetch_error") return true;
+  return DIGEST_NET_ERROR_RE.test(c);
+}
+
+function allFetchedNetworkFailed(fetched) {
+  return (
+    Array.isArray(fetched) &&
+    fetched.length > 0 &&
+    fetched.every((row) => !row.ok && isDigestNetworkError(row.error))
+  );
+}
 
 /**
  * Fetch one feed, retrying ONCE after a short backoff when the first attempt
@@ -645,6 +704,42 @@ async function fetchFeedXmlOnce(url, fetchImpl) {
   return { url, ok: true, xml, error: "" };
 }
 
+async function fetchFeedsPass(
+  selected,
+  { fetchImpl, xmlByUrl, retryDelayMs, sleep },
+) {
+  const fetched = [];
+  const xmlFor = {};
+  for (const feed of selected) {
+    const preset = xmlByUrl?.[feed.url] || xmlByUrl?.[feed.name] || "";
+    if (preset) {
+      xmlFor[feed.url] = preset;
+      continue;
+    }
+    if (!fetchImpl) continue;
+    try {
+      const got = await fetchFeedXml(feed.url, { fetchImpl, retryDelayMs, sleep });
+      fetched.push({
+        name: feed.name,
+        url: feed.url,
+        ok: got.ok,
+        error: got.error || "",
+        attempts: got.attempts,
+      });
+      if (got.ok) xmlFor[feed.url] = got.xml;
+    } catch (err) {
+      fetched.push({
+        name: feed.name,
+        url: feed.url,
+        ok: false,
+        error: digestFetchErrorCode(err),
+        attempts: 1 + DIGEST_FETCH_RETRIES,
+      });
+    }
+  }
+  return { fetched, xmlFor };
+}
+
 export async function seedRssDigest({
   people = [],
   feeds,
@@ -655,30 +750,51 @@ export async function seedRssDigest({
   queueLeads = true,
   retryDelayMs = DIGEST_FETCH_RETRY_DELAY_MS,
   sleep,
+  netRetries = DIGEST_NET_RETRIES,
+  netRetryDelayMs = DIGEST_NET_RETRY_DELAY_MS,
 } = {}) {
   assertOfficialFeedList(OFFICIAL_RSS_FEEDS);
   const selected = feeds || selectDigestFeeds(slice);
   assertOfficialFeedList(selected);
   const allLeads = [];
   const skipped = [];
-  const fetched = [];
-  for (const feed of selected) {
-    let xml = xmlByUrl?.[feed.url] || xmlByUrl?.[feed.name] || "";
-    if (!xml && fetchImpl) {
-      const got = await fetchFeedXml(feed.url, { fetchImpl, retryDelayMs, sleep });
-      fetched.push({
-        name: feed.name,
-        url: feed.url,
-        ok: got.ok,
-        error: got.error,
-        attempts: got.attempts,
+  const sleeper = sleep || sleepMs;
+  const netRetryN = asNonNegInt(netRetries, DIGEST_NET_RETRIES);
+  const netDelayMs = asNonNegInt(netRetryDelayMs, DIGEST_NET_RETRY_DELAY_MS);
+  let fetched = [];
+  let xmlFor = {};
+  let netRetriesUsed = 0;
+  {
+    const pass = await fetchFeedsPass(selected, {
+      fetchImpl,
+      xmlByUrl,
+      retryDelayMs,
+      sleep,
+    });
+    fetched = pass.fetched;
+    xmlFor = pass.xmlFor;
+    while (allFetchedNetworkFailed(fetched) && netRetriesUsed < netRetryN) {
+      await sleeper(netDelayMs);
+      netRetriesUsed += 1;
+      const again = await fetchFeedsPass(selected, {
+        fetchImpl,
+        xmlByUrl,
+        retryDelayMs,
+        sleep,
       });
-      if (!got.ok) {
-        skipped.push({ skip: "fetch", url: feed.url, error: got.error });
-        continue;
-      }
-      xml = got.xml;
-    } else if (!xml) {
+      fetched = again.fetched;
+      xmlFor = again.xmlFor;
+    }
+  }
+  const fetchedByUrl = new Map(fetched.map((row) => [row.url, row]));
+  for (const feed of selected) {
+    const got = fetchedByUrl.get(feed.url);
+    if (got && !got.ok) {
+      skipped.push({ skip: "fetch", url: feed.url, error: got.error });
+      continue;
+    }
+    const xml = xmlFor[feed.url] || xmlByUrl?.[feed.url] || xmlByUrl?.[feed.name] || "";
+    if (!xml) {
       skipped.push({ skip: "no_xml", url: feed.url });
       continue;
     }
@@ -732,6 +848,7 @@ export async function seedRssDigest({
     fetched,
     imported,
     queued,
+    net_retries_used: netRetriesUsed,
     jsonl: formatJsonlRows(importRows),
   };
 }
