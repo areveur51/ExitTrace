@@ -128,7 +128,7 @@ test("the fraud fact tag and the fraud Operations category stay separate", async
   assert.equal(categoryById("fraud").kind, "operation");
   assert.equal(attributeTagByPath("/group-operations/fraud"), null);
   assert.deepEqual(normalizeOperationTags(["fraud"]), ["fraud"]);
-  assert.deepEqual(normalizeOperationTags(["federal_investigation"]), []);
+  assert.deepEqual(normalizeOperationTags(["not_a_signed_operation"]), []);
 
   const op = {
     id: "example-fraud-op",

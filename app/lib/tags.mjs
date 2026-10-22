@@ -90,13 +90,6 @@ export const ATTRIBUTE_TAGS = [
       "People with stored former employment at a U.S. intelligence agency.",
   },
   {
-    id: "federal_investigation",
-    nav: "Federal investigation",
-    path: "/tags/federal-investigation",
-    lede:
-      "People with a stored report of a federal investigation.",
-  },
-  {
     id: "fraud",
     nav: "Fraud",
     path: "/tags/fraud",

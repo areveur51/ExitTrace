@@ -1,0 +1,22 @@
+[
+  {
+    "id": "fictional-river-sample",
+    "tags": ["fraud", "federal-investigation", "masks"]
+  },
+  {
+    "id": "fictional-quinn-example",
+    "tags": ["official", "federal_investigation", "fraud", "kept-unknown"]
+  },
+  {
+    "id": "fictional-both-spellings",
+    "tags": ["fraud", "federal_investigation", "official", "federal-investigation", "kept-unknown", "federal_investigation"]
+  },
+  {
+    "id": "fictional-lookalike",
+    "tags": ["Federal_Investigation", "fraud"]
+  },
+  {
+    "id": "fictional-sage-clear",
+    "tags": ["official", "fraud"]
+  }
+]

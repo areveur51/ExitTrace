@@ -33,8 +33,8 @@ function requestPage(pathname) {
 
 test("fact tags stay on the person and are not identity filters", () => {
   assert.deepEqual(
-    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "former_intel_agency_personnel", "federal_investigation", "fraud", "nope"]),
-    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "former_intel_agency_personnel", "federal_investigation", "fraud"],
+    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "former_intel_agency_personnel", "fraud", "nope"]),
+    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "former_intel_agency_personnel", "fraud"],
   );
   assert.deepEqual(
     personTags({
@@ -77,8 +77,7 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.match(facts, />Ukraine aid</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/former-intel-agency-personnel"/);
   assert.match(facts, />Former intel</);
-  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/federal-investigation"/);
-  assert.match(facts, />Federal investigation</);
+  assert.doesNotMatch(facts, />Federal investigation</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/fraud"/);
   assert.match(facts, />Fraud</);
   assert.doesNotMatch(facts, /keymap-tag[^>]*data-key=/);
@@ -413,7 +412,6 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.match(firings.body, /href="\/tags\/harassment-records"/);
   assert.match(firings.body, /href="\/tags\/ukraine-aid"/);
   assert.match(firings.body, /href="\/tags\/former-intel-agency-personnel"/);
-  assert.match(firings.body, /href="\/tags\/federal-investigation"/);
   assert.match(firings.body, /href="\/tags\/fraud"/);
 
   const clients = await requestPage("/tags/epstein-clients");
