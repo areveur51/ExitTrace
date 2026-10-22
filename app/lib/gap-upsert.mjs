@@ -376,19 +376,21 @@ function centralCastingJson(row) {
 
 /**
  * people.tags as stored. The store already writes IMPLIED_TAGS, so this is a
- * no-op guard for a row written outside the store. Bad JSON or a non-array
- * becomes '[]', like clearanceJson.
+ * no-op guard for a row written outside the store. Pass the whole people row
+ * (id, career, clearances) so Former intel is added only when a recorded
+ * intel-agency role allows it, and dropped for FORMER_INTEL_EXCLUDE ids.
+ * Bad JSON or a non-array becomes '[]', like clearanceJson.
  */
-function peopleTagsJson(v) {
-  let list = v;
-  if (typeof v === "string") {
+function peopleTagsJson(row) {
+  let list = row?.tags;
+  if (typeof list === "string") {
     try {
-      list = JSON.parse(v);
+      list = JSON.parse(list);
     } catch {
       return "[]";
     }
   }
-  return Array.isArray(list) ? JSON.stringify(withImpliedTags(list)) : "[]";
+  return Array.isArray(list) ? JSON.stringify(withImpliedTags(list, row)) : "[]";
 }
 
 function rowValue(table, col, row) {
@@ -405,7 +407,7 @@ function rowValue(table, col, row) {
     return clearanceJson(row?.clearances);
   }
   if (table === "people" && col === "tags") {
-    return peopleTagsJson(row?.tags);
+    return peopleTagsJson(row);
   }
   if (table === "add_requests") {
     if (col === "cite_urls" || col === "payload") {

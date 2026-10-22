@@ -1,3 +1,6 @@
+import { personCareer } from "./career.mjs";
+import { normalizeClearances } from "./clearances.mjs";
+
 /** Person identity tags — independent of event kind. Multi-tag is allowed. */
 
 export const IDENTITY_TAGS = [
@@ -94,29 +97,141 @@ export const ATTRIBUTE_TAGS = [
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
 
+const FORMER_INTEL_TAG = "former_intel_agency_personnel";
+
+/**
+ * Card ids that never served at an intel agency. Adding an id here is how an
+ * operator blocks the Former intel tag for a non-intel card: the auto-tag
+ * never adds it, and the store write path / gap-upsert drop a stored
+ * former_intel_agency_personnel so a stale import, seed, or gap-upsert cannot
+ * reintroduce it.
+ */
+export const FORMER_INTEL_EXCLUDE = Object.freeze(["john-bolton"]);
+
+/**
+ * Agency / role phrases that count as intelligence-agency service. Word
+ * boundaries so "National Security Advisor" does not match NSA. Congressional
+ * committee text is excluded in isIntelAgencyText.
+ */
+export const INTEL_AGENCY_PATTERNS = Object.freeze([
+  /\bcia\b/,
+  /\bcentral intelligence agency\b/,
+  /\bnsa\b/,
+  /\bnational security agency\b/,
+  /\bdia\b/,
+  /\bdefense intelligence agency\b/,
+  /\bodni\b/,
+  /\bdni\b/,
+  /\bdirector(?:ate)? of national intelligence\b/,
+  /\boffice of the director of national intelligence\b/,
+  /\bnational counterterrorism center\b/,
+  /\bnctc\b/,
+  /\bnational intelligence council\b/,
+  /\bnational intelligence officer\b/,
+  /\bnga\b/,
+  /\bnational geospatial-?intelligence agency\b/,
+  /\bnro\b/,
+  /\bnational reconnaissance office\b/,
+  /\bstate\b.{0,20}\binr\b/,
+  /\bbureau of intelligence and research\b/,
+  /\bfbi intelligence branch\b/,
+  /\bfbi national security branch\b/,
+  /\bunder secretary of defense for intelligence(?: and security)?\b/,
+  /\bmilitary intelligence\b/,
+  /\barmy intelligence\b/,
+  /\boffice of naval intelligence\b/,
+  /\bair force intelligence\b/,
+  /\bair force\b.{0,40}\bisr\b/,
+  /\bmarine corps intelligence\b/,
+  /\bintelligence official\b/,
+  /\bintelligence officer\b/,
+  /\bintelligence agenc(?:y|ies)\b/,
+  /\bintelligence community\b/,
+]);
+
+export function isIntelAgencyText(text) {
+  const folded = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  if (!folded) return false;
+  if (/\bcommittee\b/.test(folded)) return false;
+  return INTEL_AGENCY_PATTERNS.some((re) => re.test(folded));
+}
+
+function jsonArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function cardHasIntelAgencyRole(row) {
+  if (!row || typeof row !== "object") return false;
+  for (const item of personCareer({ career: jsonArray(row.career ?? row.service_history ?? row.person_career) })) {
+    if (
+      isIntelAgencyText(item.title) ||
+      isIntelAgencyText(item.organization) ||
+      isIntelAgencyText(item.branch)
+    ) {
+      return true;
+    }
+  }
+  for (const item of normalizeClearances(row.clearances)) {
+    if (isIntelAgencyText(item.role)) return true;
+  }
+  return false;
+}
+
+function formerIntelExcluded(row) {
+  const id = String(row?.id || "")
+    .trim()
+    .toLowerCase();
+  return Boolean(id) && FORMER_INTEL_EXCLUDE.includes(id);
+}
+
 /**
  * Fact tags that imply other fact tags. A revoked clearance implies former
- * intel-agency personnel (standing rule, 2026-10-21). The store writes the
- * implied tag into people.tags on every insert and update, so tag filters and
- * tag lists see it as a stored tag. personTags and the public gap-upsert apply
- * it again as an idempotent guard. A filter query is not expanded: asking for
- * Former intel does not also select revoked clearances.
+ * intel-agency personnel only when the card itself records an intelligence-
+ * agency role (career title / organization / branch, or a clearance row role)
+ * and the id is not in FORMER_INTEL_EXCLUDE (standing rule, 2026-10-22). The
+ * store writes the implied tag into people.tags on every insert and update, so
+ * tag filters and tag lists see it as a stored tag. personTags and the public
+ * gap-upsert apply it again as an idempotent guard. Add-only for everyone else:
+ * a stored Former intel tag is never stripped from a non-excluded card.
+ * A filter query is not expanded: asking for Former intel does not also select
+ * revoked clearances. Former intel alone never implies a revoked clearance.
  */
 export const IMPLIED_TAGS = Object.freeze({
-  clearance_revoked: Object.freeze(["former_intel_agency_personnel"]),
+  clearance_revoked: Object.freeze([FORMER_INTEL_TAG]),
 });
 
 /**
- * Stored tag list plus every tag implied by IMPLIED_TAGS. Add-only: keeps each
- * input value and its order, and appends a missing implied tag at the end.
+ * Stored tag list plus Former intel when IMPLIED_TAGS and the card's recorded
+ * intel-agency role allow it. `row` is optional: { id, career, clearances }.
+ * With no row this is a pure copy of the list — no additions. Excluded ids
+ * never gain Former intel, and a stored copy is dropped so write paths cannot
+ * reintroduce it. Non-excluded cards are add-only.
  * Unknown values are kept as-is (normalizeTags drops them where needed).
  */
-export function withImpliedTags(raw) {
+export function withImpliedTags(raw, row) {
   const list = Array.isArray(raw) ? raw.slice() : [];
+  if (!row || typeof row !== "object") return list;
+  if (formerIntelExcluded(row)) {
+    return list.filter((item) => normalizeTag(item) !== FORMER_INTEL_TAG);
+  }
   const have = new Set(list.map((item) => normalizeTag(item)).filter(Boolean));
+  const allowFormerIntel = cardHasIntelAgencyRole(row);
   for (let i = 0; i < list.length; i += 1) {
     for (const implied of IMPLIED_TAGS[normalizeTag(list[i])] || []) {
       if (have.has(implied)) continue;
+      if (implied === FORMER_INTEL_TAG && !allowFormerIntel) continue;
       have.add(implied);
       list.push(implied);
     }
@@ -217,7 +332,7 @@ export function personTags(row) {
     ...((row?.events || []).map((ev) => ev.kind).filter(Boolean)),
     row?.category,
   ];
-  return normalizeTags(withImpliedTags([...(row?.tags || []), ...tagsFromKinds(kinds)]));
+  return normalizeTags(withImpliedTags([...(row?.tags || []), ...tagsFromKinds(kinds)], row));
 }
 
 export function kindsImplyingTags(tags) {

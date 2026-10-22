@@ -1855,8 +1855,9 @@ function personValues(row) {
     person.summary,
     JSON.stringify(person.events || []),
     // Every people INSERT / UPDATE / seed upsert binds tags here. Store IMPLIED_TAGS
+    // (revoked + recorded intel-agency role; FORMER_INTEL_EXCLUDE drops Former intel)
     // so the SQL tag lists (peopleTagWhere) see them.
-    JSON.stringify(withImpliedTags(person.tags || [])),
+    JSON.stringify(withImpliedTags(person.tags || [], person)),
     JSON.stringify(person.career || []),
     JSON.stringify(person.nicknames || []),
     JSON.stringify(person.clearances || []),

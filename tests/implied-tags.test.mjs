@@ -4,7 +4,9 @@ import { buildUpsertSql, pickRow } from "../app/lib/gap-upsert.mjs";
 import { projectPerson } from "../app/lib/promote.mjs";
 import { getPerson, insertPerson, listPeople, savePerson, setMemory, setTestPool } from "../app/lib/store.mjs";
 import {
+  FORMER_INTEL_EXCLUDE,
   IMPLIED_TAGS,
+  isIntelAgencyText,
   matchesTags,
   normalizeTags,
   personTags,
@@ -14,7 +16,38 @@ import {
 const REVOKED = "clearance_revoked";
 const INTEL = "former_intel_agency_personnel";
 
-function clearanceCard(id, tags) {
+const CITES = [
+  {
+    url: "https://www.govinfo.gov/content/pkg/FR-2025-01-29/html/2025-01954.htm",
+    publisher: "Federal Register",
+    date: "2025-01-20",
+    snippet: "shall revoke any current or active clearances held by the following individuals",
+  },
+  {
+    url: "https://www.whitehouse.gov/presidential-actions/2025/01/holding-former-government-officials-accountablefor-election-interference-and-improper-disclosure-of-sensitive-governmental-information/",
+    publisher: "The White House",
+    date: "2025-01-20",
+    snippet: "Signatories of the letter falsely suggested that the news story was part of a Russian disinformation campaign.",
+  },
+];
+
+function ciaCareer() {
+  return [{ title: "Analyst", organization: "Central Intelligence Agency", start_year: 1990, end_year: 2004 }];
+}
+
+function clearanceRole(role) {
+  return [
+    {
+      status: "revoked",
+      date: "2025-01-20",
+      authority: "Executive Order 14152",
+      role,
+      sources: CITES,
+    },
+  ];
+}
+
+function clearanceCard(id, tags, extra = {}) {
   return {
     id,
     name: id,
@@ -26,28 +59,116 @@ function clearanceCard(id, tags) {
     career: [],
     nicknames: [],
     clearances: [],
+    ...extra,
   };
 }
 
-test("a revoked clearance implies the Former intel tag", () => {
+test("withImpliedTags without a row is a pure pass-through", () => {
   assert.deepEqual(IMPLIED_TAGS[REVOKED], [INTEL]);
-  assert.deepEqual(withImpliedTags([REVOKED]), [REVOKED, INTEL]);
-  assert.deepEqual(withImpliedTags(["official", REVOKED, "non_civilian"]), ["official", REVOKED, "non_civilian", INTEL]);
-  assert.deepEqual(withImpliedTags(["clearance-revoked"]), ["clearance-revoked", INTEL]);
-});
-
-test("the implied tag is add-only and idempotent", () => {
+  assert.deepEqual(withImpliedTags([REVOKED]), [REVOKED]);
+  assert.deepEqual(withImpliedTags(["official", REVOKED, "non_civilian"]), ["official", REVOKED, "non_civilian"]);
+  assert.deepEqual(withImpliedTags(["clearance-revoked"]), ["clearance-revoked"]);
   assert.deepEqual(withImpliedTags([REVOKED, INTEL]), [REVOKED, INTEL]);
-  assert.deepEqual(withImpliedTags([INTEL, REVOKED]), [INTEL, REVOKED]);
-  assert.deepEqual(withImpliedTags(withImpliedTags([REVOKED])), [REVOKED, INTEL]);
-  assert.deepEqual(withImpliedTags(["legacy_value", REVOKED]), ["legacy_value", REVOKED, INTEL]);
-  assert.deepEqual(withImpliedTags(["official"]), ["official"]);
   assert.deepEqual(withImpliedTags([INTEL]), [INTEL]);
+  assert.deepEqual(withImpliedTags(["official"]), ["official"]);
   assert.deepEqual(withImpliedTags([]), []);
   assert.deepEqual(withImpliedTags(null), []);
   const input = [REVOKED];
   withImpliedTags(input);
   assert.deepEqual(input, [REVOKED]);
+  const copy = withImpliedTags(input, undefined);
+  copy.push("x");
+  assert.deepEqual(input, [REVOKED]);
+});
+
+test("revoked plus an intel career row adds Former intel", () => {
+  const row = { id: "jane-roe", career: ciaCareer() };
+  assert.deepEqual(withImpliedTags([REVOKED], row), [REVOKED, INTEL]);
+  assert.deepEqual(withImpliedTags(["official", REVOKED, "non_civilian"], row), [
+    "official",
+    REVOKED,
+    "non_civilian",
+    INTEL,
+  ]);
+  assert.deepEqual(withImpliedTags(["clearance-revoked"], row), ["clearance-revoked", INTEL]);
+  assert.deepEqual(withImpliedTags([REVOKED, INTEL], row), [REVOKED, INTEL]);
+  assert.deepEqual(withImpliedTags([INTEL, REVOKED], row), [INTEL, REVOKED]);
+  assert.deepEqual(withImpliedTags(withImpliedTags([REVOKED], row), row), [REVOKED, INTEL]);
+  assert.deepEqual(personTags({ id: "jane-roe", tags: [REVOKED], career: ciaCareer() }), [REVOKED, INTEL]);
+  assert.deepEqual(
+    projectPerson(clearanceCard("jane-roe", [REVOKED], { career: ciaCareer() })).tags,
+    [REVOKED, INTEL],
+  );
+});
+
+test("revoked plus a clearance role naming an intel agency adds Former intel", () => {
+  assert.deepEqual(
+    withImpliedTags([REVOKED], { id: "a", clearances: clearanceRole("Former intelligence official") }),
+    [REVOKED, INTEL],
+  );
+  assert.deepEqual(
+    withImpliedTags([REVOKED], { id: "a", clearances: clearanceRole("Former CIA Director") }),
+    [REVOKED, INTEL],
+  );
+  assert.deepEqual(
+    personTags({
+      id: "james-clapper",
+      tags: [REVOKED],
+      clearances: clearanceRole("Former Director of National Intelligence"),
+    }),
+    [REVOKED, INTEL],
+  );
+});
+
+test("revoked with no intel role does not add Former intel", () => {
+  const nsaAdvisor = { id: "a", clearances: clearanceRole("Former National Security Advisor") };
+  assert.deepEqual(withImpliedTags([REVOKED], nsaAdvisor), [REVOKED]);
+  assert.deepEqual(personTags({ tags: [REVOKED], ...nsaAdvisor }), [REVOKED]);
+  assert.deepEqual(
+    projectPerson(clearanceCard("x", [REVOKED], { clearances: clearanceRole("Former National Security Advisor") })).tags,
+    [REVOKED],
+  );
+  assert.deepEqual(personTags({ category: "clearance", tags: [REVOKED] }), [REVOKED]);
+});
+
+test("john-bolton is excluded even with a revoked clearance", () => {
+  assert.deepEqual(FORMER_INTEL_EXCLUDE, ["john-bolton"]);
+  const row = {
+    id: "john-bolton",
+    tags: [REVOKED],
+    clearances: clearanceRole("Former National Security Advisor"),
+  };
+  assert.deepEqual(withImpliedTags([REVOKED], row), [REVOKED]);
+  assert.deepEqual(withImpliedTags(["clearance-revoked"], row), ["clearance-revoked"]);
+  assert.deepEqual(personTags(row), [REVOKED]);
+  assert.deepEqual(
+    projectPerson(
+      clearanceCard("john-bolton", [REVOKED], {
+        clearances: clearanceRole("Former National Security Advisor"),
+      }),
+    ).tags,
+    [REVOKED],
+  );
+});
+
+test("john-bolton with a stored Former intel tag is dropped on write", () => {
+  const row = { id: "john-bolton", tags: [REVOKED, INTEL] };
+  assert.deepEqual(withImpliedTags([REVOKED, INTEL], row), [REVOKED]);
+  assert.deepEqual(withImpliedTags(["former-intel-agency-personnel", REVOKED], row), [REVOKED]);
+  assert.deepEqual(personTags(row), [REVOKED]);
+  assert.equal(pickRow("people", row).tags, JSON.stringify([REVOKED]));
+  assert.equal(
+    pickRow("people", { id: "john-bolton", tags: JSON.stringify([REVOKED, INTEL]) }).tags,
+    JSON.stringify([REVOKED]),
+  );
+});
+
+test("a non-excluded card that already stores Former intel keeps it (add-only)", () => {
+  const stored = { id: "gina-haspel", tags: [INTEL] };
+  assert.deepEqual(withImpliedTags([INTEL], stored), [INTEL]);
+  assert.deepEqual(withImpliedTags([REVOKED, INTEL], { id: "gina-haspel" }), [REVOKED, INTEL]);
+  assert.deepEqual(personTags(stored), [INTEL]);
+  assert.equal(pickRow("people", stored).tags, JSON.stringify([INTEL]));
 });
 
 test("Former intel does not imply a revoked clearance", () => {
@@ -55,16 +176,69 @@ test("Former intel does not imply a revoked clearance", () => {
   assert.equal(matchesTags({ tags: [INTEL] }, [REVOKED]), false);
 });
 
-test("person tags carry the implication; filters do not widen", () => {
-  assert.deepEqual(personTags({ category: "clearance", tags: [REVOKED] }), [REVOKED, INTEL]);
-  assert.deepEqual(projectPerson(clearanceCard("x", [REVOKED])).tags, [REVOKED, INTEL]);
-  assert.equal(matchesTags({ tags: [REVOKED] }, [INTEL]), true);
+test("person tags carry a gated implication; filters do not widen", () => {
+  const intel = { id: "a", tags: [REVOKED], career: ciaCareer() };
+  assert.equal(matchesTags(intel, [INTEL]), true);
   assert.deepEqual(normalizeTags([REVOKED]), [REVOKED]);
+  assert.equal(matchesTags({ tags: [REVOKED] }, [INTEL]), false);
 });
 
-test("insert and update store the implied tag", async () => {
+test("the intel-agency matcher uses word boundaries and excludes committees", () => {
+  for (const text of [
+    "CIA",
+    "Central Intelligence Agency",
+    "NSA",
+    "National Security Agency",
+    "DIA",
+    "Defense Intelligence Agency",
+    "ODNI",
+    "Director of National Intelligence",
+    "Directorate of National Intelligence",
+    "DNI",
+    "National Counterterrorism Center",
+    "NCTC",
+    "National Intelligence Council",
+    "National Intelligence Officer",
+    "NGA",
+    "National Geospatial-Intelligence Agency",
+    "NRO",
+    "National Reconnaissance Office",
+    "State INR",
+    "Bureau of Intelligence and Research",
+    "FBI Intelligence Branch",
+    "FBI National Security Branch",
+    "Under Secretary of Defense for Intelligence",
+    "military intelligence",
+    "Army Intelligence",
+    "Office of Naval Intelligence",
+    "Air Force intelligence",
+    "Air Force ISR",
+    "Marine Corps Intelligence",
+    "intelligence official",
+    "intelligence officer",
+    "intelligence agency",
+    "intelligence community",
+    "Former intelligence official",
+    "Former CIA Director",
+  ]) {
+    assert.equal(isIntelAgencyText(text), true, text);
+  }
+  for (const text of [
+    "National Security Advisor",
+    "National Security Council",
+    "Senate Select Committee on Intelligence",
+    "Defense Secretary",
+    "Secretary of State",
+    "Ambassador",
+    "Senate Intelligence Committee staff",
+  ]) {
+    assert.equal(isIntelAgencyText(text), false, text);
+  }
+});
+
+test("insert and update store the implied tag only with a recorded intel role", async () => {
   setMemory({ people: [], operations: [], source_posts: [] });
-  const inserted = await insertPerson(clearanceCard("jane-roe", [REVOKED]));
+  const inserted = await insertPerson(clearanceCard("jane-roe", [REVOKED], { career: ciaCareer() }));
   assert.deepEqual(inserted.tags, [REVOKED, INTEL]);
   assert.deepEqual((await getPerson("jane-roe")).tags, [REVOKED, INTEL]);
 
@@ -72,22 +246,56 @@ test("insert and update store the implied tag", async () => {
   assert.deepEqual((await getPerson("john-roe")).tags, ["official"]);
   const before = await getPerson("john-roe");
   await savePerson({ ...before, tags: ["official", REVOKED] });
-  assert.deepEqual((await getPerson("john-roe")).tags, ["official", REVOKED, INTEL]);
+  assert.deepEqual((await getPerson("john-roe")).tags, ["official", REVOKED]);
+
+  const kept = await insertPerson(clearanceCard("gina-haspel", [INTEL]));
+  assert.deepEqual(kept.tags, [INTEL]);
 
   const listed = await listPeople({ tags: [INTEL] });
-  assert.deepEqual(listed.map((r) => r.id).sort(), ["jane-roe", "john-roe"]);
+  assert.deepEqual(listed.map((r) => r.id).sort(), ["gina-haspel", "jane-roe"]);
   setMemory({ people: [], operations: [], source_posts: [] });
 });
 
-test("public gap-upsert carries the implied tag on people rows", () => {
-  assert.equal(pickRow("people", { id: "a", tags: [REVOKED] }).tags, JSON.stringify([REVOKED, INTEL]));
-  assert.equal(pickRow("people", { id: "a", tags: JSON.stringify(["official", REVOKED]) }).tags, JSON.stringify(["official", REVOKED, INTEL]));
+test("john-bolton is not tagged Former intel on insert, save, memory, or personTags", async () => {
+  setMemory({ people: [], operations: [], source_posts: [] });
+  const nsa = { clearances: clearanceRole("Former National Security Advisor") };
+  const inserted = await insertPerson(clearanceCard("john-bolton", [REVOKED], nsa));
+  assert.deepEqual(inserted.tags, [REVOKED]);
+  assert.deepEqual((await getPerson("john-bolton")).tags, [REVOKED]);
+  assert.deepEqual(personTags(await getPerson("john-bolton")), [REVOKED]);
+
+  await savePerson({ ...(await getPerson("john-bolton")), tags: [REVOKED, INTEL] });
+  assert.deepEqual((await getPerson("john-bolton")).tags, [REVOKED]);
+
+  const listed = await listPeople({ tags: [INTEL] });
+  assert.deepEqual(listed.map((r) => r.id), []);
+  setMemory({ people: [], operations: [], source_posts: [] });
+});
+
+test("public gap-upsert carries the gated implied tag on people rows", () => {
+  const intelRow = { id: "a", tags: [REVOKED], career: ciaCareer() };
+  assert.equal(pickRow("people", intelRow).tags, JSON.stringify([REVOKED, INTEL]));
+  assert.equal(
+    pickRow("people", { id: "a", tags: JSON.stringify(["official", REVOKED]), career: ciaCareer() }).tags,
+    JSON.stringify(["official", REVOKED, INTEL]),
+  );
+  assert.equal(pickRow("people", { id: "a", tags: [REVOKED] }).tags, JSON.stringify([REVOKED]));
   assert.equal(pickRow("people", { id: "a", tags: [REVOKED, INTEL] }).tags, JSON.stringify([REVOKED, INTEL]));
   assert.equal(pickRow("people", { id: "a", tags: ["official"] }).tags, JSON.stringify(["official"]));
   assert.equal(pickRow("people", { id: "a", tags: [] }).tags, "[]");
   assert.equal(pickRow("people", { id: "a" }).tags, "[]");
   assert.equal(pickRow("operations", { id: "op", tags: [REVOKED] }).tags, JSON.stringify([REVOKED]));
-  const { sql, params } = buildUpsertSql("people", [{ id: "a", name: "A", category: "clearance", tags: [REVOKED] }]);
+
+  const nsa = {
+    id: "john-bolton",
+    tags: [REVOKED],
+    clearances: clearanceRole("Former National Security Advisor"),
+  };
+  assert.equal(pickRow("people", nsa).tags, JSON.stringify([REVOKED]));
+
+  const { sql, params } = buildUpsertSql("people", [
+    { id: "a", name: "A", category: "clearance", tags: [REVOKED], career: ciaCareer() },
+  ]);
   assert.match(sql, /\btags = EXCLUDED\.tags\b/);
   assert.ok(params.includes(JSON.stringify([REVOKED, INTEL])));
 });
@@ -134,26 +342,38 @@ function stubPool() {
   return { people, query, connect: async () => ({ query, release() {} }) };
 }
 
-test("the SQL tag list returns a person saved with only clearance_revoked", async () => {
+test("the SQL tag list stores Former intel only when an intel role is recorded", async () => {
   const stub = stubPool();
   setTestPool(stub);
   try {
-    await insertPerson(clearanceCard("jane-roe", [REVOKED]));
+    await insertPerson(clearanceCard("jane-roe", [REVOKED], { career: ciaCareer() }));
     assert.deepEqual(stub.people.get("jane-roe").tags, [REVOKED, INTEL]);
 
     await insertPerson(clearanceCard("john-roe", ["official"]));
     assert.deepEqual(stub.people.get("john-roe").tags, ["official"]);
     await savePerson({ ...(await getPerson("john-roe")), tags: ["official", REVOKED] });
-    assert.deepEqual(stub.people.get("john-roe").tags, ["official", REVOKED, INTEL]);
+    assert.deepEqual(stub.people.get("john-roe").tags, ["official", REVOKED]);
+
+    await insertPerson(
+      clearanceCard("john-bolton", [REVOKED], {
+        clearances: clearanceRole("Former National Security Advisor"),
+      }),
+    );
+    assert.deepEqual(stub.people.get("john-bolton").tags, [REVOKED]);
+    await savePerson({ ...(await getPerson("john-bolton")), tags: [REVOKED, INTEL] });
+    assert.deepEqual(stub.people.get("john-bolton").tags, [REVOKED]);
+
+    await insertPerson(clearanceCard("gina-haspel", [INTEL]));
+    assert.deepEqual(stub.people.get("gina-haspel").tags, [INTEL]);
 
     // Control: a row written outside the store without the implied tag stays off the list,
     // which proves the list reads stored people.tags.
     stub.people.set("raw-row", { ...clearanceCard("raw-row", [REVOKED]) });
 
     const intel = await listPeople({ tags: [INTEL] });
-    assert.deepEqual(intel.map((r) => r.id).sort(), ["jane-roe", "john-roe"]);
+    assert.deepEqual(intel.map((r) => r.id).sort(), ["gina-haspel", "jane-roe"]);
     const revoked = await listPeople({ tags: [REVOKED] });
-    assert.deepEqual(revoked.map((r) => r.id).sort(), ["jane-roe", "john-roe", "raw-row"]);
+    assert.deepEqual(revoked.map((r) => r.id).sort(), ["jane-roe", "john-bolton", "john-roe", "raw-row"]);
   } finally {
     setTestPool(null);
   }

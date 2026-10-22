@@ -303,6 +303,26 @@ test("fact-tag lists include only people who already have that tag", async () =>
         category: "clearance",
         event_date: "2025-01-20",
         tags: ["clearance_revoked"],
+        clearances: [
+          {
+            status: "revoked",
+            date: "2025-01-20",
+            authority: "Executive Order 14152",
+            role: "Former Director of National Intelligence",
+            sources: [
+              {
+                url: "https://www.govinfo.gov/content/pkg/FR-2025-01-29/html/2025-01954.htm",
+                publisher: "Federal Register",
+                date: "2025-01-20",
+              },
+              {
+                url: "https://www.whitehouse.gov/presidential-actions/2025/01/holding-former-government-officials-accountablefor-election-interference-and-improper-disclosure-of-sensitive-governmental-information/",
+                publisher: "The White House",
+                date: "2025-01-20",
+              },
+            ],
+          },
+        ],
       },
       {
         id: "other-person",
@@ -476,7 +496,7 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.match(formerIntel.body, /stored former employment at a U\.S\. intelligence agency/);
   assert.doesNotMatch(formerIntel.body, /identity filter/);
   assert.doesNotMatch(formerIntel.body, /href="\/people\/gavin-newsom"/);
-  // A revoked clearance implies Former intel (IMPLIED_TAGS).
+  // Revoked + recorded DNI role implies Former intel (IMPLIED_TAGS).
   assert.match(formerIntel.body, /href="\/people\/james-clapper"/);
   assert.doesNotMatch(formerIntel.body, /href="\/people\/alma-adams"/);
   assert.match(formerIntel.body, /href="\/tags\/former-intel-agency-personnel" aria-current="page"/);
