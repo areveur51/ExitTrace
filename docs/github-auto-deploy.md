@@ -65,8 +65,10 @@ Live (not `et_meta`) public fields on `keep_up.logical`:
 | Public field | Meaning |
 |--|--|
 | `apply_state` | Subscriber only: `disabled` / `healthy` / `handshake_retry` / `crash_loop` / `lsn_stalled` / `relations_stale` / `poison_txn`. `null` when no `pg_subscription` (publisher / lab / file) — not subscriber `absent`. |
-| `apply_error_count` | Live `pg_stat_subscription_stats` apply errors, or null. |
+| `apply_error_count` | Live `pg_stat_subscription_stats` apply errors, or null. Cumulative: it stays high after a crash loop ends. |
 | `lag_seconds` | Receipt age. A small number is **not** proof apply is healthy. |
+
+`apply_state` on health is derived from the **change** in `apply_error_count` over a 10-minute window (`createApplyErrorTrend` in `app/lib/logical-heal.mjs`), never the cumulative total. `crash_loop` needs the count to have gone up within the window. A flat count with an active apply worker, or with `received_lsn` / `latest_end_lsn` advancing, reads `healthy`. The first sample after a process start has no baseline, so it does not count as a rise. The heal script keeps its own rules (it passes the previous snapshot).
 
 `GET /api/health` also exposes `git_sha` when Render sets `RENDER_GIT_COMMIT` (hex only). File backend is null.
 
