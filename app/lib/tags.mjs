@@ -94,7 +94,7 @@ export const ATTRIBUTE_TAGS = [
     nav: "Federal investigation",
     path: "/tags/federal-investigation",
     lede:
-      "People with a stored report of a federal investigation; an investigation is not a charge or a finding of wrongdoing.",
+      "People with a stored report of a federal investigation.",
   },
 ];
 

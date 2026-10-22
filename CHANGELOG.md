@@ -11,7 +11,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Added
 
-- Fact tag Federal investigation (`/tags/federal-investigation`). It records a stored report of a federal investigation. An investigation is not a charge or a finding of wrongdoing. It is not an identity filter.
+- Fact tag Federal investigation (`/tags/federal-investigation`). It records a stored report of a federal investigation. It is not an identity filter.
 
 ### Changed
 

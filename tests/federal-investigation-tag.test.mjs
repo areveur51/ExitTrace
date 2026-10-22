@@ -70,7 +70,7 @@ test("normalizeTags accepts federal_investigation as a fact tag", () => {
   assert.equal(def.path, "/tags/federal-investigation");
   assert.equal(attributeTagByPath("/tags/federal-investigation")?.id, "federal_investigation");
   assert.doesNotMatch(def.lede, /\n/);
-  assert.match(def.lede, /not a charge or a finding of wrongdoing/);
+  assert.equal(def.lede, "People with a stored report of a federal investigation.");
 });
 
 test("the tag menu links to /tags/federal-investigation", () => {
@@ -84,7 +84,8 @@ test("/tags/federal-investigation renders and lists only tagged people", async (
   const page = await requestPage("/tags/federal-investigation");
   assert.equal(page.status, 200);
   assert.match(page.body, /Federal investigation/);
-  assert.match(page.body, /stored report of a federal investigation/);
+  assert.match(page.body, /People with a stored report of a federal investigation\./);
+  assert.doesNotMatch(page.body, /not a charge/);
   assert.match(page.body, /href="\/people\/pat-example"/);
   assert.doesNotMatch(page.body, /href="\/people\/sam-sample"/);
   assert.match(page.body, /href="\/tags\/federal-investigation" aria-current="page"/);
