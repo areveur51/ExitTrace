@@ -158,8 +158,11 @@ function asSources(raw) {
   return Array.isArray(raw) ? raw.filter((s) => s && s.url) : [];
 }
 
-/** Stored gold still wins. Otherwise the lead agency seal. Screenshot paths are not stills. */
-export function operationPortraitFrom(row = {}) {
+/** Stored gold still wins. Otherwise the lead agency seal. Screenshot paths are not stills.
+ *  A plain-object overrides table is a test injection. Anything else, including the
+ *  index Array#map passes, keeps the default override table.
+ */
+export function operationPortraitFrom(row = {}, overrides) {
   const agencies = parseAgencies(row.agencies || row.organization || row.orgs);
   const photo = String(row.photo || "").trim();
   const gold = goldMediaHref(photo);
@@ -169,10 +172,17 @@ export function operationPortraitFrom(row = {}) {
       photo_credit: String(row.photo_credit || "").trim(),
     };
   }
-  return operationLeadLogo(agencies);
+  const operationId = row.id || row.slug || "";
+  const injected =
+    overrides && typeof overrides === "object" && !Array.isArray(overrides)
+      ? overrides
+      : null;
+  return injected
+    ? operationLeadLogo(agencies, operationId, injected)
+    : operationLeadLogo(agencies, operationId);
 }
 
-export function normalizeOperation(row = {}) {
+export function normalizeOperation(row = {}, overrides) {
   const name = String(row.name || row.subject || "").trim();
   const event_date = asEventDate(row.event_date);
   const announcedRaw = asEventDate(row.announced_date);
@@ -188,7 +198,7 @@ export function normalizeOperation(row = {}) {
     arrest_count = null;
   }
   const agencies = parseAgencies(row.agencies || row.organization || row.orgs);
-  const logo = operationPortraitFrom({ ...row, agencies });
+  const logo = operationPortraitFrom({ ...row, agencies }, overrides);
   return {
     id: String(row.id || "").trim() || operationSlug(name),
     name,
@@ -246,7 +256,7 @@ export function mergeOperationAnnotate(gold, prior) {
     screenshot: a.screenshot || b.screenshot || "",
   };
   if (!merged.photo) {
-    const logo = operationLeadLogo(merged.agencies);
+    const logo = operationLeadLogo(merged.agencies, merged.id);
     merged.photo = logo.photo;
     merged.photo_credit = logo.photo_credit;
   }
