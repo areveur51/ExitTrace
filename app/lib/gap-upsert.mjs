@@ -10,6 +10,7 @@
 
 import { clearanceJson } from "./clearances.mjs";
 import { nicknameJson } from "./nicknames.mjs";
+import { withImpliedTags } from "./tags.mjs";
 
 export const PUBLISHED_TABLES = Object.freeze([
   "people",
@@ -373,6 +374,25 @@ function centralCastingJson(row) {
   return Array.isArray(v) ? JSON.stringify(v) : "[]";
 }
 
+/**
+ * people.tags as stored. The store already writes IMPLIED_TAGS, so this is a
+ * no-op guard for a row written outside the store. Pass the whole people row
+ * (id, career, clearances) so Former intel is added only when a recorded
+ * intel-agency role allows it, and dropped for FORMER_INTEL_EXCLUDE ids.
+ * Bad JSON or a non-array becomes '[]', like clearanceJson.
+ */
+function peopleTagsJson(row) {
+  let list = row?.tags;
+  if (typeof list === "string") {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      return "[]";
+    }
+  }
+  return Array.isArray(list) ? JSON.stringify(withImpliedTags(list, row)) : "[]";
+}
+
 function rowValue(table, col, row) {
   if (table === "person_events" && col === "unsealed") {
     return row?.unsealed === true ? true : null;
@@ -385,6 +405,9 @@ function rowValue(table, col, row) {
   }
   if (table === "people" && col === "clearances") {
     return clearanceJson(row?.clearances);
+  }
+  if (table === "people" && col === "tags") {
+    return peopleTagsJson(row);
   }
   if (table === "add_requests") {
     if (col === "cite_urls" || col === "payload") {

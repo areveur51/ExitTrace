@@ -46,6 +46,12 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS country_of_origin TEXT;
 -- Identity tags (civilian, non_civilian, celebrity, official, ceo) and fact tags
 -- (clearance_revoked, trump_nickname). Multi-tag. Fact tags are not implied by kind.
+-- clearance_revoked implies former_intel_agency_personnel only when the card
+-- records an intelligence-agency role (career title / organization / branch, or
+-- a clearance row role). FORMER_INTEL_EXCLUDE (john-bolton) never gets that tag;
+-- a stored copy is dropped on write. Add-only for everyone else. See IMPLIED_TAGS
+-- in app/lib/tags.mjs.
+
 ALTER TABLE people ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Person-level occupation / service years. Not event-tag attrs. Empty stays empty.
 ALTER TABLE people ADD COLUMN IF NOT EXISTS career JSONB NOT NULL DEFAULT '[]'::jsonb;

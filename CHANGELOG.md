@@ -11,6 +11,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Changed
 
+- A person with a revoked clearance also carries the Former intel tag only when the card records an intelligence-agency role (career title, organization, or branch, or a clearance role). John Bolton is excluded: he never served at an intel agency, so Former intel is not added and a stored copy is dropped on write. Cards that already store Former intel keep it unless they are excluded. Former intel alone does not add a revoked clearance.
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
 
 ## [1.2.27] - 2026-10-21

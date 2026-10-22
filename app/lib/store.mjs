@@ -30,6 +30,7 @@ import {
   kindsImplyingTags,
   matchesTags,
   normalizeTags,
+  withImpliedTags,
 } from "./tags.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
@@ -60,6 +61,15 @@ import {
 
 let pool = null;
 let memory = null;
+/** Tests only: a stub pool that stands in for Postgres. Never set by the app. */
+let testPool = null;
+
+/** Tests only: route store SQL to a stub pool (null clears it). No-op unless NODE_ENV is test. */
+export function setTestPool(stub) {
+  if (process.env.NODE_ENV !== "test") return;
+  testPool = stub || null;
+  dropCatalogCache();
+}
 
 /** Postgres catalog reads only. Memory tests stay live. Direct SQL shows up within this window. An expired snapshot is served once while it refreshes. */
 const CATALOG_CACHE_MS = 12_000;
@@ -86,6 +96,7 @@ export function backendName() {
 }
 
 export async function getPool() {
+  if (testPool) return testPool;
   const url = databaseUrl();
   if (!url) return null;
   if (pool) return pool;
@@ -1844,7 +1855,10 @@ function personValues(row) {
     JSON.stringify(person.sources || []),
     person.summary,
     JSON.stringify(person.events || []),
-    JSON.stringify(person.tags || []),
+    // Every people INSERT / UPDATE / seed upsert binds tags here. Store IMPLIED_TAGS
+    // (revoked + recorded intel-agency role; FORMER_INTEL_EXCLUDE drops Former intel)
+    // so the SQL tag lists (peopleTagWhere) see them.
+    JSON.stringify(withImpliedTags(person.tags || [], person)),
     JSON.stringify(person.career || []),
     JSON.stringify(person.nicknames || []),
     JSON.stringify(person.clearances || []),
