@@ -30,11 +30,11 @@ The subscriber's replica-identity columns (its primary key) must all be among th
 
 `exittrace_lab_pub` is a table list (`ALTER PUBLICATION … ADD TABLE …`). There is no `FOR ALL TABLES` in this repo. Retired rollback tables are lab-local and are not published. Do not `ALTER PUBLICATION`. Never `copy_data=true`. No `REFRESH PUBLICATION` (no new published table).
 
-Gap-upsert (lab to Render) only copies rows lab already has. Lab has `seq > 0` rows only after lab phase B. That is why the write freeze below matters: a second notable must not be written until both sides have phase B.
+Gap-upsert (lab to Render) only copies rows lab already has. Lab has `seq > 0` rows only after lab phase B. That is why the required write freeze below matters: a second notable must not be written until both sides have phase B.
 
 ## Before every step
 
-Record these read-only results before each step: phase A on each side, phase B on each side, and each rollback step. The same queries are in `scripts/migrations/2026-10-22-multi-notable-replication-checks.sql` (`SELECT` only).
+Record these read-only results before **every** step: phase A on each side, phase B on each side, and each rollback step (a, b, c, d, e). Always record the LSNs (lab `pg_current_wal_lsn()` and slot `confirmed_flush_lsn`; Render `received_lsn` and `latest_end_lsn`) and Render `apply_error_count` before every step, so a stall or a new apply error can be tied to the step that caused it. The same queries are in `scripts/migrations/2026-10-22-multi-notable-replication-checks.sql` (`SELECT` only).
 
 On Render (subscriber):
 
@@ -62,6 +62,23 @@ SELECT slot_name, active, confirmed_flush_lsn,
 Catch-up means the lab slot `confirmed_flush_lsn` and Render `latest_end_lsn` are both greater than or equal to the lab `pg_current_wal_lsn()` recorded right after the lab step committed.
 
 Stop rule: if Render logs show apply errors (for example `publisher did not send replica identity column`, a duplicate key, or `logical replication apply worker` exited), or `apply_error_count` rises, halt. Do not run the next step. Roll back in the a–e order below.
+
+### Before rollback step b: publication precheck
+
+Record on lab before step b (also in `scripts/migrations/2026-10-22-multi-notable-replication-checks.sql`, read-only):
+
+```sql
+SELECT pubname, puballtables
+  FROM pg_publication
+ WHERE pubname = 'exittrace_lab_pub';
+
+SELECT pubname, schemaname, tablename
+  FROM pg_publication_tables
+ WHERE tablename IN ('person_events_multi_notable_retired',
+                     'people_events_multi_notable_retired');
+```
+
+Required result: `puballtables` is `false`, and the second query returns no rows (neither retired table is in any publication). If `puballtables` is `true`, STOP: do not run step b and go back to Worf. Do not `ALTER PUBLICATION`. A `FOR ALL TABLES` publication would publish the retired tables that step b creates, and Render has no such tables. If a retired table is listed (for example from an earlier partial run), also STOP and go back to Worf.
 
 ## Rollout
 
@@ -93,9 +110,11 @@ Run phase A off-ingest (outside the ingest window). The non-concurrent `CREATE U
 3. Confirm the subscriber applied past the lab DDL LSN (`pg_stat_subscription.latest_end_lsn` / `pg_replication_slots.confirmed_flush_lsn` for slot `exittrace_lab_sub` on the lab). Counts/checksums unchanged. Use the [Before every step](#before-every-step) queries.
 4. **Deploy code.** It works with both the old primary key and the phase A unique index. `insertPerson` and `savePerson` write `people` and call `syncPersonEvents` on one client in one transaction (`BEGIN`, then `COMMIT`; any error runs `ROLLBACK` and rethrows). `assertMultiNotableReady` refuses a notable with `seq > 0` until **this** database's `person_events` primary key includes `seq`. The error is `PromoteError` with code `multi_notable_needs_phase_b` (`Second notable not saved: person_events primary key is still (person_id, kind). …`). There is no catalog query when the person has no `seq > 0` notable. The guard sees only the database it is connected to. Do **not** write a second notable yet.
 
-### Write freeze (optional, recommended)
+### Write freeze (REQUIRED)
 
-Pause ingest and app writes to `person_events` on lab from before lab phase B until after Render phase B. Confirm LSN catch-up before unfreezing.
+The write freeze is required, not optional. Pause ingest and app writes to `person_events` on lab from before lab phase B until after Render phase B. Confirm LSN catch-up before unfreezing.
+
+Why it is required: the app guard (`assertMultiNotableReady`) only sees the local database. It cannot see whether Render has phase B yet.
 
 Between lab phase B and Render phase B, a `seq > 0` notable written on lab replicates as an `INSERT` that conflicts with Render's old primary key `(person_id, kind)` and stalls apply. No second notable may be written until both sides have phase B. The code guard sees only its own database, so a lab that already has phase B will accept a second notable while Render is still on `(person_id, kind)`.
 
@@ -120,17 +139,17 @@ Between lab phase B and Render phase B, a `seq > 0` notable written on lab repli
 
 Documented in `scripts/migrations/2026-10-22-multi-notable-rollback.sql` (comments only; that file has no executable SQL). Not run as part of place. Run the step files in this order. Lab keeps sending `seq` as a key column until Render is back on `(person_id, kind)`. At every moment Render's primary-key columns are a subset of the key columns lab sends.
 
+**Write freeze (REQUIRED) across the rollback.** Pause lab writes to `person_events` from before step b until after step e, and confirm catch-up before unfreezing. Why it is required: the app guard only sees the local database. Until step e, lab's key still has `seq`, so lab accepts a `seq > 0` notable. Between b and d that row has no CHECK on Render and lands outside the re-key. Between d and e its `INSERT` conflicts with Render's restored `(person_id, kind)` and stalls apply. The guards in d and e abort if such a row exists, but only the freeze prevents it.
+
 a. **Render:** drop CHECK `person_events_seq_notable_only` (`scripts/migrations/2026-10-22-multi-notable-rollback-a-render-drop-check.sql`). Replicated re-key changes set `kind = notable_retired_N` with `seq > 0`. That value fails the CHECK, so the CHECK has to be gone first.
 
-b. **Lab:** one transaction (`scripts/migrations/2026-10-22-multi-notable-rollback-b-lab-retire-rekey.sql`). Copy extra notables into the lab-local retired tables, drop the CHECK, then re-key with `UPDATE person_events SET kind = 'notable_retired_' || seq WHERE kind = 'notable' AND seq > 0`. Keep lab's `PRIMARY KEY (person_id, kind, seq)`.
+b. **Lab:** first run and record the [publication precheck](#before-rollback-step-b-publication-precheck): `puballtables` must be `false` and neither retired table listed. If `puballtables` is `true`, STOP and go back to Worf; no `ALTER PUBLICATION`. Then one transaction (`scripts/migrations/2026-10-22-multi-notable-rollback-b-lab-retire-rekey.sql`). Copy extra notables into the lab-local retired tables, drop the CHECK, then re-key with `UPDATE person_events SET kind = 'notable_retired_' || seq WHERE kind = 'notable' AND seq > 0`. Keep lab's `PRIMARY KEY (person_id, kind, seq)`.
 
 c. **Wait for LSN catch-up.** Read-only. Render must apply the re-key changes before either side restores `(person_id, kind)`. Record `pg_current_wal_lsn()` on lab right after step b commits. Catch-up means slot `exittrace_lab_sub` `confirmed_flush_lsn` and Render `latest_end_lsn` are both at least that LSN. Queries are in [Before every step](#before-every-step) and `scripts/migrations/2026-10-22-multi-notable-replication-checks.sql`.
 
 d. **Render:** restore `PRIMARY KEY (person_id, kind)` (`scripts/migrations/2026-10-22-multi-notable-rollback-d-render-restore-pk.sql`). Keep the `seq` column and the unique index `person_events_person_kind_seq_key`. `REPLICA IDENTITY DEFAULT`. A `DO` block runs `RAISE EXCEPTION` and aborts the transaction if any row still has `kind = 'notable' AND seq > 0` (the re-key has not been applied yet). This step does not change rows.
 
 e. **Lab:** restore `PRIMARY KEY (person_id, kind)` (`scripts/migrations/2026-10-22-multi-notable-rollback-e-lab-restore-pk.sql`). Same shape and the same guard. Keep the unique index. `REPLICA IDENTITY DEFAULT`. This step does not change rows. Run it only after step d, so Render is already on `(person_id, kind)` before lab stops sending `seq`.
-
-Keep the same write freeze across the rollback: pause lab writes to `person_events` from before step b until after step e, and confirm catch-up before unfreezing. Between d and e lab still accepts a `seq > 0` notable (its key still has `seq`), and that `INSERT` would conflict with Render's restored `(person_id, kind)` and stall apply. The guards in d and e abort if such a row exists.
 
 `people.events` JSON snapshot in `people_events_multi_notable_retired` is the source to restore extra notables. Do not `ALTER PUBLICATION`.
 

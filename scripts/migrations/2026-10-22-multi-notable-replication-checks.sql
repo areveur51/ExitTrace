@@ -23,6 +23,16 @@
 --   e. Lab: restore PRIMARY KEY (person_id, kind). Same shape and same guard.
 --      2026-10-22-multi-notable-rollback-e-lab-restore-pk.sql
 --
+-- Write freeze is REQUIRED (not optional): pause lab person_events writes
+-- from before lab phase B until after Render phase B, and from before
+-- rollback step b until after step e. Confirm LSN catch-up before
+-- unfreezing. The app guard only sees the local DB, so it cannot stop a
+-- seq > 0 notable on lab while Render is on a different key.
+-- Before step b, run the publication precheck in
+-- 2026-10-22-multi-notable-replication-checks.sql: puballtables must be
+-- false and neither retired table listed. If puballtables is true, STOP and
+-- go back to Worf. No ALTER PUBLICATION.
+--
 -- Catch-up: lab slot confirmed_flush_lsn and Render latest_end_lsn are >=
 -- the lab pg_current_wal_lsn() recorded right after the lab step committed.
 -- Stop if Render logs show apply errors or apply_error_count rises.
@@ -45,3 +55,16 @@ SELECT slot_name, active, confirmed_flush_lsn,
        pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS lag_bytes
   FROM pg_replication_slots
  WHERE slot_name = 'exittrace_lab_sub';
+
+-- On lab, before rollback step b (publication precheck). Record both results.
+-- Required: puballtables = false, and the second query returns no rows
+-- (neither retired table is in any publication). If puballtables is true,
+-- STOP: do not run step b; go back to Worf. No ALTER PUBLICATION.
+SELECT pubname, puballtables
+  FROM pg_publication
+ WHERE pubname = 'exittrace_lab_pub';
+
+SELECT pubname, schemaname, tablename
+  FROM pg_publication_tables
+ WHERE tablename IN ('person_events_multi_notable_retired',
+                     'people_events_multi_notable_retired');

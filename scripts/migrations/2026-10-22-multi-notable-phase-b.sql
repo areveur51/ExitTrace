@@ -9,6 +9,11 @@
 -- PRIMARY KEY (person_id, kind) is a subset, so UPDATE/DELETE still apply.
 -- Render-first leaves seq on Render's key while lab does not send it, and
 -- apply fails with "publisher did not send replica identity column".
+-- Write freeze is REQUIRED: pause lab person_events writes from before lab
+-- phase B until after Render phase B, and confirm LSN catch-up before
+-- unfreezing. The app guard only sees the local DB: lab with phase B would
+-- accept a seq > 0 notable that conflicts with Render's old PK and stalls apply.
+-- Record LSNs and apply_error_count before each step (replication-checks.sql).
 -- Idempotent via pg_constraint / pg_index guards.
 
 BEGIN;

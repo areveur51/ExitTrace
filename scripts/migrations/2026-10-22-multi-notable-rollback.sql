@@ -37,6 +37,16 @@
 --   e. Lab: restore PRIMARY KEY (person_id, kind). Same shape and same guard.
 --      scripts/migrations/2026-10-22-multi-notable-rollback-e-lab-restore-pk.sql
 --
+-- Write freeze is REQUIRED (not optional): pause lab person_events writes
+-- from before lab phase B until after Render phase B, and from before
+-- rollback step b until after step e. Confirm LSN catch-up before
+-- unfreezing. The app guard only sees the local DB, so it cannot stop a
+-- seq > 0 notable on lab while Render is on a different key.
+-- Before step b, run the publication precheck in
+-- 2026-10-22-multi-notable-replication-checks.sql: puballtables must be
+-- false and neither retired table listed. If puballtables is true, STOP and
+-- go back to Worf. No ALTER PUBLICATION.
+--
 -- Retired tables are lab-local. Publication exittrace_lab_pub is a table list
 -- (no FOR ALL TABLES in this repo), so they are not published. Do not ALTER PUBLICATION.
 -- people.events JSON snapshot in people_events_multi_notable_retired is the source
