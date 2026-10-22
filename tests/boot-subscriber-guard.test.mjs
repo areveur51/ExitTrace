@@ -194,6 +194,15 @@ test("bootstrap SQL: every row backfill is marked, DDL is kept", () => {
   }
   assert.match(stripped, /ADD COLUMN IF NOT EXISTS unsealed BOOLEAN/);
   assert.throws(() => stripBootDataWrites("-- @boot-data-write begin x\nUPDATE people SET a = 1;\n"), /unbalanced/);
+  // No marker may sit inside a DO $$ ... $$ body: stripping would cut the block in half.
+  const lines = BOOTSTRAP.split("\n");
+  let dollar = 0;
+  lines.forEach((line, i) => {
+    if (line.startsWith("-- @boot-data-write")) {
+      assert.equal(dollar % 2, 0, `marker at line ${i + 1} is inside a $$ block`);
+    }
+    dollar += (line.replace(/--.*$/, "").match(/\$\$/g) || []).length;
+  });
   assert.throws(() => stripBootDataWrites("-- @boot-data-write end\n-- @boot-data-write begin\n"), /misplaced/);
 });
 

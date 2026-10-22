@@ -82,6 +82,14 @@ Live (not `et_meta`) public fields on `keep_up.logical`:
 
 Scheduled dump reads `vars.SYNC_MODE` (default `dump`). Dispatch input wins, so a one-shot `SYNC_MODE=dump` does not change the repo var and does not re-enable the dump cron while logical is primary. Do **not** flip `vars.SYNC_MODE` to `dump` while the subscription is enabled — that is dual-write. Changing the var back to dump is a human SIGN (disable the sub first).
 
+## Boot on a subscriber
+
+`app/lib/boot-guard.mjs` probes once per boot whether **this** database has a logical subscription (per-database, fail closed: a failed probe counts as a subscriber). On a subscriber, boot skips every row writer to a replicated table: `importSeed`, `migrateUniquePeople`, the `-- @boot-data-write` sections of `scripts/bootstrap-db.sql`, and any row write from logical heal (gap upsert included; heal gets the same flag and its pool refuses row writes). Schema DDL and subscription management still run.
+
+**Intentional:** if lab (the publisher) ever gains a subscription of its own, lab's boot writers skip too. That is the same fail-closed rule, not a bug. Rows on any subscriber come from the stream or a signed one-off, never from boot.
+
+`tests/bootstrap-stripped-pg.test.mjs` applies the stripped bootstrap SQL to an EMPTY throwaway Postgres named by `ET_SCRATCH_PG_URL` (localhost only; never lab or Render) and skips when it is unset. CI needs a `postgres:16` service on the `test` job (trust auth, database `et_scratch`) with `ET_SCRATCH_PG_URL=postgresql://postgres@localhost:5432/et_scratch` on the `npm test` step. No `@boot-data-write` marker may sit inside a `DO $$ ... $$` block (unit-tested).
+
 ## Logical apply heal
 
 [`.github/workflows/et-logical-heal.yml`](../.github/workflows/et-logical-heal.yml) runs `scripts/logical-apply-heal.mjs` (library: `app/lib/logical-heal.mjs`). It reuses the existing subscription name and the same DISABLE/ENABLE / `REFRESH PUBLICATION WITH (copy_data = false)` verbs as `et-sub-reconnect` and `et-sub-refresh-publication`. The workflow is `workflow_dispatch` only. It has no cron, so it does not re-ENABLE `exittrace_lab_sub` on a timer.

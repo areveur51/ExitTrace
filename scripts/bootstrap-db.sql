@@ -577,6 +577,9 @@ ALTER TABLE add_requests ADD CONSTRAINT add_requests_kind_check
 -- Partial unique: one row per channel + subject when subject_status_id is set.
 -- A null subject does not collide. Empty backfill is OK.
 -- The unpublished composite-key draft (no id column, no rows) is replaced.
+-- The row check is a nested IF: PL/pgSQL plans a whole IF condition at once, so a
+-- FROM request_attributions in the outer condition fails on an empty database
+-- (relation does not exist) even though to_regclass is NULL.
 DO $$
 BEGIN
   IF to_regclass('public.request_attributions') IS NOT NULL
@@ -587,9 +590,10 @@ BEGIN
           AND table_name = 'request_attributions'
           AND column_name = 'id'
      )
-     AND NOT EXISTS (SELECT 1 FROM request_attributions LIMIT 1)
   THEN
-    DROP TABLE request_attributions;
+    IF NOT EXISTS (SELECT 1 FROM request_attributions LIMIT 1) THEN
+      DROP TABLE request_attributions;
+    END IF;
   END IF;
 END $$;
 
