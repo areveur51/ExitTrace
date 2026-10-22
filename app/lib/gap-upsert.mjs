@@ -10,6 +10,7 @@
 
 import { clearanceJson } from "./clearances.mjs";
 import { nicknameJson } from "./nicknames.mjs";
+import { withImpliedTags } from "./tags.mjs";
 
 export const PUBLISHED_TABLES = Object.freeze([
   "people",
@@ -373,6 +374,23 @@ function centralCastingJson(row) {
   return Array.isArray(v) ? JSON.stringify(v) : "[]";
 }
 
+/** people.tags with IMPLIED_TAGS applied (add-only), so the public row carries the rule. */
+function peopleTagsJson(v) {
+  let list = v;
+  if (typeof v === "string") {
+    const text = v.trim();
+    if (!text) return "[]";
+    try {
+      list = JSON.parse(text);
+    } catch {
+      return v;
+    }
+  }
+  if (list === undefined || list === null) return "[]";
+  if (!Array.isArray(list)) return JSON.stringify(list);
+  return JSON.stringify(withImpliedTags(list));
+}
+
 function rowValue(table, col, row) {
   if (table === "person_events" && col === "unsealed") {
     return row?.unsealed === true ? true : null;
@@ -385,6 +403,9 @@ function rowValue(table, col, row) {
   }
   if (table === "people" && col === "clearances") {
     return clearanceJson(row?.clearances);
+  }
+  if (table === "people" && col === "tags") {
+    return peopleTagsJson(row?.tags);
   }
   if (table === "add_requests") {
     if (col === "cite_urls" || col === "payload") {

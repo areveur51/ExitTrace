@@ -476,7 +476,8 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.match(formerIntel.body, /stored former employment at a U\.S\. intelligence agency/);
   assert.doesNotMatch(formerIntel.body, /identity filter/);
   assert.doesNotMatch(formerIntel.body, /href="\/people\/gavin-newsom"/);
-  assert.doesNotMatch(formerIntel.body, /href="\/people\/james-clapper"/);
+  // A revoked clearance implies Former intel (IMPLIED_TAGS).
+  assert.match(formerIntel.body, /href="\/people\/james-clapper"/);
   assert.doesNotMatch(formerIntel.body, /href="\/people\/alma-adams"/);
   assert.match(formerIntel.body, /href="\/tags\/former-intel-agency-personnel" aria-current="page"/);
   assert.match(formerIntel.body, /class="keychip keymap-tag" href="\/tags\/former-intel-agency-personnel"/);

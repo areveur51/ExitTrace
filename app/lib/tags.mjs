@@ -11,7 +11,8 @@ export const IDENTITY_TAGS = [
 export const IDENTITY_TAG_IDS = IDENTITY_TAGS.map((t) => t.id);
 
 /**
- * Fact tags. Not identity, and not implied by an event kind.
+ * Fact tags. Not identity, and not implied by an event kind. A fact tag can imply
+ * another fact tag (IMPLIED_TAGS).
  * The catalog menu has a letterless Tags section. Each row links to the people who already store that fact.
  * They are not catalog hotkeys.
  */
@@ -92,6 +93,34 @@ export const ATTRIBUTE_TAGS = [
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
+
+/**
+ * Fact tags that imply other fact tags. A revoked clearance implies former
+ * intel-agency personnel (standing rule, 2026-10-21). Applied when a person is
+ * stored, read, or synced. Not applied to filter queries: asking for one tag
+ * never widens to its implied tags.
+ */
+export const IMPLIED_TAGS = Object.freeze({
+  clearance_revoked: Object.freeze(["former_intel_agency_personnel"]),
+});
+
+/**
+ * Stored tag list plus every tag implied by IMPLIED_TAGS. Add-only: keeps each
+ * input value and its order, and appends a missing implied tag at the end.
+ * Unknown values are kept as-is (normalizeTags drops them where needed).
+ */
+export function withImpliedTags(raw) {
+  const list = Array.isArray(raw) ? raw.slice() : [];
+  const have = new Set(list.map((item) => normalizeTag(item)).filter(Boolean));
+  for (let i = 0; i < list.length; i += 1) {
+    for (const implied of IMPLIED_TAGS[normalizeTag(list[i])] || []) {
+      if (have.has(implied)) continue;
+      have.add(implied);
+      list.push(implied);
+    }
+  }
+  return list;
+}
 
 /** Event kinds that imply an identity tag. Gold rows often have only the kind. */
 export const KIND_TAGS = {
@@ -180,13 +209,13 @@ export function tagsFromKinds(kinds) {
   return out;
 }
 
-/** Union of stored tags plus tags implied by event kinds / primary category. */
+/** Union of stored tags, tags implied by event kinds / primary category, and IMPLIED_TAGS. */
 export function personTags(row) {
   const kinds = [
     ...((row?.events || []).map((ev) => ev.kind).filter(Boolean)),
     row?.category,
   ];
-  return normalizeTags([...(row?.tags || []), ...tagsFromKinds(kinds)]);
+  return normalizeTags(withImpliedTags([...(row?.tags || []), ...tagsFromKinds(kinds)]));
 }
 
 export function kindsImplyingTags(tags) {

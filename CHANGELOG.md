@@ -11,6 +11,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Changed
 
+- A person with a revoked clearance also carries the Former intel tag. The tag is added when the card is stored, shown, or synced to the public site. Former intel alone does not add a revoked clearance.
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
 
 ## [1.2.27] - 2026-10-21
