@@ -19,7 +19,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Removed
 
-- Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Lab ops scripts `scripts/ops/et-retire-fedinv-tag.mjs` (dry-run by default) and `scripts/ops/et-retire-fedinv-tag-undo.mjs` strip and restore the stored tag.
+- Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
 ## [1.2.27] - 2026-10-21
 
