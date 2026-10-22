@@ -379,8 +379,8 @@ test("identity panel leaves null origin blank, sources are numbered, notables st
   assert.match(html.slice(notableAt, supportAt), /<h3 class="event-h">Notable event<\/h3>/);
   assert.match(html.slice(notableAt, supportAt), /rally\.jpg/);
   assert.match(html.slice(supportAt), /hearing\.jpg/);
-  assert.match(html.slice(supportAt), /src="\/media\/screenshots\/people\/casey-vale\.jpg"/);
-  assert.match(html.slice(supportAt), /data-lightbox="\/media\/screenshots\/people\/casey-vale\.jpg"/);
+  assert.match(html.slice(supportAt), /src="\/media\/screenshots\/people\/casey-vale\.jpg\?p=7"/);
+  assert.match(html.slice(supportAt), /data-lightbox="\/media\/screenshots\/people\/casey-vale\.jpg\?p=7"/);
   assert.doesNotMatch(html.slice(0, supportAt), /screenshots\/people\/casey-vale\.jpg/);
   assert.doesNotMatch(html.slice(0, notableAt), /detail-tile--support/);
   assert.doesNotMatch(html.slice(0, notableAt), /casey-vale-notable\.jpg/);

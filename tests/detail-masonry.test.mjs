@@ -230,9 +230,9 @@ test("dog detail masonry: one CITE tile + Source; lightbox on media only; X URL 
   assert.match(inner, /detail-tile--screenshot[\s\S]*detail-tile--meta/);
   assert.doesNotMatch(html, /detail-media--masonry[\s\S]*<\/div>\s*<div class="detail-copy"/);
   assert.doesNotMatch(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026\.jpg"/);
-  assert.match(html, /data-lightbox="\/media\/screenshots\/dog-comms\/ezraacohen-dow-2026\.png"/);
-  assert.match(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026-2\.jpg"/);
-  assert.match(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026-4\.jpg"/);
+  assert.match(html, /data-lightbox="\/media\/screenshots\/dog-comms\/ezraacohen-dow-2026\.png\?p=7"/);
+  assert.match(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026-2\.jpg\?p=7"/);
+  assert.match(html, /data-lightbox="\/media\/dog-comms\/ezraacohen-dow-2026-4\.jpg\?p=7"/);
   for (const tile of metaTiles(html)) {
     assert.doesNotMatch(tile, /lightbox-open/);
     assert.doesNotMatch(tile, /data-lightbox="/);
@@ -314,7 +314,7 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
   assert.match(person, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.match(person, /james-comey\.hero\.webp\?p=7/);
   assert.doesNotMatch(person, /<img[^>]+src="\/media\/thumbs\/people\/james-comey\.jpg/);
-  assert.match(person, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
+  assert.match(person, /data-lightbox="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.match(person, /aria-label="Sources"/);
   assert.match(person, /<ol class="sources cite-list">/);
   assert.equal(tileByKind(person, "cite").length, 0);
@@ -381,7 +381,7 @@ test("people / ops / corona reuse interleaved masonry; cite tile only when cite 
   assert.match(opInner, /Operation Restore Justice/);
   assert.match(opInner, /pane-h">Sources</);
   assert.match(opInner, /cite-list/);
-  assert.match(op, /data-lightbox="\/media\/screenshots\/operations\/restore\.jpg"/);
+  assert.match(op, /data-lightbox="\/media\/screenshots\/operations\/restore\.jpg\?p=7"/);
   for (const tile of metaTiles(op)) {
     assert.doesNotMatch(tile, /lightbox-open/);
     assert.doesNotMatch(tile, /data-lightbox="/);
@@ -502,7 +502,7 @@ test("detail media keeps the first tile when a later file is the same bytes", ()
     assert.equal((dup.match(/detail-tile--screenshot/g) || []).length, 0);
     assert.doesNotMatch(dup, /screenshots\/people\/duprule\.jpg/);
     assert.doesNotMatch(dup, /Lead still from the same post/);
-    assert.match(dup, /data-lightbox="\/media\/people\/duprule\.jpg"/);
+    assert.match(dup, /data-lightbox="\/media\/people\/duprule\.jpg\?p=7"/);
     assert.match(dup, /Portrait fill-empty from that still/);
     assert.doesNotMatch(dup, /central-casting-comms\/duprule\.jpg/);
     assert.match(dup, /central-casting-comms\/duprule-other\.jpg/);
@@ -573,7 +573,7 @@ test("detail media keeps the first tile when a later file is the same bytes", ()
         ],
       },
     });
-    assert.match(folderHtml, /data-lightbox="\/media\/red-folder-comms\/duprule\.jpg"/);
+    assert.match(folderHtml, /data-lightbox="\/media\/red-folder-comms\/duprule\.jpg\?p=7"/);
     assert.doesNotMatch(folderHtml, /duprule-2\.jpg/);
     assert.match(folderHtml, /Same photo again/);
     assert.match(folderHtml, /detail-tile--screenshot/);

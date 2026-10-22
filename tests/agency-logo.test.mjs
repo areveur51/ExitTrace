@@ -108,7 +108,7 @@ test("operation list and detail paint the seal and leave an unmapped card empty"
     summary: "Roundup.",
   });
   assert.match(detail, /\/media\/agencies\/doj\.jpg\?p=7/);
-  assert.match(detail, /data-lightbox="\/media\/agencies\/doj\.jpg"/);
+  assert.match(detail, /data-lightbox="\/media\/agencies\/doj\.jpg\?p=7"/);
   assert.match(detail, /United States Department of Justice/);
   assert.doesNotMatch(detail, /class="[^"]*empty-portrait/);
 

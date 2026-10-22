@@ -86,7 +86,7 @@ test("support clips render at the bottom with the cite link, and unofficial cite
   const eventAt = html.indexOf('data-kind="government_stepdowns"');
   const mediaAt = html.indexOf('class="detail-supporting"');
   assert.ok(eventAt >= 0 && mediaAt > eventAt);
-  assert.match(html, new RegExp(`src="${CLIP}"`));
+  assert.match(html, new RegExp(`src="${CLIP}\\?p=7"`));
   // Poster is emitted only when the file exists on disk (explicit or sibling .poster.jpg).
   assert.match(html, /playsinline/);
   assert.match(html, /data-lightbox-kind="video"/);
@@ -138,7 +138,7 @@ test("sibling .poster.jpg fills empty supporting video poster", () => {
       ],
     });
     const poster = `/media/people/joe-biden/support/${stem}.poster.jpg`;
-    assert.match(html, new RegExp(`poster="${poster.replace(/\./g, "\\.")}"`));
+    assert.match(html, new RegExp(`poster="${poster.replace(/\./g, "\\.")}\\?p=7"`));
     assert.match(html, /playsinline/);
     assert.match(html, /preload="metadata"/);
     assert.match(html, /data-lightbox-poster="/);
@@ -177,7 +177,7 @@ test("missing sibling poster leaves supporting video without a poster attr", () 
         },
       ],
     });
-    assert.match(html, new RegExp(`src="/media/people/joe-biden/support/${stem}\.mp4"`));
+    assert.match(html, new RegExp(`src="/media/people/joe-biden/support/${stem}\\.mp4\\?p=7"`));
     assert.doesNotMatch(html, /poster="/);
     assert.match(html, /playsinline/);
   } finally {
@@ -221,8 +221,8 @@ test("explicit poster that exists still renders on supporting video", () => {
         },
       ],
     });
-    assert.match(html, new RegExp(`src="${src.replace(/\./g, "\\.")}"`));
-    assert.match(html, new RegExp(`poster="${poster.replace(/\./g, "\\.")}"`));
+    assert.match(html, new RegExp(`src="${src.replace(/\./g, "\\.")}\\?p=7"`));
+    assert.match(html, new RegExp(`poster="${poster.replace(/\./g, "\\.")}\\?p=7"`));
     assert.doesNotMatch(html, /explicit-clip\.poster\.jpg/);
     assert.match(html, /playsinline/);
   } finally {

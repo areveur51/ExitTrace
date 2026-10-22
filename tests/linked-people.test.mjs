@@ -183,7 +183,7 @@ test("official post cards sit after context and before one shared supporting cop
 
   assert.match(main, /detail-tile--video/);
   assert.match(main, new RegExp(VIDEO.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(main, /poster="\/media\/shot-comms\/newstreason\.jpg"/);
+  assert.match(main, /poster="\/media\/shot-comms\/newstreason\.jpg\?p=7"/);
   assert.match(main, /class="cite-block"/);
   assert.match(main, /class="handle">@NewsTreason</);
   assert.ok(main.includes(EXTRA));
