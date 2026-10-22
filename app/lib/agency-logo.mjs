@@ -56,7 +56,7 @@ const AGENCY_LOGOS = Object.freeze({
   ),
   "hud-oig": seal(
     "hud-oig.png",
-    "Logo of the Office of Inspector General, U.S. Department of Housing and Urban Development. U.S. government work, via Wikimedia Commons.",
+    "Seal of the U.S. Department of Housing and Urban Development, shown for its Office of Inspector General. Public domain, via Wikimedia Commons.",
   ),
   usao: seal(
     "usao.png",
@@ -106,8 +106,9 @@ export const SEAL_SOURCES = Object.freeze({
     license: "CC0 1.0 (vector redraw of the official DOL OIG seal)",
   }),
   "hud-oig": Object.freeze({
-    source: "https://commons.wikimedia.org/wiki/File:Office_of_Inspector_General_logo_for_HUD.png",
-    license: "Public domain (U.S. government work, HUD OIG)",
+    // No HUD OIG seal (only a wordmark) is on Commons, so the HUD seal is used.
+    source: "https://commons.wikimedia.org/wiki/File:Seal_of_the_United_States_Department_of_Housing_and_Urban_Development.svg",
+    license: "Public domain (U.S. government work, HUD)",
   }),
   usao: Object.freeze({
     source: "https://commons.wikimedia.org/wiki/File:Official_Logo_for_the_Executive_Office_for_United_States_Attorneys.png",
