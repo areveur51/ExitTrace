@@ -26,7 +26,7 @@ import {
   normalizeClearances,
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
-import { asEventDate, personEvents } from "./promote.mjs";
+import { asEventDate, notableEvents, personEvents } from "./promote.mjs";
 import { renderEventGraph } from "./event-graph.mjs";
 import { hostOf, isUnofficialOrCommentarySocial } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -2354,8 +2354,7 @@ function notableEventSection(ev, sourceNumbers) {
 }
 
 export function notableMediaHtml(row, sourceNumbers) {
-  return personEvents(row)
-    .filter((ev) => String(ev?.kind || "").trim() === "notable")
+  return notableEvents(personEvents(row))
     .map((ev) => notableEventSection(ev, sourceNumbers))
     .filter(Boolean)
     .join("");
@@ -2427,15 +2426,14 @@ export function ukraineAidFlagsEventHtml(row, sourceNumbers) {
     .join("");
 }
 
-/** Vote, endorsement, and notable cards in date order, oldest first. */
+/** Vote and endorsement cards oldest first; notables newest date first at the bottom. */
 function specialEventNodes(row, sourceNumbers) {
   const render = {
     endorsement: endorsementEventSection,
     harassment_records: harassmentEventSection,
     ukraine_aid_flags: ukraineEventSection,
-    notable: notableEventSection,
   };
-  return personEvents(row)
+  const nodes = personEvents(row)
     .filter((ev) => render[String(ev?.kind || "").trim()])
     .sort(compareTimelineEvents)
     .map((ev) => {
@@ -2444,6 +2442,11 @@ function specialEventNodes(row, sourceNumbers) {
       return html ? { kind, html } : null;
     })
     .filter(Boolean);
+  for (const ev of notableEvents(personEvents(row))) {
+    const html = notableEventSection(ev, sourceNumbers);
+    if (html) nodes.push({ kind: "notable", html });
+  }
+  return nodes;
 }
 
 /** Shot comm on a person card. Summary and cites stay here; the clip is not a generic supporting tile. */

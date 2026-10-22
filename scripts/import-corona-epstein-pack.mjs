@@ -225,10 +225,10 @@ async function main() {
         const ev = next.events.find((e) => e.kind === "corona_comms");
         await client.query(
           `INSERT INTO person_events (
-             person_id, kind, event_date, sources, country, comments,
+             person_id, kind, seq, event_date, sources, country, comments,
              notable_group, title_note, status
-           ) VALUES ($1,'corona_comms',$2::date,$3::jsonb,$4,$5,$6,$7,$8)
-           ON CONFLICT (person_id, kind) DO UPDATE SET
+           ) VALUES ($1,'corona_comms',0,$2::date,$3::jsonb,$4,$5,$6,$7,$8)
+           ON CONFLICT (person_id, kind, seq) DO UPDATE SET
              sources = EXCLUDED.sources,
              country = COALESCE(NULLIF(person_events.country,''), EXCLUDED.country),
              comments = COALESCE(NULLIF(person_events.comments,''), EXCLUDED.comments),

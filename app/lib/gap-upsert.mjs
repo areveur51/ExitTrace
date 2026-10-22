@@ -56,7 +56,7 @@ const TABLE_KEYS = Object.freeze({
   request_attributions: "id",
   operations: "id",
   categories: "id",
-  person_events: ["person_id", "kind"],
+  person_events: ["person_id", "kind", "seq"],
   epstein_flight_legs: ["passenger_name_raw", "flight_date", "dep", "arr", "aircraft"],
   source_posts: "id",
   add_requests: "id",
@@ -141,6 +141,7 @@ const OP_COLS = Object.freeze([
 const EVENT_COLS = Object.freeze([
   "person_id",
   "kind",
+  "seq",
   "event_date",
   "sources",
   "announced_date",
@@ -374,6 +375,10 @@ function centralCastingJson(row) {
 }
 
 function rowValue(table, col, row) {
+  if (table === "person_events" && col === "seq") {
+    const n = Number(row?.seq);
+    return Number.isInteger(n) && n >= 0 ? n : 0;
+  }
   if (table === "person_events" && col === "unsealed") {
     return row?.unsealed === true ? true : null;
   }

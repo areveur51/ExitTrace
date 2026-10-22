@@ -14,6 +14,7 @@ import {
   personSlug,
   mergeCites,
   mergePersonAnnotate,
+  notableSeq,
   personEvents,
   personHasKind,
   projectPerson,
@@ -1851,19 +1852,20 @@ function personValues(row) {
   ];
 }
 
-async function syncPersonEvents(client, row) {
+export async function syncPersonEvents(client, row) {
   const person = normalizePerson(row);
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
   for (const ev of person.events) {
+    const seq = String(ev.kind || "").trim() === "notable" ? notableSeq(ev) : 0;
     await client.query(
       `INSERT INTO person_events (
-         person_id, kind, event_date, sources, announced_date,
+         person_id, kind, seq, event_date, sources, announced_date,
          position, organization, country, branch, comments,
          notable_group, title_note, status,
          age_at_event, unsealed
        )
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-       ON CONFLICT (person_id, kind) DO UPDATE SET
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       ON CONFLICT (person_id, kind, seq) DO UPDATE SET
          event_date = person_events.event_date,
          sources = EXCLUDED.sources,
          announced_date = COALESCE(person_events.announced_date, EXCLUDED.announced_date),
@@ -1883,6 +1885,7 @@ async function syncPersonEvents(client, row) {
       [
         person.id,
         ev.kind,
+        seq,
         ev.event_date,
         JSON.stringify(ev.sources || []),
         ev.announced_date || null,
@@ -2698,8 +2701,10 @@ async function countsUncached() {
         byCategory[row.category] = (byCategory[row.category] || 0) + 1;
         continue;
       }
+      const seenKinds = new Set();
       for (const ev of events) {
-        if (!ev.kind) continue;
+        if (!ev.kind || seenKinds.has(ev.kind)) continue;
+        seenKinds.add(ev.kind);
         byCategory[ev.kind] = (byCategory[ev.kind] || 0) + eventHeadcount(ev);
       }
     }
@@ -2766,7 +2771,9 @@ async function countsUncached() {
                     AND (ev->>'headcount')::int BETWEEN 2 AND 100000
                 ), 1)
               ), 0)::int AS n
-         FROM person_events e
+         FROM (
+           SELECT DISTINCT person_id, kind FROM person_events
+         ) e
          JOIN people p ON p.id = e.person_id
         GROUP BY e.kind`,
     ),
