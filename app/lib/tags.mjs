@@ -96,9 +96,11 @@ export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
 
 /**
  * Fact tags that imply other fact tags. A revoked clearance implies former
- * intel-agency personnel (standing rule, 2026-10-21). Applied when a person is
- * stored, read, or synced. Not applied to filter queries: asking for one tag
- * never widens to its implied tags.
+ * intel-agency personnel (standing rule, 2026-10-21). The store writes the
+ * implied tag into people.tags on every insert and update, so tag filters and
+ * tag lists see it as a stored tag. personTags and the public gap-upsert apply
+ * it again as an idempotent guard. A filter query is not expanded: asking for
+ * Former intel does not also select revoked clearances.
  */
 export const IMPLIED_TAGS = Object.freeze({
   clearance_revoked: Object.freeze(["former_intel_agency_personnel"]),

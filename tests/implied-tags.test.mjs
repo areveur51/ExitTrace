@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildUpsertSql, pickRow } from "../app/lib/gap-upsert.mjs";
 import { projectPerson } from "../app/lib/promote.mjs";
-import { getPerson, insertPerson, listPeople, savePerson, setMemory } from "../app/lib/store.mjs";
+import { getPerson, insertPerson, listPeople, savePerson, setMemory, setTestPool } from "../app/lib/store.mjs";
 import {
   IMPLIED_TAGS,
   matchesTags,
@@ -90,4 +90,79 @@ test("public gap-upsert carries the implied tag on people rows", () => {
   const { sql, params } = buildUpsertSql("people", [{ id: "a", name: "A", category: "clearance", tags: [REVOKED] }]);
   assert.match(sql, /\btags = EXCLUDED\.tags\b/);
   assert.ok(params.includes(JSON.stringify([REVOKED, INTEL])));
+});
+
+const PEOPLE_COLS = [
+  "id", "category", "name", "role", "event_date", "death_date", "birth_date", "country_of_origin",
+  "photo", "photo_credit", "screenshot", "screenshot_credit", "net_worth_usd", "net_worth_note",
+  "net_worth_source", "sources", "summary", "events", "tags", "career", "nicknames", "clearances",
+];
+const JSON_COLS = new Set(["sources", "events", "tags", "career", "nicknames", "clearances"]);
+
+/**
+ * Stub Postgres pool. people rows keep exactly the bound column values, so the
+ * tag-list query is answered from stored people.tags only (peopleTagWhere),
+ * never from personTags on read.
+ */
+function stubPool() {
+  const people = new Map();
+  const rowFrom = (params) => {
+    const row = {};
+    PEOPLE_COLS.forEach((col, i) => {
+      row[col] = JSON_COLS.has(col) ? JSON.parse(params[i]) : params[i];
+    });
+    return row;
+  };
+  const query = async (sql, params = []) => {
+    const text = String(sql).trim();
+    if (/^INSERT INTO people \(/.test(text) || /^UPDATE people SET\s+category = \$2/.test(text)) {
+      people.set(params[0], rowFrom(params));
+      return { rows: [], rowCount: 1 };
+    }
+    if (/^SELECT \* FROM people WHERE id = \$1$/.test(text)) {
+      return { rows: people.has(params[0]) ? [structuredClone(people.get(params[0]))] : [] };
+    }
+    if (/^SELECT \* FROM people WHERE/.test(text)) {
+      assert.match(text, /jsonb_array_elements_text\(COALESCE\(people\.tags, '\[\]'::jsonb\)\) t\s+WHERE t = ANY\(\$1::text\[\]\)/);
+      assert.doesNotMatch(text, /people\.category = ANY/);
+      const want = params[0];
+      const rows = [...people.values()].filter((row) => row.tags.some((t) => want.includes(t)));
+      return { rows: rows.map((row) => structuredClone(row)) };
+    }
+    return { rows: [], rowCount: 0 };
+  };
+  return { people, query, connect: async () => ({ query, release() {} }) };
+}
+
+test("the SQL tag list returns a person saved with only clearance_revoked", async () => {
+  const stub = stubPool();
+  setTestPool(stub);
+  try {
+    await insertPerson(clearanceCard("jane-roe", [REVOKED]));
+    assert.deepEqual(stub.people.get("jane-roe").tags, [REVOKED, INTEL]);
+
+    await insertPerson(clearanceCard("john-roe", ["official"]));
+    assert.deepEqual(stub.people.get("john-roe").tags, ["official"]);
+    await savePerson({ ...(await getPerson("john-roe")), tags: ["official", REVOKED] });
+    assert.deepEqual(stub.people.get("john-roe").tags, ["official", REVOKED, INTEL]);
+
+    // Control: a row written outside the store without the implied tag stays off the list,
+    // which proves the list reads stored people.tags.
+    stub.people.set("raw-row", { ...clearanceCard("raw-row", [REVOKED]) });
+
+    const intel = await listPeople({ tags: [INTEL] });
+    assert.deepEqual(intel.map((r) => r.id).sort(), ["jane-roe", "john-roe"]);
+    const revoked = await listPeople({ tags: [REVOKED] });
+    assert.deepEqual(revoked.map((r) => r.id).sort(), ["jane-roe", "john-roe", "raw-row"]);
+  } finally {
+    setTestPool(null);
+  }
+});
+
+test("gap-upsert tags fall back like clearanceJson", () => {
+  assert.equal(pickRow("people", { id: "a", tags: "{not json" }).tags, "[]");
+  assert.equal(pickRow("people", { id: "a", tags: "" }).tags, "[]");
+  assert.equal(pickRow("people", { id: "a", tags: JSON.stringify({ a: 1 }) }).tags, "[]");
+  assert.equal(pickRow("people", { id: "a", tags: { a: 1 } }).tags, "[]");
+  assert.equal(pickRow("people", { id: "a", clearances: "{not json" }).clearances, "[]");
 });

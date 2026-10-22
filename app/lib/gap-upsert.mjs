@@ -374,21 +374,21 @@ function centralCastingJson(row) {
   return Array.isArray(v) ? JSON.stringify(v) : "[]";
 }
 
-/** people.tags with IMPLIED_TAGS applied (add-only), so the public row carries the rule. */
+/**
+ * people.tags as stored. The store already writes IMPLIED_TAGS, so this is a
+ * no-op guard for a row written outside the store. Bad JSON or a non-array
+ * becomes '[]', like clearanceJson.
+ */
 function peopleTagsJson(v) {
   let list = v;
   if (typeof v === "string") {
-    const text = v.trim();
-    if (!text) return "[]";
     try {
-      list = JSON.parse(text);
+      list = JSON.parse(v);
     } catch {
-      return v;
+      return "[]";
     }
   }
-  if (list === undefined || list === null) return "[]";
-  if (!Array.isArray(list)) return JSON.stringify(list);
-  return JSON.stringify(withImpliedTags(list));
+  return Array.isArray(list) ? JSON.stringify(withImpliedTags(list)) : "[]";
 }
 
 function rowValue(table, col, row) {
