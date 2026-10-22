@@ -18,6 +18,14 @@
  * subconninfo or *. If a server still denies pg_subscription (42501), the
  * check falls back to pg_stat_subscription (a system view readable by
  * PUBLIC). Any other failure fails closed.
+ *
+ * One probe per boot: bootDatabase computes the flag once and passes it to
+ * logical_heal, so heal does not run its own cluster-wide probe.
+ *
+ * Intentional: if lab (the publisher) ever gains a subscription of its own,
+ * its boot writers skip too. That is the same fail-closed rule, not a bug.
+ * A database that is both a publisher and a subscriber must get its rows from
+ * the stream (or a signed one-off), never from a boot writer.
  */
 
 const LOG = "[exittrace] boot:";
@@ -37,6 +45,41 @@ export const BOOT_DATA_WRITE_END = "-- @boot-data-write end";
 /** The one log line each skipped writer prints. */
 export function skipLine(writer) {
   return `${LOG} subscriber DB, skipping ${writer}`;
+}
+
+/** The one log line every fail-closed path prints. `label` says why. */
+export function failClosed(label) {
+  return `${LOG} subscriber check ${label}; failing closed, boot writes to replicated tables skipped`;
+}
+
+/** Row-writing statements. DDL and ALTER SUBSCRIPTION are not matched. */
+const ROW_WRITE_SQL = /^\s*(?:WITH\b[\s\S]*?\b)?(?:INSERT|UPDATE|DELETE|TRUNCATE|MERGE|COPY)\b|\bON\s+CONFLICT\b/i;
+
+/** True when `sql` writes rows (INSERT / UPDATE / DELETE / TRUNCATE / MERGE / COPY / upsert). */
+export function isRowWriteSql(sql) {
+  return ROW_WRITE_SQL.test(String(sql || ""));
+}
+
+/**
+ * Wrap a pool so row writes are refused while `subscriber` is true. Fail
+ * closed: anything but an explicit `false` counts as a subscriber. Used by
+ * logical_heal so a gap upsert (or any other row write to a replicated table)
+ * can never run on the subscriber; rows there arrive only by the stream.
+ */
+export function guardReplicatedWrites(p, subscriber, { label = "row write", log = console.log } = {}) {
+  if (subscriber === false || !p || typeof p.query !== "function") return p;
+  return {
+    async query(sql, ...rest) {
+      const text = typeof sql === "string" ? sql : sql && typeof sql.text === "string" ? sql.text : "";
+      if (isRowWriteSql(text)) {
+        log(skipLine(label));
+        const err = new Error(`refused ${label} on a logical-replication subscriber`);
+        err.code = "subscriber_write_refused";
+        throw err;
+      }
+      return p.query(sql, ...rest);
+    },
+  };
 }
 
 /** SQLSTATE or error name only. Never the message (it can carry a host). */
@@ -64,7 +107,7 @@ function countOf(res) {
  */
 export async function isLogicalSubscriberDb(p, { log = console.log } = {}) {
   if (!p || typeof p.query !== "function") {
-    log(`${LOG} subscriber check has no pool; failing closed, boot writes to replicated tables skipped`);
+    log(failClosed("has no pool"));
     return true;
   }
   let n;
@@ -72,18 +115,14 @@ export async function isLogicalSubscriberDb(p, { log = console.log } = {}) {
     n = countOf(await p.query(SUBSCRIBER_COUNT_SQL));
   } catch (err) {
     if (err?.code !== INSUFFICIENT_PRIVILEGE) {
-      log(
-        `${LOG} subscriber check failed (${errLabel(err)}); failing closed, boot writes to replicated tables skipped`,
-      );
+      log(failClosed(`failed (${errLabel(err)})`));
       return true;
     }
     log(`${LOG} pg_subscription not readable (${INSUFFICIENT_PRIVILEGE}); checking pg_stat_subscription`);
     try {
       n = countOf(await p.query(SUBSCRIBER_STAT_FALLBACK_SQL));
     } catch (err2) {
-      log(
-        `${LOG} subscriber check failed (${errLabel(err2)}); failing closed, boot writes to replicated tables skipped`,
-      );
+      log(failClosed(`failed (${errLabel(err2)})`));
       return true;
     }
   }
@@ -118,8 +157,9 @@ export function stripBootDataWrites(sql) {
 /**
  * Database part of server boot(). Dependencies are passed in so tests can
  * prove which writers run. On a subscriber: schema DDL still runs (DDL is not
- * replicated), logical_heal still runs (it manages the subscription; its own
- * et_meta stamp is guarded inside it), and every row writer is skipped.
+ * replicated), logical_heal still runs (it manages the subscription and gets
+ * the same flag, so it never re-probes and never writes rows), and every row
+ * writer is skipped. The subscriber probe runs once per boot.
  */
 export async function bootDatabase(pool, deps) {
   const {
@@ -140,7 +180,7 @@ export async function bootDatabase(pool, deps) {
     await ensureSchema(pool, bootstrapSql);
   }
   try {
-    const heal = await healLogicalApply();
+    const heal = await healLogicalApply({ subscriber });
     log(
       `[exittrace] logical_heal ok=${heal.ok} reason=${heal.reason || ""} altered=${heal.altered} bounced=${heal.bounced} posted_at=${heal.posted_at_type_after} apply_errors_before=${heal.apply_error_count_before} people=${heal.people} dog_comms=${heal.dog_comms}`,
     );
