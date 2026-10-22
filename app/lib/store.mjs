@@ -37,6 +37,7 @@ import { mergeNicknames, nicknameCatalogDate, normalizeNicknames } from "./nickn
 import { DEATH_KEEP_IDS, asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
 import { eventHeadcount, personHeadcount, originText } from "./event-attrs.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
+import { isLogicalSubscriberDb, skipLine } from "./boot-guard.mjs";
 import {
   CENTRAL_CASTING_SCREENSHOT_KIND,
   CentralCastingClassifyError,
@@ -897,21 +898,27 @@ export async function healLogicalApply() {
     out.operations = row.operations ?? null;
     out.warren = row.warren ?? null;
 
-    try {
-      await upsertEtMeta("keep_up.logical.last_heal", {
-        at: new Date().toISOString(),
-        altered: out.altered,
-        bounced: out.bounced,
-        gap_upserted: out.gap_upserted,
-        origin_advanced: out.origin_advanced,
-        lab_tip_lsn: out.lab_tip_lsn,
-        posted_at_type: out.posted_at_type_after,
-        apply_error_count_before: out.apply_error_count_before,
-        people: out.people,
-        dog_comms: out.dog_comms,
-      });
-    } catch {
-      /* ignore */
+    // et_meta is published: a row stamped here on the subscriber collides with
+    // the replicated stream. Boot writers skip on a subscriber (Worf, fail closed).
+    if (await isLogicalSubscriberDb(p)) {
+      console.log(skipLine("logical_heal et_meta keep_up.logical.last_heal"));
+    } else {
+      try {
+        await upsertEtMeta("keep_up.logical.last_heal", {
+          at: new Date().toISOString(),
+          altered: out.altered,
+          bounced: out.bounced,
+          gap_upserted: out.gap_upserted,
+          origin_advanced: out.origin_advanced,
+          lab_tip_lsn: out.lab_tip_lsn,
+          posted_at_type: out.posted_at_type_after,
+          apply_error_count_before: out.apply_error_count_before,
+          people: out.people,
+          dog_comms: out.dog_comms,
+        });
+      } catch {
+        /* ignore */
+      }
     }
   } catch (err) {
     out.ok = false;
