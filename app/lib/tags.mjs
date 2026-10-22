@@ -89,6 +89,20 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People with stored former employment at a U.S. intelligence agency.",
   },
+  {
+    id: "federal_investigation",
+    nav: "Federal investigation",
+    path: "/tags/federal-investigation",
+    lede:
+      "People with a stored report of a federal investigation.",
+  },
+  {
+    id: "fraud",
+    nav: "Fraud",
+    path: "/tags/fraud",
+    lede:
+      "People with a stored record of a fraud charge, plea, conviction, indictment or official fraud finding.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
