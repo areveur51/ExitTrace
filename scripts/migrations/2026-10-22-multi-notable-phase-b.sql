@@ -4,7 +4,11 @@
 -- Does not UPDATE / DELETE / TRUNCATE any row. Does not DROP TABLE or DROP COLUMN.
 --
 -- Requires phase A (column + unique index person_events_person_kind_seq_key).
--- Rollout: run on Render first, then lab. See docs/MULTI_NOTABLE_MIGRATION.md.
+-- Rollout: run on lab first, then Render. See docs/MULTI_NOTABLE_MIGRATION.md.
+-- Lab moves to PRIMARY KEY (person_id, kind, seq) and sends seq. Render's old
+-- PRIMARY KEY (person_id, kind) is a subset, so UPDATE/DELETE still apply.
+-- Render-first leaves seq on Render's key while lab does not send it, and
+-- apply fails with "publisher did not send replica identity column".
 -- Idempotent via pg_constraint / pg_index guards.
 
 BEGIN;

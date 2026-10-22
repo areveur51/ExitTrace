@@ -14,7 +14,7 @@ import {
 } from "../app/lib/promote.mjs";
 import { keymapFooter, personDetail } from "../app/lib/html.mjs";
 import { pickRow, buildUpsertSql } from "../app/lib/gap-upsert.mjs";
-import { syncPersonEvents } from "../app/lib/store.mjs";
+import { counts, insertPersonTx, savePersonTx, setMemory, syncPersonEvents } from "../app/lib/store.mjs";
 
 const CITE_A = { url: "https://www.example.com/news/a" };
 const CITE_B = { url: "https://www.example.net/world/b" };
@@ -197,14 +197,75 @@ test("person detail renders two Notable blocks newest first and no Notable nav",
   assert.doesNotMatch(footer, />Notable</);
 });
 
-test("syncPersonEvents uses ON CONFLICT (person_id, kind, seq) and passes seq", async () => {
+const OLD_PK = [{ attname: "person_id" }, { attname: "kind" }];
+const NEW_PK = [{ attname: "person_id" }, { attname: "kind" }, { attname: "seq" }];
+
+function isCatalog(sql) {
+  return /to_regclass\('person_events'\)/.test(sql) && /pg_constraint/.test(sql);
+}
+
+function recordingClient(pkRows, { throwOn } = {}) {
   const queries = [];
   const client = {
     async query(sql, params) {
-      queries.push({ sql, params });
+      const text = String(sql);
+      queries.push({ sql: text, params });
+      if (throwOn && throwOn.test(text)) throw new Error("person_events insert failed");
+      if (isCatalog(text)) return { rows: pkRows };
       return { rows: [] };
     },
   };
+  return { client, queries };
+}
+
+function twoNotables() {
+  return {
+    id: "casey-vale",
+    name: "Casey Vale",
+    category: "notable",
+    event_date: "2024-08-01",
+    events: [
+      notable({ event_date: "2020-01-15", seq: 0, comments: "First notable.", sources: [CITE_A] }),
+      notable({ event_date: "2024-08-01", seq: 1, comments: "Second notable.", sources: [CITE_B] }),
+    ],
+  };
+}
+
+function oneNotable() {
+  return {
+    id: "casey-vale",
+    name: "Casey Vale",
+    category: "notable",
+    event_date: "2024-08-01",
+    events: [notable({ seq: 0 })],
+  };
+}
+
+function queryKinds(queries) {
+  return queries.map((q) => {
+    const sql = q.sql.trim();
+    if (/^BEGIN\b/i.test(sql)) return "begin";
+    if (/^COMMIT\b/i.test(sql)) return "commit";
+    if (/^ROLLBACK\b/i.test(sql)) return "rollback";
+    if (isCatalog(sql)) return "catalog";
+    if (/^INSERT INTO people\b/i.test(sql)) return "insert-people";
+    if (/^UPDATE people\b/i.test(sql)) return "update-people";
+    if (/DELETE FROM person_events/i.test(sql)) return "delete-events";
+    if (/INSERT INTO person_events/i.test(sql)) return "insert-events";
+    return `other:${sql.slice(0, 48)}`;
+  });
+}
+
+async function assertNeedsPhaseB(fn) {
+  await assert.rejects(fn, (err) => {
+    assert.equal(err.code, "multi_notable_needs_phase_b");
+    assert.match(err.message, /primary key is still \(person_id, kind\)/);
+    return true;
+  });
+}
+
+test("syncPersonEvents uses ON CONFLICT (person_id, kind, seq) and passes seq", async () => {
+  const { client, queries } = recordingClient(NEW_PK);
   await syncPersonEvents(client, {
     id: "casey-vale",
     name: "Casey Vale",
@@ -279,4 +340,90 @@ test("gap-upsert person_events key and columns include seq", () => {
     event_date: "2024-01-01",
   });
   assert.equal(missing.seq, 0);
+});
+
+test("old primary key rejects a second notable before any people or person_events write", async () => {
+  const saved = recordingClient(OLD_PK);
+  await assertNeedsPhaseB(() => savePersonTx(saved.client, twoNotables()));
+  assert.deepEqual(queryKinds(saved.queries), ["begin", "catalog", "rollback"]);
+
+  const inserted = recordingClient(OLD_PK);
+  await assertNeedsPhaseB(() => insertPersonTx(inserted.client, twoNotables()));
+  assert.deepEqual(queryKinds(inserted.queries), ["begin", "catalog", "rollback"]);
+});
+
+test("old primary key saves a single notable without a catalog query", async () => {
+  const saved = recordingClient(OLD_PK);
+  await savePersonTx(saved.client, oneNotable());
+  const savedKinds = queryKinds(saved.queries);
+  assert.equal(savedKinds.includes("catalog"), false);
+  assert.equal(savedKinds.at(-1), "commit");
+  assert.ok(savedKinds.includes("update-people"));
+  assert.equal(savedKinds.includes("rollback"), false);
+
+  const inserted = recordingClient(OLD_PK);
+  await insertPersonTx(inserted.client, oneNotable());
+  const insertedKinds = queryKinds(inserted.queries);
+  assert.equal(insertedKinds.includes("catalog"), false);
+  assert.equal(insertedKinds.at(-1), "commit");
+  assert.ok(insertedKinds.includes("insert-people"));
+  assert.equal(insertedKinds.includes("rollback"), false);
+});
+
+test("new primary key saves both notable seq values in one transaction", async () => {
+  const { client, queries } = recordingClient(NEW_PK);
+  await savePersonTx(client, twoNotables());
+  const kinds = queryKinds(queries);
+  assert.equal(kinds.at(-1), "commit");
+  assert.equal(kinds.includes("rollback"), false);
+  const seqs = queries
+    .filter((q) => /INSERT INTO person_events/.test(q.sql) && q.params?.[1] === "notable")
+    .map((q) => q.params[2])
+    .sort((a, b) => a - b);
+  assert.deepEqual(seqs, [0, 1]);
+});
+
+test("a person_events insert failure rolls back and does not commit", async () => {
+  const { client, queries } = recordingClient(NEW_PK, {
+    throwOn: /INSERT INTO person_events/,
+  });
+  await assert.rejects(() => savePersonTx(client, twoNotables()), /person_events insert failed/);
+  const kinds = queryKinds(queries);
+  assert.ok(kinds.includes("rollback"));
+  assert.equal(kinds.includes("commit"), false);
+});
+
+test("syncPersonEvents rejects seq > 0 on the old primary key before DELETE", async () => {
+  const { client, queries } = recordingClient(OLD_PK);
+  await assertNeedsPhaseB(() => syncPersonEvents(client, twoNotables()));
+  assert.deepEqual(queryKinds(queries), ["catalog"]);
+});
+
+test("two notables contribute the max headcount once", async () => {
+  setMemory({
+    people: [
+      {
+        id: "casey-vale",
+        name: "Casey Vale",
+        category: "notable",
+        event_date: "2024-08-01",
+        events: [
+          notable({
+            event_date: "2024-08-01",
+            seq: 1,
+            comments: "Newer notable.",
+            headcount: 3,
+          }),
+          notable({
+            event_date: "2020-01-15",
+            seq: 0,
+            comments: "Older notable.",
+            headcount: 7,
+          }),
+        ],
+      },
+    ],
+  });
+  const census = await counts();
+  assert.equal(census.byCategory.notable, 7);
 });

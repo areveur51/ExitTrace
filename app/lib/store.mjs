@@ -1852,8 +1852,35 @@ function personValues(row) {
   ];
 }
 
+const PERSON_EVENTS_PK_ATTS_SQL =
+  "SELECT a.attname FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey) WHERE c.conrelid = to_regclass('person_events') AND c.contype = 'p'";
+
+/** Read the live primary key. Not cached: rollback can restore (person_id, kind). */
+export async function personEventsKeyHasSeq(client) {
+  const q = await client.query(PERSON_EVENTS_PK_ATTS_SQL);
+  return (q.rows || []).some((row) => row.attname === "seq");
+}
+
+/**
+ * A seq > 0 notable needs PRIMARY KEY (person_id, kind, seq) on this database.
+ * No catalog query when every notable is seq 0.
+ */
+export async function assertMultiNotableReady(client, person) {
+  const normalized = normalizePerson(person);
+  const needsPhaseB = (normalized.events || []).some(
+    (ev) => String(ev.kind || "").trim() === "notable" && notableSeq(ev) > 0,
+  );
+  if (!needsPhaseB) return;
+  if (await personEventsKeyHasSeq(client)) return;
+  throw new PromoteError(
+    "Second notable not saved: person_events primary key is still (person_id, kind). Multi-notable phase B (PRIMARY KEY (person_id, kind, seq)) must be applied on this database first.",
+    "multi_notable_needs_phase_b",
+  );
+}
+
 export async function syncPersonEvents(client, row) {
   const person = normalizePerson(row);
+  await assertMultiNotableReady(client, person);
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
   for (const ev of person.events) {
     const seq = String(ev.kind || "").trim() === "notable" ? notableSeq(ev) : 0;
@@ -1904,6 +1931,53 @@ export async function syncPersonEvents(client, row) {
   }
 }
 
+const INSERT_PERSON_SQL = `INSERT INTO people (
+       id, category, name, role, event_date, death_date, birth_date, country_of_origin,
+       photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
+       net_worth_source, sources, summary, events, tags, career, nicknames, clearances
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21::jsonb,$22::jsonb
+     )`;
+
+const UPDATE_PERSON_SQL = `UPDATE people SET
+       category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
+       birth_date = $7, country_of_origin = $8, photo = $9, photo_credit = $10,
+       screenshot = $11, screenshot_credit = $12,
+       net_worth_usd = $13, net_worth_note = $14, net_worth_source = $15,
+       sources = $16::jsonb, summary = $17, events = $18::jsonb, tags = $19::jsonb,
+       career = $20::jsonb, nicknames = $21::jsonb, clearances = $22::jsonb
+     WHERE id = $1`;
+
+async function commitPersonWrite(client, person, sql) {
+  await client.query("BEGIN");
+  try {
+    await assertMultiNotableReady(client, person);
+    await client.query(sql, personValues(person));
+    await syncPersonEvents(client, person);
+    await client.query("COMMIT");
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Keep the original save error when ROLLBACK fails.
+    }
+    throw err;
+  }
+  return person;
+}
+
+/** People insert plus person_events sync. One transaction. Caller owns the client. */
+export async function insertPersonTx(client, row) {
+  const person = normalizePerson(row);
+  return commitPersonWrite(client, person, INSERT_PERSON_SQL);
+}
+
+/** People update plus person_events sync. One transaction. Caller owns the client. */
+export async function savePersonTx(client, row) {
+  const person = normalizePerson(row);
+  return commitPersonWrite(client, person, UPDATE_PERSON_SQL);
+}
+
 export async function insertPerson(row) {
   const person = normalizePerson(row);
   const p = await getPool();
@@ -1916,19 +1990,9 @@ export async function insertPerson(row) {
     dropCatalogCache();
     return person;
   }
-  await p.query(
-    `INSERT INTO people (
-       id, category, name, role, event_date, death_date, birth_date, country_of_origin,
-       photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
-       net_worth_source, sources, summary, events, tags, career, nicknames, clearances
-     ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21::jsonb,$22::jsonb
-     )`,
-    personValues(person),
-  );
   const client = await p.connect();
   try {
-    await syncPersonEvents(client, person);
+    await insertPersonTx(client, person);
   } finally {
     client.release();
     dropCatalogCache();
@@ -1949,20 +2013,9 @@ export async function savePerson(row) {
     dropCatalogCache();
     return person;
   }
-  await p.query(
-    `UPDATE people SET
-       category = $2, name = $3, role = $4, event_date = $5, death_date = $6,
-       birth_date = $7, country_of_origin = $8, photo = $9, photo_credit = $10,
-       screenshot = $11, screenshot_credit = $12,
-       net_worth_usd = $13, net_worth_note = $14, net_worth_source = $15,
-       sources = $16::jsonb, summary = $17, events = $18::jsonb, tags = $19::jsonb,
-       career = $20::jsonb, nicknames = $21::jsonb, clearances = $22::jsonb
-     WHERE id = $1`,
-    personValues(person),
-  );
   const client = await p.connect();
   try {
-    await syncPersonEvents(client, person);
+    await savePersonTx(client, person);
   } finally {
     client.release();
     dropCatalogCache();
@@ -2688,6 +2741,19 @@ export async function counts() {
   return refreshCounts();
 }
 
+/** Per person, per kind: largest eventHeadcount (default 1). Matches the census MAX. */
+export function maxEventHeadcountByKind(events) {
+  const byKind = new Map();
+  for (const ev of events || []) {
+    const kind = ev?.kind;
+    if (!kind) continue;
+    const weight = eventHeadcount(ev);
+    const prev = byKind.get(kind);
+    if (prev == null || weight > prev) byKind.set(kind, weight);
+  }
+  return byKind;
+}
+
 async function countsUncached() {
   const p = await getPool();
   if (!p) {
@@ -2701,11 +2767,8 @@ async function countsUncached() {
         byCategory[row.category] = (byCategory[row.category] || 0) + 1;
         continue;
       }
-      const seenKinds = new Set();
-      for (const ev of events) {
-        if (!ev.kind || seenKinds.has(ev.kind)) continue;
-        seenKinds.add(ev.kind);
-        byCategory[ev.kind] = (byCategory[ev.kind] || 0) + eventHeadcount(ev);
+      for (const [kind, weight] of maxEventHeadcountByKind(events)) {
+        byCategory[kind] = (byCategory[kind] || 0) + weight;
       }
     }
     const operations = getMemory().operations || [];
