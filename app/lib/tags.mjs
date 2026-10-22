@@ -112,6 +112,8 @@ export const FORMER_INTEL_EXCLUDE = Object.freeze(["john-bolton"]);
  * Agency / role phrases that count as intelligence-agency service. Word
  * boundaries so "National Security Advisor" does not match NSA. Congressional
  * committee text is excluded in isIntelAgencyText.
+ * INTEL_AGENCY_PATTERNS is the frozen source list. INTEL_AGENCY_RE is those
+ * same alternatives compiled once; each alternative keeps its own boundaries.
  */
 export const INTEL_AGENCY_PATTERNS = Object.freeze([
   /\bcia\b/,
@@ -149,6 +151,10 @@ export const INTEL_AGENCY_PATTERNS = Object.freeze([
   /\bintelligence community\b/,
 ]);
 
+export const INTEL_AGENCY_RE = new RegExp(
+  INTEL_AGENCY_PATTERNS.map((re) => `(?:${re.source})`).join("|"),
+);
+
 export function isIntelAgencyText(text) {
   const folded = String(text || "")
     .replace(/\s+/g, " ")
@@ -156,7 +162,7 @@ export function isIntelAgencyText(text) {
     .toLowerCase();
   if (!folded) return false;
   if (/\bcommittee\b/.test(folded)) return false;
-  return INTEL_AGENCY_PATTERNS.some((re) => re.test(folded));
+  return INTEL_AGENCY_RE.test(folded);
 }
 
 function jsonArray(raw) {
@@ -227,11 +233,16 @@ export function withImpliedTags(raw, row) {
     return list.filter((item) => normalizeTag(item) !== FORMER_INTEL_TAG);
   }
   const have = new Set(list.map((item) => normalizeTag(item)).filter(Boolean));
-  const allowFormerIntel = cardHasIntelAgencyRole(row);
+  // Career/clearance scan only when a tag implies Former intel and the list
+  // does not already have it. Cached so one call inspects the row at most once.
+  let allowFormerIntel;
   for (let i = 0; i < list.length; i += 1) {
     for (const implied of IMPLIED_TAGS[normalizeTag(list[i])] || []) {
       if (have.has(implied)) continue;
-      if (implied === FORMER_INTEL_TAG && !allowFormerIntel) continue;
+      if (implied === FORMER_INTEL_TAG) {
+        if (allowFormerIntel === undefined) allowFormerIntel = cardHasIntelAgencyRole(row);
+        if (!allowFormerIntel) continue;
+      }
       have.add(implied);
       list.push(implied);
     }

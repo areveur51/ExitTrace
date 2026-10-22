@@ -171,6 +171,63 @@ test("a non-excluded card that already stores Former intel keeps it (add-only)",
   assert.equal(pickRow("people", stored).tags, JSON.stringify([INTEL]));
 });
 
+test("withImpliedTags inspects the intel role lazily and at most once", () => {
+  const unread = {
+    id: "unread",
+    get career() {
+      throw new Error("career inspected");
+    },
+    get clearances() {
+      throw new Error("clearances inspected");
+    },
+  };
+  assert.deepEqual(withImpliedTags(["official"], unread), ["official"]);
+  assert.deepEqual(withImpliedTags([], unread), []);
+  assert.deepEqual(withImpliedTags([INTEL], unread), [INTEL]);
+  assert.deepEqual(withImpliedTags([INTEL, REVOKED], unread), [INTEL, REVOKED]);
+  assert.deepEqual(withImpliedTags(["former-intel-agency-personnel", REVOKED], unread), [
+    "former-intel-agency-personnel",
+    REVOKED,
+  ]);
+
+  let careerReads = 0;
+  let clearanceReads = 0;
+  const counted = {
+    id: "counted",
+    get career() {
+      careerReads += 1;
+      return ciaCareer();
+    },
+    get clearances() {
+      clearanceReads += 1;
+      return [];
+    },
+  };
+  assert.deepEqual(withImpliedTags([REVOKED, "official", REVOKED], counted), [
+    REVOKED,
+    "official",
+    REVOKED,
+    INTEL,
+  ]);
+  assert.equal(careerReads, 1);
+  assert.equal(clearanceReads, 0);
+
+  let passes = 0;
+  const plain = {
+    id: "plain",
+    get career() {
+      passes += 1;
+      return [{ title: "Ambassador", organization: "Department of State", start_year: 2010, end_year: 2012 }];
+    },
+    get clearances() {
+      passes += 1;
+      return clearanceRole("Former National Security Advisor");
+    },
+  };
+  assert.deepEqual(withImpliedTags([REVOKED, REVOKED], plain), [REVOKED, REVOKED]);
+  assert.equal(passes, 2);
+});
+
 test("Former intel does not imply a revoked clearance", () => {
   assert.deepEqual(personTags({ tags: [INTEL] }), [INTEL]);
   assert.equal(matchesTags({ tags: [INTEL] }, [REVOKED]), false);
@@ -234,6 +291,14 @@ test("the intel-agency matcher uses word boundaries and excludes committees", ()
   ]) {
     assert.equal(isIntelAgencyText(text), false, text);
   }
+});
+
+test("committee text never counts as an intel agency, even beside a real agency role", () => {
+  // Conservative: committee text never counts, by design.
+  assert.equal(
+    isIntelAgencyText("Former CIA officer; staff, Senate Select Committee on Intelligence"),
+    false,
+  );
 });
 
 test("insert and update store the implied tag only with a recorded intel role", async () => {

@@ -64,8 +64,9 @@ let memory = null;
 /** Tests only: a stub pool that stands in for Postgres. Never set by the app. */
 let testPool = null;
 
-/** Tests only: route store SQL to a stub pool (null clears it). */
+/** Tests only: route store SQL to a stub pool (null clears it). No-op unless NODE_ENV is test. */
 export function setTestPool(stub) {
+  if (process.env.NODE_ENV !== "test") return;
   testPool = stub || null;
   dropCatalogCache();
 }
