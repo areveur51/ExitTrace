@@ -9,6 +9,10 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ## [Unreleased]
 
+### Added
+
+- Fact tag Federal investigation (`/tags/federal-investigation`). It records a stored report of a federal investigation. An investigation is not a charge or a finding of wrongdoing. It is not an identity filter.
+
 ### Changed
 
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
