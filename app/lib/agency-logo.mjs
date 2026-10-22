@@ -74,9 +74,21 @@ const AGENCY_LOGOS = Object.freeze({
 
 // ---- Per-Operation lead-agency overrides ------------------------------
 // Keyed by operation id (slug) -> seal key in AGENCY_LOGOS.
-// Intentionally EMPTY in this change. Filled in after the cite audit,
-// after merge and deploy. Each entry must cite the source naming the lead.
+// Filled from the 2026-10-22 cite audit. Each entry cites the source
+// naming the lead. Add new entries only with a cite.
 export const OPERATION_LEAD_OVERRIDES = Object.freeze({
+  // https://www.justice.gov/usao-cdca/pr/operation-guardian-angel-launched-neutralize-californias-sanctuary-state-policies
+  "operation-guardian-angel": "usao",
+  // https://www.justice.gov/opa/pr/justice-department-charges-28-foreign-nationals-california-election-crimes
+  "operation-protect-the-vote": "usao",
+  // https://www.hudoig.gov/newsroom/press-release/hud-oig-announces-results-operation-clean-house-multi-city-enforcement
+  "operation-clean-house": "hud-oig",
+  // https://www.dol.gov/agencies/olms/criminal-enforcement/2026
+  "afscme-local-1746-wire-fraud-charges": "dol",
+  // https://www.justice.gov/opa/pr/national-health-care-fraud-takedown-results-324-defendants-charged-connection-over-146
+  "2025-national-health-care-fraud-takedown": "doj",
+  // https://www.fox2detroit.com/news/federal-agents-raid-hyundai-battery-site-south-georgia
+  "operation-low-voltage": "hsi",
 });
 // ---- end overrides -----------------------------------------------------
 
