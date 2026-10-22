@@ -233,6 +233,73 @@ test("unknown override keys and prototype ids fall back", () => {
   assert.equal(operationLeadLogo(["Example Clearinghouse"], "op-x", { "op-x": "not-a-seal" }).photo, "");
 });
 
+test("the six audited lead overrides beat the stored agency list", () => {
+  const expected = {
+    "operation-guardian-angel": "usao",
+    "operation-protect-the-vote": "usao",
+    "operation-clean-house": "hud-oig",
+    "afscme-local-1746-wire-fraud-charges": "dol",
+    "2025-national-health-care-fraud-takedown": "doj",
+    "operation-low-voltage": "hsi",
+  };
+  assert.deepEqual({ ...OPERATION_LEAD_OVERRIDES }, expected);
+  const known = new Set(knownSealKeys());
+  const cases = [
+    [
+      "operation-guardian-angel",
+      ["U.S. Attorney's Office Central District of California", "ICE"],
+      "/media/agencies/usao.png",
+    ],
+    [
+      "operation-protect-the-vote",
+      [
+        "U.S. Department of Justice",
+        "U.S. Attorney's Office for the Central District of California",
+        "Homeland Security Investigations",
+      ],
+      "/media/agencies/usao.png",
+    ],
+    [
+      "operation-clean-house",
+      [
+        "U.S. Department of Housing and Urban Development Office of Inspector General",
+        "U.S. Marshals Service",
+      ],
+      "/media/agencies/hud-oig.png",
+    ],
+    [
+      "afscme-local-1746-wire-fraud-charges",
+      [
+        "U.S. Department of Labor Office of Labor-Management Standards",
+        "U.S. Attorney's Office for the Northern District of Ohio",
+      ],
+      "/media/agencies/dol.png",
+    ],
+    [
+      "2025-national-health-care-fraud-takedown",
+      ["DOJ", "HHS-OIG", "FBI", "DEA", "CMS"],
+      "/media/agencies/doj.jpg",
+    ],
+    [
+      "operation-low-voltage",
+      ["ICE", "Homeland Security Investigations", "ATF", "Georgia State Patrol"],
+      "/media/agencies/hsi.jpg",
+    ],
+  ];
+  for (const [slug, agencies, photo] of cases) {
+    assert.equal(known.has(OPERATION_LEAD_OVERRIDES[slug]), true, slug);
+    assert.equal(operationLeadLogo(agencies, slug).photo, photo, slug);
+    const stored = normalizeOperation({ id: slug, name: "x", agencies });
+    assert.equal(stored.photo, photo, slug);
+  }
+  const untouched = normalizeOperation({
+    id: "operation-restore-justice",
+    name: "x",
+    agencies: ["U.S. Department of Justice", "FBI"],
+  });
+  assert.equal(untouched.photo, "/media/agencies/fbi.png");
+});
+
 test("the override table is frozen and every entry names a known seal", () => {
   assert.equal(Object.isFrozen(OPERATION_LEAD_OVERRIDES), true);
   const known = new Set(knownSealKeys());
