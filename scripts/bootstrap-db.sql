@@ -133,6 +133,7 @@ ALTER TABLE person_events ADD CONSTRAINT person_events_event_date_kind CHECK (
   event_date IS NOT NULL OR kind = 'death_unconfirmed'
 );
 
+-- @boot-data-write begin (row backfill on replicated tables; skipped on a logical-replication subscriber)
 UPDATE people
    SET events = jsonb_build_array(
      jsonb_build_object(
@@ -151,6 +152,7 @@ SELECT id, category, event_date, COALESCE(sources, '[]'::jsonb)
  WHERE category IS NOT NULL
    AND event_date IS NOT NULL
 ON CONFLICT (person_id, kind) DO NOTHING;
+-- @boot-data-write end
 
 CREATE TABLE IF NOT EXISTS dog_comms (
   id TEXT PRIMARY KEY,
@@ -247,12 +249,14 @@ BEGIN
   END IF;
 END $$;
 
+-- @boot-data-write begin (row backfill on replicated tables; skipped on a logical-replication subscriber)
 -- Prefer snapshot ISO clock into column when column is still date-only (no invented midnight).
 UPDATE dog_comms
    SET posted_at = snapshot->>'posted_at'
  WHERE snapshot ? 'posted_at'
    AND (snapshot->>'posted_at') ~ '[Tt ][0-9]{2}:'
    AND posted_at !~ '[Tt ][0-9]{2}:';
+-- @boot-data-write end
 
 -- Optional local X-post screenshot. Empty stays empty. Does not replace still.
 ALTER TABLE dog_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
@@ -338,6 +342,7 @@ ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS screenshot TEXT;
 ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 ALTER TABLE central_casting_comms ADD COLUMN IF NOT EXISTS person_id TEXT;
 
+-- @boot-data-write begin (row backfill on replicated tables; skipped on a logical-replication subscriber)
 -- MIGRATION (~1:27am ET): delete the dual glossary rows only (JTitor + Warsh).
 -- Evidence rows with person_id stay. People rows stay. Media stays.
 DO $$
@@ -353,6 +358,7 @@ BEGIN
        AND person_id IS NULL;
   END IF;
 END $$;
+-- @boot-data-write end
 
 ALTER TABLE central_casting_comms DROP CONSTRAINT IF EXISTS central_casting_comms_sense_check;
 DROP INDEX IF EXISTS central_casting_comms_sense_idx;
@@ -374,6 +380,7 @@ END $$;
 ALTER TABLE central_casting_comms ALTER COLUMN person_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS central_casting_comms_person_idx ON central_casting_comms (person_id);
 
+-- @boot-data-write begin (row backfill on replicated tables; skipped on a logical-replication subscriber)
 -- Membership JSON: strip the retired field, keep cite URLs.
 -- Rewrite only when at least one cite remains, so a member is not blanked.
 -- People rows are not removed.
@@ -405,6 +412,7 @@ UPDATE people
   ) migrated
  WHERE people.id = migrated.id
    AND jsonb_array_length(migrated.urls) > 0;
+-- @boot-data-write end
 
 -- Parked public posts (not identified people). Gold people stay in `people`.
 CREATE TABLE IF NOT EXISTS source_posts (
@@ -435,6 +443,7 @@ CREATE INDEX IF NOT EXISTS source_posts_category_idx ON source_posts (category);
 CREATE INDEX IF NOT EXISTS source_posts_posted_at_idx ON source_posts (posted_at DESC);
 CREATE INDEX IF NOT EXISTS source_posts_gold_idx ON source_posts (gold_person_id);
 
+-- @boot-data-write begin (row backfill on replicated tables; skipped on a logical-replication subscriber)
 -- Riker DESIGN LOCK AMEND (~6:49am ET): backfill empty Central Casting snippets.
 -- Writes real quote text onto central_casting_comms.text only when that row
 -- already has it in quote/body/snapshot, or an archived source_posts body
@@ -507,6 +516,7 @@ UPDATE central_casting_comms AS c
   ) picked
  WHERE c.id = picked.id
    AND picked.quote IS NOT NULL;
+-- @boot-data-write end
 
 CREATE TABLE IF NOT EXISTS et_meta (
   k TEXT PRIMARY KEY,
@@ -567,6 +577,9 @@ ALTER TABLE add_requests ADD CONSTRAINT add_requests_kind_check
 -- Partial unique: one row per channel + subject when subject_status_id is set.
 -- A null subject does not collide. Empty backfill is OK.
 -- The unpublished composite-key draft (no id column, no rows) is replaced.
+-- The row check is a nested IF: PL/pgSQL plans a whole IF condition at once, so a
+-- FROM request_attributions in the outer condition fails on an empty database
+-- (relation does not exist) even though to_regclass is NULL.
 DO $$
 BEGIN
   IF to_regclass('public.request_attributions') IS NOT NULL
@@ -577,9 +590,10 @@ BEGIN
           AND table_name = 'request_attributions'
           AND column_name = 'id'
      )
-     AND NOT EXISTS (SELECT 1 FROM request_attributions LIMIT 1)
   THEN
-    DROP TABLE request_attributions;
+    IF NOT EXISTS (SELECT 1 FROM request_attributions LIMIT 1) THEN
+      DROP TABLE request_attributions;
+    END IF;
   END IF;
 END $$;
 
