@@ -366,3 +366,29 @@ test("each new seal source is an opaque 800x1040 canvas on the seal background",
     }
   }
 });
+
+test("the hud-oig seal is a near-square seal, not a banner", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const png = PNG.sync.read(fs.readFileSync(path.join(root, "media", "agencies", "hud-oig.png")));
+  let x0 = png.width;
+  let y0 = png.height;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < png.height; y++) {
+    for (let x = 0; x < png.width; x++) {
+      const i = (y * png.width + x) * 4;
+      if (png.data[i] === 13 && png.data[i + 1] === 13 && png.data[i + 2] === 18) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  assert.ok(w >= 600 && h >= 600, `${w}x${h}`);
+  assert.ok(w / h > 0.9 && w / h < 1.1, `${w}x${h}`);
+  assert.ok(x0 >= 64 && x1 <= 735 && y0 >= 184 && y1 <= 855, `${x0},${y0}..${x1},${y1}`);
+  const meta = SEAL_SOURCES["hud-oig"];
+  assert.match(meta.source, /Seal_of_the_United_States_Department_of_Housing_and_Urban_Development/);
+});
