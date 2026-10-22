@@ -89,6 +89,24 @@ export const OPERATION_LEAD_OVERRIDES = Object.freeze({
   "2025-national-health-care-fraud-takedown": "doj",
   // https://www.fox2detroit.com/news/federal-agents-raid-hyundai-battery-site-south-georgia
   "operation-low-voltage": "hsi",
+  // Batch 2. Ruling 2026-10-22 5:01pm ET: "Use the DOJ seal for the unclear
+  // national surges, and the USDA inspector general for the USDA surge".
+  // https://www.justice.gov/opa/pr/dojs-fraud-division-department-agriculture-and-usda-oig-uncover-nearly-42m-snap-benefit
+  "national-usda-benefits-and-program-fraud-enforcement-surge": "usda-oig",
+  // https://www.nbcnews.com/news/us-news/u-s-charges-hundreds-major-healthcare-fraud-opioid-crackdown-n887436
+  "2018-national-health-care-fraud-takedown": "doj",
+  // https://x.com/TheJusticeDept/status/2099544322144100775
+  "heartland-fraud-surge": "doj",
+  // https://www.nbcnews.com/news/us-news/officials-tout-operation-legend-s-successes-some-remain-frustrated-skeptical-n1239988
+  "operation-legend": "doj",
+  // https://x.com/TheJusticeDept/status/1207402053137555456
+  "operation-relentless-pursuit": "doj",
+  // https://www.cnn.com/2021/10/26/politics/darknet-opioid
+  "operation-dark-huntor": "doj",
+  // https://www.justice.gov/opa/pr/attorney-general-pamela-bondi-announces-29-wanted-defendants-mexico-taken-us-custody
+  "mexico-29-cartel-transfers": "doj",
+  // https://x.com/TheJusticeDept/status/1801586432022126934
+  "clan-del-golfo-human-smuggling": "doj",
 });
 // ---- end overrides -----------------------------------------------------
 
