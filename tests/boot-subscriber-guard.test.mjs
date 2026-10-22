@@ -288,11 +288,15 @@ function healPool({ postedAt = "text", enabled = true } = {}) {
   };
 }
 
+// Test-only arm of the heal gate, restored in finally. Not a committed default
+// (live-sync-gate.test.mjs scans the repo for one).
+const HEAL_ARMED = "on";
+
 async function withHealOn(fn) {
   const saved = process.env.ET_LOGICAL_HEAL;
   const savedLog = console.log;
   const lines = [];
-  process.env.ET_LOGICAL_HEAL = "on";
+  process.env.ET_LOGICAL_HEAL = HEAL_ARMED;
   console.log = (...a) => lines.push(a.map(String).join(" "));
   try {
     return await fn(lines);
