@@ -259,9 +259,9 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   assert.match(html, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.doesNotMatch(html, /class="detail-photo screenshot"/);
   assert.doesNotMatch(html.slice(0, supportAt), /screenshots\/people/);
-  assert.match(html.slice(supportAt), /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
-  assert.match(html, /data-lightbox="\/media\/people\/james-comey\.jpg"/);
-  assert.match(html.slice(supportAt), /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.match(html.slice(supportAt), /src="\/media\/screenshots\/people\/james-comey\.jpg\?p=7"/);
+  assert.match(html, /data-lightbox="\/media\/people\/james-comey\.jpg\?p=7"/);
+  assert.match(html.slice(supportAt), /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg\?p=7"/);
   assert.doesNotMatch(html, /<img class="detail-photo portrait"[^>]+src="\/media\/screenshots\//);
   assert.doesNotMatch(html, /class="portrait thumb"/);
 
@@ -270,7 +270,7 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
   assert.ok(coronaSupport > coronaHtml.indexOf('class="person-header"'));
   assert.match(coronaHtml, /src="\/media\/people\/james-comey\.jpg\?p=7"/);
   assert.doesNotMatch(coronaHtml.slice(0, coronaSupport), /screenshots\/people/);
-  assert.match(coronaHtml.slice(coronaSupport), /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.match(coronaHtml.slice(coronaSupport), /src="\/media\/screenshots\/people\/james-comey\.jpg\?p=7"/);
 
   const dogHtml = dogDetail(
     dog({
@@ -279,8 +279,8 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
     }),
   );
   assert.match(dogHtml, /detail-tile--screenshot/);
-  assert.match(dogHtml, /src="\/media\/screenshots\/dog-comms\/dod-k9-2020\.jpg"/);
-  assert.match(dogHtml, /data-lightbox="\/media\/screenshots\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.match(dogHtml, /src="\/media\/screenshots\/dog-comms\/dod-k9-2020\.jpg\?p=7"/);
+  assert.match(dogHtml, /data-lightbox="\/media\/screenshots\/dog-comms\/dod-k9-2020\.jpg\?p=7"/);
   assert.doesNotMatch(dogHtml, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
   assert.doesNotMatch(dogHtml, /data-lightbox="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
 
@@ -288,10 +288,10 @@ test("detail pages render portrait/still and screenshot; list thumbs stay unchan
     operation({ screenshot: "/media/screenshots/operations/restore.jpg" }),
   );
   assert.match(opHtml, /src="\/media\/agencies\/doj\.jpg\?p=7"/);
-  assert.match(opHtml, /data-lightbox="\/media\/agencies\/doj\.jpg"/);
+  assert.match(opHtml, /data-lightbox="\/media\/agencies\/doj\.jpg\?p=7"/);
   assert.doesNotMatch(opHtml, /class="[^"]*empty-portrait/);
-  assert.match(opHtml, /src="\/media\/screenshots\/operations\/restore\.jpg"/);
-  assert.match(opHtml, /data-lightbox="\/media\/screenshots\/operations\/restore\.jpg"/);
+  assert.match(opHtml, /src="\/media\/screenshots\/operations\/restore\.jpg\?p=7"/);
+  assert.match(opHtml, /data-lightbox="\/media\/screenshots\/operations\/restore\.jpg\?p=7"/);
   assert.match(opHtml, /meta-pane--stack/);
   assert.doesNotMatch(opHtml, /sources-pane/);
   assert.match(coronaHtml, /meta-pane--stack/);
@@ -377,8 +377,8 @@ test("legacy people.screenshot renders only in the bottom supporting-media block
   const supportAt = html.indexOf('aria-label="Supporting media"');
   assert.ok(supportAt > html.indexOf('class="person-header"'));
   const support = html.slice(supportAt);
-  assert.match(support, /src="\/media\/screenshots\/people\/james-comey\.jpg"/);
-  assert.match(support, /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg"/);
+  assert.match(support, /src="\/media\/screenshots\/people\/james-comey\.jpg\?p=7"/);
+  assert.match(support, /data-lightbox="\/media\/screenshots\/people\/james-comey\.jpg\?p=7"/);
   assert.match(support, /detail-tile--support/);
   assert.doesNotMatch(support, /detail-tile--screenshot/);
   assert.doesNotMatch(html.slice(0, supportAt), /screenshots\/people|detail-tile--support/);

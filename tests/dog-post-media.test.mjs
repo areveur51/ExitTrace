@@ -56,7 +56,7 @@ test("a dog image post shows the screenshot and not the still", () => {
     source_url: "https://x.com/nypost/status/1",
     snapshot: { stills: ["/media/dog-comms/nypost-sunny-2026.jpg", "/media/dog-comms/nypost-sunny-extra.jpg"] },
   });
-  assert.match(html, /src="\/media\/screenshots\/dog-comms\/nypost-sunny\.png"/);
+  assert.match(html, /src="\/media\/screenshots\/dog-comms\/nypost-sunny\.png\?p=7"/);
   assert.doesNotMatch(html, /nypost-sunny-2026\.jpg/);
   assert.match(html, /nypost-sunny-extra\.jpg/);
   assert.equal((html.match(/detail-tile--screenshot/g) || []).length, 1);
@@ -86,11 +86,11 @@ test("a dog video post is one screenshot with the video in the picture", () => {
       },
     });
     assert.equal((html.match(/class="post-shot"/g) || []).length, 1);
-    assert.match(html, /src="\/media\/screenshots\/dog-comms\/boxcheck\.png"/);
-    assert.match(html, /data-lightbox="\/media\/dog-comms\/scavino-video\.mp4"/);
+    assert.match(html, /src="\/media\/screenshots\/dog-comms\/boxcheck\.png\?p=7"/);
+    assert.match(html, /data-lightbox="\/media\/dog-comms\/scavino-video\.mp4\?p=7"/);
     assert.match(html, /data-lightbox-kind="video"/);
     assert.match(html, /class="post-shot-media" style="left:[0-9.]+%;top:[0-9.]+%;width:[0-9.]+%;height:[0-9.]+%"/);
-    assert.match(html, /<video class="detail-photo" src="\/media\/dog-comms\/scavino-video\.mp4"/);
+    assert.match(html, /<video class="detail-photo" src="\/media\/dog-comms\/scavino-video\.mp4\?p=7"/);
     assert.doesNotMatch(html, /<img[^>]+scavino-video\.jpg/);
     assert.match(html, /scavino-other\.jpg/);
     assert.equal((html.match(/detail-tile--postshot/g) || []).length, 1);
@@ -113,7 +113,7 @@ test("a dog post with no screenshot still shows its still", () => {
     still: "/media/dog-comms/biden-dog.jpg",
     source_url: "https://x.com/POTUS46Archive/status/1",
   });
-  assert.match(html, /src="\/media\/dog-comms\/biden-dog\.jpg"/);
+  assert.match(html, /src="\/media\/dog-comms\/biden-dog\.jpg\?p=7"/);
   assert.doesNotMatch(html, /class="post-shot"/);
 });
 
@@ -203,10 +203,10 @@ test("a person dog section fits each video into its screenshot", () => {
   ]));
   const section = html.slice(html.indexOf('aria-label="Supporting media"'));
   assert.equal((section.match(/class="post-shot"/g) || []).length, 2);
-  assert.match(section, /data-lightbox="\/media\/people\/dog-media-fixture\/support\/jessey\.mp4"/);
-  assert.match(section, /src="\/media\/people\/dog-media-fixture\/support\/jessey\.png"/);
-  assert.match(section, /data-lightbox="\/media\/people\/dog-media-fixture\/support\/benny\.mp4"/);
-  assert.match(section, /src="\/media\/people\/dog-media-fixture\/support\/benny\.png"/);
+  assert.match(section, /data-lightbox="\/media\/people\/dog-media-fixture\/support\/jessey\.mp4\?p=7"/);
+  assert.match(section, /src="\/media\/people\/dog-media-fixture\/support\/jessey\.png\?p=7"/);
+  assert.match(section, /data-lightbox="\/media\/people\/dog-media-fixture\/support\/benny\.mp4\?p=7"/);
+  assert.match(section, /src="\/media\/people\/dog-media-fixture\/support\/benny\.png\?p=7"/);
   assert.equal((section.match(/<figure /g) || []).length, 2);
   assert.match(section, /Post by @jesseyjay94/);
   assert.match(section, /Post by @bennyjohnson/);

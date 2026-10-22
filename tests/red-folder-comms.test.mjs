@@ -86,7 +86,7 @@ test("red folder list and search thumbs use still.thumb like dog comms", () => {
 test("red folder detail keeps the full still", () => {
   const html = kindDetail("red_folder", folder());
   assert.match(html, /class="detail red-folder-detail"/);
-  assert.match(html, /src="\/media\/red-folder-comms\/flotus-red-folder-2026\.jpg"/);
+  assert.match(html, /src="\/media\/red-folder-comms\/flotus-red-folder-2026\.jpg\?p=7"/);
   assert.match(html, /width="192" height="250"/);
   assert.doesNotMatch(html, /\/media\/thumbs\//);
   assert.match(html, /Source ·/);
@@ -241,7 +241,7 @@ test("red folder supporting group renders cite+source+optional screenshot+stills
   assert.match(first, /class="post-text">McDonald/);
   assert.match(first, /Source · <a class="source-link" href="https:\/\/x\.com\/MarijkeANON\/status\/2100995431534649639"/);
   assert.match(first, /marijkeanon-2026-09-18\.jpg/);
-  assert.match(first, /data-lightbox="\/media\/red-folder-comms\/marijkeanon-2026-09-18\.jpg"/);
+  assert.match(first, /data-lightbox="\/media\/red-folder-comms\/marijkeanon-2026-09-18\.jpg\?p=7"/);
   assert.doesNotMatch(first, /detail-tile--screenshot/);
   assert.doesNotMatch(first, /MELANIATRUMP\/status\/2001266577077837917/);
   assert.doesNotMatch(first, /Areveur51/);
@@ -253,9 +253,9 @@ test("red folder supporting group renders cite+source+optional screenshot+stills
   assert.match(second, /Melania Trailer features her hat/);
   assert.match(second, /Source · <a class="source-link" href="https:\/\/x\.com\/Areveur51\/status\/2101014802256494801"/);
   assert.match(second, /detail-tile--screenshot/);
-  assert.match(second, new RegExp(`data-lightbox="${row._shots.shot1.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  assert.match(second, new RegExp(`data-lightbox="${row._shots.shot1.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\?p=7"`));
   assert.match(second, /areveur51-2026-09-18-4\.png/);
-  assert.match(second, /data-lightbox="\/media\/red-folder-comms\/areveur51-2026-09-18-4\.png"/);
+  assert.match(second, /data-lightbox="\/media\/red-folder-comms\/areveur51-2026-09-18-4\.png\?p=7"/);
   assert.match(second, /data-tiles="7"/); // shot + 4 stills + cite + source
   assert.doesNotMatch(second, /MarijkeANON\/status\/2100995431534649639/);
   assert.doesNotMatch(second, /MELANIATRUMP\/status\/2001266577077837917/);
@@ -311,7 +311,7 @@ test("red folder supporting screenshot is fail-closed and optional", () => {
   assert.doesNotMatch(empty, /detail-tile--screenshot/);
   const shot = kindSupportingGroupHtml("red_folder", row, entries[1]);
   assert.match(shot, /detail-tile--screenshot/);
-  assert.match(shot, /data-lightbox="\/media\/screenshots\/red-folder-comms\/melaniatrump-2025-12-17-8fe71a81\/support\/1\/bea\.png"/);
+  assert.match(shot, /data-lightbox="\/media\/screenshots\/red-folder-comms\/melaniatrump-2025-12-17-8fe71a81\/support\/1\/bea\.png\?p=7"/);
 });
 
 test("red folder without supporting keeps a single Source line", () => {
