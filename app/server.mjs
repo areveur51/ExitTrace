@@ -55,10 +55,11 @@ import {
   resetRateLimiter,
 } from "./lib/rate-limit.mjs";
 import {
+  cfOnlyBootRefusals,
   cfOnlyMode,
   cfOnlyStats,
+  cfRejectLogLines,
   checkCfOrigin,
-  formatCfRejectLine,
   recordCfReject,
 } from "./lib/cf-origin.mjs";
 import { bootDatabase } from "./lib/boot-guard.mjs";
@@ -515,7 +516,7 @@ async function handle(req, res) {
     const cfDecision = checkCfOrigin(req, { pathname: p });
     if (!cfDecision.pass && !cfDecision.exempt) {
       recordCfReject();
-      console.log(formatCfRejectLine(cfMode, cfDecision, p));
+      for (const line of cfRejectLogLines(cfMode, cfDecision, p)) console.log(line);
       if (cfMode === "enforce") {
         send(res, 403, "Forbidden\n", { "Content-Type": "text/plain; charset=utf-8" });
         return;
@@ -1434,6 +1435,13 @@ async function handle(req, res) {
 }
 
 async function boot() {
+  const refusals = cfOnlyBootRefusals();
+  if (refusals.length) {
+    for (const line of refusals) console.error(line);
+    // exitCode, not process.exit, so the lines flush before the process ends.
+    process.exitCode = 1;
+    return;
+  }
   if (!fs.existsSync(seedPath)) {
     throw new Error(`Missing seed file: ${seedPath}`);
   }

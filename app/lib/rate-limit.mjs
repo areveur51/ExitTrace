@@ -6,8 +6,10 @@ import { nonNegativeInt, positiveInt } from "./num.mjs";
  * 1. CF-Connecting-IP when ET_TRUST_CF_CONNECTING_IP is on (default).
  *    Cloudflare overwrites that header. A request that reaches the origin
  *    directly can forge it. When ET_CF_ONLY is report or enforce, the server
- *    passes trustCf from app/lib/cf-origin.mjs, and only a passed hop check
- *    keeps this header. When ET_CF_ONLY is off, this switch alone applies.
+ *    passes trustCf from app/lib/cf-origin.mjs. Only a request that passed
+ *    the whole CF check keeps this header. On Render, CF-Ray, CF-Connecting-IP,
+ *    and the hop are hygiene. Host does the practical work. The origin secret
+ *    is the real control. When ET_CF_ONLY is off, this switch alone applies.
  *    Off when the env value trims/lowercases to 0, false, off, or no.
  * 2. Rightmost X-Forwarded-For after TRUSTED_PROXY_HOPS (N-th from the
  *    right). Never leftmost — XFF is client-forgeable; CF and Render append.

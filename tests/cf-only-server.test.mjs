@@ -6,10 +6,10 @@ import { resetRateLimiter } from "../app/lib/rate-limit.mjs";
 import { handle } from "../app/server.mjs";
 
 const RAY = "ray-do-not-log";
-const SECRET = "origin-secret-test-dddd";
+const SECRET = "test-origin-secret-" + "a".repeat(20);
 const BOT = "test-bot-token-aaaa";
 const WORKER = "test-worker-token-bbbb";
-const INTERNAL = "test-internal-token-cccc";
+const INTERNAL = "test-internal-token-" + "c".repeat(20);
 const CF_V4 = "173.245.48.1";
 
 const ENV_KEYS = [
@@ -158,14 +158,13 @@ test("health and mention-queue bearers pass in enforce; static files do not", as
   process.env.MENTION_QUEUE_BOT_TOKEN = BOT;
   process.env.MENTION_QUEUE_WORKER_TOKEN = WORKER;
 
-  const health = await httpCall({ pathname: "/api/health" });
-  assert.equal(health.status, 200);
-  const json = JSON.parse(health.body);
-  assert.equal(json.cf_only.mode, "enforce");
-  assert.equal(typeof json.cf_only.rejected_since_boot, "number");
+  const api = await httpCall({ pathname: "/api/health" });
+  assert.equal(api.status, 403);
+  assert.equal(api.body, "Forbidden\n");
   const page = await httpCall({ pathname: "/health" });
   assert.equal(page.status, 200);
   assert.match(page.body, /cf_only/);
+  assert.match(page.body, /&quot;mode&quot;: &quot;enforce&quot;/);
 
   const preflight = await httpCall({
     method: "POST",

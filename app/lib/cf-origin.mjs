@@ -1,13 +1,20 @@
 /**
  * App-side Cloudflare-only origin check.
  * Env is read at call time. ET_CF_ONLY=off is a no-op (rollback is a restart).
+ * On Render, CF-Ray, CF-Connecting-IP, and a Cloudflare XFF hop arrive on every
+ * request, because Render's edge is Cloudflare. Those are hygiene, not proof the
+ * request used the areveur.com zone. Host does the practical work. The hop only
+ * blocks traffic that never touched Cloudflare. ET_CF_ORIGIN_SECRET, carried as
+ * X-ET-Origin-Auth from an areveur-zone Transform Rule, is the real control.
  * The proxy hop is xffHop from rate-limit.mjs. The socket address is not read.
  * Secrets (ET_CF_ORIGIN_SECRET, ET_INTERNAL_BYPASS_TOKEN) are compared and dropped.
- * They are not logged, not returned, and not copied onto errors.
+ * They are not logged, not returned, and not copied onto errors. A non-empty
+ * secret shorter than 32 characters is not accepted.
  */
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
+import { BlockList, isIP } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mentionRole } from "./mention-queue.mjs";
@@ -26,107 +33,38 @@ const RANGES_PATH = path.join(
 );
 
 const DEFAULT_HOSTS = ["exittrace.areveur.com"];
-const DEFAULT_EXEMPT = ["/health", "/api/health"];
+const DEFAULT_EXEMPT = ["/health"];
 const PATH_CAP = 200;
+const SECRET_MIN = 32;
+const SECRET_NAMES = ["ET_INTERNAL_BYPASS_TOKEN", "ET_CF_ORIGIN_SECRET"];
+const REJECT_LOG_WINDOW_MS = 60_000;
+const REJECT_LOG_CAP = 10;
 
-function loadRanges(file = RANGES_PATH) {
+function loadBlockList(file = RANGES_PATH) {
   const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
   if (!Array.isArray(parsed.ipv4) || !Array.isArray(parsed.ipv6)) {
     throw new Error("cloudflare-ips.json is missing ipv4 or ipv6 lists");
   }
-  return {
-    v4: parsed.ipv4.map(compileV4),
-    v6: parsed.ipv6.map(compileV6),
-  };
+  const list = new BlockList();
+  for (const cidr of parsed.ipv4) addCidr(list, cidr, "ipv4");
+  for (const cidr of parsed.ipv6) addCidr(list, cidr, "ipv6");
+  return list;
 }
 
-function compileV4(cidr) {
+function addCidr(list, cidr, type) {
   const [addr, bitsRaw] = String(cidr).split("/");
   const bits = Number(bitsRaw);
-  if (!Number.isInteger(bits) || bits < 0 || bits > 32 || String(bits) !== bitsRaw) {
-    throw new Error(`bad cloudflare ipv4 cidr: ${cidr}`);
+  const max = type === "ipv4" ? 32 : 128;
+  const family = type === "ipv4" ? 4 : 6;
+  if (!Number.isInteger(bits) || bits < 0 || bits > max || String(bits) !== bitsRaw) {
+    throw new Error(`bad cloudflare ${type} cidr: ${cidr}`);
   }
-  const ip = ipv4ToInt(addr);
-  if (ip == null) throw new Error(`bad cloudflare ipv4 cidr: ${cidr}`);
-  const mask = v4Mask(bits);
-  return { network: (ip & mask) >>> 0, mask };
+  if (isIP(addr) !== family) throw new Error(`bad cloudflare ${type} cidr: ${cidr}`);
+  list.addSubnet(addr, bits, type);
 }
 
-function compileV6(cidr) {
-  const [addr, bitsRaw] = String(cidr).split("/");
-  const bits = Number(bitsRaw);
-  if (!Number.isInteger(bits) || bits < 0 || bits > 128 || String(bits) !== bitsRaw) {
-    throw new Error(`bad cloudflare ipv6 cidr: ${cidr}`);
-  }
-  const ip = ipv6ToBigInt(addr);
-  if (ip == null) throw new Error(`bad cloudflare ipv6 cidr: ${cidr}`);
-  const mask = v6Mask(bits);
-  return { network: ip & mask, mask };
-}
-
-function v4Mask(bits) {
-  if (bits <= 0) return 0;
-  if (bits >= 32) return 0xffffffff;
-  return (0xffffffff << (32 - bits)) >>> 0;
-}
-
-function v6Mask(bits) {
-  if (bits <= 0) return 0n;
-  if (bits >= 128) return (1n << 128n) - 1n;
-  return ((1n << BigInt(bits)) - 1n) << BigInt(128 - bits);
-}
-
-function ipv4ToInt(ip) {
-  const parts = String(ip).split(".");
-  if (parts.length !== 4) return null;
-  let n = 0;
-  for (const part of parts) {
-    if (!/^\d{1,3}$/.test(part)) return null;
-    const octet = Number(part);
-    if (octet > 255) return null;
-    n = (n * 256 + octet) >>> 0;
-  }
-  return n;
-}
-
-function ipv6ToBigInt(input) {
-  let s = String(input).trim().toLowerCase();
-  if (s.startsWith("[")) {
-    const end = s.indexOf("]");
-    if (end === -1) return null;
-    s = s.slice(1, end);
-  }
-  const zone = s.indexOf("%");
-  if (zone !== -1) s = s.slice(0, zone);
-  if (s.includes(".")) {
-    const last = s.lastIndexOf(":");
-    const oct = s.slice(last + 1).split(".");
-    if (oct.length !== 4) return null;
-    const nums = oct.map((part) => Number(part));
-    if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
-    const hi = ((nums[0] << 8) | nums[1]).toString(16);
-    const lo = ((nums[2] << 8) | nums[3]).toString(16);
-    s = `${s.slice(0, last + 1)}${hi}:${lo}`;
-  }
-  const halves = s.split("::");
-  if (halves.length > 2) return null;
-  const side = (text) => (text ? text.split(":") : []);
-  const left = side(halves[0]);
-  const right = halves.length === 2 ? side(halves[1]) : [];
-  if (halves.length === 1 && left.length !== 8) return null;
-  const fill = 8 - left.length - right.length;
-  if (fill < 0) return null;
-  const groups = halves.length === 2 ? [...left, ...Array(fill).fill("0"), ...right] : left;
-  if (groups.length !== 8) return null;
-  let value = 0n;
-  for (const group of groups) {
-    if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
-    value = (value << 16n) + BigInt(parseInt(group, 16));
-  }
-  return value;
-}
-
-const RANGES = loadRanges();
+// Built once at load from the vendored snapshot. The process does not fetch ranges.
+const CF_LIST = loadBlockList();
 
 function headerFirst(headers, name) {
   if (!headers || typeof headers !== "object") return "";
@@ -154,6 +92,10 @@ function listFrom(raw, fallback) {
     .split(",")
     .map((part) => part.trim().toLowerCase())
     .filter(Boolean);
+}
+
+function trimmedEnv(env, name) {
+  return String(env?.[name] ?? "").trim();
 }
 
 /** "off" | "report" | "enforce". Unknown values are off. */
@@ -199,14 +141,34 @@ export function cfHostName(raw) {
 export function isCloudflareIp(ip) {
   const norm = normalizeIp(ip);
   if (!norm) return false;
-  if (norm.includes(":")) {
-    const value = ipv6ToBigInt(norm);
-    if (value == null) return false;
-    return RANGES.v6.some((range) => (value & range.mask) === range.network);
+  const family = isIP(norm);
+  if (family === 4) return CF_LIST.check(norm, "ipv4");
+  if (family === 6) return CF_LIST.check(norm, "ipv6");
+  return false;
+}
+
+/**
+ * Names of secrets that are set (non-empty after trim) and shorter than 32.
+ * The values are not returned.
+ */
+export function cfSecretProblems(env = process.env) {
+  const names = [];
+  for (const name of SECRET_NAMES) {
+    const value = trimmedEnv(env, name);
+    if (value.length > 0 && value.length < SECRET_MIN) names.push(name);
   }
-  const value = ipv4ToInt(norm);
-  if (value == null) return false;
-  return RANGES.v4.some((range) => ((value & range.mask) >>> 0) === range.network);
+  return names;
+}
+
+/**
+ * Lines to print before a non-zero exit. Empty when the mode is off, or when
+ * every set secret is at least 32 characters. Names only, never the value.
+ */
+export function cfOnlyBootRefusals(env = process.env) {
+  if (cfOnlyMode(env) === "off") return [];
+  return cfSecretProblems(env).map(
+    (name) => `cf_only refusing to start: ${name} must be at least 32 characters`,
+  );
 }
 
 function secretEqual(left, right) {
@@ -215,13 +177,10 @@ function secretEqual(left, right) {
   return timingSafeEqual(a, b);
 }
 
-function originSecret(env) {
-  return String(env?.ET_CF_ORIGIN_SECRET ?? "").trim();
-}
-
 function originAuthOk(headers, env) {
-  const secret = originSecret(env);
+  const secret = trimmedEnv(env, "ET_CF_ORIGIN_SECRET");
   if (!secret) return true;
+  if (secret.length < SECRET_MIN) return false;
   const got = headerFirst(headers, "x-et-origin-auth").trim();
   return secretEqual(got, secret);
 }
@@ -239,8 +198,8 @@ function bearerExempt(pathname, headers, env) {
 function internalExempt(req, env) {
   const method = String(req?.method || "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") return false;
-  const token = String(env?.ET_INTERNAL_BYPASS_TOKEN ?? "").trim();
-  if (!token) return false;
+  const token = trimmedEnv(env, "ET_INTERNAL_BYPASS_TOKEN");
+  if (!token || token.length < SECRET_MIN) return false;
   const got = headerFirst(req?.headers, "x-et-internal").trim();
   return secretEqual(got, token);
 }
@@ -256,8 +215,10 @@ function exemptionFor(req, env, pathname) {
 function failReason(headers, env, hop) {
   const host = cfHostName(headerFirst(headers, "host"));
   if (!cfHosts(env).includes(host)) return "host";
+  // cf_ray and cf_ip are hygiene. On Render they are present on every request.
   if (!headerFirst(headers, "cf-ray").trim()) return "cf_ray";
   if (!normalizeIp(headerFirst(headers, "cf-connecting-ip"))) return "cf_ip";
+  // The hop only blocks traffic that never touched Cloudflare.
   if (!hop || !isCloudflareIp(hop)) return "hop";
   if (!originAuthOk(headers, env)) return "origin_auth";
   return null;
@@ -282,8 +243,9 @@ function pathnameOf(req, pathname) {
  * CF decision for one request.
  * mode off: pass true, exempt null, trustCf false. The server does not pass
  * trustCf into the limiter, so #225 keeps ET_TRUST_CF_CONNECTING_IP.
- * report/enforce: trustCf is true only when the CF check passed and the
+ * report/enforce: trustCf is true only when the whole CF check passed and the
  * #225 switch is on. Exempt and failing requests do not trust CF-Connecting-IP.
+ * Host does the practical work. The origin secret is the real control.
  */
 export function checkCfOrigin(req, { env = process.env, pathname } = {}) {
   const mode = cfOnlyMode(env);
@@ -308,8 +270,20 @@ export function recordCfReject() {
   return rejectedSinceBoot;
 }
 
+let rejectLogWindowStart = null;
+let rejectLogKept = 0;
+let rejectLogSuppressed = 0;
+
+/** Clears the reject-log window. Does not change rejected_since_boot. */
+export function resetCfRejectLog() {
+  rejectLogWindowStart = null;
+  rejectLogKept = 0;
+  rejectLogSuppressed = 0;
+}
+
 export function resetCfOnlyStats() {
   rejectedSinceBoot = 0;
+  resetCfRejectLog();
 }
 
 export function cfOnlyStats(env = process.env) {
@@ -325,10 +299,11 @@ function safeToken(value, fallback) {
   return fallback;
 }
 
-function safeHop(hop) {
-  const text = String(hop || "");
-  if (text && text.length <= 64 && /^[0-9a-f:.]+$/i.test(text)) return text;
-  return "none";
+function hopToken(hop) {
+  const text = String(hop ?? "").trim();
+  if (!text) return "none";
+  if (!isCloudflareIp(text)) return "masked";
+  return normalizeIp(text);
 }
 
 export function sanitizeCfPath(pathname) {
@@ -342,10 +317,48 @@ export function sanitizeCfPath(pathname) {
   return text || "/";
 }
 
-/** One log line. No headers, no secrets. */
+/** One log line. No headers, no secrets. A non-Cloudflare hop is masked. */
 export function formatCfRejectLine(mode, decision, pathname) {
   const reason = safeToken(decision?.reason, "hop");
-  const hop = safeHop(decision?.hop);
+  const hop = hopToken(decision?.hop);
   const flag = safeToken(mode, "report");
   return `cf_only reject mode=${flag} reason=${reason} path=${sanitizeCfPath(pathname)} hop=${hop}`;
+}
+
+/**
+ * Lines to log for one counted reject. Call recordCfReject separately so the
+ * counter still moves when a line is suppressed.
+ * Fixed 60s window, opened by the first reject in the window. The first 10
+ * rejects each return one formatCfRejectLine. The rest return nothing and
+ * increment a suppressed count. The summary is lazy: there is no timer. When
+ * the first reject of a later window arrives, and the previous window
+ * suppressed K>0, the summary line is first:
+ *   cf_only reject_summary suppressed=<K> window_s=60
+ * A quiet process does not print that summary until the next reject.
+ * A timestamp earlier than the open window also opens a new window.
+ * Same function for report and enforce.
+ */
+export function cfRejectLogLines(mode, decision, pathname, now = Date.now()) {
+  const ts = Number(now);
+  const at = Number.isFinite(ts) ? ts : Date.now();
+  const lines = [];
+  const rolled =
+    rejectLogWindowStart == null ||
+    at < rejectLogWindowStart ||
+    at >= rejectLogWindowStart + REJECT_LOG_WINDOW_MS;
+  if (rolled) {
+    if (rejectLogSuppressed > 0) {
+      lines.push(`cf_only reject_summary suppressed=${rejectLogSuppressed} window_s=60`);
+    }
+    rejectLogWindowStart = at;
+    rejectLogKept = 0;
+    rejectLogSuppressed = 0;
+  }
+  if (rejectLogKept < REJECT_LOG_CAP) {
+    lines.push(formatCfRejectLine(mode, decision, pathname));
+    rejectLogKept += 1;
+  } else {
+    rejectLogSuppressed += 1;
+  }
+  return lines;
 }

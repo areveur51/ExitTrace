@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { isIP } from "node:net";
@@ -7,12 +8,17 @@ import { fileURLToPath } from "node:url";
 import {
   cfExemptPaths,
   cfHosts,
+  cfOnlyBootRefusals,
   cfOnlyMode,
   cfOnlyStats,
+  cfRejectLogLines,
+  cfSecretProblems,
   checkCfOrigin,
   formatCfRejectLine,
   isCloudflareIp,
+  recordCfReject,
   resetCfOnlyStats,
+  resetCfRejectLog,
   sanitizeCfPath,
 } from "../app/lib/cf-origin.mjs";
 import {
@@ -55,10 +61,10 @@ const EXPECTED_V6 = [
 ];
 
 const RAY = "ray-do-not-log";
-const SECRET = "origin-secret-test-dddd";
+const SECRET = "test-origin-secret-" + "a".repeat(20);
 const BOT = "test-bot-token-aaaa";
 const WORKER = "test-worker-token-bbbb";
-const INTERNAL = "test-internal-token-cccc";
+const INTERNAL = "test-internal-token-" + "c".repeat(20);
 const CF_V4 = "173.245.48.1";
 const CF_V6 = "2400:cb00::1";
 
@@ -323,7 +329,7 @@ test("mode parser treats only report and enforce as on", () => {
     "exittrace.areveur.com",
     "www.example.com",
   ]);
-  assert.deepEqual(cfExemptPaths({}), ["/health", "/api/health"]);
+  assert.deepEqual(cfExemptPaths({}), ["/health"]);
   assert.deepEqual(cfExemptPaths({ ET_CF_EXEMPT_PATHS: " /only-probe , /health " }), [
     "/only-probe",
     "/health",
@@ -370,16 +376,18 @@ test("report serves, counts, and logs one line without secrets or headers", asyn
   const again = await capture(() => request("/no-such", { headers: { host: "127.0.0.1" } }));
   assert.equal(again.result.status, 404);
   assert.equal(cfLines(again.lines).length, 1);
+  assert.equal(decision("/api/health", { host: "127.0.0.1" }).exempt, null);
   const health = await request("/api/health");
   const json = JSON.parse(health.body);
-  assert.deepEqual(json.cf_only, { mode: "report", rejected_since_boot: 2 });
+  assert.equal(health.status, 200);
+  assert.deepEqual(json.cf_only, { mode: "report", rejected_since_boot: 3 });
   assert.equal(JSON.stringify(json).includes(SECRET), false);
   const page = await request("/health");
   assert.equal(page.status, 200);
   // healthBody HTML-escapes the embedded JSON, so the key is &quot;cf_only&quot;.
   assert.match(page.body, /&quot;cf_only&quot;/);
   assert.equal(page.body.includes(SECRET), false);
-  assert.equal(cfOnlyStats().rejected_since_boot, 2);
+  assert.equal(cfOnlyStats().rejected_since_boot, 3);
 });
 
 test("enforce returns exactly Forbidden and does not leak the reason", async () => {
@@ -397,7 +405,7 @@ test("enforce returns exactly Forbidden and does not leak the reason", async () 
   assert.equal(denied.result.body.includes("origin_auth"), false);
   assert.equal(denied.result.body.includes(SECRET), false);
   assert.deepEqual(cfLines(denied.lines), [
-    "cf_only reject mode=enforce reason=hop path=/search hop=203.0.113.50",
+    "cf_only reject mode=enforce reason=hop path=/search hop=masked",
   ]);
   assertNoLeak(cfLines(denied.lines).join("\n"));
   assert.equal(cfOnlyStats().rejected_since_boot, 1);
@@ -568,9 +576,10 @@ test("health stays up in enforce and exempt paths are exact", async () => {
   assert.equal(health.status, 200);
   assert.match(health.body, /&quot;cf_only&quot;/);
   const api = await request("/api/health?x=1");
-  assert.equal(api.status, 200);
-  assert.equal(JSON.parse(api.body).cf_only.mode, "enforce");
-  assert.equal(JSON.parse(api.body).cf_only.rejected_since_boot, 0);
+  assert.equal(api.status, 403);
+  assert.equal(api.body, "Forbidden\n");
+  assert.equal(decision("/api/health", { host: "127.0.0.1" }).exempt, null);
+  assert.equal(cfOnlyStats().rejected_since_boot, 1);
   const direct = decision("/health", { host: "127.0.0.1" });
   assert.equal(direct.pass, false);
   assert.equal(direct.exempt, "path");
@@ -687,7 +696,7 @@ test("a passing Cloudflare request is not marked exempt", () => {
   assert.equal(got.trustCf, true);
 });
 
-test("dormant origin secret is required only when set", async () => {
+test("origin secret is the control and is required only when set and long enough", async () => {
   enable("enforce", "1");
   const open = decision("/search", passHeaders());
   assert.equal(open.pass, true);
@@ -711,10 +720,10 @@ test("dormant origin secret is required only when set", async () => {
     "cf_only reject mode=enforce reason=origin_auth path=/search hop=173.245.48.1",
   ]);
   assert.equal(cfLines(denied.lines).join("\n").includes(SECRET), false);
-  const health = await request("/api/health");
+  const health = await request("/health");
   assert.equal(health.status, 200);
   assert.equal(health.body.includes(SECRET), false);
-  assert.equal(JSON.parse(health.body).cf_only.mode, "enforce");
+  assert.match(health.body, /&quot;mode&quot;: &quot;enforce&quot;/);
 
   const allowed = await request("/search?q=z", {
     headers: passHeaders({ "x-et-origin-auth": ` ${SECRET} ` }),
@@ -732,7 +741,7 @@ test("reject log path drops the query and control characters and caps length", (
   const long = `/${"a".repeat(250)}`;
   assert.equal(
     formatCfRejectLine("enforce", { reason: "hop", hop: "203.0.113.5" }, long),
-    `cf_only reject mode=enforce reason=hop path=${sanitizeCfPath(long)} hop=203.0.113.5`,
+    `cf_only reject mode=enforce reason=hop path=${sanitizeCfPath(long)} hop=masked`,
   );
   assert.equal(sanitizeCfPath(long).length, 200);
 });
@@ -855,8 +864,11 @@ test("mention-queue and health are the HTTP paths; replication is not", async ()
   enable("enforce", "0");
   process.env.MENTION_QUEUE_BOT_TOKEN = BOT;
   process.env.MENTION_QUEUE_WORKER_TOKEN = WORKER;
-  const health = await request("/api/health");
+  const health = await request("/health");
   assert.equal(health.status, 200);
+  const api = await request("/api/health");
+  assert.equal(api.status, 403);
+  assert.equal(api.body, "Forbidden\n");
   const preflight = await request("/api/mention-queue/preflight", {
     method: "POST",
     headers: { host: "127.0.0.1", authorization: `Bearer ${BOT}` },
@@ -868,5 +880,272 @@ test("mention-queue and health are the HTTP paths; replication is not", async ()
   });
   assert.equal(pending.status, 200);
   // Logical replication is a Postgres connection. It never reaches handle().
-  assert.equal(decision("/api/health", { host: "127.0.0.1" }).exempt, "path");
+  assert.equal(decision("/health", { host: "127.0.0.1" }).exempt, "path");
+  assert.equal(decision("/api/health", { host: "127.0.0.1" }).exempt, null);
+});
+
+function serverCmdline(pid) {
+  try {
+    return fs.readFileSync(`/proc/${pid}/cmdline`).toString("utf8").split("\0").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function isServerArg(arg) {
+  return arg.endsWith(`${path.sep}app${path.sep}server.mjs`);
+}
+
+// Child has no DATABASE_URL. It must exit from the boot refusal before listen.
+function runServerBoot(extraEnv) {
+  const serverPath = path.join(ROOT, "app", "server.mjs");
+  const env = {
+    PATH: process.env.PATH || "",
+    HOME: process.env.HOME || "",
+    HOST: "127.0.0.1",
+    PORT: "53991",
+  };
+  for (const [key, value] of Object.entries(extraEnv)) env[key] = value;
+  delete env.DATABASE_URL;
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [serverPath], {
+      cwd: ROOT,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const pid = child.pid;
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const timer = setTimeout(() => {
+      const args = serverCmdline(pid);
+      if (args.some(isServerArg)) {
+        try {
+          process.kill(pid, "SIGTERM");
+        } catch {
+          // already exited
+        }
+        setTimeout(() => {
+          if (serverCmdline(pid).some(isServerArg)) {
+            try {
+              process.kill(pid, "SIGKILL");
+            } catch {
+              // already exited
+            }
+          }
+        }, 400);
+      }
+      if (settled) return;
+      settled = true;
+      reject(new Error(`boot child ${pid} did not exit`));
+    }, 10000);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("exit", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr });
+    });
+  });
+}
+
+test("reject log keeps the first 10 in a window and summarizes the rest on the next window", () => {
+  for (const mode of ["report", "enforce"]) {
+    resetCfOnlyStats();
+    resetCfRejectLog();
+    const t0 = 1_700_000_000_000;
+    const shown = { reason: "host", hop: "" };
+    const hiddenPath = "/suppressed-path";
+    const hidden = { reason: "hop", hop: "203.0.113.9" };
+    for (let i = 0; i < 10; i++) {
+      recordCfReject();
+      assert.deepEqual(cfRejectLogLines(mode, shown, "/search", t0 + i), [
+        `cf_only reject mode=${mode} reason=host path=/search hop=none`,
+      ]);
+    }
+    for (let i = 0; i < 3; i++) {
+      recordCfReject();
+      assert.deepEqual(cfRejectLogLines(mode, hidden, hiddenPath, t0 + 20 + i), []);
+    }
+    assert.equal(cfOnlyStats().rejected_since_boot, 13, mode);
+    const next = cfRejectLogLines(mode, shown, "/search", t0 + 60_000);
+    assert.deepEqual(next, [
+      "cf_only reject_summary suppressed=3 window_s=60",
+      `cf_only reject mode=${mode} reason=host path=/search hop=none`,
+    ]);
+    assert.equal(next[0].includes(hiddenPath), false);
+    assert.equal(next[0].includes("203.0.113.9"), false);
+    assert.equal(next[0].includes("hop="), false);
+    const later = cfRejectLogLines(mode, shown, "/search", t0 + 120_000);
+    assert.deepEqual(later, [`cf_only reject mode=${mode} reason=host path=/search hop=none`]);
+  }
+});
+
+test("server throttles reject lines in report and enforce and still counts every reject", async () => {
+  for (const mode of ["report", "enforce"]) {
+    applyClean();
+    enable(mode, "0");
+    const seen = await capture(async () => {
+      const statuses = [];
+      for (let i = 0; i < 11; i++) {
+        const res = await request("/no-such", { headers: { host: "127.0.0.1" } });
+        statuses.push(res.status);
+      }
+      return statuses;
+    });
+    const expectStatus = mode === "enforce" ? 403 : 404;
+    assert.deepEqual(seen.result, Array(11).fill(expectStatus), mode);
+    const logged = seen.lines.filter((line) => line.startsWith("cf_only reject "));
+    assert.equal(logged.length, 10, mode);
+    assert.equal(logged[0], `cf_only reject mode=${mode} reason=host path=/no-such hop=none`);
+    assert.equal(
+      seen.lines.some((line) => line.startsWith("cf_only reject_summary")),
+      false,
+      mode,
+    );
+    assert.equal(cfOnlyStats().rejected_since_boot, 11, mode);
+  }
+});
+
+test("reject log prints a Cloudflare hop, masks any other hop, and uses none when empty", () => {
+  assert.equal(
+    formatCfRejectLine("enforce", { reason: "origin_auth", hop: CF_V4 }, "/search"),
+    "cf_only reject mode=enforce reason=origin_auth path=/search hop=173.245.48.1",
+  );
+  assert.equal(
+    formatCfRejectLine("report", { reason: "hop", hop: CF_V6 }, "/search"),
+    "cf_only reject mode=report reason=hop path=/search hop=2400:cb00::1",
+  );
+  assert.equal(
+    formatCfRejectLine("enforce", { reason: "hop", hop: "::ffff:173.245.48.1" }, "/search"),
+    "cf_only reject mode=enforce reason=hop path=/search hop=173.245.48.1",
+  );
+  assert.equal(
+    formatCfRejectLine("enforce", { reason: "hop", hop: "203.0.113.50" }, "/search"),
+    "cf_only reject mode=enforce reason=hop path=/search hop=masked",
+  );
+  assert.equal(
+    formatCfRejectLine("report", { reason: "host", hop: "" }, "/search"),
+    "cf_only reject mode=report reason=host path=/search hop=none",
+  );
+  assert.equal(
+    formatCfRejectLine("enforce", { reason: "hop", hop: "not-an-ip" }, "/search"),
+    "cf_only reject mode=enforce reason=hop path=/search hop=masked",
+  );
+});
+
+test("cfSecretProblems returns names only", () => {
+  const shortOrigin = "test-origin-secret-" + "a".repeat(12);
+  const shortBypass = "test-internal-token-" + "b".repeat(11);
+  const env = {
+    ET_CF_ONLY: "report",
+    ET_CF_ORIGIN_SECRET: ` ${shortOrigin} `,
+    ET_INTERNAL_BYPASS_TOKEN: shortBypass,
+  };
+  const names = cfSecretProblems(env);
+  assert.deepEqual(names, ["ET_INTERNAL_BYPASS_TOKEN", "ET_CF_ORIGIN_SECRET"]);
+  assert.equal(JSON.stringify(names).includes(shortOrigin), false);
+  assert.equal(JSON.stringify(names).includes(shortBypass), false);
+  const lines = cfOnlyBootRefusals(env);
+  assert.deepEqual(lines, [
+    "cf_only refusing to start: ET_INTERNAL_BYPASS_TOKEN must be at least 32 characters",
+    "cf_only refusing to start: ET_CF_ORIGIN_SECRET must be at least 32 characters",
+  ]);
+  assert.equal(lines.join("\n").includes(shortOrigin), false);
+  assert.equal(lines.join("\n").includes(shortBypass), false);
+  assert.equal(lines.join("\n").includes("31"), false);
+  assert.deepEqual(
+    cfSecretProblems({ ET_CF_ORIGIN_SECRET: "test-origin-secret-" + "a".repeat(13) }),
+    [],
+  );
+  assert.deepEqual(
+    cfSecretProblems({ ET_INTERNAL_BYPASS_TOKEN: "test-internal-token-" + "b".repeat(12) }),
+    [],
+  );
+  assert.deepEqual(cfSecretProblems({ ET_CF_ORIGIN_SECRET: "   " }), []);
+  assert.deepEqual(cfSecretProblems({}), []);
+  assert.deepEqual(cfOnlyBootRefusals({ ET_CF_ONLY: "off", ET_CF_ORIGIN_SECRET: shortOrigin }), []);
+});
+
+test("a short secret fails origin_auth, a short bypass grants nothing, and off mode is unchanged", () => {
+  const shortOrigin = "test-origin-secret-" + "a".repeat(12);
+  const longOrigin = "test-origin-secret-" + "a".repeat(13);
+  const shortBypass = "test-internal-token-" + "b".repeat(11);
+  const longBypass = "test-internal-token-" + "b".repeat(12);
+  assert.equal(shortOrigin.length, 31);
+  assert.equal(longOrigin.length, 32);
+  assert.equal(shortBypass.length, 31);
+  assert.equal(longBypass.length, 32);
+
+  enable("enforce", "1");
+  process.env.ET_CF_ORIGIN_SECRET = shortOrigin;
+  const denied = decision("/search", passHeaders({ "x-et-origin-auth": shortOrigin }));
+  assert.equal(denied.pass, false);
+  assert.equal(denied.reason, "origin_auth");
+
+  process.env.ET_CF_ORIGIN_SECRET = ` ${longOrigin} `;
+  const allowed = decision("/search", passHeaders({ "x-et-origin-auth": longOrigin }));
+  assert.equal(allowed.pass, true);
+  assert.equal(allowed.reason, null);
+
+  delete process.env.ET_CF_ORIGIN_SECRET;
+  process.env.ET_INTERNAL_BYPASS_TOKEN = shortBypass;
+  const noBypass = decision("/search", { host: "127.0.0.1", "x-et-internal": shortBypass });
+  assert.equal(noBypass.pass, false);
+  assert.equal(noBypass.exempt, null);
+
+  process.env.ET_INTERNAL_BYPASS_TOKEN = longBypass;
+  const bypass = decision("/search", { host: "127.0.0.1", "x-et-internal": longBypass });
+  assert.equal(bypass.exempt, "internal");
+
+  process.env.ET_CF_ONLY = "off";
+  process.env.ET_CF_ORIGIN_SECRET = shortOrigin;
+  process.env.ET_INTERNAL_BYPASS_TOKEN = shortBypass;
+  const off = decision("/search", { host: "127.0.0.1" });
+  assert.equal(off.pass, true);
+  assert.equal(off.reason, null);
+  assert.equal(off.exempt, null);
+  assert.deepEqual(cfOnlyBootRefusals(), []);
+});
+
+test("boot refuses short secrets by name and does not print the values", async () => {
+  const shortOrigin = "test-origin-secret-" + "a".repeat(12);
+  const shortBypass = "test-internal-token-" + "b".repeat(11);
+  const result = await runServerBoot({
+    ET_CF_ONLY: "enforce",
+    ET_CF_ORIGIN_SECRET: shortOrigin,
+    ET_INTERNAL_BYPASS_TOKEN: shortBypass,
+  });
+  assert.equal(result.code, 1);
+  assert.equal(
+    result.stderr.includes(
+      "cf_only refusing to start: ET_INTERNAL_BYPASS_TOKEN must be at least 32 characters",
+    ),
+    true,
+  );
+  assert.equal(
+    result.stderr.includes(
+      "cf_only refusing to start: ET_CF_ORIGIN_SECRET must be at least 32 characters",
+    ),
+    true,
+  );
+  assert.equal(result.stderr.includes(shortOrigin), false);
+  assert.equal(result.stdout.includes(shortOrigin), false);
+  assert.equal(result.stderr.includes(shortBypass), false);
+  assert.equal(result.stdout.includes(shortBypass), false);
+  assert.equal(result.stdout.includes("[exittrace]"), false);
+  assert.equal(result.stderr.includes("31"), false);
 });
