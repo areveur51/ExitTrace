@@ -95,7 +95,7 @@ Run phase A off-ingest (outside the ingest window). The non-concurrent `CREATE U
    ```sql
    SELECT count(*) FROM person_events;
 
-   SELECT md5(string_agg(row_text, '' ORDER BY person_id, kind, seq))
+   SELECT md5(string_agg(row_text, '' ORDER BY person_id COLLATE "C", kind COLLATE "C", seq))
      FROM (
        SELECT person_id || '|' || kind || '|' || coalesce(seq::text, '0')
               || '|' || coalesce(event_date::text, '') AS row_text

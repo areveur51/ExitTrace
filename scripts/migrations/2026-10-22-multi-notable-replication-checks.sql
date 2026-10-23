@@ -100,7 +100,7 @@ SELECT count(*) AS n,
        count(*) FILTER (WHERE seq > 0) AS seq_gt_0
   FROM person_events;
 
-SELECT md5(string_agg(row_text, '' ORDER BY person_id, kind, seq))
+SELECT md5(string_agg(row_text, '' ORDER BY person_id COLLATE "C", kind COLLATE "C", seq))
   FROM (
     SELECT person_id, kind, seq,
            person_id || '|' || kind || '|' || seq::text
@@ -108,11 +108,26 @@ SELECT md5(string_agg(row_text, '' ORDER BY person_id, kind, seq))
       FROM person_events
   ) s;
 
+-- Order-independent md5 (record alongside; must also match):
+SELECT md5(string_agg(row_text, E'\n' ORDER BY row_text COLLATE "C"))
+  FROM (
+    SELECT person_id || '|' || kind || '|' || seq::text
+           || '|' || coalesce(event_date::text, '') AS row_text
+      FROM person_events
+  ) s;
+
 -- Before phase A (no seq column):
-SELECT md5(string_agg(row_text, '' ORDER BY person_id, kind))
+SELECT md5(string_agg(row_text, '' ORDER BY person_id COLLATE "C", kind COLLATE "C"))
   FROM (
     SELECT person_id, kind,
            person_id || '|' || kind || '|' || coalesce(event_date::text, '') AS row_text
+      FROM person_events
+  ) s;
+
+-- Order-independent md5 (record alongside; must also match):
+SELECT md5(string_agg(row_text, E'\n' ORDER BY row_text COLLATE "C"))
+  FROM (
+    SELECT person_id || '|' || kind || '|' || coalesce(event_date::text, '') AS row_text
       FROM person_events
   ) s;
 
