@@ -60,9 +60,11 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS screenshot_credit TEXT;
 CREATE TABLE IF NOT EXISTS person_events (
   person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
   kind TEXT NOT NULL,
+  seq INTEGER NOT NULL DEFAULT 0,
   event_date DATE,
   sources JSONB NOT NULL DEFAULT '[]'::jsonb,
-  PRIMARY KEY (person_id, kind)
+  PRIMARY KEY (person_id, kind, seq),
+  CONSTRAINT person_events_seq_notable_only CHECK (kind = 'notable' OR seq = 0)
 );
 
 -- Harvest / dashboard attrs live on the event. Empty stays empty.
@@ -151,7 +153,7 @@ SELECT id, category, event_date, COALESCE(sources, '[]'::jsonb)
   FROM people
  WHERE category IS NOT NULL
    AND event_date IS NOT NULL
-ON CONFLICT (person_id, kind) DO NOTHING;
+ON CONFLICT DO NOTHING;
 -- @boot-data-write end
 
 CREATE TABLE IF NOT EXISTS dog_comms (

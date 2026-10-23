@@ -165,6 +165,117 @@ function applyEventShot(event, ...candidates) {
   return event;
 }
 
+function isNotableKind(kind) {
+  return String(kind || "").trim() === "notable";
+}
+
+/** Integer seq ≥ 0, or null when missing / invalid. */
+export function parseEventSeq(raw) {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "number") {
+    return Number.isInteger(raw) && raw >= 0 ? raw : null;
+  }
+  const text = String(raw).trim();
+  if (!/^(0|[1-9]\d*)$/.test(text)) return null;
+  return Number(text);
+}
+
+export function hasExplicitSeq(ev) {
+  if (!ev || typeof ev !== "object") return false;
+  return parseEventSeq(ev.seq) != null;
+}
+
+/** Stable notable identity. Missing seq is 0. Non-notable callers get 0. */
+export function notableSeq(ev) {
+  const n = parseEventSeq(ev?.seq);
+  return n == null ? 0 : n;
+}
+
+function citeUrlSet(ev) {
+  const set = new Set();
+  for (const source of ev?.sources || []) {
+    const url = canonicalPublicUrl(source?.url);
+    if (url) set.add(url);
+  }
+  return set;
+}
+
+function overlappingCiteUrls(a, b) {
+  const other = citeUrlSet(b);
+  if (!other.size) return false;
+  for (const url of citeUrlSet(a)) {
+    if (other.has(url)) return true;
+  }
+  return false;
+}
+
+/**
+ * Two notables are the same event when they share an explicit seq, or when
+ * the incoming row has no seq and they share a date plus an overlapping cite,
+ * identical comments, or both lack a date. Different dates never fold unless
+ * seq matches. seq is stable identity.
+ */
+export function sameNotable(a, b) {
+  if (!isNotableKind(a?.kind) || !isNotableKind(b?.kind)) return false;
+  if (hasExplicitSeq(b)) return notableSeq(a) === parseEventSeq(b.seq);
+  const da = asEventDate(a?.event_date) || null;
+  const db = asEventDate(b?.event_date) || null;
+  if (da !== db) return false;
+  if (overlappingCiteUrls(a, b)) return true;
+  if (String(a?.comments || "") === String(b?.comments || "")) return true;
+  if (!da && !db) return true;
+  return false;
+}
+
+/** Dedup key after seq assignment. Notable is `notable:${seq}`; other kinds are the kind. */
+export function eventKey(ev) {
+  const kind = String(ev?.kind || "").trim();
+  if (isNotableKind(kind)) return `notable:${notableSeq(ev)}`;
+  return kind;
+}
+
+export function nextNotableSeq(events) {
+  let max = -1;
+  for (const ev of events || []) {
+    if (!isNotableKind(ev?.kind)) continue;
+    max = Math.max(max, notableSeq(ev));
+  }
+  return max + 1;
+}
+
+/** Notable events, newest event_date first. Null dates last, then seq ascending. */
+export function notableEvents(events) {
+  return (events || [])
+    .filter((ev) => isNotableKind(ev?.kind))
+    .slice()
+    .sort((a, b) => {
+      const da = asEventDate(a?.event_date) || "";
+      const db = asEventDate(b?.event_date) || "";
+      if (da !== db) {
+        if (!da) return 1;
+        if (!db) return -1;
+        return db.localeCompare(da);
+      }
+      return notableSeq(a) - notableSeq(b);
+    });
+}
+
+function compareUniqueEvents(a, b) {
+  const d = String(b.event_date || "").localeCompare(String(a.event_date || ""));
+  if (d !== 0) return d;
+  const k = String(a.kind || "").localeCompare(String(b.kind || ""));
+  if (k !== 0) return k;
+  return notableSeq(a) - notableSeq(b);
+}
+
+function findMergeIndex(events, ev) {
+  if (isNotableKind(ev?.kind)) {
+    return (events || []).findIndex((row) => sameNotable(row, ev));
+  }
+  const kind = String(ev?.kind || "").trim();
+  return (events || []).findIndex((row) => row.kind === kind);
+}
+
 export function normalizePersonEvent(raw, fallback = {}) {
   if (!raw || typeof raw !== "object") return null;
   const kind = String(raw.kind || raw.category || fallback.kind || fallback.category || "").trim();
@@ -194,6 +305,10 @@ export function normalizePersonEvent(raw, fallback = {}) {
     ...attrs,
     age_at_event,
   };
+  if (isNotableKind(kind)) {
+    const seq = parseEventSeq(raw.seq) ?? parseEventSeq(fallback.seq);
+    if (seq != null) event.seq = seq;
+  }
   const headcount = parseHeadcount(raw.headcount) ?? parseHeadcount(fallback.headcount);
   if (headcount != null) event.headcount = headcount;
   if (isIndictmentKeepKind(kind)) {
@@ -214,45 +329,72 @@ function mergedUnsealed(kind, ...flags) {
   return flags.some((flag) => flag === true) ? true : null;
 }
 
-function uniqueEvents(events) {
-  const byKind = new Map();
-  for (const raw of events || []) {
-    const ev = normalizePersonEvent(raw);
-    if (!ev) continue;
-    const prior = byKind.get(ev.kind);
-    if (!prior) {
-      byKind.set(ev.kind, ev);
-      continue;
-    }
-    const merged = {
-      kind: prior.kind,
-      event_date: keptEventDate(prior, ev),
-      sources: mergeCites(prior.sources, ev.sources).sources,
-      ...mergeEventAttrs(prior, ev),
-      age_at_event:
-        parseStoredAge(prior.age_at_event) ?? parseStoredAge(ev.age_at_event),
-    };
-    const headcount = parseHeadcount(prior.headcount) ?? parseHeadcount(ev.headcount);
-    if (headcount != null) merged.headcount = headcount;
-    if (isIndictmentKeepKind(prior.kind)) {
-      merged.unsealed = mergedUnsealed(prior.kind, prior.unsealed, ev.unsealed);
-    }
-    const media = normalizeEventMedia([...(prior.media || []), ...(ev.media || [])]);
-    if (media.length) merged.media = media;
-    applyEventShot(merged, prior, ev);
-    byKind.set(ev.kind, merged);
-  }
-  return [...byKind.values()].sort((a, b) => {
-    const d = String(b.event_date || "").localeCompare(String(a.event_date || ""));
-    if (d !== 0) return d;
-    return String(a.kind).localeCompare(String(b.kind));
-  });
-}
-
 /** Keep a stored calendar date. Fill a null death_unconfirmed date only from an explicit one. */
 function keptEventDate(prior, incoming) {
   if (!isDeathUnconfirmed(prior?.kind)) return prior.event_date;
   return prior.event_date || incoming.event_date || null;
+}
+
+function mergePersonEvent(prior, ev) {
+  const merged = {
+    kind: prior.kind,
+    event_date: keptEventDate(prior, ev),
+    sources: mergeCites(prior.sources, ev.sources).sources,
+    ...mergeEventAttrs(prior, ev),
+    age_at_event:
+      parseStoredAge(prior.age_at_event) ?? parseStoredAge(ev.age_at_event),
+  };
+  if (isNotableKind(prior.kind)) merged.seq = notableSeq(prior);
+  const headcount = parseHeadcount(prior.headcount) ?? parseHeadcount(ev.headcount);
+  if (headcount != null) merged.headcount = headcount;
+  if (isIndictmentKeepKind(prior.kind)) {
+    merged.unsealed = mergedUnsealed(prior.kind, prior.unsealed, ev.unsealed);
+  }
+  const media = normalizeEventMedia([...(prior.media || []), ...(ev.media || [])]);
+  if (media.length) merged.media = media;
+  applyEventShot(merged, prior, ev);
+  return merged;
+}
+
+function copyEventRow(ev) {
+  const row = {
+    kind: ev.kind,
+    event_date: ev.event_date,
+    sources: (ev.sources || []).slice(),
+    ...mergeEventAttrs(ev, {}),
+    age_at_event: parseStoredAge(ev.age_at_event),
+  };
+  if (isNotableKind(ev.kind)) row.seq = notableSeq(ev);
+  if (parseHeadcount(ev.headcount) != null) row.headcount = parseHeadcount(ev.headcount);
+  if (isIndictmentKeepKind(ev.kind)) {
+    row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
+  }
+  const media = normalizeEventMedia(ev.media);
+  if (media.length) row.media = media;
+  applyEventShot(row, ev);
+  return row;
+}
+
+/**
+ * One event per (person, kind) except notable, which may repeat keyed by seq.
+ * Order: event_date desc, then kind, then seq asc.
+ */
+export function uniqueEvents(events) {
+  const out = [];
+  for (const raw of events || []) {
+    const ev = normalizePersonEvent(raw);
+    if (!ev) continue;
+    const i = findMergeIndex(out, ev);
+    if (i >= 0) {
+      out[i] = mergePersonEvent(out[i], ev);
+      continue;
+    }
+    if (isNotableKind(ev.kind) && !hasExplicitSeq(ev)) {
+      ev.seq = nextNotableSeq(out);
+    }
+    out.push(ev);
+  }
+  return out.sort(compareUniqueEvents);
 }
 
 /**
@@ -269,7 +411,7 @@ export function markEventsReady(row) {
   return row;
 }
 
-/** Lift legacy category/event_date/sources into events; keep one event per kind. */
+/** Lift legacy category/event_date/sources into events; one event per kind except notable (seq). */
 export function personEvents(row) {
   if (!row || typeof row !== "object") return [];
   if (row[EVENTS_READY] === true && Array.isArray(row.events)) return row.events;
@@ -309,6 +451,7 @@ export function personEvents(row) {
 export function eventForKind(events, kind) {
   const key = String(kind || "").trim();
   if (!key) return null;
+  if (isNotableKind(key)) return notableEvents(events)[0] || null;
   return (events || []).find((ev) => ev.kind === key) || null;
 }
 
@@ -400,7 +543,7 @@ export function resolveEventKind(person, kind) {
   return existing ? existing.kind : key;
 }
 
-/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. */
+/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second notable with a different date (or seq) is a new row. */
 export function attachPersonEvent(person, incoming) {
   const ev = normalizePersonEvent(incoming);
   if (!ev) {
@@ -408,35 +551,19 @@ export function attachPersonEvent(person, incoming) {
   }
   ev.kind = resolveEventKind(person, ev.kind);
   const events = personEvents(person);
-  const i = events.findIndex((row) => row.kind === ev.kind);
+  const i = findMergeIndex(events, ev);
   if (i >= 0) {
     const merged = mergeCites(events[i].sources, ev.sources);
     const next = events.slice();
-    next[i] = {
-      kind: events[i].kind,
-      event_date: keptEventDate(events[i], ev),
-      sources: merged.sources,
-      ...mergeEventAttrs(events[i], ev),
-      age_at_event:
-        parseStoredAge(events[i].age_at_event) ?? parseStoredAge(ev.age_at_event),
-    };
-    const headcount = parseHeadcount(events[i].headcount) ?? parseHeadcount(ev.headcount);
-    if (headcount != null) next[i].headcount = headcount;
-    if (isIndictmentKeepKind(events[i].kind)) {
-      next[i].unsealed = mergedUnsealed(
-        events[i].kind,
-        events[i].unsealed,
-        ev.unsealed,
-      );
-    }
-    const media = normalizeEventMedia([...(events[i].media || []), ...(ev.media || [])]);
-    if (media.length) next[i].media = media;
-    applyEventShot(next[i], events[i], ev);
+    next[i] = mergePersonEvent(events[i], ev);
     return {
       person: projectPerson({ ...person, events: next }),
       added: merged.added,
       existed: true,
     };
+  }
+  if (isNotableKind(ev.kind) && !hasExplicitSeq(ev)) {
+    ev.seq = nextNotableSeq(events);
   }
   return {
     person: projectPerson({
@@ -519,44 +646,31 @@ function preferKeepPerson(a, b) {
 export function mergePersonAnnotate(gold, prior) {
   const keep = projectPerson(gold);
   const extra = projectPerson(prior);
-  const eventsByKind = new Map();
-  for (const ev of keep.events) {
-    const row = {
-      kind: ev.kind,
-      event_date: ev.event_date,
-      sources: (ev.sources || []).slice(),
-      ...mergeEventAttrs(ev, {}),
-      age_at_event: parseStoredAge(ev.age_at_event),
-    };
-    if (parseHeadcount(ev.headcount) != null) row.headcount = parseHeadcount(ev.headcount);
-    if (isIndictmentKeepKind(ev.kind)) {
-      row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
-    }
-    const media = normalizeEventMedia(ev.media);
-    if (media.length) row.media = media;
-    applyEventShot(row, ev);
-    eventsByKind.set(ev.kind, row);
-  }
+  const events = keep.events.map((ev) => copyEventRow(ev));
   for (const ev of extra.events) {
-    const existing = eventsByKind.get(ev.kind);
-    if (!existing) {
-      const row = {
-        kind: ev.kind,
-        event_date: ev.event_date,
-        sources: (ev.sources || []).slice(),
-        ...mergeEventAttrs(ev, {}),
-        age_at_event: parseStoredAge(ev.age_at_event),
-      };
-      if (parseHeadcount(ev.headcount) != null) row.headcount = parseHeadcount(ev.headcount);
-      if (isIndictmentKeepKind(ev.kind)) {
-        row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
+    if (isNotableKind(ev.kind)) {
+      // Seq is per-person. Match extra notables by date/cites, then assign a new seq.
+      const incoming = { ...copyEventRow(ev) };
+      delete incoming.seq;
+      const i = findMergeIndex(events, incoming);
+      if (i >= 0) {
+        events[i] = mergePersonEvent(events[i], ev);
+        continue;
       }
-      const media = normalizeEventMedia(ev.media);
-      if (media.length) row.media = media;
-      applyEventShot(row, ev);
-      eventsByKind.set(ev.kind, row);
+      const row = copyEventRow(ev);
+      row.seq = nextNotableSeq(events);
+      events.push(row);
       continue;
     }
+    // Non-notable: origin/main merge. Gold event_date stays as-is (no
+    // death_unconfirmed fill from the prior row). age_at_event fills only
+    // when null. applyEventShot(existing, ev).
+    const i = events.findIndex((row) => row.kind === ev.kind);
+    if (i < 0) {
+      events.push(copyEventRow(ev));
+      continue;
+    }
+    const existing = events[i];
     existing.sources = mergeCites(existing.sources, ev.sources).sources;
     Object.assign(existing, mergeEventAttrs(existing, ev));
     const headcount = parseHeadcount(existing.headcount) ?? parseHeadcount(ev.headcount);
@@ -588,7 +702,7 @@ export function mergePersonAnnotate(gold, prior) {
     summary: keep.summary || extra.summary || "",
     birth_date: keep.birth_date || extra.birth_date || null,
     country_of_origin: keep.country_of_origin || extra.country_of_origin || "",
-    events: [...eventsByKind.values()],
+    events,
     career: mergeCareer(keep.career, extra.career),
     tags: [...(keep.tags || []), ...(extra.tags || [])],
     central_casting: mergeCentralCasting(keep.central_casting, extra.central_casting),
