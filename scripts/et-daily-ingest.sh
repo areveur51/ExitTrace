@@ -53,6 +53,10 @@
 #   ET_DAILY_DRY_RUN=1 skips seeding, health, and stamp. Leads then come from
 #   ET_DAILY_LEADS_IN (or none). Unless ET_DAILY_HELPER is set, the apply
 #   driver only plans rows and writes nothing.
+#
+# Never unlinks: a file from an earlier run today (report, apply.json, summary,
+# digests, leads, prompt, grok and seed logs) is moved into a fresh
+# $TMPD/retired/<YYYYmmdd-HHMMSS>-<pid>/ dir (0700) before it is rewritten.
 set -u
 export TZ=America/New_York
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -129,6 +133,30 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# Retire, never unlink: mv each existing path into one fresh timestamped
+# $TMPD/retired/<stamp>-<pid>/ dir (0700). Returns 1 if anything cannot be moved.
+RETIRED_DIR=""
+retire() {
+  local f
+  for f in "$@"; do
+    [[ -e "$f" || -L "$f" ]] || continue
+    if [[ -z "$RETIRED_DIR" ]]; then
+      private_dir "$TMPD/retired" || return 1
+      RETIRED_DIR="$TMPD/retired/$(date +%Y%m%d-%H%M%S)-$$"
+      mkdir -m 700 -- "$RETIRED_DIR" || { echo "et-daily FAIL: cannot create $RETIRED_DIR" >&2; RETIRED_DIR=""; return 1; }
+    fi
+    mv -n -- "$f" "$RETIRED_DIR/" || return 1
+    [[ -e "$f" || -L "$f" ]] && { echo "et-daily FAIL: $f was not retired" >&2; return 1; }
+  done
+  return 0
+}
+
+# Files from an earlier run today are retired before this run rewrites them.
+shopt -s nullglob
+retire "$REPORT" "$APPLY" "$SUMMARY" "$CURRENT" "$HIST" "$LEADS" "$PROMPT" "$GLOG" \
+  "$TMPD"/et-daily-"${DAY}"-seed-*.log || { echo "et-daily FAIL: cannot retire earlier run files in $TMPD" >&2; exit 1; }
+shopt -u nullglob
+
 {
   echo "et-daily start $(date)"
   echo "day=$DAY dry_run=$DRY lock=$LOCK $TAG"
@@ -204,8 +232,7 @@ seed_slice() {
 
 if [[ "$DRY" == "1" ]]; then
   echo "dry_run: seeding skipped" >> "$REPORT"
-  : > "$CURRENT"
-  : > "$HIST"
+  touch -- "$CURRENT" "$HIST"
   if [[ -n "${ET_DAILY_LEADS_IN:-}" && -f "${ET_DAILY_LEADS_IN}" ]]; then
     cp "$ET_DAILY_LEADS_IN" "$CURRENT"
   fi
@@ -266,6 +293,8 @@ KEEP catalog only: death_celebrity, death_ceo, death_official, firings, resignat
 From the leads below, pick at most 8 people with a real named subject, calendar event_date, and TWO official cite URLs (BBC/Reuters/AP/NYT/WaPo/WSJ/Bloomberg/gov). The digest source_url is a HINT not a cite unless it is itself an official news URL AND you have a second distinct official URL. Skip unnamed, death_unspecified, dups, and anything without 2 official cites. If unsure, emit zero rows.
 A NEW person (not already in the catalog) also needs country_of_origin, position, organization, and reason, all stated by the cites. Fill them only from the cites; leave them "" if not stated. Do not invent. hint_url is the digest source_url the row came from.
 
+no rm/shred/unlink (mv to retired/), no lab :5220, no desktop browser
+
 Write ONLY this JSON to $APPLY (no markdown):
 {"rows":[{"subject":"Full Name","category":"firings","event_date":"YYYY-MM-DD","role":"","position":"","organization":"","country_of_origin":"","reason":"","hint_url":"https://...","cite_urls":["https://...","https://..."]}],"skipped":[{"subject":"","reason":"dup|no-cites|not-keep"}]}
 
@@ -273,8 +302,9 @@ Leads (category, posted_at, hint_url, text):
 $LEAD_BODY
 EOF
 
-# A stale apply.json from an earlier run today must not be re-applied.
-rm -f "$APPLY" "$SUMMARY"
+# A stale apply.json from an earlier run today must not be re-applied: it is
+# retired (moved), and the run fails closed if it cannot be moved.
+retire "$APPLY" "$SUMMARY" || fail stale_apply_not_retired
 
 echo "grok start max-turns=2 cwd=$GROK_CWD" >> "$REPORT"
 env -C "$GROK_CWD" PATH="$PATH" "$GROK" --permission-mode auto --always-approve --no-subagents --max-turns 2 --output-format plain --no-alt-screen --prompt-file "$PROMPT" > "$GLOG" 2>&1 9>&-
