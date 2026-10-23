@@ -16,7 +16,11 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Changed
 
-- List pages share one results-controls bar: view, card size, pager, and rows per page. Wide screens use a single toolbar; narrower widths use a two-row panel.
+- List pages share one results-controls bar: view, card size, pager, and rows per page. Wide screens use a single toolbar from 1200px; narrower widths use a two-row panel.
+
+### Fixed
+
+- The results pager keeps previous, page numbers, and next on one line at phone width.
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
 
 ## [1.2.27] - 2026-10-21

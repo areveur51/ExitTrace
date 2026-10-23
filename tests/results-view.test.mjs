@@ -227,7 +227,11 @@ test("app.js persists results view and card size without a reload", () => {
   assert.match(css, /--result-card-min:\s*16rem/);
   assert.match(css, /\.results-controls/);
   assert.match(css, /@media \(min-width: 820px\)/);
-  assert.match(css, /@media \(min-width: 1440px\)/);
+  assert.match(css, /@media \(min-width: 1200px\)/);
+  assert.doesNotMatch(css, /@media \(min-width: 1440px\)/);
+  assert.match(css, /@media \(max-width: 430px\)[\s\S]*\.results-controls \.pager-controls \{[\s\S]*?flex-wrap:\s*nowrap/);
+  assert.match(css, /@container results-pager \(max-width: 17rem\)/);
+  assert.match(css, /pager-pages > li:not\(:first-child\):not\(:last-child\):not\(:has\(a\[aria-current="page"\]\)\)/);
 });
 
 test("operation cards share the result portrait slot and the sharp srcset", () => {

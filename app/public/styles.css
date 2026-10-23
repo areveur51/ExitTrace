@@ -3177,7 +3177,59 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
   }
 }
 
-@media (min-width: 1440px) {
+/* Phone widths: keep prev, page numbers, and next on one line.
+   Around 390px the rows selector sits beside the pager, so the control
+   strip is only ~10rem. Shrink the buttons, and drop middle numbers when
+   that strip is too narrow for the full window. First, current, and last stay. */
+@media (max-width: 430px) {
+  .results-controls .pager-controls {
+    container-type: inline-size;
+    container-name: results-pager;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .results-controls .pager-btn {
+    flex: 0 0 auto;
+    min-width: 1.75rem;
+    min-height: 2rem;
+    padding: 0.12rem 0.28rem;
+  }
+  .results-controls .pager-btn .ui-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+  .results-controls .pager-pages {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0.12rem;
+  }
+  .results-controls .pager-pages > li {
+    flex: 0 0 auto;
+  }
+  .results-controls .pager-pages a {
+    min-width: 1.55rem;
+    min-height: 2rem;
+    padding: 0.08rem 0.22rem;
+    font-size: 0.78rem;
+  }
+  .results-controls .pager-gap {
+    min-height: 0;
+    padding-inline: 0.05rem;
+  }
+}
+
+@container results-pager (max-width: 17rem) {
+  .results-controls .pager-pages > li:not(:first-child):not(:last-child):not(:has(a[aria-current="page"])) {
+    display: none;
+  }
+}
+
+@media (min-width: 1200px) {
   .results-controls.results-view {
     flex-direction: row;
     flex-wrap: nowrap;
