@@ -1,18 +1,22 @@
 import { isIP } from "node:net";
+import { nonNegativeInt, positiveInt } from "./num.mjs";
 
 /**
  * Client IP for rate limits, in this order:
- * 1. CF-Connecting-IP (Cloudflare overwrites it). Trusted only because
- *    production traffic arrives via Cloudflare; a request that reaches the
- *    origin directly can forge that header (best-effort; origin lock-down
- *    to CF is a follow-up).
+ * 1. CF-Connecting-IP when ET_TRUST_CF_CONNECTING_IP is on (default).
+ *    Cloudflare overwrites that header. A request that reaches the origin
+ *    directly can forge it (best-effort; origin lock-down is a follow-up).
+ *    Off when the env value trims/lowercases to 0, false, off, or no.
  * 2. Rightmost X-Forwarded-For after TRUSTED_PROXY_HOPS (N-th from the
  *    right). Never leftmost — XFF is client-forgeable; CF and Render append.
  *    hops=0 (default) ignores XFF completely.
- * 3. "unknown". With no CF header and hops=0 (or not enough hops), every
- *    such request shares the single "unknown" bucket, so the limits apply
- *    to all of that traffic combined (lab direct hits, or origin hits that
- *    bypass Cloudflare).
+ * 3. "unknown". With no usable CF header and hops=0 (or not enough hops),
+ *    every such request shares one dedicated "unknown" entry. That entry is
+ *    not an LRU key and is not counted against maxKeys. Overflow IPs use it
+ *    only when the per-IP map is full of live keys, so it never spends a
+ *    CF-keyed or XFF-keyed client's own buckets. clientIp returns a
+ *    normalized address or this sentinel, never an address whose text is
+ *    "unknown".
  * Do not fall back to socket.remoteAddress — that fallback is being
  * reconciled between Riker and Worf.
  */
@@ -25,6 +29,7 @@ const DEFAULT_ADD = 5;
 const XFF_MAX_CHARS = 1024;
 const XFF_MAX_ENTRIES = 20;
 const HOPS_CAP = 10;
+const CF_OFF = new Set(["0", "false", "off", "no"]);
 
 const EXEMPT_EXACT = new Set([
   "/health",
@@ -33,12 +38,6 @@ const EXEMPT_EXACT = new Set([
   "/app.js",
   "/empty-portrait.jpg",
 ]);
-
-function positiveInt(value, fallback) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return fallback;
-  return Math.floor(n);
-}
 
 function envPositive(name, fallback, env = process.env) {
   return positiveInt(env[name], fallback);
@@ -63,15 +62,25 @@ export function normalizeIp(raw) {
   }
   const mapped = s.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
   if (mapped) s = mapped[1];
+  // The limiter's shared bucket is the sentinel "unknown". Reject that word
+  // before isIP so a parsed address can never be stored under the same key.
+  if (s.toLowerCase() === "unknown") return "";
   if (!isIP(s)) return "";
   return s;
 }
 
 export function trustedProxyHops(value = process.env.TRUSTED_PROXY_HOPS) {
   if (value === undefined || value === null || value === "") return 0;
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.min(HOPS_CAP, Math.floor(n));
+  return Math.min(HOPS_CAP, nonNegativeInt(value, 0));
+}
+
+/** Default on. Read at call time. */
+export function trustCfConnectingIp(value = process.env.ET_TRUST_CF_CONNECTING_IP) {
+  if (value === undefined || value === null || value === true) return true;
+  if (value === false) return false;
+  const s = String(value).trim().toLowerCase();
+  if (!s) return true;
+  return !CF_OFF.has(s);
 }
 
 function headerRaw(headers, name) {
@@ -87,10 +96,13 @@ function headerFirst(headers, name) {
   return v;
 }
 
-export function clientIp(req, { trustedProxyHops: hopsOpt } = {}) {
+export function clientIp(req, { trustCf, trustedProxyHops: hopsOpt } = {}) {
   const headers = req?.headers;
-  const cf = normalizeIp(headerFirst(headers, "cf-connecting-ip"));
-  if (cf) return cf;
+  const trust = trustCf !== undefined ? trustCfConnectingIp(trustCf) : trustCfConnectingIp();
+  if (trust) {
+    const cf = normalizeIp(headerFirst(headers, "cf-connecting-ip"));
+    if (cf) return cf;
+  }
 
   const hops = hopsOpt !== undefined ? trustedProxyHops(hopsOpt) : trustedProxyHops();
   if (hops > 0) {
@@ -130,64 +142,101 @@ export function createRateLimiter({ windowMs, maxKeys, now, trustedProxyHops: ho
     search: envPositive("ET_RL_SEARCH", DEFAULT_SEARCH),
     add: envPositive("ET_RL_ADD", DEFAULT_ADD),
   };
-  /** @type {Map<string, { times: number[] }>} */
+  /**
+   * One entry per charged IP. Map order is LRU by lastSeen.
+   * lastSeen is the newest counted timestamp (denials do not refresh it).
+   * Idle means every bucket is empty. A live entry's lastSeen is inside
+   * the window, so if the front entry is not idle, no entry is idle.
+   * "unknown" is not a key here. It is `unknownEntry` below: created with
+   * the limiter, never evicted, and not counted against maxKeys.
+   * size() reports this map only. Map size stays <= maxKeys, so the map
+   * plus the dedicated unknown entry stays <= maxKeys + 1.
+   * @type {Map<string, { lastSeen: number, times: { global: number[], search: number[], add: number[] } }>}
+   */
   const store = new Map();
-  const sweepEvery = Math.max(1000, win / 10);
-  let lastSweep = Number.NEGATIVE_INFINITY;
 
-  function prune(entry, nowTs) {
-    const cutoff = nowTs - win;
-    const times = entry.times;
-    let i = 0;
-    while (i < times.length && times[i] <= cutoff) i += 1;
-    if (i) times.splice(0, i);
-  }
-
-  function ensureCapacity() {
-    if (store.size < cap) return;
-    const nowTs = clock();
-    if (nowTs - lastSweep >= sweepEvery) {
-      lastSweep = nowTs;
-      for (const [key, entry] of store) {
-        prune(entry, nowTs);
-        if (entry.times.length === 0) store.delete(key);
-      }
-    }
-    while (store.size >= cap) {
-      const oldest = store.keys().next().value;
-      if (oldest === undefined) break;
-      store.delete(oldest);
-    }
-  }
-
-  function peek(bucket, ip, limit, nowTs) {
-    const key = `${bucket}:${ip}`;
-    const entry = store.get(key);
-    if (!entry) {
-      return { key, count: 0, remaining: limit, denied: false, retryAfter: 1 };
-    }
-    prune(entry, nowTs);
-    const count = entry.times.length;
-    const denied = count >= limit;
+  function freshEntry(nowTs) {
     return {
-      key,
-      count,
-      remaining: Math.max(0, limit - count),
-      denied,
-      retryAfter: retryAfterSec(entry.times, nowTs, win),
+      lastSeen: nowTs,
+      times: { global: [], search: [], add: [] },
     };
   }
 
-  function take(bucket, ip, limit, nowTs) {
-    const key = `${bucket}:${ip}`;
-    let entry = store.get(key);
-    if (!entry) {
-      ensureCapacity();
-      entry = { times: [] };
-      store.set(key, entry);
+  /**
+   * Shared bucket for clientIp() "unknown" and for overflow IPs when the
+   * map is already full of live keys. Own counters. Never inserted, never evicted.
+   */
+  const unknownEntry = freshEntry(clock());
+
+  function pruneEntry(entry, nowTs) {
+    const cutoff = nowTs - win;
+    for (const name of ["global", "search", "add"]) {
+      const times = entry.times[name];
+      let i = 0;
+      while (i < times.length && times[i] <= cutoff) i += 1;
+      if (i) times.splice(0, i);
     }
-    prune(entry, nowTs);
-    if (entry.times.length < limit) entry.times.push(nowTs);
+  }
+
+  function isIdle(entry) {
+    return (
+      entry.times.global.length === 0 &&
+      entry.times.search.length === 0 &&
+      entry.times.add.length === 0
+    );
+  }
+
+  function evictFrontIfIdle(nowTs) {
+    const first = store.entries().next().value;
+    if (!first) return false;
+    const [key, entry] = first;
+    pruneEntry(entry, nowTs);
+    if (!isIdle(entry)) return false;
+    store.delete(key);
+    return true;
+  }
+
+  /** Free a per-IP slot. Unknown is outside the map, so size never exceeds cap. */
+  function makeRoom(nowTs) {
+    let guard = 0;
+    while (store.size >= cap && guard < 2) {
+      if (!evictFrontIfIdle(nowTs)) return;
+      guard += 1;
+    }
+  }
+
+  function takeLive(ip, nowTs) {
+    const entry = store.get(ip);
+    if (!entry) return null;
+    pruneEntry(entry, nowTs);
+    if (isIdle(entry)) {
+      store.delete(ip);
+      return null;
+    }
+    return entry;
+  }
+
+  function useUnknown(nowTs) {
+    pruneEntry(unknownEntry, nowTs);
+    return { key: "unknown", entry: unknownEntry };
+  }
+
+  function resolveEntry(ip, nowTs) {
+    if (ip === "unknown") return useUnknown(nowTs);
+    const live = takeLive(ip, nowTs);
+    if (live) return { key: ip, entry: live };
+    makeRoom(nowTs);
+    if (store.size >= cap) return useUnknown(nowTs);
+    const entry = freshEntry(nowTs);
+    store.set(ip, entry);
+    return { key: ip, entry };
+  }
+
+  function remember(key, entry, nowTs) {
+    entry.lastSeen = nowTs;
+    if (key === "unknown") return;
+    store.delete(key);
+    store.set(key, entry);
   }
 
   function applicableBuckets(method, pathname) {
@@ -211,11 +260,19 @@ export function createRateLimiter({ windowMs, maxKeys, now, trustedProxyHops: ho
       hopsOverride !== undefined ? { trustedProxyHops: hopsOverride } : {},
     );
     const nowTs = clock();
+    const { key, entry } = resolveEntry(ip, nowTs);
     const buckets = applicableBuckets(method, pathname);
-    const peeks = buckets.map((b) => ({
-      ...b,
-      ...peek(b.name, ip, b.limit, nowTs),
-    }));
+    const peeks = buckets.map((b) => {
+      const times = entry.times[b.name];
+      const count = times.length;
+      return {
+        ...b,
+        count,
+        remaining: Math.max(0, b.limit - count),
+        denied: count >= b.limit,
+        retryAfter: retryAfterSec(times, nowTs, win),
+      };
+    });
     const denying = peeks.filter((p) => p.denied);
     if (denying.length) {
       const retryAfter = Math.max(1, ...denying.map((d) => d.retryAfter));
@@ -231,11 +288,18 @@ export function createRateLimiter({ windowMs, maxKeys, now, trustedProxyHops: ho
         reset: retryAfter,
       };
     }
-    for (const b of buckets) take(b.name, ip, b.limit, nowTs);
-    const after = buckets.map((b) => ({
-      ...b,
-      ...peek(b.name, ip, b.limit, nowTs),
-    }));
+    for (const b of buckets) entry.times[b.name].push(nowTs);
+    remember(key, entry, nowTs);
+    const after = buckets.map((b) => {
+      const times = entry.times[b.name];
+      const count = times.length;
+      return {
+        ...b,
+        count,
+        remaining: Math.max(0, b.limit - count),
+        retryAfter: retryAfterSec(times, nowTs, win),
+      };
+    });
     let tightest = after[0];
     for (const row of after) {
       if (row.remaining < tightest.remaining) tightest = row;
@@ -251,8 +315,24 @@ export function createRateLimiter({ windowMs, maxKeys, now, trustedProxyHops: ho
 
   return {
     check,
+    // Per-IP map entries only. The dedicated "unknown" bucket is not included.
+    // Total tracked entries are size() + 1 and stay <= maxKeys + 1.
     size() {
       return store.size;
+    },
+    has(ip) {
+      if (ip === "unknown") return true;
+      return store.has(ip);
+    },
+    usage(ip) {
+      const entry = ip === "unknown" ? unknownEntry : store.get(ip);
+      if (!entry) return null;
+      pruneEntry(entry, clock());
+      return {
+        global: entry.times.global.length,
+        search: entry.times.search.length,
+        add: entry.times.add.length,
+      };
     },
     limits: { ...limits, windowMs: win, maxKeys: cap },
   };

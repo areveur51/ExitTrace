@@ -1,4 +1,6 @@
 -- Search trigram GIN indexes for ILIKE '%q%' (H2).
+-- Expression indexes on (nicknames::text), (clearances::text), and
+-- (agencies::text) match the catalog search SQL.
 -- Lab :5433 first. Render only after Admiral CLEAR.
 -- CREATE INDEX CONCURRENTLY cannot run inside a transaction.
 -- Run with psql without -1 / --single-transaction.
@@ -9,9 +11,12 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX CONCURRENTLY IF NOT EXISTS people_name_trgm ON people USING gin (name gin_trgm_ops);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS people_role_trgm ON people USING gin (role gin_trgm_ops);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS people_summary_trgm ON people USING gin (summary gin_trgm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS people_nicknames_trgm ON people USING gin ((nicknames::text) gin_trgm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS people_clearances_trgm ON people USING gin ((clearances::text) gin_trgm_ops);
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS operations_name_trgm ON operations USING gin (name gin_trgm_ops);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS operations_summary_trgm ON operations USING gin (summary gin_trgm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS operations_agencies_trgm ON operations USING gin ((agencies::text) gin_trgm_ops);
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS dog_comms_handle_trgm ON dog_comms USING gin (handle gin_trgm_ops);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS dog_comms_account_name_trgm ON dog_comms USING gin (account_name gin_trgm_ops);

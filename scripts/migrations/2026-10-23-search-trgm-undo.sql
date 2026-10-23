@@ -29,9 +29,12 @@ DROP INDEX CONCURRENTLY IF EXISTS dog_comms_text_trgm;
 DROP INDEX CONCURRENTLY IF EXISTS dog_comms_account_name_trgm;
 DROP INDEX CONCURRENTLY IF EXISTS dog_comms_handle_trgm;
 
+DROP INDEX CONCURRENTLY IF EXISTS operations_agencies_trgm;
 DROP INDEX CONCURRENTLY IF EXISTS operations_summary_trgm;
 DROP INDEX CONCURRENTLY IF EXISTS operations_name_trgm;
 
+DROP INDEX CONCURRENTLY IF EXISTS people_clearances_trgm;
+DROP INDEX CONCURRENTLY IF EXISTS people_nicknames_trgm;
 DROP INDEX CONCURRENTLY IF EXISTS people_summary_trgm;
 DROP INDEX CONCURRENTLY IF EXISTS people_role_trgm;
 DROP INDEX CONCURRENTLY IF EXISTS people_name_trgm;

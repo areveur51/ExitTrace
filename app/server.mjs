@@ -15,6 +15,7 @@ import {
   isIndictmentCategory,
 } from "./lib/categories.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "./lib/env.mjs";
+import { positiveInt } from "./lib/num.mjs";
 import {
   backendName,
   counts,
@@ -44,8 +45,8 @@ import {
   hydrateFileMemory,
   loadSeedFile,
   persistAddRequests,
+  prepareSearchQuery,
   searchCatalog,
-  SEARCH_Q_MAX,
   writeFileStore,
 } from "./lib/store.mjs";
 import {
@@ -489,15 +490,9 @@ async function healthPayload() {
   };
 }
 
-function positiveTimeout(value, fallback) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return fallback;
-  return Math.floor(n);
-}
-
 function applyServerTimeouts(server, env = process.env) {
-  server.requestTimeout = positiveTimeout(env.ET_REQUEST_TIMEOUT_MS, 30_000);
-  server.headersTimeout = positiveTimeout(env.ET_HEADERS_TIMEOUT_MS, 15_000);
+  server.requestTimeout = positiveInt(env.ET_REQUEST_TIMEOUT_MS, 30_000);
+  server.headersTimeout = positiveInt(env.ET_HEADERS_TIMEOUT_MS, 15_000);
 }
 
 async function handle(req, res) {
@@ -726,18 +721,29 @@ async function handle(req, res) {
   }
 
   if (p === "/search") {
-    let q = (url.searchParams.get("q") || "").trim();
-    if (q.length > SEARCH_Q_MAX) q = "";
+    const prepared = prepareSearchQuery(url.searchParams.get("q") || "");
+    const q = prepared ? prepared.raw : "";
     let all = [];
-    if (q) {
+    if (prepared) {
+      const ac = new AbortController();
+      const onClose = () => {
+        if (!res.writableFinished) ac.abort();
+      };
+      if (typeof res.on === "function") res.on("close", onClose);
       try {
-        all = await searchCatalog(q);
+        all = await searchCatalog(prepared, { signal: ac.signal });
+        if (ac.signal.aborted || res.writableFinished) return;
       } catch (err) {
+        if (ac.signal.aborted || err?.name === "AbortError") return;
         console.error(err?.message);
-        send(res, 503, "Search is temporarily unavailable. Try again shortly.\n", {
-          "Content-Type": "text/plain; charset=utf-8",
-        });
+        if (!res.writableFinished) {
+          send(res, 503, "Search is temporarily unavailable. Try again shortly.\n", {
+            "Content-Type": "text/plain; charset=utf-8",
+          });
+        }
         return;
+      } finally {
+        if (typeof res.removeListener === "function") res.removeListener("close", onClose);
       }
     }
     const meta = paginate({
