@@ -15,6 +15,7 @@ import {
   isIndictmentCategory,
 } from "./lib/categories.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "./lib/env.mjs";
+import { positiveInt } from "./lib/num.mjs";
 import {
   backendName,
   counts,
@@ -44,9 +45,15 @@ import {
   hydrateFileMemory,
   loadSeedFile,
   persistAddRequests,
+  prepareSearchQuery,
   searchCatalog,
   writeFileStore,
 } from "./lib/store.mjs";
+import {
+  getRateLimiter,
+  isExemptPath,
+  resetRateLimiter,
+} from "./lib/rate-limit.mjs";
 import { bootDatabase } from "./lib/boot-guard.mjs";
 import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
 import { publicGitSha } from "./lib/logical-heal.mjs";
@@ -483,9 +490,29 @@ async function healthPayload() {
   };
 }
 
+function applyServerTimeouts(server, env = process.env) {
+  server.requestTimeout = positiveInt(env.ET_REQUEST_TIMEOUT_MS, 30_000);
+  server.headersTimeout = positiveInt(env.ET_HEADERS_TIMEOUT_MS, 15_000);
+}
+
 async function handle(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
   const p = url.pathname;
+
+  if (!isExemptPath(p)) {
+    const decision = getRateLimiter().check(req, p);
+    if (!decision.allowed) {
+      const n = decision.retryAfter;
+      send(res, 429, `Too many requests. Retry after ${n} seconds.\n`, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Retry-After": String(n),
+        "RateLimit-Limit": String(decision.limit),
+        "RateLimit-Remaining": "0",
+        "RateLimit-Reset": String(decision.reset),
+      });
+      return;
+    }
+  }
 
   if (p.startsWith("/api/mention-queue")) {
     await dispatchMentionRoute(req, res, { send, readBody });
@@ -694,8 +721,31 @@ async function handle(req, res) {
   }
 
   if (p === "/search") {
-    const q = (url.searchParams.get("q") || "").trim();
-    const all = q ? await searchCatalog(q) : [];
+    const prepared = prepareSearchQuery(url.searchParams.get("q") || "");
+    const q = prepared ? prepared.raw : "";
+    let all = [];
+    if (prepared) {
+      const ac = new AbortController();
+      const onClose = () => {
+        if (!res.writableFinished) ac.abort();
+      };
+      if (typeof res.on === "function") res.on("close", onClose);
+      try {
+        all = await searchCatalog(prepared, { signal: ac.signal });
+        if (ac.signal.aborted || res.writableFinished) return;
+      } catch (err) {
+        if (ac.signal.aborted || err?.name === "AbortError") return;
+        console.error(err?.message);
+        if (!res.writableFinished) {
+          send(res, 503, "Search is temporarily unavailable. Try again shortly.\n", {
+            "Content-Type": "text/plain; charset=utf-8",
+          });
+        }
+        return;
+      } finally {
+        if (typeof res.removeListener === "function") res.removeListener("close", onClose);
+      }
+    }
     const meta = paginate({
       total: all.length,
       page: parsePage(url.searchParams),
@@ -1389,6 +1439,7 @@ async function boot() {
       }
     });
   });
+  applyServerTimeouts(server);
   server.listen(port, host, () => {
     console.log(`[exittrace] http://${host}:${port} backend=${backendName()}`);
   });
@@ -1399,9 +1450,11 @@ export {
   CATEGORIES,
   PERSON_CATEGORIES,
   ROOT,
+  applyServerTimeouts,
   boot,
   handle,
   healthPayload,
+  resetRateLimiter,
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { databaseUrl } from "./env.mjs";
+import { positiveInt } from "./num.mjs";
 import {
   PromoteError,
   assertNewPersonInsertLock,
@@ -62,6 +63,157 @@ import {
 
 let pool = null;
 let memory = null;
+/** Test-only: inject a fake pool. Pass null to restore normal getPool. */
+let poolForTests = null;
+
+export const SEARCH_Q_MAX = 64;
+export const SEARCH_SQL_LIMIT = 200;
+
+export class SearchBusyError extends Error {
+  constructor(message = "Search is temporarily unavailable") {
+    super(message);
+    this.name = "SearchBusyError";
+    this.code = "SEARCH_BUSY";
+  }
+}
+
+export function pgPoolConfig(url, env = process.env) {
+  return {
+    connectionString: url,
+    max: positiveInt(env.PG_POOL_MAX, 4),
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: positiveInt(env.PG_CONNECT_TIMEOUT_MS, 5_000),
+    statement_timeout: positiveInt(env.PG_STATEMENT_TIMEOUT_MS, 8_000),
+  };
+}
+
+export function setPoolForTests(fakePool) {
+  // Test-only: inject a fake pg Pool. Pass null to restore normal getPool.
+  poolForTests = fakePool;
+}
+
+export function resetCatalogCacheForTests() {
+  // Test-only: drop counts/people snapshots so the next GET / hits the pool.
+  dropCatalogCache();
+}
+
+const searchWaiters = [];
+let searchActive = 0;
+const SEARCH_QUEUE_FACTOR = 4;
+const DEFAULT_SEARCH_ACQUIRE_TIMEOUT_MS = 5_000;
+
+function abortError() {
+  const err = new Error("The operation was aborted");
+  err.name = "AbortError";
+  return err;
+}
+
+function searchSlotLimit() {
+  return Math.max(1, positiveInt(process.env.PG_POOL_MAX, 4) - 1);
+}
+
+function searchAcquireTimeoutMs() {
+  return positiveInt(
+    process.env.ET_SEARCH_ACQUIRE_TIMEOUT_MS,
+    DEFAULT_SEARCH_ACQUIRE_TIMEOUT_MS,
+  );
+}
+
+export function searchSlotStats() {
+  return {
+    active: searchActive,
+    queued: searchWaiters.length,
+    limit: searchSlotLimit(),
+  };
+}
+
+function detachWaiter(waiter) {
+  if (waiter.timer) clearTimeout(waiter.timer);
+  waiter.timer = null;
+  if (waiter.signal && waiter.onAbort) {
+    waiter.signal.removeEventListener("abort", waiter.onAbort);
+    waiter.onAbort = null;
+  }
+}
+
+export function acquireSearchSlot(signal) {
+  if (signal?.aborted) return Promise.reject(abortError());
+  const limit = searchSlotLimit();
+  if (searchActive < limit) {
+    searchActive += 1;
+    return Promise.resolve();
+  }
+  if (searchWaiters.length >= limit * SEARCH_QUEUE_FACTOR) {
+    return Promise.reject(new SearchBusyError("search slot queue is full"));
+  }
+  return new Promise((resolve, reject) => {
+    const waiter = {
+      done: false,
+      signal,
+      timer: null,
+      onAbort: null,
+      resolve,
+      reject,
+    };
+    const fail = (err) => {
+      if (waiter.done) return;
+      waiter.done = true;
+      detachWaiter(waiter);
+      const idx = searchWaiters.indexOf(waiter);
+      if (idx !== -1) searchWaiters.splice(idx, 1);
+      reject(err);
+    };
+    waiter.timer = setTimeout(() => {
+      fail(new SearchBusyError("search slot acquire timed out"));
+    }, searchAcquireTimeoutMs());
+    if (signal && typeof signal.addEventListener === "function") {
+      waiter.onAbort = () => fail(abortError());
+      signal.addEventListener("abort", waiter.onAbort, { once: true });
+      if (signal.aborted) {
+        fail(abortError());
+        return;
+      }
+    }
+    searchWaiters.push(waiter);
+  });
+}
+
+export function releaseSearchSlot() {
+  while (searchWaiters.length > 0) {
+    const next = searchWaiters.shift();
+    if (!next || next.done) continue;
+    next.done = true;
+    detachWaiter(next);
+    next.resolve();
+    return;
+  }
+  searchActive = Math.max(0, searchActive - 1);
+}
+
+export function resetSearchSlotsForTests() {
+  const pending = searchWaiters.splice(0, searchWaiters.length);
+  for (const waiter of pending) {
+    if (!waiter || waiter.done) continue;
+    waiter.done = true;
+    detachWaiter(waiter);
+    waiter.reject(new SearchBusyError("search slots reset"));
+  }
+  searchActive = 0;
+}
+
+async function withSearchSlot(signal, fn) {
+  if (signal?.aborted) throw abortError();
+  await acquireSearchSlot(signal);
+  if (signal?.aborted) {
+    releaseSearchSlot();
+    throw abortError();
+  }
+  try {
+    return await fn();
+  } finally {
+    releaseSearchSlot();
+  }
+}
 
 /** Postgres catalog reads only. Memory tests stay live. Direct SQL shows up within this window. An expired snapshot is served once while it refreshes. */
 const CATALOG_CACHE_MS = 12_000;
@@ -88,6 +240,7 @@ export function backendName() {
 }
 
 export async function getPool() {
+  if (poolForTests) return poolForTests;
   const url = databaseUrl();
   if (!url) return null;
   if (pool) return pool;
@@ -99,11 +252,8 @@ export async function getPool() {
       "DATABASE_URL is set but the 'pg' package is missing. Run: npm install pg",
     );
   }
-  pool = new pg.default.Pool({
-    connectionString: url,
-    max: Number(process.env.PG_POOL_MAX || 4),
-    idleTimeoutMillis: 10_000,
-  });
+  const cfg = pgPoolConfig(url);
+  pool = new pg.default.Pool(cfg);
   return pool;
 }
 
@@ -3195,8 +3345,22 @@ export async function updateAddRequest(id, patch) {
   return row;
 }
 
-function likeNeedle(q) {
-  return `%${String(q).replace(/[%_\\]/g, "\\$&")}%`;
+function isPreparedSearch(q) {
+  return Boolean(
+    q &&
+      typeof q === "object" &&
+      typeof q.raw === "string" &&
+      typeof q.needle === "string",
+  );
+}
+
+/** Null when blank or trimmed length > SEARCH_Q_MAX. Escapes \\, %, and _ once. */
+export function prepareSearchQuery(q) {
+  if (isPreparedSearch(q)) return q;
+  const raw = String(q ?? "").trim();
+  if (!raw || raw.length > SEARCH_Q_MAX) return null;
+  const escaped = raw.replace(/[%_\\]/g, "\\$&");
+  return { raw, needle: `%${escaped}%` };
 }
 
 function matchesPerson(row, needle) {
@@ -3244,74 +3408,73 @@ function matchesSource(row, needle) {
     .includes(needle);
 }
 
-export async function searchPeople(q) {
-  const raw = String(q || "").trim();
-  if (!raw) return [];
+async function queryPeople(prepared, opts = {}) {
+  if (opts.signal?.aborted) return [];
   const p = await getPool();
   if (!p) {
-    const needle = raw.toLowerCase();
+    const needle = prepared.raw.toLowerCase();
     return getMemory()
       .people.filter((r) => matchesPerson(r, needle))
       .slice()
-      .sort(comparePeople);
+      .sort(comparePeople)
+      .slice(0, SEARCH_SQL_LIMIT);
   }
-  const res = await p.query(
-    `SELECT * FROM people
+  const res = await withSearchSlot(opts.signal, () =>
+    p.query(
+      `SELECT * FROM people
      WHERE name ILIKE $1 ESCAPE '\\'
         OR role ILIKE $1 ESCAPE '\\'
         OR summary ILIKE $1 ESCAPE '\\'
         OR nicknames::text ILIKE $1 ESCAPE '\\'
         OR clearances::text ILIKE $1 ESCAPE '\\'
-     ORDER BY event_date DESC, name ASC`,
-    [likeNeedle(raw)],
+     ORDER BY event_date DESC, name ASC
+     LIMIT $2`,
+      [prepared.needle, SEARCH_SQL_LIMIT],
+    ),
   );
   return res.rows.map(normalizePerson);
 }
 
-export async function searchKindComms(kind, q) {
+async function queryKindComms(kind, prepared, opts = {}) {
+  if (opts.signal?.aborted) return [];
   const spec = commsKind(kind);
-  const raw = String(q || "").trim();
-  if (!raw) return [];
   const p = await getPool();
   if (!p) {
-    const needle = raw.toLowerCase();
+    const needle = prepared.raw.toLowerCase();
     return (getMemory()[spec.memoryKey] || [])
       .filter((r) => matchesDog(r, needle))
       .slice()
-      .sort(compareDogs);
+      .sort(compareDogs)
+      .slice(0, SEARCH_SQL_LIMIT);
   }
-  const res = await p.query(
-    `SELECT * FROM ${spec.table}
+  const res = await withSearchSlot(opts.signal, () =>
+    p.query(
+      `SELECT * FROM ${spec.table}
      WHERE handle ILIKE $1 ESCAPE '\\'
         OR account_name ILIKE $1 ESCAPE '\\'
         OR text ILIKE $1 ESCAPE '\\'
-     ORDER BY posted_at DESC, handle ASC`,
-    [likeNeedle(raw)],
+     ORDER BY posted_at DESC, handle ASC
+     LIMIT $2`,
+      [prepared.needle, SEARCH_SQL_LIMIT],
+    ),
   );
   return res.rows.map((row) => normalizeKindComm(row, spec.id));
 }
 
-export async function searchDogComms(q) {
-  return searchKindComms("dog", q);
-}
-
-export async function searchRedFolderComms(q) {
-  return searchKindComms("red_folder", q);
-}
-
-export async function searchSourcePosts(q) {
-  const raw = String(q || "").trim();
-  if (!raw) return [];
+async function querySourcePosts(prepared, opts = {}) {
+  if (opts.signal?.aborted) return [];
   const p = await getPool();
   if (!p) {
-    const needle = raw.toLowerCase();
+    const needle = prepared.raw.toLowerCase();
     return (getMemory().source_posts || [])
       .filter((r) => !r.gold_person_id && matchesSource(r, needle))
       .slice()
-      .sort(compareSources);
+      .sort(compareSources)
+      .slice(0, SEARCH_SQL_LIMIT);
   }
-  const res = await p.query(
-    `SELECT * FROM source_posts
+  const res = await withSearchSlot(opts.signal, () =>
+    p.query(
+      `SELECT * FROM source_posts
      WHERE gold_person_id IS NULL
        AND (
          poster_handle ILIKE $1 ESCAPE '\\'
@@ -3319,32 +3482,69 @@ export async function searchSourcePosts(q) {
          OR text ILIKE $1 ESCAPE '\\'
          OR source_url ILIKE $1 ESCAPE '\\'
        )
-     ORDER BY posted_at DESC NULLS LAST, poster_handle ASC`,
-    [likeNeedle(raw)],
+     ORDER BY posted_at DESC NULLS LAST, poster_handle ASC
+     LIMIT $2`,
+      [prepared.needle, SEARCH_SQL_LIMIT],
+    ),
   );
   return res.rows.map(normalizeSourcePost);
 }
 
-export async function searchOperations(q) {
-  const raw = String(q || "").trim();
-  if (!raw) return [];
+async function queryOperations(prepared, opts = {}) {
+  if (opts.signal?.aborted) return [];
   const p = await getPool();
   if (!p) {
-    const needle = raw.toLowerCase();
+    const needle = prepared.raw.toLowerCase();
     return (getMemory().operations || [])
       .filter((r) => matchesOperation(r, needle))
       .slice()
-      .sort(compareOperations);
+      .sort(compareOperations)
+      .slice(0, SEARCH_SQL_LIMIT);
   }
-  const res = await p.query(
-    `SELECT * FROM operations
+  const res = await withSearchSlot(opts.signal, () =>
+    p.query(
+      `SELECT * FROM operations
      WHERE name ILIKE $1 ESCAPE '\\'
         OR summary ILIKE $1 ESCAPE '\\'
         OR agencies::text ILIKE $1 ESCAPE '\\'
-     ORDER BY event_date DESC, name ASC`,
-    [likeNeedle(raw)],
+     ORDER BY event_date DESC, name ASC
+     LIMIT $2`,
+      [prepared.needle, SEARCH_SQL_LIMIT],
+    ),
   );
   return res.rows.map(normalizeOperation);
+}
+
+export async function searchPeople(q, opts) {
+  const prepared = prepareSearchQuery(q);
+  if (!prepared) return [];
+  return queryPeople(prepared, opts);
+}
+
+export async function searchKindComms(kind, q, opts) {
+  const prepared = prepareSearchQuery(q);
+  if (!prepared) return [];
+  return queryKindComms(kind, prepared, opts);
+}
+
+export async function searchDogComms(q, opts) {
+  return searchKindComms("dog", q, opts);
+}
+
+export async function searchRedFolderComms(q, opts) {
+  return searchKindComms("red_folder", q, opts);
+}
+
+export async function searchSourcePosts(q, opts) {
+  const prepared = prepareSearchQuery(q);
+  if (!prepared) return [];
+  return querySourcePosts(prepared, opts);
+}
+
+export async function searchOperations(q, opts) {
+  const prepared = prepareSearchQuery(q);
+  if (!prepared) return [];
+  return queryOperations(prepared, opts);
 }
 
 /**
@@ -3378,25 +3578,37 @@ async function foldLinkedDogComms(people, comms) {
   return { people: merged, comms: rest };
 }
 
-export async function searchCatalog(q) {
-  const kindHits = await Promise.all([
-    searchPeople(q),
-    searchOperations(q),
-    ...KIND_COMM_IDS.map((id) => searchKindComms(id, q)),
-    searchSourcePosts(q),
-  ]);
-  const operations = kindHits[1];
-  const posts = kindHits[kindHits.length - 1];
-  const rawComms = KIND_COMM_IDS.map((id, i) =>
-    kindHits[i + 2].map((row) => ({
-      type: KIND_COMMS[id].searchType,
-      date: row.posted_at || "",
-      row,
-    })),
-  ).flat();
-  const { people, comms } = await foldLinkedDogComms(kindHits[0], rawComms);
+export async function searchCatalog(q, opts = {}) {
+  const prepared = prepareSearchQuery(q);
+  if (!prepared) return [];
+  if (opts.signal?.aborted) return [];
+  // One table at a time: this request holds at most one search slot or waiter.
+  // Default PG_POOL_MAX 4 yields 3 active slots and 12 queued waiters, so up to
+  // 3 active + 12 queued concurrent searches are served before SearchBusyError,
+  // at the cost of sequential per-table latency. Each statement is still bounded
+  // by statement_timeout and the whole request by requestTimeout 30s.
+  const people = await queryPeople(prepared, opts);
+  if (opts.signal?.aborted) return [];
+  const operations = await queryOperations(prepared, opts);
+  if (opts.signal?.aborted) return [];
+  const rawComms = [];
+  for (const id of KIND_COMM_IDS) {
+    if (opts.signal?.aborted) return [];
+    const rows = await queryKindComms(id, prepared, opts);
+    for (const row of rows) {
+      rawComms.push({
+        type: KIND_COMMS[id].searchType,
+        date: row.posted_at || "",
+        row,
+      });
+    }
+  }
+  if (opts.signal?.aborted) return [];
+  const posts = await querySourcePosts(prepared, opts);
+  if (opts.signal?.aborted) return [];
+  const { people: folded, comms } = await foldLinkedDogComms(people, rawComms);
   return [
-    ...people.map((row) => ({
+    ...folded.map((row) => ({
       type: "person",
       date: row.event_date || nicknameCatalogDate(row) || "",
       row,
