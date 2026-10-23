@@ -5,7 +5,11 @@ import { nonNegativeInt, positiveInt } from "./num.mjs";
  * Client IP for rate limits, in this order:
  * 1. CF-Connecting-IP when ET_TRUST_CF_CONNECTING_IP is on (default).
  *    Cloudflare overwrites that header. A request that reaches the origin
- *    directly can forge it (best-effort; origin lock-down is a follow-up).
+ *    directly can forge it. When ET_CF_ONLY is report or enforce, the server
+ *    passes trustCf from app/lib/cf-origin.mjs. Only a request that passed
+ *    the whole CF check keeps this header. On Render, CF-Ray, CF-Connecting-IP,
+ *    and the hop are hygiene. Host does the practical work. The origin secret
+ *    is the real control. When ET_CF_ONLY is off, this switch alone applies.
  *    Off when the env value trims/lowercases to 0, false, off, or no.
  * 2. Rightmost X-Forwarded-For after TRUSTED_PROXY_HOPS (N-th from the
  *    right). Never leftmost — XFF is client-forgeable; CF and Render append.
@@ -96,6 +100,28 @@ function headerFirst(headers, name) {
   return v;
 }
 
+/**
+ * N-th X-Forwarded-For entry from the right, N = hops.
+ * hops <= 0, a short list, or an unusable entry returns "".
+ * Same clipping as before: last 1024 characters, last 20 entries.
+ * Does not read socket.remoteAddress.
+ */
+export function xffHop(headers, hops) {
+  const n = hops === undefined ? trustedProxyHops() : trustedProxyHops(hops);
+  if (!(n > 0)) return "";
+  const xff = headerRaw(headers, "x-forwarded-for");
+  const raw = Array.isArray(xff) ? xff.join(",") : xff;
+  if (!raw) return "";
+  const clipped = raw.length > XFF_MAX_CHARS ? raw.slice(-XFF_MAX_CHARS) : raw;
+  const parts = clipped
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(-XFF_MAX_ENTRIES);
+  if (parts.length < n) return "";
+  return normalizeIp(parts[parts.length - n]);
+}
+
 export function clientIp(req, { trustCf, trustedProxyHops: hopsOpt } = {}) {
   const headers = req?.headers;
   const trust = trustCf !== undefined ? trustCfConnectingIp(trustCf) : trustCfConnectingIp();
@@ -105,22 +131,8 @@ export function clientIp(req, { trustCf, trustedProxyHops: hopsOpt } = {}) {
   }
 
   const hops = hopsOpt !== undefined ? trustedProxyHops(hopsOpt) : trustedProxyHops();
-  if (hops > 0) {
-    const xff = headerRaw(headers, "x-forwarded-for");
-    const raw = Array.isArray(xff) ? xff.join(",") : xff;
-    if (raw) {
-      const clipped = raw.length > XFF_MAX_CHARS ? raw.slice(-XFF_MAX_CHARS) : raw;
-      const parts = clipped
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .slice(-XFF_MAX_ENTRIES);
-      if (parts.length >= hops) {
-        const ip = normalizeIp(parts[parts.length - hops]);
-        if (ip) return ip;
-      }
-    }
-  }
+  const fromXff = xffHop(headers, hops);
+  if (fromXff) return fromXff;
 
   // Do not fall back to socket.remoteAddress — that fallback is being
   // reconciled between Riker and Worf.
@@ -250,15 +262,20 @@ export function createRateLimiter({ windowMs, maxKeys, now, trustedProxyHops: ho
     return buckets;
   }
 
-  function check(req, pathname) {
+  /**
+   * opts.trustCf, when set, overrides ET_TRUST_CF_CONNECTING_IP for this call.
+   * Omitted leaves the #225 switch. cf-origin passes it only when ET_CF_ONLY
+   * is report or enforce.
+   */
+  function check(req, pathname, opts) {
     if (isExemptPath(pathname)) {
       return { allowed: true, exempt: true, limit: 0, remaining: 0, reset: 0, retryAfter: 0 };
     }
     const method = String(req?.method || "GET").toUpperCase();
-    const ip = clientIp(
-      req,
-      hopsOverride !== undefined ? { trustedProxyHops: hopsOverride } : {},
-    );
+    const ipOpts = {};
+    if (hopsOverride !== undefined) ipOpts.trustedProxyHops = hopsOverride;
+    if (opts && opts.trustCf !== undefined) ipOpts.trustCf = opts.trustCf;
+    const ip = clientIp(req, ipOpts);
     const nowTs = clock();
     const { key, entry } = resolveEntry(ip, nowTs);
     const buckets = applicableBuckets(method, pathname);
