@@ -3229,6 +3229,75 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
   }
 }
 
+/* Two-row tablet (431–1199): the page row splits RESULTS and ROWS PER PAGE,
+   so the pager strip is often only ~11–17rem. Keep prev, the numbers, and
+   next on one line, and top-align the columns so the labels share a baseline.
+   Shrink the buttons the same way phones do. Drop middle numbers when the
+   strip cannot hold the full window (a long run such as 1 … 99 100 101 … 250,
+   or any list once the strip is under ~12.25rem). First, current, and last stay. */
+@media (min-width: 431px) and (max-width: 1199px) {
+  .results-controls-row--page {
+    align-items: start;
+  }
+  .results-controls .pager-main,
+  .results-controls .page-size {
+    align-items: flex-start;
+    align-content: flex-start;
+    align-self: start;
+  }
+  .results-controls .pager-controls {
+    container-type: inline-size;
+    container-name: results-pager-row;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .results-controls .pager-btn {
+    flex: 0 0 auto;
+    min-width: 1.75rem;
+    min-height: 2rem;
+    padding: 0.12rem 0.28rem;
+  }
+  .results-controls .pager-btn .ui-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+  .results-controls .pager-pages {
+    flex: 0 0 auto;
+    min-width: max-content;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.12rem;
+  }
+  .results-controls .pager-pages > li {
+    flex: 0 0 auto;
+  }
+  .results-controls .pager-pages a {
+    min-width: 1.55rem;
+    min-height: 2rem;
+    padding: 0.08rem 0.22rem;
+    font-size: 0.78rem;
+  }
+  .results-controls .pager-gap {
+    min-height: 0;
+    padding-inline: 0.05rem;
+  }
+}
+
+@container results-pager-row (max-width: 17rem) {
+  .results-controls .pager-pages:has(> li:nth-child(6)) > li:not(:first-child):not(:last-child):not(:has(a[aria-current="page"])) {
+    display: none;
+  }
+}
+
+@container results-pager-row (max-width: 12.25rem) {
+  .results-controls .pager-pages > li:not(:first-child):not(:last-child):not(:has(a[aria-current="page"])) {
+    display: none;
+  }
+}
+
 @media (min-width: 1200px) {
   .results-controls.results-view {
     flex-direction: row;
