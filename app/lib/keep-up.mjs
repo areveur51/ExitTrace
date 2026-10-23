@@ -1,5 +1,6 @@
 import {
   classifyApplyHealth,
+  createApplyErrorTrend,
   isLogicalSubscriber,
   publicApplyErrorCount,
   publicHealthApplyState,
@@ -199,6 +200,18 @@ export function buildKeepUp(
   };
 }
 
+/**
+ * Process-wide apply-error trend for /api/health. apply_state comes from the
+ * change in apply_error_count over a window, not the cumulative total, so a
+ * recovered worker reads healthy instead of a sticky crash_loop.
+ */
+const healthApplyErrorTrend = createApplyErrorTrend();
+
+/** Health classification from one live snapshot plus the process trend. */
+export function classifyHealthApply(snap, trend = healthApplyErrorTrend) {
+  return classifyApplyHealth(snap, null, { errorTrend: trend.observe(snap) });
+}
+
 export async function readKeepUp() {
   try {
     const [meta, snap] = await Promise.all([
@@ -208,7 +221,7 @@ export async function readKeepUp() {
     if (!snap || !isLogicalSubscriber(snap)) {
       return buildKeepUp(meta);
     }
-    const health = classifyApplyHealth(snap);
+    const health = classifyHealthApply(snap);
     return buildKeepUp(meta, {
       lagSeconds: health.lag_seconds,
       applyState: health.state,
