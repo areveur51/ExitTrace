@@ -674,3 +674,13 @@ test("every results-bar list renders the pager and rows control once", async () 
   assert.ok((rank.body.match(/pager-status/g) || []).length >= 2);
   assert.ok((rank.body.match(/data-page-size-select/g) || []).length >= 2);
 });
+
+test("results-controls status keeps the space before the row-count separator", () => {
+  const html = pager(
+    { page: 1, totalPages: 36, total: 612, pageSize: 17 },
+    { basePath: "/people", noun: "rows" },
+  );
+  assert.match(html, /<span class="pager-status-page">Page 1 of 36<\/span><span class="pager-count"> · 612 rows<\/span>/);
+  const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
+  assert.match(css, /\.results-controls \.pager-count \{\s*white-space: pre;/);
+});

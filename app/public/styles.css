@@ -3108,6 +3108,11 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
   align-items: baseline;
   gap: 0;
 }
+/* Flex items drop leading whitespace; keep the space before the "·" separator
+   so the status reads "PAGE 1 OF 36 · 612 ROWS", not "PAGE 1 OF 36· 612 ROWS". */
+.results-controls .pager-count {
+  white-space: pre;
+}
 .results-controls .page-size-label .ui-icon {
   display: none;
 }
