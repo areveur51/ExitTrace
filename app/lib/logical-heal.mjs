@@ -236,13 +236,73 @@ function lsnUnchanged(snap, prev) {
   return lsnEqual(snap.received_lsn, prev.received_lsn);
 }
 
+/** Window for "apply errors are still rising" on public health. */
+export const APPLY_ERROR_WINDOW_MS = 10 * 60 * 1000;
+
+function lsnKey(snap) {
+  if (!snap.received_lsn && !snap.latest_end_lsn) return null;
+  return `${snap.received_lsn || ""}|${snap.latest_end_lsn || ""}`;
+}
+
+/**
+ * Apply-error trend for public health (Worf). pg_stat_subscription_stats
+ * apply_error_count is cumulative: after a crash loop ends it stays high
+ * forever, so the total alone must never mean crash_loop. This remembers when
+ * the count last went UP (and when received_lsn / latest_end_lsn last moved)
+ * and reports:
+ *   rising        true when the count went up within windowMs, false when it
+ *                 has been flat for the window, null before a baseline exists
+ *   lsn_advancing true when either LSN moved within windowMs
+ * A drop in the count (stats reset) is a new baseline, not a rise.
+ * One tracker per process; `now` is injectable for tests.
+ */
+export function createApplyErrorTrend({ windowMs = APPLY_ERROR_WINDOW_MS, now = () => Date.now() } = {}) {
+  let lastCount = null;
+  let lastIncreaseAt = null;
+  let lastLsn = null;
+  let lastLsnMoveAt = null;
+  return {
+    observe(rawSnapshot) {
+      const snap = normalizeSnapshot(rawSnapshot);
+      const t = now();
+      const count = snap.apply_error_count;
+      const hadBaseline = lastCount !== null;
+      if (count !== null) {
+        if (hadBaseline && count > lastCount) lastIncreaseAt = t;
+        lastCount = count;
+      }
+      const key = lsnKey(snap);
+      if (key !== null) {
+        if (lastLsn !== null && key !== lastLsn) lastLsnMoveAt = t;
+        lastLsn = key;
+      }
+      const within = (at) => at !== null && t - at <= windowMs;
+      let rising = null;
+      if (count !== null && hadBaseline) rising = within(lastIncreaseAt);
+      return {
+        rising,
+        since_last_increase_ms: lastIncreaseAt === null ? null : t - lastIncreaseAt,
+        lsn_advancing: within(lastLsnMoveAt),
+        window_ms: windowMs,
+      };
+    },
+  };
+}
+
 /**
  * Classify apply health. Receipt-only lag can look fine during handshake retries;
  * apply_state is the signal that distinguishes that from a real LSN stall.
+ *
+ * `opts.errorTrend` (from createApplyErrorTrend) switches the error signal from
+ * the cumulative apply_error_count to its change over a window: a flat count
+ * with an active worker (or an advancing received / latest_end LSN) is healthy.
+ * Without it (heal script, which passes `previous`) the old rules apply.
  */
-export function classifyApplyHealth(rawSnapshot, rawPrevious = null) {
+export function classifyApplyHealth(rawSnapshot, rawPrevious = null, opts = {}) {
   const snap = normalizeSnapshot(rawSnapshot);
   const prev = rawPrevious ? normalizeSnapshot(rawPrevious) : null;
+  const trend = opts && opts.errorTrend && typeof opts.errorTrend === "object" ? opts.errorTrend : null;
+  const workerActive = snap.worker_present || Boolean(trend && trend.lsn_advancing === true);
 
   // Snapshot SELECTs failed (often TLS). Must not look like publisher "absent".
   if (snap.query_failed) {
@@ -293,14 +353,17 @@ export function classifyApplyHealth(rawSnapshot, rawPrevious = null) {
     };
   }
 
-  const errorSpike =
-    (snap.apply_error_count ?? 0) >= APPLY_ERROR_SPIKE || errorsRising(snap, prev);
-  const stalled = lsnUnchanged(snap, prev) || (receiptStale(snap.last_msg_receipt_age_seconds) && !snap.worker_present);
+  const errorSpike = trend
+    ? trend.rising === true
+    : (snap.apply_error_count ?? 0) >= APPLY_ERROR_SPIKE || errorsRising(snap, prev);
+  const stalled = lsnUnchanged(snap, prev) || (receiptStale(snap.last_msg_receipt_age_seconds) && !workerActive);
   const handshake =
     receiptLooksFine(snap.last_msg_receipt_age_seconds) &&
-    (errorSpike || !snap.worker_present || (lsnUnchanged(snap, prev) && (snap.apply_error_count ?? 0) > 0));
+    (errorSpike ||
+      !workerActive ||
+      (lsnUnchanged(snap, prev) && (trend ? errorSpike : (snap.apply_error_count ?? 0) > 0)));
 
-  if (errorSpike && (lsnUnchanged(snap, prev) || !snap.worker_present || handshake)) {
+  if (errorSpike && (lsnUnchanged(snap, prev) || !workerActive || handshake)) {
     return {
       state: "crash_loop",
       lag_seconds: snap.last_msg_receipt_age_seconds,

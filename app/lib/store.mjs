@@ -38,6 +38,7 @@ import { mergeNicknames, nicknameCatalogDate, normalizeNicknames } from "./nickn
 import { DEATH_KEEP_IDS, asPostedAt, isIndictmentKeepKind } from "./categories.mjs";
 import { eventHeadcount, personHeadcount, originText } from "./event-attrs.mjs";
 import { isLogicalSubscriber } from "./logical-heal.mjs";
+import { guardReplicatedWrites } from "./boot-guard.mjs";
 import {
   CENTRAL_CASTING_SCREENSHOT_KIND,
   CentralCastingClassifyError,
@@ -778,8 +779,15 @@ export async function upsertEtMeta(k, v) {
  * - If the subscription is disabled, ENABLE it so logical apply can run.
  * A frozen snapshot is not replayed: that overwrite drops live fact tags.
  * Never auto-SKIP an LSN. Returns a public-safe summary (no DSNs or passwords).
+ *
+ * `subscriber` is the per-database, fail-closed flag bootDatabase computed once
+ * (isLogicalSubscriberDb). When it is a boolean it replaces the old cluster-wide
+ * EXISTS probe; that probe is only a fallback when the flag is undefined.
+ * Heal never writes rows: on a subscriber the pool it uses refuses row writes
+ * (no gap upsert, no et_meta stamp). Rows there arrive only by the stream or the
+ * signed et-gap-upsert workflow. `pool` is for tests.
  */
-export async function healLogicalApply() {
+export async function healLogicalApply({ subscriber, pool: poolOverride } = {}) {
   if (process.env.ET_LOGICAL_HEAL !== "on") {
     console.log(
       "[exittrace] logical_heal skipped: ET_LOGICAL_HEAL is not on; exittrace_lab_sub ENABLE not run",
@@ -802,14 +810,19 @@ export async function healLogicalApply() {
       warren: null,
     };
   }
-  const p = await getPool();
-  if (!p) return { ok: false, reason: "no_pool" };
+  const rawPool = poolOverride || (await getPool());
+  if (!rawPool) return { ok: false, reason: "no_pool" };
   let present = false;
-  try {
-    const sub = await p.query(`SELECT EXISTS (SELECT 1 FROM pg_subscription) AS present`);
-    present = Boolean(sub.rows[0]?.present);
-  } catch {
-    present = false;
+  if (typeof subscriber === "boolean") {
+    present = subscriber;
+  } else {
+    // Fallback only (no flag passed): the old cluster-wide probe.
+    try {
+      const sub = await rawPool.query(`SELECT EXISTS (SELECT 1 FROM pg_subscription) AS present`);
+      present = Boolean(sub.rows[0]?.present);
+    } catch {
+      present = false;
+    }
   }
   if (!isLogicalSubscriber(present)) {
     return {
@@ -844,6 +857,11 @@ export async function healLogicalApply() {
     operations: null,
     warren: null,
   };
+  // Past this point the database is a subscriber. Refuse every row write
+  // (gap upsert or anything else) on the pool heal uses (Worf).
+  const p = guardReplicatedWrites(rawPool, true, {
+    label: "logical_heal row write (gap upsert)",
+  });
   try {
     const typeRes = await p.query(
       `SELECT data_type FROM information_schema.columns
@@ -897,23 +915,6 @@ export async function healLogicalApply() {
     out.dog_comms = row.dog_comms ?? null;
     out.operations = row.operations ?? null;
     out.warren = row.warren ?? null;
-
-    try {
-      await upsertEtMeta("keep_up.logical.last_heal", {
-        at: new Date().toISOString(),
-        altered: out.altered,
-        bounced: out.bounced,
-        gap_upserted: out.gap_upserted,
-        origin_advanced: out.origin_advanced,
-        lab_tip_lsn: out.lab_tip_lsn,
-        posted_at_type: out.posted_at_type_after,
-        apply_error_count_before: out.apply_error_count_before,
-        people: out.people,
-        dog_comms: out.dog_comms,
-      });
-    } catch {
-      /* ignore */
-    }
   } catch (err) {
     out.ok = false;
     out.reason = String(err?.message || err).slice(0, 240);

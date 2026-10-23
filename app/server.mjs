@@ -47,6 +47,7 @@ import {
   searchCatalog,
   writeFileStore,
 } from "./lib/store.mjs";
+import { bootDatabase } from "./lib/boot-guard.mjs";
 import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
 import { publicGitSha } from "./lib/logical-heal.mjs";
 import {
@@ -1339,20 +1340,16 @@ async function boot() {
   const seed = loadSeedFile(seedPath);
   if (databaseUrl()) {
     const pool = await getPool();
-    await ensureSchema(pool, bootstrapSql);
-    try {
-      const heal = await healLogicalApply();
-      console.log(
-        `[exittrace] logical_heal ok=${heal.ok} reason=${heal.reason || ""} altered=${heal.altered} bounced=${heal.bounced} posted_at=${heal.posted_at_type_after} apply_errors_before=${heal.apply_error_count_before} people=${heal.people} dog_comms=${heal.dog_comms}`,
-      );
-    } catch (err) {
-      console.error('[exittrace] logical_heal failed', err);
-    }
-    const imported = await importSeed(pool, seed);
-    const migrated = await migrateUniquePeople();
-    console.log(
-      `[exittrace] postgres people=${imported.people} dog_comms=${imported.dog_comms} operations=${imported.operations || 0} unique=${migrated.people}`,
-    );
+    // Worf: on a logical-replication subscriber, boot writers to replicated
+    // tables skip themselves (fail closed). See app/lib/boot-guard.mjs.
+    await bootDatabase(pool, {
+      bootstrapSql,
+      seed,
+      ensureSchema,
+      healLogicalApply,
+      importSeed,
+      migrateUniquePeople,
+    });
   } else {
     const mem = hydrateFileMemory(dataDir, seed);
     writeFileStore(dataDir, mem);

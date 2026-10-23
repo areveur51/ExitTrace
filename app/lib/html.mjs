@@ -706,6 +706,17 @@ function portraitSrc(href) {
   return `${href}?p=${PORTRAIT_CACHE}`;
 }
 
+/**
+ * Same `?p=` bust as portraitSrc. Only a bare local /media path is versioned.
+ * Remote http(s), data:, and hrefs that already have a query or hash stay as given,
+ * so a second pass cannot emit `?p=7?p=7`.
+ */
+export function versionedMediaHref(href) {
+  const text = String(href || "").trim();
+  if (!text || text !== mediaHrefPath(text)) return text;
+  return portraitSrc(text);
+}
+
 function portraitFallbackAttr() {
   return ` data-portrait-fallback="${esc(EMPTY_PORTRAIT_HREF)}"`;
 }
@@ -787,19 +798,22 @@ function localCommVideoHref(row, mediaDir) {
 }
 
 function commVideoInner(src, poster, label) {
-  const posterAttr = poster ? ` poster="${esc(poster)}"` : "";
-  return `<span class="detail-video"><video class="detail-photo" src="${esc(src)}"${posterAttr} preload="metadata" muted playsinline tabindex="-1" aria-label="${esc(label)}"></video><span class="detail-video-play" aria-hidden="true"></span></span>`;
+  const href = versionedMediaHref(src);
+  const posterHref = versionedMediaHref(poster);
+  const posterAttr = posterHref ? ` poster="${esc(posterHref)}"` : "";
+  return `<span class="detail-video"><video class="detail-photo" src="${esc(href)}"${posterAttr} preload="metadata" muted playsinline tabindex="-1" aria-label="${esc(label)}"></video><span class="detail-video-play" aria-hidden="true"></span></span>`;
 }
 
 /** Lightbox opens the gold /media still (or screenshot), never the 80×104 list thumb. */
 function lightboxButton(src, inner, { alt = "", credit = "", kind = "image", poster = "" } = {}) {
-  const href = String(src || "").trim();
+  const href = versionedMediaHref(src);
   const body = String(inner || "");
   const video = kind === "video";
   if (!href || !body) return body;
   if (!video && !body.includes("<img")) return body;
   const kindAttr = video ? ` data-lightbox-kind="video"` : "";
-  const posterAttr = video && poster ? ` data-lightbox-poster="${esc(poster)}"` : "";
+  const posterHref = versionedMediaHref(poster);
+  const posterAttr = video && posterHref ? ` data-lightbox-poster="${esc(posterHref)}"` : "";
   return `<button type="button" class="lightbox-open" data-lightbox="${esc(href)}" data-lightbox-alt="${esc(alt)}" data-lightbox-credit="${esc(credit)}"${kindAttr}${posterAttr}>${body}</button>`;
 }
 
@@ -996,7 +1010,7 @@ function detailMediaTile({
 function screenshotTile(src, { alt = "", credit = "" } = {}) {
   const href = normalizeScreenshotHref(src);
   if (!href) return "";
-  const img = `<img class="detail-photo screenshot" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
+  const img = `<img class="detail-photo screenshot" src="${esc(versionedMediaHref(href))}" alt="${esc(alt)}" decoding="async">`;
   return detailMediaTile({
     kind: "screenshot",
     src: href,
@@ -1170,7 +1184,7 @@ function detailMediaStrip({
     if (!href || claimDetailMedia(bag, href)) continue;
     const alt = item?.alt || "Post media";
     const credit = creditWithoutUrls(item?.credit || "");
-    const img = `<img class="detail-photo still" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
+    const img = `<img class="detail-photo still" src="${esc(versionedMediaHref(href))}" alt="${esc(alt)}" decoding="async">`;
     media.push(
       detailMediaTile({
         kind: "still",
@@ -1273,7 +1287,7 @@ export function localMediaPortrait(src, label, { dog = false, commsKind: kind } 
   if (spec) {
     const href = String(src || "").trim();
     if (isCommsMediaHref(href, spec.mediaDir)) {
-      return `<img class="detail-photo portrait" src="${esc(href)}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async"${portraitFallbackAttr()}>`;
+      return `<img class="detail-photo portrait" src="${esc(versionedMediaHref(href))}" alt="${esc(label)}" width="${DETAIL_PORTRAIT_CSS_W}" height="${DETAIL_PORTRAIT_CSS_H}" decoding="async"${portraitFallbackAttr()}>`;
     }
     return emptyPortraitImg({ size: "detail", label });
   }
@@ -1696,7 +1710,7 @@ function postShotPercent(n) {
 
 /** Screenshot of the post. A video sits in the picture area of that same screenshot. */
 function postShotFrame({ shot, video, alt }) {
-  const img = `<img class="detail-photo screenshot" src="${esc(shot)}" alt="${esc(alt)}" decoding="async">`;
+  const img = `<img class="detail-photo screenshot" src="${esc(versionedMediaHref(shot))}" alt="${esc(alt)}" decoding="async">`;
   const box = findPostMediaBox(shot);
   const left = box ? postShotPercent(box.x) : "";
   const top = box ? postShotPercent(box.y) : "";
@@ -1793,7 +1807,8 @@ function supportingMediaFigure(item, source) {
     ? `${contextHtml}${mediaCaptionLink(href, outlet)}${dateHtml}`
     : `${contextHtml}${esc(credit || alt)}`;
   const shot = String(item.shot || "").trim();
-  const videoSrc = /\.mp4$/i.test(item.src);
+  // Strip ?p= before the extension test so a versioned href is still a video.
+  const videoSrc = /\.mp4$/i.test(String(item.src || "").split(/[?#]/)[0]);
   if (videoSrc && shot) {
     const frameInner = postShotFrame({ shot, video: item.src, alt });
     const button = lightboxButton(item.src, `<span class="detail-support-frame">${frameInner}</span>`, {
@@ -1809,7 +1824,7 @@ function supportingMediaFigure(item, source) {
     : "";
   const frameInner = videoSrc
     ? commVideoInner(item.src, videoPoster, alt)
-    : `<img class="detail-photo still" src="${esc(item.src)}" alt="${esc(alt)}" loading="lazy" decoding="async">`;
+    : `<img class="detail-photo still" src="${esc(versionedMediaHref(item.src))}" alt="${esc(alt)}" loading="lazy" decoding="async">`;
   const button = lightboxButton(item.src, `<span class="detail-support-frame">${frameInner}</span>`, {
     alt,
     credit,
@@ -1855,7 +1870,7 @@ function personSupportingMediaHtml(row, seen) {
 function eventMediaFigure(src, alt) {
   const href = String(src || "").trim();
   if (!href) return "";
-  const img = `<img class="detail-photo still" src="${esc(href)}" alt="${esc(alt)}" decoding="async">`;
+  const img = `<img class="detail-photo still" src="${esc(versionedMediaHref(href))}" alt="${esc(alt)}" decoding="async">`;
   return `<figure class="event-media">${lightboxButton(href, img, { alt })}</figure>`;
 }
 
@@ -3121,7 +3136,7 @@ function officialPostDetail(spec, row, { attributions, linkedPeople } = {}) {
     claimHrefs = [shotHref, stillHref];
   } else if (dogOne) {
     portraitAlt = `X-post screenshot of ${row.handle}`;
-    portraitHtml = `<img class="detail-photo screenshot" src="${esc(shotHref)}" alt="${esc(portraitAlt)}" decoding="async">`;
+    portraitHtml = `<img class="detail-photo screenshot" src="${esc(versionedMediaHref(shotHref))}" alt="${esc(portraitAlt)}" decoding="async">`;
     portraitSrc = shotHref;
     portraitCredit = row.screenshot_credit;
     portraitTile = "screenshot";

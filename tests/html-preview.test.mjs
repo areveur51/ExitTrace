@@ -101,7 +101,7 @@ test("person list uses small thumbs + srcset; detail masonry uses the gold still
   assert.doesNotMatch(person, /<img[^>]+src="\/media\/thumbs\/people\/james-comey\.jpg/);
   assert.doesNotMatch(person, /upload\.wikimedia\.org/);
   assert.match(dogPage, /class="detail-photo portrait"/);
-  assert.match(dogPage, /src="\/media\/dog-comms\/dod-k9-2020\.jpg"/);
+  assert.match(dogPage, /src="\/media\/dog-comms\/dod-k9-2020\.jpg\?p=7"/);
   assert.match(dogPage, /width="192" height="250"/);
   assert.doesNotMatch(dogPage, /width="120" height="150"/);
   assert.doesNotMatch(dogPage, /\/media\/thumbs\//);

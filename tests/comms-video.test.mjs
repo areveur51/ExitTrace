@@ -30,15 +30,15 @@ test("a local comm video opens in the lightbox as a video", () => {
   assert.match(html, /data-lightbox-kind="video"/);
   assert.match(
     html,
-    /data-lightbox="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.mp4"/,
+    /data-lightbox="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.mp4\?p=7"/,
   );
   assert.match(
     html,
-    /data-lightbox-poster="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.jpg"/,
+    /data-lightbox-poster="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.jpg\?p=7"/,
   );
   assert.match(
     html,
-    /<video class="detail-photo" src="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.mp4" poster="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.jpg"/,
+    /<video class="detail-photo" src="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.mp4\?p=7" poster="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.jpg\?p=7"/,
   );
   assert.match(html, /class="detail-video-play"/);
   assert.doesNotMatch(html, /<img[^>]+src="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.mp4"/);
@@ -56,7 +56,7 @@ test("a remote or non-mp4 video stays a still", () => {
     assert.doesNotMatch(html, /data-lightbox-kind="video"/);
     assert.match(
       html,
-      /data-lightbox="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.jpg"/,
+      /data-lightbox="\/media\/eagle-comms\/dhsgov-2026-09-30-42e68497\.jpg\?p=7"/,
     );
   }
 });

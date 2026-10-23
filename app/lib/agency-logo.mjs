@@ -1,6 +1,7 @@
 /** Lead law-enforcement seal for an operation card.
  *  Chosen from the stored agencies list. Not a database column.
  *  Official seals only. An unmapped list stays blank.
+ *  A per-operation override may name a seal; otherwise the list lookup is unchanged.
  */
 
 const AGENCY_LOGOS = Object.freeze({
@@ -44,6 +45,101 @@ const AGENCY_LOGOS = Object.freeze({
     "dhs.png",
     "Seal of the United States Department of Homeland Security. U.S. government work, via Wikimedia Commons.",
   ),
+  // Reachable only through OPERATION_LEAD_OVERRIDES. Not name-matched below.
+  "usda-oig": seal(
+    "usda-oig.png",
+    "Seal of the Office of Inspector General, U.S. Department of Agriculture. U.S. government work, via Wikimedia Commons.",
+  ),
+  "dol-oig": seal(
+    "dol-oig.png",
+    "Seal of the Office of Inspector General, U.S. Department of Labor. CC0, via Wikimedia Commons.",
+  ),
+  "hud-oig": seal(
+    "hud-oig.png",
+    "Seal of the U.S. Department of Housing and Urban Development, shown for its Office of Inspector General. Public domain, via Wikimedia Commons.",
+  ),
+  usao: seal(
+    "usao.png",
+    "Official logo of the Executive Office for United States Attorneys. U.S. government work, via Wikimedia Commons.",
+  ),
+  dol: seal(
+    "dol.png",
+    "Seal of the United States Department of Labor. U.S. government work, via Wikimedia Commons.",
+  ),
+  atf: seal(
+    "atf.png",
+    "Seal of the Bureau of Alcohol, Tobacco, Firearms and Explosives. U.S. government work, via Wikimedia Commons.",
+  ),
+});
+
+// ---- Per-Operation lead-agency overrides ------------------------------
+// Keyed by operation id (slug) -> seal key in AGENCY_LOGOS.
+// Filled from the 2026-10-22 cite audit. Each entry cites the source
+// naming the lead. Add new entries only with a cite.
+export const OPERATION_LEAD_OVERRIDES = Object.freeze({
+  // https://www.justice.gov/usao-cdca/pr/operation-guardian-angel-launched-neutralize-californias-sanctuary-state-policies
+  "operation-guardian-angel": "usao",
+  // https://www.justice.gov/opa/pr/justice-department-charges-28-foreign-nationals-california-election-crimes
+  "operation-protect-the-vote": "usao",
+  // https://www.hudoig.gov/newsroom/press-release/hud-oig-announces-results-operation-clean-house-multi-city-enforcement
+  "operation-clean-house": "hud-oig",
+  // https://www.dol.gov/agencies/olms/criminal-enforcement/2026
+  "afscme-local-1746-wire-fraud-charges": "dol",
+  // https://www.justice.gov/opa/pr/national-health-care-fraud-takedown-results-324-defendants-charged-connection-over-146
+  "2025-national-health-care-fraud-takedown": "doj",
+  // https://www.fox2detroit.com/news/federal-agents-raid-hyundai-battery-site-south-georgia
+  "operation-low-voltage": "hsi",
+  // Batch 2. Ruling 2026-10-22 5:01pm ET: "Use the DOJ seal for the unclear
+  // national surges, and the USDA inspector general for the USDA surge".
+  // https://www.justice.gov/opa/pr/dojs-fraud-division-department-agriculture-and-usda-oig-uncover-nearly-42m-snap-benefit
+  "national-usda-benefits-and-program-fraud-enforcement-surge": "usda-oig",
+  // https://www.nbcnews.com/news/us-news/u-s-charges-hundreds-major-healthcare-fraud-opioid-crackdown-n887436
+  "2018-national-health-care-fraud-takedown": "doj",
+  // https://x.com/TheJusticeDept/status/2099544322144100775
+  "heartland-fraud-surge": "doj",
+  // https://www.nbcnews.com/news/us-news/officials-tout-operation-legend-s-successes-some-remain-frustrated-skeptical-n1239988
+  "operation-legend": "doj",
+  // https://x.com/TheJusticeDept/status/1207402053137555456
+  "operation-relentless-pursuit": "doj",
+  // https://www.cnn.com/2021/10/26/politics/darknet-opioid
+  "operation-dark-huntor": "doj",
+  // https://www.justice.gov/opa/pr/attorney-general-pamela-bondi-announces-29-wanted-defendants-mexico-taken-us-custody
+  "mexico-29-cartel-transfers": "doj",
+  // https://x.com/TheJusticeDept/status/1801586432022126934
+  "clan-del-golfo-human-smuggling": "doj",
+});
+// ---- end overrides -----------------------------------------------------
+
+/** Commons pages for seals reachable only through OPERATION_LEAD_OVERRIDES.
+ *  usda-oig, dol-oig, hud-oig, usao, dol, atf.
+ *  Credit strings on AGENCY_LOGOS stay free of URLs.
+ */
+export const SEAL_SOURCES = Object.freeze({
+  "usda-oig": Object.freeze({
+    source: "https://commons.wikimedia.org/wiki/File:USDA-OfficeOfInspectorGeneral.svg",
+    license: "Public domain (U.S. government work, USDA)",
+  }),
+  "dol-oig": Object.freeze({
+    source: "https://commons.wikimedia.org/wiki/File:Seal_of_the_United_States_Department_of_Labor_Office_of_Inspector_General.svg",
+    license: "CC0 1.0 (vector redraw of the official DOL OIG seal)",
+  }),
+  "hud-oig": Object.freeze({
+    // No HUD OIG seal (only a wordmark) is on Commons, so the HUD seal is used.
+    source: "https://commons.wikimedia.org/wiki/File:Seal_of_the_United_States_Department_of_Housing_and_Urban_Development.svg",
+    license: "Public domain (U.S. government work, HUD)",
+  }),
+  usao: Object.freeze({
+    source: "https://commons.wikimedia.org/wiki/File:Official_Logo_for_the_Executive_Office_for_United_States_Attorneys.png",
+    license: "Public domain (U.S. government work, EOUSA)",
+  }),
+  dol: Object.freeze({
+    source: "https://commons.wikimedia.org/wiki/File:Seal_of_the_United_States_Department_of_Labor.svg",
+    license: "Public domain (U.S. government work)",
+  }),
+  atf: Object.freeze({
+    source: "https://commons.wikimedia.org/wiki/File:Seal_of_the_Bureau_of_Alcohol,_Tobacco,_Firearms_and_Explosives.svg",
+    license: "Public domain (U.S. government work)",
+  }),
 });
 
 /** First matching law-enforcement agency wins. Order is the stored list, not this table. */
@@ -101,6 +197,31 @@ function seal(file, credit) {
   return Object.freeze({ file, credit });
 }
 
+/** Prototype names are never an operation id or a seal key. */
+const PROTO_SEAL_KEYS = new Set(["__proto__", "constructor", "toString"]);
+
+export function knownSealKeys() {
+  return Object.keys(AGENCY_LOGOS);
+}
+
+function ownDataValue(obj, key) {
+  if (obj === null || typeof obj !== "object") return undefined;
+  if (typeof key !== "string" || !Object.prototype.hasOwnProperty.call(obj, key)) return undefined;
+  const desc = Object.getOwnPropertyDescriptor(obj, key);
+  if (!desc || !Object.prototype.hasOwnProperty.call(desc, "value")) return undefined;
+  return desc.value;
+}
+
+/** Own override entry whose value is an own AGENCY_LOGOS key, or "". */
+function sealIdFromOverride(operationId, overrides) {
+  const id = String(operationId ?? "").trim();
+  if (!id || PROTO_SEAL_KEYS.has(id)) return "";
+  const key = ownDataValue(overrides, id);
+  if (typeof key !== "string" || !key || PROTO_SEAL_KEYS.has(key)) return "";
+  if (!Object.prototype.hasOwnProperty.call(AGENCY_LOGOS, key)) return "";
+  return key;
+}
+
 export function foldAgencyName(name) {
   return String(name || "")
     .toLowerCase()
@@ -112,7 +233,9 @@ export function foldAgencyName(name) {
 }
 
 /** Lead seal id, or "" when the list has no mapped law-enforcement agency and no department fallback. */
-export function operationLeadAgencyId(agencies) {
+export function operationLeadAgencyId(agencies, operationId = "", overrides = OPERATION_LEAD_OVERRIDES) {
+  const overridden = sealIdFromOverride(operationId, overrides);
+  if (overridden) return overridden;
   const list = Array.isArray(agencies) ? agencies : [];
   for (const name of list) {
     const id = LE_BY_NAME.get(foldAgencyName(name));
@@ -124,9 +247,11 @@ export function operationLeadAgencyId(agencies) {
   return "";
 }
 
-export function operationLeadLogo(agencies) {
-  const id = operationLeadAgencyId(agencies);
-  const logo = id ? AGENCY_LOGOS[id] : null;
+export function operationLeadLogo(agencies, operationId = "", overrides = OPERATION_LEAD_OVERRIDES) {
+  const id = operationLeadAgencyId(agencies, operationId, overrides);
+  const logo = id && Object.prototype.hasOwnProperty.call(AGENCY_LOGOS, id)
+    ? Object.getOwnPropertyDescriptor(AGENCY_LOGOS, id).value
+    : null;
   if (!logo) return { photo: "", photo_credit: "" };
   return {
     photo: `/media/agencies/${logo.file}`,

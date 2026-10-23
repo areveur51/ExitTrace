@@ -459,10 +459,10 @@ test("unique person cards, one central casting section, no sense filter or gloss
   assert.match(detail.body, /data-section="person-event"/);
   assert.match(detail.body, /class="event-snippet">Stored central-casting snapshot/);
   assert.match(detail.body, /https:\/\/x\.com\/nytimes\/status\/2100603347044585925/);
-  assert.match(detail.body, /src="\/media\/central-casting-comms\/nytimes-2026-09-17\.jpg"/);
-  assert.match(detail.body, /src="\/media\/central-casting-comms\/nytimes-2026-09-17-2\.jpg"/);
-  assert.match(detail.body, /src="\/media\/central-casting-comms\/support-2026-09-17\.jpg"/);
-  assert.match(detail.body, /src="\/media\/central-casting-comms\/support-2026-09-17-2\.jpg"/);
+  assert.match(detail.body, /src="\/media\/central-casting-comms\/nytimes-2026-09-17\.jpg\?p=7"/);
+  assert.match(detail.body, /src="\/media\/central-casting-comms\/nytimes-2026-09-17-2\.jpg\?p=7"/);
+  assert.match(detail.body, /src="\/media\/central-casting-comms\/support-2026-09-17\.jpg\?p=7"/);
+  assert.match(detail.body, /src="\/media\/central-casting-comms\/support-2026-09-17-2\.jpg\?p=7"/);
   assert.match(detail.body, new RegExp(shot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(detail.body, /Second harvest clip under the same person/);
   assert.doesNotMatch(detail.body, /class="detail central-casting-detail"/);

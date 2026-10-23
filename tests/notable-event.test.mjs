@@ -143,9 +143,9 @@ test("notable is a bottom media block, not an event timeline row", () => {
   assert.match(notable, /<h3 class="event-h">Notable event<\/h3>/);
   assert.match(notable, /Named in a published poll of public figures\./);
   assert.match(notable, /Named in the poll lead/);
-  assert.match(notable, new RegExp(`src="${SHOT}"`));
+  assert.match(notable, new RegExp(`src="${SHOT}\\?p=7"`));
   assert.match(notable, /X-post screenshot/);
-  assert.match(notable, new RegExp(`src="${CLIP}"`));
+  assert.match(notable, new RegExp(`src="${CLIP}\\?p=7"`));
   assert.match(notable, /detail-tile--support/);
   assert.match(notable, /detail-support-masonry/);
   const cites = notable.slice(notable.indexOf('class="sources cite-list"'));
@@ -231,7 +231,7 @@ test("a Justice Department Epstein file is titled Epstein Files", () => {
   const section = html.slice(sectionAt);
   assert.match(section, /<h3 class="event-h">Epstein Files<\/h3>/);
   assert.doesNotMatch(section, /<h3 class="event-h">Notable event<\/h3>/);
-  assert.match(section, new RegExp(`src="${shot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  assert.match(section, new RegExp(`src="${shot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\?p=7"`));
   assert.match(section, /EFTA00975176\.pdf/);
   assert.equal(html.indexOf('aria-label="Supporting media"'), -1);
 });
@@ -269,8 +269,8 @@ test("person detail shows Notable event when a notable person_event exists", asy
   assert.match(html, /<h3 class="event-h">Notable event<\/h3>/);
   assert.doesNotMatch(html, /class="event-tag-row"[^>]*data-kind="notable"/);
   assert.match(html, /data-kind="arrests"/);
-  assert.match(html, new RegExp(`src="${SHOT}"`));
-  assert.match(html, new RegExp(`src="${CLIP}"`));
+  assert.match(html, new RegExp(`src="${SHOT}\\?p=7"`));
+  assert.match(html, new RegExp(`src="${CLIP}\\?p=7"`));
   assert.match(html, /Named in a published poll of public figures\./);
   assert.match(html, /casey-vale-notable/);
   assert.doesNotMatch(html, /Aisha|Gaddafi|Muammar/);

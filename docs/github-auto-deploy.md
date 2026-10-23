@@ -65,8 +65,10 @@ Live (not `et_meta`) public fields on `keep_up.logical`:
 | Public field | Meaning |
 |--|--|
 | `apply_state` | Subscriber only: `disabled` / `healthy` / `handshake_retry` / `crash_loop` / `lsn_stalled` / `relations_stale` / `poison_txn`. `null` when no `pg_subscription` (publisher / lab / file) — not subscriber `absent`. |
-| `apply_error_count` | Live `pg_stat_subscription_stats` apply errors, or null. |
+| `apply_error_count` | Live `pg_stat_subscription_stats` apply errors, or null. Cumulative: it stays high after a crash loop ends. |
 | `lag_seconds` | Receipt age. A small number is **not** proof apply is healthy. |
+
+`apply_state` on health is derived from the **change** in `apply_error_count` over a 10-minute window (`createApplyErrorTrend` in `app/lib/logical-heal.mjs`), never the cumulative total. `crash_loop` needs the count to have gone up within the window. A flat count with an active apply worker, or with `received_lsn` / `latest_end_lsn` advancing, reads `healthy`. The first sample after a process start has no baseline, so it does not count as a rise. The heal script keeps its own rules (it passes the previous snapshot).
 
 `GET /api/health` also exposes `git_sha` when Render sets `RENDER_GIT_COMMIT` (hex only). File backend is null.
 
@@ -79,6 +81,14 @@ Live (not `et_meta`) public fields on `keep_up.logical`:
 | `logical` + sustained unhealthy | still primary | one-shot dump **only** if `ET_DUMP_COLD_FALLBACK=true` **and** dispatch `allow_dump_fallback=true` | gap-upsert catch-up if `ET_AUTO_GAP_UPSERT=true` |
 
 Scheduled dump reads `vars.SYNC_MODE` (default `dump`). Dispatch input wins, so a one-shot `SYNC_MODE=dump` does not change the repo var and does not re-enable the dump cron while logical is primary. Do **not** flip `vars.SYNC_MODE` to `dump` while the subscription is enabled — that is dual-write. Changing the var back to dump is a human SIGN (disable the sub first).
+
+## Boot on a subscriber
+
+`app/lib/boot-guard.mjs` probes once per boot whether **this** database has a logical subscription (per-database, fail closed: a failed probe counts as a subscriber). On a subscriber, boot skips every row writer to a replicated table: `importSeed`, `migrateUniquePeople`, the `-- @boot-data-write` sections of `scripts/bootstrap-db.sql`, and any row write from logical heal (gap upsert included; heal gets the same flag and its pool refuses row writes). Schema DDL and subscription management still run.
+
+**Intentional:** if lab (the publisher) ever gains a subscription of its own, lab's boot writers skip too. That is the same fail-closed rule, not a bug. Rows on any subscriber come from the stream or a signed one-off, never from boot.
+
+`tests/bootstrap-stripped-pg.test.mjs` applies the stripped bootstrap SQL to an EMPTY throwaway Postgres named by `ET_SCRATCH_PG_URL` (localhost only; never lab or Render) and skips when it is unset. CI needs a `postgres:16` service on the `test` job (trust auth, database `et_scratch`) with `ET_SCRATCH_PG_URL=postgresql://postgres@localhost:5432/et_scratch` on the `npm test` step. No `@boot-data-write` marker may sit inside a `DO $$ ... $$` block (unit-tested).
 
 ## Logical apply heal
 
