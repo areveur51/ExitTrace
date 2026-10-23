@@ -62,6 +62,70 @@ import {
 
 let pool = null;
 let memory = null;
+/** Test-only: inject a fake pool. Pass null to restore normal getPool. */
+let poolForTests = null;
+
+export const SEARCH_Q_MAX = 64;
+export const SEARCH_SQL_LIMIT = 200;
+
+function positiveInt(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.floor(n);
+}
+
+export function pgPoolConfig(url, env = process.env) {
+  return {
+    connectionString: url,
+    max: positiveInt(env.PG_POOL_MAX, 4),
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: positiveInt(env.PG_CONNECT_TIMEOUT_MS, 5_000),
+    statement_timeout: positiveInt(env.PG_STATEMENT_TIMEOUT_MS, 8_000),
+  };
+}
+
+export function setPoolForTests(fakePool) {
+  // Test-only: inject a fake pg Pool. Pass null to restore normal getPool.
+  poolForTests = fakePool;
+}
+
+export function resetCatalogCacheForTests() {
+  // Test-only: drop counts/people snapshots so the next GET / hits the pool.
+  dropCatalogCache();
+}
+
+const searchWaiters = [];
+let searchActive = 0;
+
+function searchSlotLimit() {
+  return Math.max(1, positiveInt(process.env.PG_POOL_MAX, 4) - 1);
+}
+
+function acquireSearchSlot() {
+  return new Promise((resolve) => {
+    if (searchActive < searchSlotLimit()) {
+      searchActive += 1;
+      resolve();
+    } else {
+      searchWaiters.push(resolve);
+    }
+  });
+}
+
+function releaseSearchSlot() {
+  const next = searchWaiters.shift();
+  if (next) next();
+  else searchActive = Math.max(0, searchActive - 1);
+}
+
+async function withSearchSlot(fn) {
+  await acquireSearchSlot();
+  try {
+    return await fn();
+  } finally {
+    releaseSearchSlot();
+  }
+}
 
 /** Postgres catalog reads only. Memory tests stay live. Direct SQL shows up within this window. An expired snapshot is served once while it refreshes. */
 const CATALOG_CACHE_MS = 12_000;
@@ -88,6 +152,7 @@ export function backendName() {
 }
 
 export async function getPool() {
+  if (poolForTests) return poolForTests;
   const url = databaseUrl();
   if (!url) return null;
   if (pool) return pool;
@@ -99,10 +164,12 @@ export async function getPool() {
       "DATABASE_URL is set but the 'pg' package is missing. Run: npm install pg",
     );
   }
-  pool = new pg.default.Pool({
-    connectionString: url,
-    max: Number(process.env.PG_POOL_MAX || 4),
-    idleTimeoutMillis: 10_000,
+  const cfg = pgPoolConfig(url);
+  pool = new pg.default.Pool(cfg);
+  const ms = cfg.statement_timeout;
+  pool.on("connect", (client) => {
+    if (!Number.isInteger(ms) || ms <= 0) return;
+    client.query(`SET statement_timeout = ${ms}`).catch(() => {});
   });
   return pool;
 }
@@ -3246,24 +3313,28 @@ function matchesSource(row, needle) {
 
 export async function searchPeople(q) {
   const raw = String(q || "").trim();
-  if (!raw) return [];
+  if (!raw || raw.length > SEARCH_Q_MAX) return [];
   const p = await getPool();
   if (!p) {
     const needle = raw.toLowerCase();
     return getMemory()
       .people.filter((r) => matchesPerson(r, needle))
       .slice()
-      .sort(comparePeople);
+      .sort(comparePeople)
+      .slice(0, SEARCH_SQL_LIMIT);
   }
-  const res = await p.query(
-    `SELECT * FROM people
+  const res = await withSearchSlot(() =>
+    p.query(
+      `SELECT * FROM people
      WHERE name ILIKE $1 ESCAPE '\\'
         OR role ILIKE $1 ESCAPE '\\'
         OR summary ILIKE $1 ESCAPE '\\'
         OR nicknames::text ILIKE $1 ESCAPE '\\'
         OR clearances::text ILIKE $1 ESCAPE '\\'
-     ORDER BY event_date DESC, name ASC`,
-    [likeNeedle(raw)],
+     ORDER BY event_date DESC, name ASC
+     LIMIT $2`,
+      [likeNeedle(raw), SEARCH_SQL_LIMIT],
+    ),
   );
   return res.rows.map(normalizePerson);
 }
@@ -3271,22 +3342,26 @@ export async function searchPeople(q) {
 export async function searchKindComms(kind, q) {
   const spec = commsKind(kind);
   const raw = String(q || "").trim();
-  if (!raw) return [];
+  if (!raw || raw.length > SEARCH_Q_MAX) return [];
   const p = await getPool();
   if (!p) {
     const needle = raw.toLowerCase();
     return (getMemory()[spec.memoryKey] || [])
       .filter((r) => matchesDog(r, needle))
       .slice()
-      .sort(compareDogs);
+      .sort(compareDogs)
+      .slice(0, SEARCH_SQL_LIMIT);
   }
-  const res = await p.query(
-    `SELECT * FROM ${spec.table}
+  const res = await withSearchSlot(() =>
+    p.query(
+      `SELECT * FROM ${spec.table}
      WHERE handle ILIKE $1 ESCAPE '\\'
         OR account_name ILIKE $1 ESCAPE '\\'
         OR text ILIKE $1 ESCAPE '\\'
-     ORDER BY posted_at DESC, handle ASC`,
-    [likeNeedle(raw)],
+     ORDER BY posted_at DESC, handle ASC
+     LIMIT $2`,
+      [likeNeedle(raw), SEARCH_SQL_LIMIT],
+    ),
   );
   return res.rows.map((row) => normalizeKindComm(row, spec.id));
 }
@@ -3301,17 +3376,19 @@ export async function searchRedFolderComms(q) {
 
 export async function searchSourcePosts(q) {
   const raw = String(q || "").trim();
-  if (!raw) return [];
+  if (!raw || raw.length > SEARCH_Q_MAX) return [];
   const p = await getPool();
   if (!p) {
     const needle = raw.toLowerCase();
     return (getMemory().source_posts || [])
       .filter((r) => !r.gold_person_id && matchesSource(r, needle))
       .slice()
-      .sort(compareSources);
+      .sort(compareSources)
+      .slice(0, SEARCH_SQL_LIMIT);
   }
-  const res = await p.query(
-    `SELECT * FROM source_posts
+  const res = await withSearchSlot(() =>
+    p.query(
+      `SELECT * FROM source_posts
      WHERE gold_person_id IS NULL
        AND (
          poster_handle ILIKE $1 ESCAPE '\\'
@@ -3319,30 +3396,36 @@ export async function searchSourcePosts(q) {
          OR text ILIKE $1 ESCAPE '\\'
          OR source_url ILIKE $1 ESCAPE '\\'
        )
-     ORDER BY posted_at DESC NULLS LAST, poster_handle ASC`,
-    [likeNeedle(raw)],
+     ORDER BY posted_at DESC NULLS LAST, poster_handle ASC
+     LIMIT $2`,
+      [likeNeedle(raw), SEARCH_SQL_LIMIT],
+    ),
   );
   return res.rows.map(normalizeSourcePost);
 }
 
 export async function searchOperations(q) {
   const raw = String(q || "").trim();
-  if (!raw) return [];
+  if (!raw || raw.length > SEARCH_Q_MAX) return [];
   const p = await getPool();
   if (!p) {
     const needle = raw.toLowerCase();
     return (getMemory().operations || [])
       .filter((r) => matchesOperation(r, needle))
       .slice()
-      .sort(compareOperations);
+      .sort(compareOperations)
+      .slice(0, SEARCH_SQL_LIMIT);
   }
-  const res = await p.query(
-    `SELECT * FROM operations
+  const res = await withSearchSlot(() =>
+    p.query(
+      `SELECT * FROM operations
      WHERE name ILIKE $1 ESCAPE '\\'
         OR summary ILIKE $1 ESCAPE '\\'
         OR agencies::text ILIKE $1 ESCAPE '\\'
-     ORDER BY event_date DESC, name ASC`,
-    [likeNeedle(raw)],
+     ORDER BY event_date DESC, name ASC
+     LIMIT $2`,
+      [likeNeedle(raw), SEARCH_SQL_LIMIT],
+    ),
   );
   return res.rows.map(normalizeOperation);
 }
@@ -3379,11 +3462,13 @@ async function foldLinkedDogComms(people, comms) {
 }
 
 export async function searchCatalog(q) {
+  const raw = String(q || "").trim();
+  if (!raw || raw.length > SEARCH_Q_MAX) return [];
   const kindHits = await Promise.all([
-    searchPeople(q),
-    searchOperations(q),
-    ...KIND_COMM_IDS.map((id) => searchKindComms(id, q)),
-    searchSourcePosts(q),
+    searchPeople(raw),
+    searchOperations(raw),
+    ...KIND_COMM_IDS.map((id) => searchKindComms(id, raw)),
+    searchSourcePosts(raw),
   ]);
   const operations = kindHits[1];
   const posts = kindHits[kindHits.length - 1];

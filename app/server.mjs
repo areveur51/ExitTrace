@@ -45,8 +45,14 @@ import {
   loadSeedFile,
   persistAddRequests,
   searchCatalog,
+  SEARCH_Q_MAX,
   writeFileStore,
 } from "./lib/store.mjs";
+import {
+  getRateLimiter,
+  isExemptPath,
+  resetRateLimiter,
+} from "./lib/rate-limit.mjs";
 import { bootDatabase } from "./lib/boot-guard.mjs";
 import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
 import { publicGitSha } from "./lib/logical-heal.mjs";
@@ -483,9 +489,35 @@ async function healthPayload() {
   };
 }
 
+function positiveTimeout(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.floor(n);
+}
+
+function applyServerTimeouts(server, env = process.env) {
+  server.requestTimeout = positiveTimeout(env.ET_REQUEST_TIMEOUT_MS, 30_000);
+  server.headersTimeout = positiveTimeout(env.ET_HEADERS_TIMEOUT_MS, 15_000);
+}
+
 async function handle(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
   const p = url.pathname;
+
+  if (!isExemptPath(p)) {
+    const decision = getRateLimiter().check(req, p);
+    if (!decision.allowed) {
+      const n = decision.retryAfter;
+      send(res, 429, `Too many requests. Retry after ${n} seconds.\n`, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Retry-After": String(n),
+        "RateLimit-Limit": String(decision.limit),
+        "RateLimit-Remaining": "0",
+        "RateLimit-Reset": String(decision.reset),
+      });
+      return;
+    }
+  }
 
   if (p.startsWith("/api/mention-queue")) {
     await dispatchMentionRoute(req, res, { send, readBody });
@@ -694,8 +726,20 @@ async function handle(req, res) {
   }
 
   if (p === "/search") {
-    const q = (url.searchParams.get("q") || "").trim();
-    const all = q ? await searchCatalog(q) : [];
+    let q = (url.searchParams.get("q") || "").trim();
+    if (q.length > SEARCH_Q_MAX) q = "";
+    let all = [];
+    if (q) {
+      try {
+        all = await searchCatalog(q);
+      } catch (err) {
+        console.error(err?.message);
+        send(res, 503, "Search is temporarily unavailable. Try again shortly.\n", {
+          "Content-Type": "text/plain; charset=utf-8",
+        });
+        return;
+      }
+    }
     const meta = paginate({
       total: all.length,
       page: parsePage(url.searchParams),
@@ -1389,6 +1433,7 @@ async function boot() {
       }
     });
   });
+  applyServerTimeouts(server);
   server.listen(port, host, () => {
     console.log(`[exittrace] http://${host}:${port} backend=${backendName()}`);
   });
@@ -1399,9 +1444,11 @@ export {
   CATEGORIES,
   PERSON_CATEGORIES,
   ROOT,
+  applyServerTimeouts,
   boot,
   handle,
   healthPayload,
+  resetRateLimiter,
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
