@@ -54,6 +54,13 @@ import {
   isExemptPath,
   resetRateLimiter,
 } from "./lib/rate-limit.mjs";
+import {
+  cfOnlyMode,
+  cfOnlyStats,
+  checkCfOrigin,
+  formatCfRejectLine,
+  recordCfReject,
+} from "./lib/cf-origin.mjs";
 import { bootDatabase } from "./lib/boot-guard.mjs";
 import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
 import { publicGitSha } from "./lib/logical-heal.mjs";
@@ -487,6 +494,7 @@ async function healthPayload() {
     byCategory: c.byCategory,
     keep_up,
     git_sha: publicGitSha(process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION),
+    cf_only: cfOnlyStats(),
   };
 }
 
@@ -499,8 +507,27 @@ async function handle(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
   const p = url.pathname;
 
+  // Cloudflare-only check, then exemptions, then the rate limit, then routes.
+  // ET_CF_ONLY=off does nothing here and leaves the #225 trust switch as-is.
+  const cfMode = cfOnlyMode();
+  let rateOpts;
+  if (cfMode !== "off") {
+    const cfDecision = checkCfOrigin(req, { pathname: p });
+    if (!cfDecision.pass && !cfDecision.exempt) {
+      recordCfReject();
+      console.log(formatCfRejectLine(cfMode, cfDecision, p));
+      if (cfMode === "enforce") {
+        send(res, 403, "Forbidden\n", { "Content-Type": "text/plain; charset=utf-8" });
+        return;
+      }
+    }
+    rateOpts = { trustCf: cfDecision.trustCf };
+  }
+
   if (!isExemptPath(p)) {
-    const decision = getRateLimiter().check(req, p);
+    const decision = rateOpts
+      ? getRateLimiter().check(req, p, rateOpts)
+      : getRateLimiter().check(req, p);
     if (!decision.allowed) {
       const n = decision.retryAfter;
       send(res, 429, `Too many requests. Retry after ${n} seconds.\n`, {

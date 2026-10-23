@@ -11,6 +11,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Added
 
+- App-side Cloudflare-only origin check (`ET_CF_ONLY` `off` | `report` | `enforce`, default `off`). A request in `report` or `enforce` must send a configured Host, `CF-Ray`, `CF-Connecting-IP`, and an `X-Forwarded-For` hop in the vendored Cloudflare ranges. `TRUSTED_PROXY_HOPS` must be at least 1 or that hop check cannot pass. Exempt paths, a valid mention-queue bearer, and a GET/HEAD internal bypass still get a response. Rollback is `ET_CF_ONLY=off` and a Render restart, not a deploy. See `docs/CF_ONLY.md`.
 - Per-IP process-local rate limits keyed by CF-Connecting-IP when `ET_TRUST_CF_CONNECTING_IP` is on (default), then rightmost X-Forwarded-For after `TRUSTED_PROXY_HOPS` (default 0). Live buckets stay under a 10000-key LRU cap (120/min global, 12/min `/search`, 5/min `POST /add`). Search queries are capped at 64 characters with one ILIKE escape, SQL `LIMIT 200`, a bounded search-slot queue, and statement/request timeouts so a slow search cannot wedge the pool.
 - Fact tag Fraud (`/tags/fraud`). It records a stored fraud charge, plea, conviction, indictment or official fraud finding. It is not an identity filter and is separate from the Operations category `/group-operations/fraud`.
 
