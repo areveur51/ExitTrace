@@ -30,8 +30,34 @@ function assertNoDestructiveDml(sql, label, { allowUpdate = false } = {}) {
   }
 }
 
+const RB = "2026-10-22-multi-notable-rollback";
+const RB_FILES = {
+  r1: `${RB}-r1-lab-replica-identity-full.sql`,
+  r2: `${RB}-r2-lab-bak-delete.sql`,
+  r3a: `${RB}-r3a-render-drop-check.sql`,
+  r4: `${RB}-r4-render-restore-pk.sql`,
+  r5: `${RB}-r5-lab-restore-pk.sql`,
+  r6: `${RB}-r6-lab-replica-identity-default.sql`,
+  r7a: `${RB}-r7a-lab-drop-seq.sql`,
+  r7b: `${RB}-r7b-render-drop-seq.sql`,
+};
+
+function readRb(step) {
+  return read(path.join("scripts", "migrations", RB_FILES[step]));
+}
+
 function assertRollbackOrder(sql) {
-  const markers = ["a. Render:", "b. Lab:", "c. Wait for LSN", "d. Render:", "e. Lab:"];
+  const markers = [
+    "r0. Lab + Render, read-only: freeze",
+    "r1. Lab: ALTER TABLE public.person_events REPLICA IDENTITY FULL",
+    "r2. Lab: copy every seq > 0 row",
+    "r3. Read-only: LSN catch-up",
+    "r3a. Render: drop CHECK",
+    "r4. Render: PRIMARY KEY back to (person_id, kind)",
+    "r5. Lab: PRIMARY KEY back to (person_id, kind)",
+    "r6. Lab: ALTER TABLE public.person_events REPLICA IDENTITY DEFAULT",
+    "r7. Optional",
+  ];
   let at = -1;
   for (const marker of markers) {
     const next = sql.indexOf(marker);
@@ -40,6 +66,17 @@ function assertRollbackOrder(sql) {
   }
   assert.match(sql, /run on lab first, then Render/);
   assert.match(sql, /Do not ALTER PUBLICATION/);
+  assert.match(sql, /apply_error_count flat and every srsubstate = 'r'/);
+  assert.match(sql, /Render's key columns are a subset\n-- of lab's replica identity columns, OR lab is on REPLICA IDENTITY FULL/);
+  assert.match(sql, /lab never has a column Render lacks/);
+  assert.doesNotMatch(sql, /\b(rm|unlink)\b/);
+}
+
+function txnCount(body) {
+  return [
+    (body.match(/^\s*BEGIN\s*;/gm) || []).length,
+    (body.match(/^\s*COMMIT\s*;/gm) || []).length,
+  ];
 }
 
 test("phase A only adds seq DEFAULT 0 and a unique index", () => {
@@ -77,112 +114,122 @@ test("phase B swaps PK in one transaction with USING INDEX and REPLICA IDENTITY 
   assert.ok(beginAt >= 0 && usingAt > beginAt && replicaAt > usingAt && commitAt > replicaAt);
 });
 
-test("rollback index is comments only and states the fixed a-e order", () => {
-  const sql = read("scripts/migrations/2026-10-22-multi-notable-rollback.sql");
+test("rollback index is comments only and states the fixed r0-r7 order", () => {
+  const sql = read(`scripts/migrations/${RB}.sql`);
   assert.equal(executableSql(sql).trim(), "");
-  assertNoDestructiveDml(sql, "rollback index");
   assertRollbackOrder(sql);
   assert.match(sql, /exittrace_lab_pub is a table list/);
-  assert.match(sql, /lab-local retired tables are the durable copy/);
-  assert.match(sql, /Do not edit affected people until restored/);
-  assert.match(sql, /old code's syncPersonEvents/);
-  assert.match(sql, /notable_retired_/);
-  assert.match(sql, /2026-10-22-multi-notable-rollback-a-render-drop-check\.sql/);
-  assert.match(sql, /2026-10-22-multi-notable-rollback-b-lab-retire-rekey\.sql/);
-  assert.match(sql, /2026-10-22-multi-notable-rollback-d-render-restore-pk\.sql/);
-  assert.match(sql, /2026-10-22-multi-notable-rollback-e-lab-restore-pk\.sql/);
+  assert.match(sql, /lab-local _bak tables are the durable copy/);
+  assert.match(sql, /do not edit affected people until\n-- restored/);
+  for (const file of Object.values(RB_FILES)) assert.match(sql, new RegExp(file.replace(/\./g, "\\.")));
   assert.match(sql, /2026-10-22-multi-notable-replication-checks\.sql/);
 });
 
-test("rollback step a only drops the CHECK", () => {
-  const sql = read("scripts/migrations/2026-10-22-multi-notable-rollback-a-render-drop-check.sql");
-  assertNoDestructiveDml(sql, "rollback a");
-  assertRollbackOrder(sql);
-  assert.match(sql, /This step runs on Render/);
-  const body = executableSql(sql);
-  assert.equal((body.match(/^\s*BEGIN\s*;/gm) || []).length, 1);
-  assert.equal((body.match(/^\s*COMMIT\s*;/gm) || []).length, 1);
-  assert.match(body, /DROP CONSTRAINT IF EXISTS person_events_seq_notable_only/);
-  assert.doesNotMatch(body, /\b(INSERT|UPDATE|DELETE|CREATE|RAISE)\b/i);
-  assert.doesNotMatch(body, /person_events_pkey/);
+test("every rollback step file states the order and runs in one transaction", () => {
+  for (const [step, file] of Object.entries(RB_FILES)) {
+    const sql = readRb(step);
+    assertRollbackOrder(sql);
+    assert.deepEqual(txnCount(executableSql(sql)), [1, 1], file);
+    assert.doesNotMatch(executableSql(sql), /\bTRUNCATE\b|\bCASCADE\b|\bDROP\s+TABLE\b/i, file);
+    assert.doesNotMatch(executableSql(sql), /\bUPDATE\b/i, file);
+  }
 });
 
-test("rollback step b copies, drops the CHECK, re-keys, and keeps the three-column PK", () => {
-  const sql = read("scripts/migrations/2026-10-22-multi-notable-rollback-b-lab-retire-rekey.sql");
-  assertNoDestructiveDml(sql, "rollback b", { allowUpdate: true });
-  assertRollbackOrder(sql);
+test("r1 sets REPLICA IDENTITY FULL on lab and nothing else", () => {
+  const sql = readRb("r1");
   assert.match(sql, /This step runs on lab/);
-  assert.match(sql, /CREATE TABLE IF NOT EXISTS person_events_multi_notable_retired/);
-  assert.match(sql, /CREATE TABLE IF NOT EXISTS people_events_multi_notable_retired/);
-  assert.match(sql, /ON CONFLICT DO NOTHING/);
-  assert.match(
-    sql,
-    /UPDATE person_events\s+SET kind = 'notable_retired_' \|\| seq\s+WHERE kind = 'notable' AND seq > 0/s,
-  );
-  const body = executableSql(sql);
-  assert.equal((body.match(/^\s*BEGIN\s*;/gm) || []).length, 1);
-  assert.equal((body.match(/^\s*COMMIT\s*;/gm) || []).length, 1);
-  const beginAt = body.search(/^\s*BEGIN\s*;/m);
-  const commitAt = body.search(/^\s*COMMIT\s*;/m);
-  const copyAt = body.indexOf("INSERT INTO person_events_multi_notable_retired");
-  const peopleCopyAt = body.indexOf("INSERT INTO people_events_multi_notable_retired");
-  const checkDropAt = body.search(/DROP CONSTRAINT IF EXISTS person_events_seq_notable_only/i);
-  const rekeyAt = body.indexOf("SET kind = 'notable_retired_'");
-  assert.ok(beginAt >= 0 && commitAt > beginAt);
-  assert.ok(
-    copyAt > beginAt &&
-      peopleCopyAt > copyAt &&
-      checkDropAt > peopleCopyAt &&
-      rekeyAt > checkDropAt &&
-      rekeyAt < commitAt,
-  );
-  assert.doesNotMatch(sql, /ADD CONSTRAINT person_events_pkey PRIMARY KEY \(person_id, kind\)/);
-  assert.doesNotMatch(sql, /DROP CONSTRAINT(?: IF EXISTS)? person_events_pkey/);
+  const body = executableSql(sql).replace(/\s+/g, " ").trim();
+  assert.equal(body, "BEGIN; ALTER TABLE public.person_events REPLICA IDENTITY FULL; COMMIT;");
 });
 
-function assertPkRestoreStep(rel, side) {
-  const sql = read(rel);
-  assertNoDestructiveDml(sql, rel);
-  assertRollbackOrder(sql);
+test("r2 needs FULL, copies seq > 0 rows to _bak, checks the copy, then DELETEs", () => {
+  const sql = readRb("r2");
+  assert.match(sql, /This step runs on lab/);
+  const body = executableSql(sql);
+  const fullGuard = body.indexOf("<> 'f'");
+  const bakCreate = body.indexOf("CREATE TABLE IF NOT EXISTS public.person_events_multi_notable_bak");
+  const peopleBak = body.indexOf("CREATE TABLE IF NOT EXISTS public.people_events_multi_notable_bak");
+  const copy = body.indexOf("INSERT INTO public.person_events_multi_notable_bak");
+  const peopleCopy = body.indexOf("INSERT INTO public.people_events_multi_notable_bak");
+  const check = body.indexOf("r2 copy check failed");
+  const del = body.indexOf("DELETE FROM public.person_events WHERE seq > 0;");
+  const commit = body.search(/^\s*COMMIT\s*;/m);
+  assert.ok(fullGuard > 0 && bakCreate > fullGuard && peopleBak > bakCreate);
+  assert.ok(copy > peopleBak && peopleCopy > copy && check > peopleCopy && del > check && commit > del);
+  assert.equal((body.match(/\bDELETE\b/gi) || []).length, 1);
+});
+
+test("r3a only drops the CHECK on Render", () => {
+  const sql = readRb("r3a");
+  assert.match(sql, /This step runs on Render/);
+  const body = executableSql(sql).replace(/\s+/g, " ").trim();
+  assert.equal(
+    body,
+    "BEGIN; ALTER TABLE public.person_events DROP CONSTRAINT IF EXISTS person_events_seq_notable_only; COMMIT;",
+  );
+});
+
+function assertPkRestoreStep(step, side) {
+  const sql = readRb(step);
   assert.match(sql, new RegExp(`This step runs on ${side}`));
   const body = executableSql(sql);
-  assert.equal((body.match(/^\s*BEGIN\s*;/gm) || []).length, 1);
-  assert.equal((body.match(/^\s*COMMIT\s*;/gm) || []).length, 1);
-  assert.doesNotMatch(body, /\bUPDATE\b/i);
-  assert.match(body, /RAISE EXCEPTION/);
-  assert.match(body, /kind = 'notable'/);
-  assert.match(body, /seq > 0/);
-  assert.match(body, /ADD CONSTRAINT person_events_pkey PRIMARY KEY \(person_id, kind\)/);
-  assert.match(body, /DROP CONSTRAINT person_events_pkey/);
-  assert.match(body, /CREATE UNIQUE INDEX IF NOT EXISTS person_events_person_kind_seq_key/);
-  assert.match(body, /REPLICA IDENTITY DEFAULT/);
-  const beginAt = body.search(/^\s*BEGIN\s*;/m);
-  const raiseAt = body.search(/RAISE EXCEPTION/);
-  const pkAt = body.search(/ADD CONSTRAINT person_events_pkey PRIMARY KEY \(person_id, kind\)/);
-  const commitAt = body.search(/^\s*COMMIT\s*;/m);
-  assert.ok(beginAt >= 0 && raiseAt > beginAt && pkAt > raiseAt && commitAt > pkAt);
+  assert.doesNotMatch(body, /\b(UPDATE|DELETE|INSERT)\b/i);
+  const seqGuard = body.indexOf("WHERE seq > 0");
+  const dupGuard = body.search(/HAVING count\(\*\) > 1/);
+  const dropPk = body.indexOf("DROP CONSTRAINT person_events_pkey");
+  const addPk = body.indexOf("ADD CONSTRAINT person_events_pkey PRIMARY KEY (person_id, kind)");
+  const idx = body.indexOf("CREATE UNIQUE INDEX IF NOT EXISTS person_events_person_kind_seq_key");
+  assert.ok(seqGuard > 0 && dupGuard > seqGuard && dropPk > dupGuard && addPk > dropPk && idx > addPk, step);
+  assert.match(body, /DROP CONSTRAINT IF EXISTS person_events_seq_notable_only/);
+  assert.doesNotMatch(body, /REPLICA IDENTITY DEFAULT/, `${step} must not leave FULL early`);
+  return body;
 }
 
-test("rollback steps d and e restore the two-column PK behind a re-key guard", () => {
-  assertPkRestoreStep(
-    "scripts/migrations/2026-10-22-multi-notable-rollback-d-render-restore-pk.sql",
-    "Render",
-  );
-  assertPkRestoreStep(
-    "scripts/migrations/2026-10-22-multi-notable-rollback-e-lab-restore-pk.sql",
-    "lab",
-  );
+test("r4 (Render) and r5 (lab) restore (person_id, kind) behind seq and duplicate guards", () => {
+  assertPkRestoreStep("r4", "Render");
+  const r5 = assertPkRestoreStep("r5", "lab");
+  assert.ok(r5.indexOf("<> 'f'") > 0 && r5.indexOf("<> 'f'") < r5.indexOf("WHERE seq > 0"), "r5 needs FULL");
+});
+
+test("r6 sets REPLICA IDENTITY DEFAULT on lab only after the PK lost seq", () => {
+  const sql = readRb("r6");
+  assert.match(sql, /This step runs on lab/);
+  const body = executableSql(sql);
+  const guard = body.indexOf("r6 needs r5 first");
+  const def = body.indexOf("ALTER TABLE public.person_events REPLICA IDENTITY DEFAULT;");
+  assert.ok(guard > 0 && def > guard);
+});
+
+test("r7 is optional, lab first, and guarded on the two-column PK and DEFAULT identity", () => {
+  const lab = readRb("r7a");
+  const render = readRb("r7b");
+  assert.match(lab, /OPTIONAL/);
+  assert.match(lab, /This step runs on lab/);
+  assert.match(lab, /Lab first/);
+  assert.match(render, /This step runs on Render/);
+  assert.match(render, /Only after r7a on lab/);
+  for (const sql of [lab, render]) {
+    const body = executableSql(sql);
+    assert.ok(body.indexOf("r7 needs r4/r5 first") < body.indexOf("DROP COLUMN IF EXISTS seq"));
+    assert.ok(body.indexOf("<> 'd'") < body.indexOf("DROP COLUMN IF EXISTS seq"));
+  }
 });
 
 test("replication checks file is SELECTs only", () => {
   const sql = read("scripts/migrations/2026-10-22-multi-notable-replication-checks.sql");
   assertRollbackOrder(sql);
   const body = executableSql(sql);
+  assert.match(body, /SELECT version\(\);/);
   assert.match(body, /pg_stat_subscription/);
   assert.match(body, /apply_error_count/);
+  assert.match(body, /srsubstate/);
   assert.match(body, /pg_current_wal_lsn\(\)/);
   assert.match(body, /pg_replication_slots/);
   assert.match(body, /confirmed_flush_lsn/);
+  assert.match(body, /relreplident/);
+  assert.match(body, /HAVING count\(\*\) > 1/);
+  assert.match(body, /person_events_multi_notable_bak/);
+  assert.match(body, /puballtables/);
   assert.doesNotMatch(
     body,
     /\b(INSERT|UPDATE|DELETE|TRUNCATE|ALTER|DROP|CREATE|BEGIN|COMMIT|DO)\b/i,
@@ -207,11 +254,13 @@ test("docs run phase B on lab before Render and keep phase A on Render first", (
   assert.match(doc, /SHARE/);
   assert.match(doc, /person_events_person_kind_seq_key/);
   assert.match(doc, /USING INDEX/);
-  const stepA = doc.indexOf("rollback-a-render-drop-check.sql");
-  const stepB = doc.indexOf("rollback-b-lab-retire-rekey.sql");
-  const stepD = doc.indexOf("rollback-d-render-restore-pk.sql");
-  const stepE = doc.indexOf("rollback-e-lab-restore-pk.sql");
-  assert.ok(stepA >= 0 && stepB > stepA && stepD > stepB && stepE > stepD);
+  const order = ["r1", "r2", "r3a", "r4", "r5", "r6", "r7a", "r7b"].map((k) => doc.indexOf(RB_FILES[k]));
+  for (let i = 1; i < order.length; i += 1) assert.ok(order[i - 1] >= 0 && order[i] > order[i - 1], `doc step ${i}`);
+  assert.match(doc, /## Replication invariant/);
+  assert.match(doc, /lab never has a column Render lacks/);
+  assert.match(doc, /REPLICA IDENTITY FULL/);
+  assert.match(doc, /SELECT version\(\);/);
+  assert.doesNotMatch(doc, /\b(rm|unlink)\b/);
 });
 
 test("bootstrap person_events seed insert is target-less ON CONFLICT and does not list seq", () => {
@@ -300,21 +349,23 @@ test("migration files exist under scripts/migrations", () => {
   for (const name of [
     "2026-10-22-multi-notable-phase-a.sql",
     "2026-10-22-multi-notable-phase-b.sql",
-    "2026-10-22-multi-notable-rollback.sql",
-    "2026-10-22-multi-notable-rollback-a-render-drop-check.sql",
-    "2026-10-22-multi-notable-rollback-b-lab-retire-rekey.sql",
-    "2026-10-22-multi-notable-rollback-d-render-restore-pk.sql",
-    "2026-10-22-multi-notable-rollback-e-lab-restore-pk.sql",
+    `${RB}.sql`,
+    ...Object.values(RB_FILES),
     "2026-10-22-multi-notable-replication-checks.sql",
   ]) {
     assert.equal(fs.existsSync(path.join(MIGRATIONS, name)), true, name);
   }
 });
 
-test("multi-notable SQL files have no DELETE, TRUNCATE, DROP TABLE, or DROP COLUMN", () => {
+test("multi-notable SQL: DELETE only in r2, DROP COLUMN only in optional r7, never TRUNCATE or DROP TABLE", () => {
   for (const name of fs.readdirSync(MIGRATIONS)) {
     if (!name.startsWith("2026-10-22-multi-notable-")) continue;
-    const allowUpdate = name.includes("rollback-b-");
-    assertNoDestructiveDml(read(path.join("scripts", "migrations", name)), name, { allowUpdate });
+    const body = executableSql(read(path.join("scripts", "migrations", name)));
+    assert.doesNotMatch(body, /\bTRUNCATE\b/i, name);
+    assert.doesNotMatch(body, /\bDROP\s+TABLE\b/i, name);
+    assert.doesNotMatch(body, /\bCASCADE\b/i, name);
+    assert.doesNotMatch(body, /\bUPDATE\b/i, name);
+    if (name !== RB_FILES.r2) assert.doesNotMatch(body, /\bDELETE\b/i, name);
+    if (name !== RB_FILES.r7a && name !== RB_FILES.r7b) assert.doesNotMatch(body, /\bDROP\s+COLUMN\b/i, name);
   }
 });

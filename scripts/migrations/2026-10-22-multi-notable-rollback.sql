@@ -1,63 +1,56 @@
 -- Multi-notable rollback (documented, not run).
 -- Index only. This file is comments and has no executable SQL.
 -- Run the step files in the fixed order below. Do not run them out of order.
+-- See docs/MULTI_NOTABLE_MIGRATION.md (Rollback) for the exact DDL per DB.
 --
--- Reverses phase B without data loss and without DELETE / TRUNCATE / DROP TABLE / DROP COLUMN.
--- Keeps the seq column and a unique index on (person_id, kind, seq).
+-- Backups: r2 copies the seq > 0 rows into person_events_multi_notable_bak and
+-- the affected people.events JSON into people_events_multi_notable_bak, both
+-- lab-local (exittrace_lab_pub is a table list, so they are not published).
+-- The lab-local _bak tables are the durable copy of the extra notables.
+-- people.events is not rewritten: old code's syncPersonEvents and uniqueEvents
+-- fold extra notables on the next save, so do not edit affected people until
+-- restored. The new code refuses to save them (multi_notable_needs_phase_b)
+-- once lab's primary key is back to (person_id, kind).
 --
--- After rollback, old code's syncPersonEvents does DELETE+reinsert from
--- people.events, and old uniqueEvents folds extra notables, so the next save
--- of an affected person removes its notable_retired_N rows from person_events
--- and the folded JSON loses the extra notables.
--- The lab-local retired tables are the durable copy.
--- Do not edit affected people until restored.
+-- After r6, person_events keeps the seq column and the unique index
+-- person_events_person_kind_seq_key (the phase A state), so the merged code's
+-- ON CONFLICT (person_id, kind, seq) keeps working and phase B can be re-run.
 --
--- Phase B rollout: run on lab first, then Render.
+-- Rollback order (fixed, Worf form). Freeze lab person_events writes r0..r6.
+--   r0. Lab + Render, read-only: freeze lab writes to person_events; record
+--       lab pg_current_wal_lsn(), slot confirmed_flush_lsn, Render
+--       latest_end_lsn, apply_error_count, srsubstate, counts and md5.
+--       2026-10-22-multi-notable-replication-checks.sql
+--   r1. Lab: ALTER TABLE public.person_events REPLICA IDENTITY FULL.
+--       2026-10-22-multi-notable-rollback-r1-lab-replica-identity-full.sql
+--   r2. Lab: copy every seq > 0 row into the lab-local _bak table first, then
+--       DELETE those rows. One transaction. No TRUNCATE, no CASCADE.
+--       2026-10-22-multi-notable-rollback-r2-lab-bak-delete.sql
+--   r3. Read-only: LSN catch-up on Render; counts and md5 match lab.
+--       2026-10-22-multi-notable-replication-checks.sql
+--   r3a. Render: drop CHECK person_events_seq_notable_only (any time before r4).
+--       2026-10-22-multi-notable-rollback-r3a-render-drop-check.sql
+--   r4. Render: PRIMARY KEY back to (person_id, kind), guarded on 0 rows with
+--       seq > 0 and 0 duplicate (person_id, kind).
+--       2026-10-22-multi-notable-rollback-r4-render-restore-pk.sql
+--   r5. Lab: PRIMARY KEY back to (person_id, kind), same guards. Keeps
+--       REPLICA IDENTITY FULL.
+--       2026-10-22-multi-notable-rollback-r5-lab-restore-pk.sql
+--   r6. Lab: ALTER TABLE public.person_events REPLICA IDENTITY DEFAULT.
+--       2026-10-22-multi-notable-rollback-r6-lab-replica-identity-default.sql
+--   r7. Optional, only after the code is reverted: drop seq, lab first, then
+--       Render. Leaving seq in place is fine.
+--       2026-10-22-multi-notable-rollback-r7a-lab-drop-seq.sql
+--       2026-10-22-multi-notable-rollback-r7b-render-drop-seq.sql
+--   After every step: apply_error_count flat and every srsubstate = 'r'
+--   (replication-checks.sql). If not, STOP; do not run the next step.
+--
+-- Invariant (forward and back, every step): Render's key columns are a subset
+-- of lab's replica identity columns, OR lab is on REPLICA IDENTITY FULL; and
+-- lab never has a column Render lacks.
+--
 -- Publisher = lab (publication exittrace_lab_pub). Subscriber = Render
 -- (subscription exittrace_lab_sub, slot exittrace_lab_sub on lab).
--- Lab keeps sending seq as a key column until Render is back on
--- (person_id, kind). At every moment Render's PK columns are a subset of
--- the key columns lab sends.
+-- Phase B rollout: run on lab first, then Render.
+-- Do not ALTER PUBLICATION. No file-deletion commands anywhere.
 --
--- Rollback order (fixed):
---   a. Render: drop CHECK person_events_seq_notable_only.
---      scripts/migrations/2026-10-22-multi-notable-rollback-a-render-drop-check.sql
---   b. Lab: copy extra notables to the lab-local retired tables, drop the
---      CHECK, re-key (UPDATE person_events SET kind = 'notable_retired_' || seq
---      WHERE kind = 'notable' AND seq > 0), and keep PRIMARY KEY
---      (person_id, kind, seq). One transaction.
---      scripts/migrations/2026-10-22-multi-notable-rollback-b-lab-retire-rekey.sql
---   c. Wait for LSN catch-up (Render applied the re-key). Read-only.
---      Queries: docs/MULTI_NOTABLE_MIGRATION.md and
---      scripts/migrations/2026-10-22-multi-notable-replication-checks.sql
---   d. Render: restore PRIMARY KEY (person_id, kind). Keep seq and unique
---      index person_events_person_kind_seq_key. REPLICA IDENTITY DEFAULT.
---      Guard aborts if kind = 'notable' AND seq > 0 still exists.
---      scripts/migrations/2026-10-22-multi-notable-rollback-d-render-restore-pk.sql
---   e. Lab: restore PRIMARY KEY (person_id, kind). Same shape and same guard.
---      scripts/migrations/2026-10-22-multi-notable-rollback-e-lab-restore-pk.sql
---
--- Write freeze is REQUIRED (not optional): pause lab person_events writes
--- from before lab phase B until after Render phase B, and from before
--- rollback step b until after step e. Confirm LSN catch-up before
--- unfreezing. The app guard only sees the local DB, so it cannot stop a
--- seq > 0 notable on lab while Render is on a different key.
--- Before step b, run the publication precheck in
--- 2026-10-22-multi-notable-replication-checks.sql: puballtables must be
--- false and neither retired table listed. If puballtables is true, STOP and
--- go back to Worf. No ALTER PUBLICATION.
---
--- Retired tables are lab-local. Publication exittrace_lab_pub is a table list
--- (no FOR ALL TABLES in this repo), so they are not published. Do not ALTER PUBLICATION.
--- people.events JSON snapshot in people_events_multi_notable_retired is the source
--- to restore extra notables after rollback.
---
--- Old main code ignores unknown kinds such as notable_retired_1: they are not in
--- PROMOTE_CATEGORY_IDS, isDisplayedEventKind, the person timeline, Notable blocks,
--- catalog lists, or the keymap. See docs/MULTI_NOTABLE_MIGRATION.md.
---
--- After rollback, person_events keeps unique index
--- person_events_person_kind_seq_key alongside PRIMARY KEY (person_id, kind).
--- The index overlaps the primary key (extra write cost, redundant uniqueness).
--- It is kept on purpose so a re-run of phase B can promote it with USING INDEX.
--- Removing it is a separate reviewed change.
