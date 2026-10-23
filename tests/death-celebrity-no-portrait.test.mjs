@@ -1,5 +1,5 @@
 /**
- * Celebrity deaths may be stored with a blank portrait.
+ * Celebrity deaths and arrest / charge / indictment cards may be stored with a blank portrait.
  * Every other promote kind still requires one.
  * The blank is the neutral placeholder, and a later approved still fills it.
  */
@@ -27,6 +27,9 @@ const CITES = [
   "https://www.example.com/news/casey-vale-held",
   "https://www.example.net/world/casey-vale-arrest",
 ];
+
+/** Arrest / charge / indictment promote kinds that may also store a blank portrait. */
+const BLANK_CHARGE_KINDS = ["arrests", "indictment_civilian", "indictment_non_civilian"];
 
 const EMPTY_MEDIA = fs.mkdtempSync(path.join(os.tmpdir(), "et-death-celeb-blank-"));
 fs.mkdirSync(path.join(EMPTY_MEDIA, "people"), { recursive: true });
@@ -115,14 +118,22 @@ test("death_celebrity without a portrait promotes with an empty photo", async ()
 });
 
 test("every other promote kind without a portrait still throws missing_portrait", async () => {
-  assert.deepEqual([...PORTRAIT_OPTIONAL_KINDS], ["death_celebrity"]);
+  assert.deepEqual([...PORTRAIT_OPTIONAL_KINDS], [
+    "death_celebrity",
+    ...BLANK_CHARGE_KINDS,
+    "indictment_unspecified",
+  ]);
   assert.equal(portraitRequiredFor("death_celebrity"), false);
+  for (const kind of [...BLANK_CHARGE_KINDS, "indictment_unspecified"]) {
+    assert.equal(portraitRequiredFor(kind), false, kind);
+  }
   const required = PROMOTE_CATEGORY_IDS.filter((id) => !PORTRAIT_OPTIONAL_KINDS.has(id));
   assert.deepEqual(
     required,
-    PROMOTE_CATEGORY_IDS.filter((id) => id !== "death_celebrity"),
+    PROMOTE_CATEGORY_IDS.filter((id) => id !== "death_celebrity" && !BLANK_CHARGE_KINDS.includes(id)),
   );
-  assert.equal(required.length, PROMOTE_CATEGORY_IDS.length - 1);
+  assert.equal(required.length, PROMOTE_CATEGORY_IDS.length - 1 - BLANK_CHARGE_KINDS.length);
+  assert.ok(required.includes("firings") && required.includes("notable") && required.includes("death_official"));
   assert.ok(required.every((id) => portraitRequiredFor(id)));
 
   for (const kind of required) {
@@ -214,3 +225,38 @@ test("an empty-photo death_celebrity is filled when an approved portrait is supp
   assert.equal(again.person.photo, stored.photo);
   assert.equal(again.person.photo_credit, "Wikimedia Commons");
 });
+
+for (const kind of BLANK_CHARGE_KINDS) {
+  test(`${kind} without a portrait promotes with an empty photo and renders the placeholder`, async () => {
+    setMemory({ people: [] });
+    const subject = `Blank Charge ${kind}`;
+    const created = await applyIdentifiedPerson(blankInput(subject, kind));
+    assert.equal(created.action, "created");
+    assert.equal(created.person.photo, "");
+    assert.equal(created.person.photo_credit, "");
+    assert.equal(created.person.category, kind);
+
+    const stored = await getPerson(personSlug(subject));
+    assert.ok(stored);
+    assert.equal(stored.photo, "");
+    assert.equal(isStoredPeoplePortrait(stored.photo), false);
+    assertNeutralPlaceholder(personDetail(stored), `${kind} person card`);
+    assertNeutralPlaceholder(personRow(stored), `${kind} person row`);
+
+    const detailPage = await requestPage(`/people/${stored.id}`);
+    assert.equal(detailPage.status, 200);
+    const article = detailPage.body.match(/<article class="detail person-detail"[\s\S]*<\/article>/);
+    assert.ok(article, `${kind} person detail article`);
+    assertNeutralPlaceholder(article[0], `${kind} person detail page`);
+
+    const kept = await applyIdentifiedPerson(
+      withNewPersonLock({
+        subject: `Kept Portrait ${kind}`,
+        event_date: "2024-06-15",
+        category: kind,
+        cite_urls: CITES,
+      }),
+    );
+    assert.equal(isStoredPeoplePortrait(kept.person.photo), true, `${kind}: a supplied portrait is still stored`);
+  });
+}

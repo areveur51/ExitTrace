@@ -2331,8 +2331,17 @@ export async function ensurePersonClearances({
   return { action: "created", person: created };
 }
 
-/** Celebrity deaths may be inserted with a blank portrait. Every other promote kind still requires one. */
-export const PORTRAIT_OPTIONAL_KINDS = new Set(["death_celebrity"]);
+/**
+ * Celebrity deaths and arrest / charge / indictment cards may be inserted with a blank portrait
+ * when no allowed official, booking or Commons image exists. Every other promote kind still requires one.
+ */
+export const PORTRAIT_OPTIONAL_KINDS = new Set([
+  "death_celebrity",
+  "arrests",
+  "indictment_civilian",
+  "indictment_non_civilian",
+  "indictment_unspecified",
+]);
 
 export function portraitRequiredFor(kind) {
   return !PORTRAIT_OPTIONAL_KINDS.has(String(kind || "").trim());
