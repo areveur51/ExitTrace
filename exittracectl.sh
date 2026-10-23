@@ -62,6 +62,15 @@ load_env() {
   cd "$ROOT"
 }
 
+# Retire, never unlink: move the pid file into var/retired/ with a timestamp.
+retire_pid_file() {
+  [[ -e "$PID_FILE" || -L "$PID_FILE" ]] || return 0
+  local dir="${ROOT}/var/retired"
+  mkdir -p -- "$dir"
+  chmod 700 -- "$dir"
+  mv -n -- "$PID_FILE" "${dir}/$(basename "$PID_FILE").$(date +%Y%m%d-%H%M%S).$$"
+}
+
 is_running() {
   [[ -f "$PID_FILE" ]] || return 1
   local pid
@@ -86,7 +95,7 @@ cmd_stop() {
       kill -9 "$(cat "$PID_FILE")" 2>/dev/null || true
     fi
   fi
-  rm -f "$PID_FILE"
+  retire_pid_file
   echo "Stopped"
 }
 
@@ -105,7 +114,7 @@ cmd_start() {
   if ! is_running; then
     echo "Failed to start — last log lines:" >&2
     tail -n 40 "$LOG_FILE" >&2 || true
-    rm -f "$PID_FILE"
+    retire_pid_file
     return 1
   fi
   echo "Started pid=$(cat "$PID_FILE") port=${PORT}"
