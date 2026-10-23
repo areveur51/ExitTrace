@@ -242,7 +242,9 @@ test("the six audited lead overrides beat the stored agency list", () => {
     "2025-national-health-care-fraud-takedown": "doj",
     "operation-low-voltage": "hsi",
   };
-  assert.deepEqual({ ...OPERATION_LEAD_OVERRIDES }, expected);
+  for (const [slug, seal] of Object.entries(expected)) {
+    assert.equal(OPERATION_LEAD_OVERRIDES[slug], seal, slug);
+  }
   const known = new Set(knownSealKeys());
   const cases = [
     [
@@ -298,6 +300,113 @@ test("the six audited lead overrides beat the stored agency list", () => {
     agencies: ["U.S. Department of Justice", "FBI"],
   });
   assert.equal(untouched.photo, "/media/agencies/fbi.png");
+});
+
+test("batch 2: eight more audited lead overrides beat the stored agency list", () => {
+  const batch1 = {
+    "operation-guardian-angel": "usao",
+    "operation-protect-the-vote": "usao",
+    "operation-clean-house": "hud-oig",
+    "afscme-local-1746-wire-fraud-charges": "dol",
+    "2025-national-health-care-fraud-takedown": "doj",
+    "operation-low-voltage": "hsi",
+  };
+  const batch2 = {
+    "national-usda-benefits-and-program-fraud-enforcement-surge": "usda-oig",
+    "2018-national-health-care-fraud-takedown": "doj",
+    "heartland-fraud-surge": "doj",
+    "operation-legend": "doj",
+    "operation-relentless-pursuit": "doj",
+    "operation-dark-huntor": "doj",
+    "mexico-29-cartel-transfers": "doj",
+    "clan-del-golfo-human-smuggling": "doj",
+  };
+  assert.deepEqual({ ...OPERATION_LEAD_OVERRIDES }, { ...batch1, ...batch2 });
+  const known = new Set(knownSealKeys());
+  const cases = [
+    [
+      "national-usda-benefits-and-program-fraud-enforcement-surge",
+      [
+        "U.S. Department of Justice National Fraud Enforcement Division",
+        "U.S. Department of Agriculture",
+        "USDA Office of Inspector General",
+        "U.S. Attorney's Office for the Eastern District of Arkansas",
+        "Utah Attorney General's Office",
+      ],
+      "/media/agencies/usda-oig.png",
+    ],
+    [
+      "2018-national-health-care-fraud-takedown",
+      [
+        "U.S. Department of Justice",
+        "U.S. Department of Health and Human Services",
+        "Federal Bureau of Investigation",
+      ],
+      "/media/agencies/doj.jpg",
+    ],
+    [
+      "heartland-fraud-surge",
+      ["U.S. Department of Justice", "FBI", "Small Business Administration"],
+      "/media/agencies/doj.jpg",
+    ],
+    [
+      "operation-legend",
+      [
+        "U.S. Department of Justice",
+        "Federal Bureau of Investigation",
+        "Drug Enforcement Administration",
+        "Bureau of Alcohol, Tobacco, Firearms and Explosives",
+        "U.S. Marshals Service",
+      ],
+      "/media/agencies/doj.jpg",
+    ],
+    [
+      "operation-relentless-pursuit",
+      [
+        "U.S. Department of Justice",
+        "Federal Bureau of Investigation",
+        "Drug Enforcement Administration",
+        "Bureau of Alcohol, Tobacco, Firearms and Explosives",
+        "U.S. Marshals Service",
+      ],
+      "/media/agencies/doj.jpg",
+    ],
+    [
+      "operation-dark-huntor",
+      ["U.S. Department of Justice", "Drug Enforcement Administration"],
+      "/media/agencies/doj.jpg",
+    ],
+    [
+      "mexico-29-cartel-transfers",
+      ["U.S. Department of Justice", "DEA", "Government of Mexico"],
+      "/media/agencies/doj.jpg",
+    ],
+    [
+      "clan-del-golfo-human-smuggling",
+      [
+        "U.S. Department of Justice",
+        "U.S. Department of Homeland Security",
+        "U.S. Department of State",
+        "Homeland Security Investigations",
+        "U.S. Customs and Border Protection",
+      ],
+      "/media/agencies/doj.jpg",
+    ],
+  ];
+  for (const [slug, agencies, photo] of cases) {
+    assert.equal(known.has(OPERATION_LEAD_OVERRIDES[slug]), true, slug);
+    assert.equal(operationLeadAgencyId(agencies, slug), batch2[slug], slug);
+    assert.equal(operationLeadLogo(agencies, slug).photo, photo, slug);
+    const stored = normalizeOperation({ id: slug, name: "x", agencies });
+    assert.equal(stored.photo, photo, slug);
+  }
+  for (const id of [
+    "long-island-missing-child-rescue-operation",
+    "horry-county-narcotics-and-violent-crime-operation",
+    "operation-harbor-sweep",
+  ]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(OPERATION_LEAD_OVERRIDES, id), false, id);
+  }
 });
 
 test("the override table is frozen and every entry names a known seal", () => {
