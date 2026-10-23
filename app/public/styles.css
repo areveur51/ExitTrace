@@ -3022,6 +3022,429 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-ok) 45%, transparent);
 }
 
+/* Combined results controls: Concept 2 (two-row) by default, Concept 3 (one bar) on wide. */
+.pager-results-label,
+.page-size-label-short,
+.page-size-label-full,
+.page-size-select-wrap {
+  display: none;
+}
+
+.results-controls.results-view {
+  --results-rule: color-mix(in srgb, var(--amber) 55%, transparent);
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
+  margin: 0.15rem 0 1rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+}
+.results-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem 1rem;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+}
+.results-controls-row + .results-controls-row {
+  border-top: 1px solid var(--results-rule);
+}
+.results-controls-row > *,
+.results-controls .pager-main,
+.results-controls .page-size {
+  flex: 1 1 10.5rem;
+  min-width: 0;
+}
+.results-controls .pager {
+  display: contents;
+  margin: 0;
+}
+.results-controls .pager-main,
+.results-controls .page-size,
+.results-controls .results-view-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  min-width: 0;
+}
+.results-controls .card-size {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  min-width: 0;
+}
+.results-controls .pager-main,
+.results-controls .page-size {
+  margin: 0;
+}
+.results-controls .results-view-label,
+.results-controls .card-size-label,
+.results-controls .page-size-label,
+.results-controls .pager-results-label,
+.results-controls .pager-status {
+  flex: 1 1 100%;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--hud-label);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.results-controls .pager-results-label {
+  display: block;
+}
+.results-controls .pager-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0;
+}
+/* Flex items drop leading whitespace; keep the space before the "·" separator
+   so the status reads "PAGE 1 OF 36 · 612 ROWS", not "PAGE 1 OF 36· 612 ROWS". */
+.results-controls .pager-count {
+  white-space: pre;
+}
+.results-controls .page-size-label .ui-icon {
+  display: none;
+}
+.results-controls .page-size-label-full {
+  display: inline;
+}
+.results-controls .page-size-label-short {
+  display: none;
+}
+.results-controls .results-view-btns,
+.results-controls .card-size-btns,
+.results-controls .page-size-btns,
+.results-controls .pager-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+}
+.results-controls .pager-pages {
+  flex-wrap: wrap;
+}
+.results-controls .results-view-btn,
+.results-controls .card-size-btn,
+.results-controls .page-size-btn,
+.results-controls .pager-btn,
+.results-controls .pager-pages a,
+.results-controls .page-size-select {
+  border-radius: 4px;
+}
+.results-controls .page-size-select-wrap {
+  display: none;
+}
+html:not([data-results-view]) .results-controls .results-view-btn[aria-pressed="true"],
+html:not([data-card-size]) .results-controls .card-size-btn[aria-pressed="true"],
+html[data-results-view="list"] .results-controls [data-results-view-set="list"],
+html[data-results-view="cards"] .results-controls [data-results-view-set="cards"],
+html[data-card-size="s"] .results-controls [data-card-size-set="s"],
+html[data-card-size="m"] .results-controls [data-card-size-set="m"],
+html[data-card-size="l"] .results-controls [data-card-size-set="l"],
+.results-controls .page-size-btn[aria-pressed="true"] {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  box-shadow: none;
+}
+.results-controls .pager-pages a[aria-current="page"] {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: var(--void);
+  box-shadow: none;
+}
+
+@media (min-width: 820px) {
+  .results-controls-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0;
+    padding: 0;
+  }
+  .results-controls-row > *,
+  .results-controls .pager-main,
+  .results-controls .page-size {
+    padding: 0.75rem 0.9rem;
+  }
+  .results-controls .card-size,
+  .results-controls .page-size {
+    border-left: 1px solid var(--results-rule);
+  }
+}
+
+/* Phone widths: keep prev, page numbers, and next on one line.
+   Around 390px the rows selector sits beside the pager, so the control
+   strip is only ~10rem. Shrink the buttons, and drop middle numbers when
+   that strip is too narrow for the full window. First, current, and last stay. */
+@media (max-width: 430px) {
+  .results-controls .pager-controls {
+    container-type: inline-size;
+    container-name: results-pager;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .results-controls .pager-btn {
+    flex: 0 0 auto;
+    min-width: 1.75rem;
+    min-height: 2rem;
+    padding: 0.12rem 0.28rem;
+  }
+  .results-controls .pager-btn .ui-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+  .results-controls .pager-pages {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0.12rem;
+  }
+  .results-controls .pager-pages > li {
+    flex: 0 0 auto;
+  }
+  .results-controls .pager-pages a {
+    min-width: 1.55rem;
+    min-height: 2rem;
+    padding: 0.08rem 0.22rem;
+    font-size: 0.78rem;
+  }
+  .results-controls .pager-gap {
+    min-height: 0;
+    padding-inline: 0.05rem;
+  }
+}
+
+@container results-pager (max-width: 17rem) {
+  .results-controls .pager-pages > li:not(:first-child):not(:last-child):not(:has(a[aria-current="page"])) {
+    display: none;
+  }
+}
+
+/* Two-row tablet (431–1199): the page row splits RESULTS and ROWS PER PAGE,
+   so the pager strip is often only ~11–17rem. Keep prev, the numbers, and
+   next on one line, and top-align the columns so the labels share a baseline.
+   Shrink the buttons the same way phones do. Drop middle numbers when the
+   strip cannot hold the full window (a long run such as 1 … 99 100 101 … 250,
+   or any list once the strip is under ~12.25rem). First, current, and last stay. */
+@media (min-width: 431px) and (max-width: 1199px) {
+  .results-controls-row--page {
+    align-items: start;
+  }
+  .results-controls .pager-main,
+  .results-controls .page-size {
+    align-items: flex-start;
+    align-content: flex-start;
+    align-self: start;
+  }
+  .results-controls .pager-controls {
+    container-type: inline-size;
+    container-name: results-pager-row;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .results-controls .pager-btn {
+    flex: 0 0 auto;
+    min-width: 1.75rem;
+    min-height: 2rem;
+    padding: 0.12rem 0.28rem;
+  }
+  .results-controls .pager-btn .ui-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+  .results-controls .pager-pages {
+    flex: 0 0 auto;
+    min-width: max-content;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.12rem;
+  }
+  .results-controls .pager-pages > li {
+    flex: 0 0 auto;
+  }
+  .results-controls .pager-pages a {
+    min-width: 1.55rem;
+    min-height: 2rem;
+    padding: 0.08rem 0.22rem;
+    font-size: 0.78rem;
+  }
+  .results-controls .pager-gap {
+    min-height: 0;
+    padding-inline: 0.05rem;
+  }
+}
+
+@container results-pager-row (max-width: 17rem) {
+  .results-controls .pager-pages:has(> li:nth-child(6)) > li:not(:first-child):not(:last-child):not(:has(a[aria-current="page"])) {
+    display: none;
+  }
+}
+
+@container results-pager-row (max-width: 12.25rem) {
+  .results-controls .pager-pages > li:not(:first-child):not(:last-child):not(:has(a[aria-current="page"])) {
+    display: none;
+  }
+}
+
+@media (min-width: 1200px) {
+  .results-controls.results-view {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0;
+    padding: 0.45rem 0.35rem;
+  }
+  .results-controls-row,
+  .results-controls-row + .results-controls-row {
+    display: contents;
+    border-top: 0;
+    padding: 0;
+  }
+  .results-controls-row > *,
+  .results-controls .pager-main,
+  .results-controls .page-size {
+    flex: 0 0 auto;
+    padding: 0.35rem 0.85rem;
+  }
+  .results-controls .results-view-mode,
+  .results-controls .card-size,
+  .results-controls .pager-main,
+  .results-controls .page-size {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.45rem 0.65rem;
+  }
+  .results-controls .results-view-label,
+  .results-controls .card-size-label,
+  .results-controls .page-size-label,
+  .results-controls .pager-status {
+    flex: 0 0 auto;
+    width: auto;
+  }
+  .results-controls .pager-results-label,
+  .results-controls .page-size-label-full,
+  .results-controls .pager-pages,
+  .results-controls .page-size-btns {
+    display: none;
+  }
+  .results-controls .pager-status {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0;
+  }
+  .results-controls .page-size-label-short {
+    display: inline;
+  }
+  .results-controls .results-view-btns,
+  .results-controls .card-size-btns,
+  .results-controls .pager-controls {
+    width: auto;
+    flex-wrap: nowrap;
+  }
+  .results-controls .results-view-btn > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+  .results-controls .card-size,
+  .results-controls .pager-main,
+  .results-controls .page-size {
+    border-left: 1px solid var(--results-rule);
+  }
+  .results-controls .page-size-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+  }
+  .results-controls .page-size-select {
+    appearance: none;
+    -webkit-appearance: none;
+    min-height: 44px;
+    min-width: 4.75rem;
+    padding: 0.25rem 1.85rem 0.25rem 0.7rem;
+    border: 1px solid var(--amber);
+    border-radius: 4px;
+    background-color: color-mix(in srgb, var(--bg) 70%, transparent);
+    color: var(--amber);
+    font: inherit;
+    cursor: pointer;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--amber) 50%),
+      linear-gradient(135deg, var(--amber) 50%, transparent 50%);
+    background-position:
+      calc(100% - 14px) calc(50% - 2px),
+      calc(100% - 8px) calc(50% - 2px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+  }
+  .results-controls .page-size-select:focus {
+    outline: 2px solid var(--amber);
+    outline-offset: 1px;
+  }
+}
+
+html[data-theme="glass"] .results-controls.results-view {
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+}
+html[data-theme="glass"] .results-controls .results-view-btn,
+html[data-theme="glass"] .results-controls .card-size-btn,
+html[data-theme="glass"] .results-controls .page-size-btn,
+html[data-theme="glass"] .results-controls .pager-btn,
+html[data-theme="glass"] .results-controls .pager-pages a,
+html[data-theme="glass"] .results-controls .page-size-select {
+  clip-path: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-theme="glass"] .results-controls .results-view-btn[aria-pressed="true"],
+html[data-theme="glass"] .results-controls .card-size-btn[aria-pressed="true"],
+html[data-theme="glass"] .results-controls .page-size-btn[aria-pressed="true"],
+html[data-theme="glass"]:not([data-results-view]) .results-controls .results-view-btn[aria-pressed="true"],
+html[data-theme="glass"]:not([data-card-size]) .results-controls .card-size-btn[aria-pressed="true"],
+html[data-theme="glass"][data-results-view="list"] .results-controls [data-results-view-set="list"],
+html[data-theme="glass"][data-results-view="cards"] .results-controls [data-results-view-set="cards"],
+html[data-theme="glass"][data-card-size="s"] .results-controls [data-card-size-set="s"],
+html[data-theme="glass"][data-card-size="m"] .results-controls [data-card-size-set="m"],
+html[data-theme="glass"][data-card-size="l"] .results-controls [data-card-size-set="l"] {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  box-shadow: none;
+}
+html[data-theme="glass"] .results-controls .pager-pages a[aria-current="page"] {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: var(--void);
+  box-shadow: none;
+}
+
 
 /* Official-post media strips (top post + bottom supporting): one minimum
    width, height from the image. Beats the shared masonry cover / 192×250
