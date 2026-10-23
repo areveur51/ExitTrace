@@ -11,12 +11,15 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Added
 
-- Fact tag Federal investigation (`/tags/federal-investigation`). It records a stored report of a federal investigation. It is not an identity filter.
 - Fact tag Fraud (`/tags/fraud`). It records a stored fraud charge, plea, conviction, indictment or official fraud finding. It is not an identity filter and is separate from the Operations category `/group-operations/fraud`.
 
 ### Changed
 
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
+
+### Removed
+
+- Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
 ## [1.2.27] - 2026-10-21
 

@@ -66,6 +66,7 @@ import {
   homeBody,
   layout,
   listHead,
+  tagsIndexBody,
   listSection,
   operationDetail,
   operationList,
@@ -87,7 +88,7 @@ import {
   parsePage,
 } from "./lib/paginate.mjs";
 import { parseAgeBand } from "./lib/age.mjs";
-import { attributeTagByPath, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
+import { ATTRIBUTE_TAGS, attributeTagByPath, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
   fillEmptyFromGrokipedia,
@@ -335,8 +336,8 @@ function sendHtml(res, html) {
   send(res, 200, html, { "Content-Type": "text/html; charset=utf-8" });
 }
 
-function sendRedirect(res, location) {
-  send(res, 302, "", { Location: location });
+function sendRedirect(res, location, status = 302) {
+  send(res, status, "", { Location: location });
 }
 
 async function readBody(req, limit = 32_000) {
@@ -901,6 +902,28 @@ async function handle(req, res) {
   if (p === "/tags/ukraine-aid-flags") {
     sendRedirect(res, `/tags/ukraine-aid${url.search}`);
     return;
+  }
+
+  // Retired fact tag. Final outcomes stay on the other fact lists.
+  if (p === "/tags/federal-investigation") {
+    sendRedirect(res, "/tags", 301);
+    return;
+  }
+
+  if (p === "/tags") {
+    return sendHtml(
+      res,
+      layout({
+        title: "Tags",
+        path: "/tags",
+        heading: "Tags",
+        query: "Tags",
+        crumbLabel: "Tags",
+        countLabel: `${ATTRIBUTE_TAGS.length} tags`,
+        lede: "Fact tags. Each list is the people who already store that fact.",
+        body: tagsIndexBody(),
+      }),
+    );
   }
 
   const factTag = attributeTagByPath(p);

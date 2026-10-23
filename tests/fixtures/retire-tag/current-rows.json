@@ -1,0 +1,14 @@
+[
+  {
+    "id": "fictional-quinn-example",
+    "tags": ["official", "fraud", "kept-unknown"]
+  },
+  {
+    "id": "fictional-noop-card",
+    "tags": ["fraud", "official"]
+  },
+  {
+    "id": "fictional-already-prior",
+    "tags": ["fraud", "federal_investigation"]
+  }
+]

@@ -425,6 +425,14 @@ function keymapTagSection(activePath) {
   );
 }
 
+/** Fact-tag index. Same rows as the catalog Tags menu. */
+export function tagsIndexBody() {
+  const chips = ATTRIBUTE_TAGS.map(
+    (tag) => `<a class="keychip keymap-tag" href="${esc(tag.path)}">${esc(tag.nav)}</a>`,
+  ).join("");
+  return `<nav class="keymap-group tag-index" aria-label="Fact tags"><p class="keymap-section">Tags</p>${chips}</nav>`;
+}
+
 export function keymapFooter(activePath) {
   const chips = keymapItems(activePath)
     .map((k, i) => keymapChip(k, activePath, { order: i }))
