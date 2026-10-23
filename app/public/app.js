@@ -100,6 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const PAGE_SIZES = [17, 34, 51];
   const PAGE_SIZE_KEY = "exittrace-page-size";
   const pageSizeButtons = document.querySelectorAll("[data-page-size-set]");
+  const pageSizeSelects = document.querySelectorAll("[data-page-size-select]");
 
   function applyPageSize(raw) {
     const n = Number.parseInt(String(raw ?? ""), 10);
@@ -113,6 +114,9 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const btn of pageSizeButtons) {
       btn.setAttribute("aria-pressed", Number(btn.getAttribute("data-page-size-set")) === size ? "true" : "false");
     }
+    for (const sel of pageSizeSelects) {
+      sel.value = String(size);
+    }
     const url = new URL(window.location.href);
     url.searchParams.delete("page");
     window.location.assign(`${url.pathname}${url.search}${url.hash}`);
@@ -120,6 +124,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   for (const btn of pageSizeButtons) {
     btn.addEventListener("click", () => applyPageSize(btn.getAttribute("data-page-size-set")));
+  }
+  for (const sel of pageSizeSelects) {
+    sel.addEventListener("change", () => applyPageSize(sel.value));
   }
 
   const RESULTS_VIEW_KEY = "exittrace-results-view";

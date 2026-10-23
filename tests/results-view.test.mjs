@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
+import { CATEGORIES } from "../app/lib/categories.mjs";
 import {
   CARD_SIZE_STORAGE_KEY,
   CARD_SIZES,
@@ -13,12 +14,16 @@ import {
   layout,
   listSection,
   operationRow,
+  pageSizeSelector,
+  pager,
   peopleList,
   resultsViewControl,
   searchBody,
 } from "../app/lib/html.mjs";
+import { PAGE_SIZES } from "../app/lib/paginate.mjs";
 import { handle } from "../app/server.mjs";
 import { loadSeedFile, setMemory } from "../app/lib/store.mjs";
+import { ATTRIBUTE_TAGS } from "../app/lib/tags.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -81,7 +86,8 @@ test("results view control is list/cards plus small/medium/large", () => {
   assert.match(html, /aria-label="Small"/);
   assert.match(html, /aria-label="Medium"/);
   assert.match(html, /aria-label="Large"/);
-  assert.match(html, /class="vh" id="card-size-label"/);
+  assert.match(html, /class="card-size-label" id="card-size-label"/);
+  assert.match(html, />Card size</);
   assert.doesNotMatch(html, />Small</);
   assert.doesNotMatch(html, />Medium</);
   assert.doesNotMatch(html, />Large</);
@@ -108,8 +114,20 @@ test("toolbar sits once above a result list and stays off empty or rank markup",
   assert.ok(section.indexOf("data-results-toolbar") < section.indexOf("class='pager'"));
   const empty = listSection("<p class='empty'>No rows on this page.</p>", "", "");
   assert.equal(countToolbar(empty), 0);
+  const emptyPaged = listSection(
+    "<p class='empty'>No rows on this page.</p>",
+    "<nav class='pager'></nav>",
+    "",
+  );
+  assert.equal(countToolbar(emptyPaged), 1);
   const rank = listSection("<table class='dash-table'><tr><td>Reason</td></tr></table>", "", "");
   assert.equal(countToolbar(rank), 0);
+  const rankPaged = listSection(
+    "<div class='dash-hud dash-rank-page'><table class='dash-table'><tr><td>Reason</td></tr></table></div>",
+    "<nav class='pager'></nav>",
+    "",
+  );
+  assert.equal(countToolbar(rankPaged), 0);
   const prompt = listSection(searchBody([], ""), "", "");
   assert.equal(countToolbar(prompt), 0);
 });
@@ -156,7 +174,7 @@ test("catalog, search, and people lists include one toolbar; home, detail, and r
   for (const pathname of surfaces) {
     const res = await requestPage(pathname);
     assert.equal(res.status, 200, pathname);
-    const hasList = res.body.includes("tui-list");
+    const hasList = res.body.includes("tui-list") || res.body.includes("No rows on this page");
     assert.equal(countToolbar(res.body), hasList ? 1 : 0, pathname);
     if (hasList) {
       sawList.push(pathname);
@@ -184,6 +202,7 @@ test("app.js persists results view and card size without a reload", () => {
   assert.match(js, /exittrace-card-size/);
   assert.match(js, /data-results-view-set/);
   assert.match(js, /data-card-size-set/);
+  assert.match(js, /data-page-size-select/);
   assert.match(js, /localStorage\.setItem/);
   assert.match(js, /applyResultThumbSizes/);
   assert.match(js, /picture\.thumb-src source\[srcset\]/);
@@ -206,6 +225,9 @@ test("app.js persists results view and card size without a reload", () => {
   assert.match(css, /\.card-size \{\s*display:\s*none/);
   assert.match(css, /--result-card-min:\s*8\.25rem/);
   assert.match(css, /--result-card-min:\s*16rem/);
+  assert.match(css, /\.results-controls/);
+  assert.match(css, /@media \(min-width: 820px\)/);
+  assert.match(css, /@media \(min-width: 1440px\)/);
 });
 
 test("operation cards share the result portrait slot and the sharp srcset", () => {
@@ -225,4 +247,154 @@ test("operation cards share the result portrait slot and the sharp srcset", () =
   assert.match(html, /\/media\/thumbs\/agencies\/fbi\.hero\.webp\?p=7 960w/);
   assert.doesNotMatch(html, /fbi\.card/);
   assert.doesNotMatch(html, /person-card/);
+});
+
+test("combined results-controls bar is view, card size, pager, then rows", () => {
+  const rows = [
+    {
+      id: "ada",
+      name: "Ada Lovelace",
+      category: "firing",
+      event_date: "2024-01-02",
+      net_worth_usd: null,
+      photo: "",
+    },
+  ];
+  const list = peopleList(rows);
+  const nav = pager(
+    { page: 2, totalPages: 15, total: 289, hasPrev: true, hasNext: true, pageSize: 34 },
+    { basePath: "/firings", pageSizes: PAGE_SIZES },
+  );
+  const section = listSection(list, nav, `<p class="list-head">Firings</p>`);
+  assert.equal(countToolbar(section), 1);
+  assert.match(section, /class="results-controls results-view"/);
+  assert.match(section, /results-controls-row--view/);
+  assert.match(section, /results-controls-row--page/);
+  const iToolbar = section.indexOf("data-results-toolbar");
+  const iViewRow = section.indexOf("results-controls-row--view");
+  const iView = section.indexOf("data-results-view-set");
+  const iCard = section.indexOf("data-card-size-set");
+  const iPageRow = section.indexOf("results-controls-row--page");
+  const iPage = section.indexOf("pager-status-page");
+  const iRows = section.indexOf("data-page-size-set");
+  const iList = section.indexOf("people-list");
+  assert.ok(iToolbar < iViewRow);
+  assert.ok(iViewRow < iView);
+  assert.ok(iView < iCard);
+  assert.ok(iCard < iPageRow);
+  assert.ok(iPageRow < iPage);
+  assert.ok(iPage < iRows);
+  assert.ok(iRows < iList);
+  assert.match(section, /Page 2 of 15/);
+  assert.match(section, /rel="prev"/);
+  assert.match(section, /rel="next"/);
+  assert.match(section, /data-key="ArrowLeft"/);
+  assert.match(section, /data-key="ArrowRight"/);
+  assert.match(section, /aria-current="page"/);
+  assert.match(section, /data-page-size-select/);
+  assert.match(section, /data-page-size-set="17"/);
+  assert.match(section, /data-page-size-set="34"/);
+  assert.match(section, /data-page-size-set="51"/);
+  assert.equal((section.match(/data-results-toolbar/g) || []).length, 1);
+  const afterList = section.slice(iList);
+  assert.match(afterList, /class="pager"/);
+});
+
+test("rows selector keeps 17/34/51 buttons and a wide-screen select", () => {
+  const html = pageSizeSelector(34);
+  assert.match(html, /data-page-size-set="17"/);
+  assert.match(html, /data-page-size-set="34" aria-pressed="true"/);
+  assert.match(html, /data-page-size-set="51"/);
+  assert.match(html, /data-page-size-select/);
+  assert.match(html, /<option value="34" selected>/);
+  assert.match(html, /class="vh">Rows</);
+  assert.match(html, /Rows per page/);
+});
+
+test("every catalog list route renders the combined bar; home and detail do not", async () => {
+  setMemory(goldSeed());
+  const listRoutes = [
+    ...CATEGORIES.filter((c) => c.path).map((c) => c.path),
+    ...ATTRIBUTE_TAGS.map((t) => t.path),
+    "/search?q=comey",
+    "/dashboard/missing",
+    "/dashboard/age",
+  ];
+  const sawList = [];
+  for (const pathname of listRoutes) {
+    const res = await requestPage(pathname);
+    assert.equal(res.status, 200, pathname);
+    const hasList = res.body.includes("tui-list") || res.body.includes("No rows on this page");
+    assert.equal(countToolbar(res.body), 1, pathname);
+    assert.ok(hasList, pathname);
+    sawList.push(pathname);
+    const toolbarAt = res.body.indexOf("data-results-toolbar");
+    const listAt = res.body.includes("tui-list")
+      ? res.body.indexOf("tui-list")
+      : res.body.indexOf("No rows on this page");
+    assert.ok(toolbarAt >= 0 && toolbarAt < listAt, pathname);
+    assert.match(res.body, /class="results-controls/, pathname);
+    assert.match(res.body, /results-controls-row--view/, pathname);
+    assert.match(res.body, /data-results-view-set="list"/, pathname);
+    assert.match(res.body, /data-card-size-set="s"/, pathname);
+    assert.match(res.body, /data-card-size-set="m"/, pathname);
+    assert.match(res.body, /data-card-size-set="l"/, pathname);
+    assert.match(res.body, /exittrace-results-view/, pathname);
+    assert.match(res.body, /exittrace-card-size/, pathname);
+  }
+  const enumerated = [
+    "/firings",
+    "/resignations",
+    "/government",
+    "/arrests",
+    "/indictments",
+    "/indictments/civilians",
+    "/indictments/non-civilians",
+    "/deaths",
+    "/deaths/celebrities",
+    "/deaths/officials",
+    "/deaths/ceos",
+    "/deaths/unconfirmed",
+    "/group-operations",
+    "/group-operations/missing-kids",
+    "/group-operations/human-smuggling",
+    "/group-operations/fugitives",
+    "/group-operations/cybercrime",
+    "/group-operations/drug-trafficking",
+    "/group-operations/violent-crime",
+    "/group-operations/fraud",
+    "/unsorted",
+    "/dog-comms",
+    "/eagle-comms",
+    "/ronald-comms",
+    "/shot-comms",
+    "/boot-comms",
+    "/red-folder-comms",
+    "/corona-comms",
+    "/central-casting",
+    "/search?q=comey",
+    "/dashboard/missing",
+    "/dashboard/age",
+    ...ATTRIBUTE_TAGS.map((t) => t.path),
+  ];
+  for (const pathname of enumerated) {
+    assert.ok(listRoutes.includes(pathname), `enumerated ${pathname}`);
+  }
+  for (const pathname of enumerated) {
+    assert.ok(sawList.includes(pathname), pathname);
+  }
+  const without = [
+    "/",
+    "/people/james-comey",
+    "/dashboard",
+    "/dashboard/reason",
+    "/add",
+    "/search",
+  ];
+  for (const pathname of without) {
+    const res = await requestPage(pathname);
+    assert.equal(res.status, 200, pathname);
+    assert.equal(countToolbar(res.body), 0, pathname);
+    assert.doesNotMatch(res.body, /class="results-controls/, pathname);
+  }
 });

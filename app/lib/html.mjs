@@ -300,7 +300,7 @@ function resultsViewBootScript() {
 }
 
 /** Shared list ↔ cards control. Card size is in the markup and shown only in card view. */
-export function resultsViewControl() {
+export function resultsViewControl({ pagerHtml = "" } = {}) {
   const viewBtns = RESULTS_VIEWS.map((id) => {
     const on = id === DEFAULT_RESULTS_VIEW;
     const label = id === "cards" ? "Cards" : "List";
@@ -315,22 +315,36 @@ export function resultsViewControl() {
       on ? "true" : "false"
     }" aria-label="${label}">${uiIcon(`card-${id}`)}</button>`;
   }).join("");
-  return `<div class="results-view" data-results-toolbar>
-    <div class="results-view-mode">
-      <span class="results-view-label" id="results-view-label">View</span>
-      <div class="results-view-btns" role="group" aria-labelledby="results-view-label">${viewBtns}</div>
+  const pagingRow = pagerHtml
+    ? `<div class="results-controls-row results-controls-row--page">${pagerHtml}</div>`
+    : "";
+  return `<div class="results-controls results-view" data-results-toolbar>
+    <div class="results-controls-row results-controls-row--view">
+      <div class="results-view-mode">
+        <span class="results-view-label" id="results-view-label">View</span>
+        <div class="results-view-btns" role="group" aria-labelledby="results-view-label">${viewBtns}</div>
+      </div>
+      <div class="card-size">
+        <span class="card-size-label" id="card-size-label">Card size</span>
+        <div class="card-size-btns" role="group" aria-labelledby="card-size-label">${sizeBtns}</div>
+      </div>
     </div>
-    <div class="card-size">
-      <span class="vh" id="card-size-label">Card size</span>
-      <div class="card-size-btns" role="group" aria-labelledby="card-size-label">${sizeBtns}</div>
-    </div>
+    ${pagingRow}
   </div>`;
 }
 
 export function pageSizeSelector(activeSize = PAGE_SIZE) {
   const current = PAGE_SIZES.includes(Number(activeSize)) ? Number(activeSize) : PAGE_SIZE;
+  const options = PAGE_SIZES.map((n) => {
+    const on = n === current;
+    return `<option value="${n}"${on ? " selected" : ""}>${n}</option>`;
+  }).join("");
   return `<nav class="page-size" aria-label="Rows per page">
-    <span class="page-size-label" id="page-size-label">${uiIcon("rows")}<span class="vh">Rows</span></span>
+    <span class="page-size-label" id="page-size-label">${uiIcon("rows")}<span class="page-size-label-short">Rows</span><span class="page-size-label-full">Rows per page</span><span class="vh">Rows</span></span>
+    <label class="page-size-select-wrap">
+      <span class="vh">Rows per page</span>
+      <select class="page-size-select" data-page-size-select aria-label="${current} rows per page">${options}</select>
+    </label>
     <div class="page-size-btns" role="group" aria-labelledby="page-size-label">
       ${PAGE_SIZES.map((n) => {
         const on = n === current;
@@ -2128,7 +2142,8 @@ export function dogList(rows) {
 
 export function pager(meta, { basePath, noun = "rows", pageSizes } = {}) {
   const { page, totalPages, total, hasPrev, hasNext } = meta;
-  const status = `Page ${page} of ${totalPages} · ${total} ${noun}`;
+  const statusPage = `Page ${page} of ${totalPages}`;
+  const statusCount = ` · ${total} ${noun}`;
   const prev = hasPrev
     ? `<a class="pager-btn keychip" href="${esc(pageHref(basePath, page - 1))}" rel="prev" data-key="ArrowLeft" aria-label="Previous page">${uiIcon("prev")}</a>`
     : `<span class="pager-btn keychip is-disabled" aria-disabled="true" aria-label="Previous page">${uiIcon("prev")}</span>`;
@@ -2153,11 +2168,14 @@ export function pager(meta, { basePath, noun = "rows", pageSizes } = {}) {
   }
   const sizeNav = pageSizes ? pageSizeSelector(meta.pageSize) : "";
   return `<nav class="pager" aria-label="Pagination">
-    <p class="pager-status">${esc(status)}</p>
-    <div class="pager-controls">
-      ${prev}
-      <ol class="pager-pages">${items.join("")}</ol>
-      ${next}
+    <div class="pager-main">
+      <p class="pager-results-label">Results</p>
+      <p class="pager-status"><span class="pager-status-page">${esc(statusPage)}</span><span class="pager-count">${esc(statusCount)}</span></p>
+      <div class="pager-controls">
+        ${prev}
+        <ol class="pager-pages">${items.join("")}</ol>
+        ${next}
+      </div>
     </div>
     ${sizeNav}
   </nav>`;
@@ -2167,9 +2185,19 @@ function isResultList(html) {
   return typeof html === "string" && html.includes("tui-list");
 }
 
+function wantsResultsControls(listHtml, pagerHtml) {
+  if (isResultList(listHtml)) return true;
+  if (!pagerHtml || typeof listHtml !== "string") return false;
+  if (listHtml.includes("dash-table") || listHtml.includes("dash-rank-page")) return false;
+  return listHtml.includes("No rows on this page");
+}
+
 export function listSection(listHtml, pagerHtml, headHtml = "") {
-  const toolbar = isResultList(listHtml) ? resultsViewControl() : "";
-  return `${headHtml}${toolbar}${pagerHtml}${listHtml}${pagerHtml}`;
+  if (!wantsResultsControls(listHtml, pagerHtml)) {
+    return `${headHtml}${pagerHtml}${listHtml}${pagerHtml}`;
+  }
+  const toolbar = resultsViewControl({ pagerHtml: pagerHtml || "" });
+  return `${headHtml}${toolbar}${listHtml}${pagerHtml}`;
 }
 
 export function dogRow(row) {
