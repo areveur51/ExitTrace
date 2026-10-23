@@ -3103,7 +3103,10 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
   display: block;
 }
 .results-controls .pager-status {
-  display: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0;
 }
 .results-controls .page-size-label .ui-icon {
   display: none;
@@ -3336,14 +3339,14 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
   .results-controls .pager-results-label,
   .results-controls .page-size-label-full,
   .results-controls .pager-pages,
-  .results-controls .pager-count,
   .results-controls .page-size-btns {
     display: none;
   }
   .results-controls .pager-status {
     display: flex;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0;
   }
   .results-controls .page-size-label-short {
     display: inline;

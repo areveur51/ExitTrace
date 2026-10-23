@@ -2192,12 +2192,47 @@ function wantsResultsControls(listHtml, pagerHtml) {
   return listHtml.includes("No rows on this page");
 }
 
+function sliceFirstDiv(html, className) {
+  const source = String(html || "");
+  const marker = `<div class="${className}">`;
+  const start = source.indexOf(marker);
+  if (start < 0) return "";
+  const re = /<\/?div\b[^>]*>/gi;
+  re.lastIndex = start;
+  let depth = 0;
+  let match;
+  while ((match = re.exec(source))) {
+    if (match[0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, match.index + match[0].length);
+    } else {
+      depth += 1;
+    }
+  }
+  return "";
+}
+
+function pagerTotalPages(pagerHtml) {
+  const match = String(pagerHtml || "").match(/Page \d+ of (\d+)/);
+  if (!match) return 1;
+  const total = Number(match[1]);
+  return Number.isFinite(total) && total > 0 ? total : 1;
+}
+
+/** Prev / page numbers / next only. Reuses the controls block pager() already built. */
+function compactBottomPager(listHtml, pagerHtml) {
+  if (!isResultList(listHtml) || pagerTotalPages(pagerHtml) <= 1) return "";
+  const controls = sliceFirstDiv(pagerHtml, "pager-controls");
+  if (!controls) return "";
+  return `<nav class="pager pager--bottom" aria-label="Pagination (bottom)">${controls}</nav>`;
+}
+
 export function listSection(listHtml, pagerHtml, headHtml = "") {
   if (!wantsResultsControls(listHtml, pagerHtml)) {
     return `${headHtml}${pagerHtml}${listHtml}${pagerHtml}`;
   }
   const toolbar = resultsViewControl({ pagerHtml: pagerHtml || "" });
-  return `${headHtml}${toolbar}${listHtml}${pagerHtml}`;
+  return `${headHtml}${toolbar}${listHtml}${compactBottomPager(listHtml, pagerHtml)}`;
 }
 
 export function dogRow(row) {

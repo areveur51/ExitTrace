@@ -304,8 +304,17 @@ test("combined results-controls bar is view, card size, pager, then rows", () =>
   assert.match(section, /data-page-size-set="34"/);
   assert.match(section, /data-page-size-set="51"/);
   assert.equal((section.match(/data-results-toolbar/g) || []).length, 1);
+  assert.equal((section.match(/data-page-size-select/g) || []).length, 1);
+  assert.equal((section.match(/<nav class="page-size"/g) || []).length, 1);
+  assert.equal((section.match(/<nav class="pager"/g) || []).length, 1);
+  assert.match(section, /· 289 rows/);
   const afterList = section.slice(iList);
-  assert.match(afterList, /class="pager"/);
+  assert.match(afterList, /class="pager pager--bottom"/);
+  assert.match(afterList, /aria-label="Pagination \(bottom\)"/);
+  assert.doesNotMatch(afterList, /pager-status/);
+  assert.doesNotMatch(afterList, /pager-count/);
+  assert.doesNotMatch(afterList, /data-page-size/);
+  assert.doesNotMatch(afterList, /Rows per page/);
 });
 
 test("rows selector keeps 17/34/51 buttons and a wide-screen select", () => {
@@ -405,4 +414,263 @@ test("every catalog list route renders the combined bar; home and detail do not"
     assert.equal(countToolbar(res.body), 0, pathname);
     assert.doesNotMatch(res.body, /class="results-controls/, pathname);
   }
+});
+
+function sliceDivContaining(html, marker) {
+  const at = html.indexOf(marker);
+  if (at < 0) return { start: -1, end: -1, html: "" };
+  const start = html.lastIndexOf("<div", at);
+  const re = /<\/?div\b[^>]*>/gi;
+  re.lastIndex = start;
+  let depth = 0;
+  let match;
+  while ((match = re.exec(html))) {
+    if (match[0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0) {
+        const end = match.index + match[0].length;
+        return { start, end, html: html.slice(start, end) };
+      }
+    } else {
+      depth += 1;
+    }
+  }
+  return { start, end: -1, html: "" };
+}
+
+function sliceNavAt(html, start) {
+  const re = /<\/?nav\b[^>]*>/gi;
+  re.lastIndex = start;
+  let depth = 0;
+  let match;
+  while ((match = re.exec(html))) {
+    if (match[0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0) return html.slice(start, match.index + match[0].length);
+    } else {
+      depth += 1;
+    }
+  }
+  return "";
+}
+
+function barListRoutes() {
+  return [
+    ...CATEGORIES.filter((c) => c.path).map((c) => c.path),
+    ...ATTRIBUTE_TAGS.map((t) => t.path),
+    "/search?q=comey",
+    "/dashboard/missing",
+    "/dashboard/age",
+  ];
+}
+
+function sampleRows(n) {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `person-${i + 1}`,
+    name: `Person ${i + 1}`,
+    category: "firing",
+    event_date: "2024-01-02",
+    net_worth_usd: null,
+    photo: "",
+  }));
+}
+
+function pagingMeta(page, totalPages, total) {
+  return {
+    page,
+    totalPages,
+    total,
+    hasPrev: page > 1,
+    hasNext: page < totalPages,
+    pageSize: 17,
+  };
+}
+
+test("bar pages keep one rows control and a bottom nav only for multi-page lists with rows", () => {
+  const head = `<p class="list-head">Firings</p>`;
+  const emptyNav = pager(pagingMeta(1, 1, 0), {
+    basePath: "/indictments",
+    noun: "rows",
+    pageSizes: PAGE_SIZES,
+  });
+  const empty = listSection(`<p class="empty">No rows on this page.</p>`, emptyNav, head);
+  assert.equal(countToolbar(empty), 1);
+  assert.equal((empty.match(/<nav class="pager"/g) || []).length, 1);
+  assert.equal((empty.match(/data-page-size-select/g) || []).length, 1);
+  assert.equal((empty.match(/pager--bottom/g) || []).length, 0);
+  assert.match(empty, /Page 1 of 1/);
+  assert.match(empty, /· 0 rows/);
+  const emptyBar = sliceDivContaining(empty, "data-results-toolbar");
+  assert.match(emptyBar.html, /pager-status/);
+  assert.equal(empty.slice(emptyBar.end).includes("pager-status"), false);
+
+  const emptyMulti = listSection(
+    `<p class="empty">No rows on this page.</p>`,
+    pager(pagingMeta(1, 4, 0), { basePath: "/indictments", pageSizes: PAGE_SIZES }),
+    head,
+  );
+  assert.equal((emptyMulti.match(/pager--bottom/g) || []).length, 0);
+  assert.equal((emptyMulti.match(/data-page-size-select/g) || []).length, 1);
+
+  const single = listSection(
+    peopleList(sampleRows(1)),
+    pager(pagingMeta(1, 1, 4), { basePath: "/firings", noun: "rows", pageSizes: PAGE_SIZES }),
+    head,
+  );
+  assert.equal(countToolbar(single), 1);
+  assert.match(single, /tui-list/);
+  assert.match(single, /Page 1 of 1/);
+  assert.match(single, /· 4 rows/);
+  assert.equal((single.match(/<nav class="pager"/g) || []).length, 1);
+  assert.equal((single.match(/<nav class="page-size"/g) || []).length, 1);
+  assert.equal((single.match(/data-page-size-select/g) || []).length, 1);
+  assert.equal((single.match(/pager--bottom/g) || []).length, 0);
+  const singleBar = sliceDivContaining(single, "data-results-toolbar");
+  assert.equal((singleBar.html.match(/data-page-size-select/g) || []).length, 1);
+  assert.equal(single.slice(singleBar.end).includes("pager-status"), false);
+
+  const multi = listSection(
+    peopleList(sampleRows(2)),
+    pager(pagingMeta(2, 3, 36), { basePath: "/deaths", noun: "rows", pageSizes: PAGE_SIZES }),
+    head,
+  );
+  assert.equal(countToolbar(multi), 1);
+  assert.equal((multi.match(/<nav class="pager"/g) || []).length, 1);
+  assert.equal((multi.match(/<nav class="pager pager--bottom"/g) || []).length, 1);
+  assert.equal((multi.match(/data-page-size-select/g) || []).length, 1);
+  assert.equal((multi.match(/class="pager-status"/g) || []).length, 1);
+  assert.match(multi, /Page 2 of 3/);
+  assert.match(multi, /· 36 rows/);
+  const multiBar = sliceDivContaining(multi, "data-results-toolbar");
+  const listAt = multi.indexOf("tui-list");
+  const bottomAt = multi.indexOf(`<nav class="pager pager--bottom"`);
+  assert.ok(multiBar.end < listAt);
+  assert.ok(bottomAt > listAt);
+  assert.equal((multiBar.html.match(/<nav class="pager"/g) || []).length, 1);
+  assert.equal((multiBar.html.match(/data-page-size-select/g) || []).length, 1);
+  assert.match(multiBar.html, /pager-count/);
+  const bottom = sliceNavAt(multi, bottomAt);
+  assert.match(bottom, /aria-label="Pagination \(bottom\)"/);
+  assert.match(bottom, /class="pager-controls"/);
+  assert.match(bottom, /class="pager-pages"/);
+  assert.match(bottom, /aria-label="Previous page"/);
+  assert.match(bottom, /aria-label="Next page"/);
+  assert.match(bottom, /rel="prev"/);
+  assert.match(bottom, /rel="next"/);
+  assert.doesNotMatch(bottom, /pager-status/);
+  assert.doesNotMatch(bottom, /pager-count/);
+  assert.doesNotMatch(bottom, /pager-results-label/);
+  assert.doesNotMatch(bottom, /data-page-size/);
+  assert.doesNotMatch(bottom, /page-size/);
+  assert.doesNotMatch(bottom, /Rows per page/);
+  const outside = multi.slice(0, multiBar.start) + multi.slice(multiBar.end, bottomAt) + multi.slice(bottomAt + bottom.length);
+  assert.equal((outside.match(/pager-status/g) || []).length, 0);
+  assert.equal((outside.match(/data-page-size-select/g) || []).length, 0);
+});
+
+test("rank tables keep the standalone pager when the results bar is absent", () => {
+  const nav = pager(pagingMeta(1, 2, 20), {
+    basePath: "/dashboard/reason",
+    noun: "rows",
+    pageSizes: PAGE_SIZES,
+  });
+  const rank = listSection(
+    `<div class="dash-hud dash-rank-page"><table class="dash-table"><tr><td>Reason</td></tr></table></div>`,
+    nav,
+    `<p class="list-head">Reason</p>`,
+  );
+  assert.equal(countToolbar(rank), 0);
+  assert.doesNotMatch(rank, /results-controls/);
+  assert.equal((rank.match(/<nav class="pager"/g) || []).length, 2);
+  assert.equal((rank.match(/class="pager-status"/g) || []).length, 2);
+  assert.equal((rank.match(/data-page-size-select/g) || []).length, 2);
+  assert.equal((rank.match(/<nav class="page-size"/g) || []).length, 2);
+  assert.equal((rank.match(/pager--bottom/g) || []).length, 0);
+  const listAt = rank.indexOf("dash-table");
+  assert.ok(rank.indexOf("pager-status") < listAt);
+  assert.ok(rank.indexOf("pager-status", listAt) > listAt);
+});
+
+test("row count stays visible in the results bar at every width", () => {
+  const css = fs.readFileSync(path.join(ROOT, "app", "public", "styles.css"), "utf8");
+  assert.match(css, /\.results-controls \.pager-status \{[^}]*display:\s*flex/);
+  assert.doesNotMatch(css, /\.results-controls \.pager-status \{[^}]*display:\s*none/);
+  assert.doesNotMatch(css, /\.pager-count\b[^}]*display:\s*none/);
+});
+
+test("every results-bar list renders the pager and rows control once", async () => {
+  setMemory(goldSeed());
+  const routes = barListRoutes();
+  let sawEmpty = false;
+  let sawSingle = false;
+  let sawMulti = false;
+  for (const pathname of routes) {
+    const res = await requestPage(pathname);
+    assert.equal(res.status, 200, pathname);
+    assert.equal(countToolbar(res.body), 1, pathname);
+    const bar = sliceDivContaining(res.body, "data-results-toolbar");
+    assert.ok(bar.end > bar.start, pathname);
+    assert.equal((bar.html.match(/<nav class="pager"/g) || []).length, 1, pathname);
+    assert.equal((bar.html.match(/pager--bottom/g) || []).length, 0, pathname);
+    assert.match(bar.html, /aria-label="Pagination"/, pathname);
+    assert.match(bar.html, /class="pager-status"/, pathname);
+    assert.match(bar.html, /class="pager-count"/, pathname);
+    assert.match(bar.html, /Page \d+ of \d+/, pathname);
+    assert.match(bar.html, /· \d+ (?:rows|posts|results)/, pathname);
+
+    const outside = res.body.slice(0, bar.start) + res.body.slice(bar.end);
+    assert.equal((outside.match(/pager-status/g) || []).length, 0, pathname);
+    assert.equal((outside.match(/<nav class="pager"/g) || []).length, 0, pathname);
+    assert.equal((outside.match(/data-page-size-select/g) || []).length, 0, pathname);
+    assert.equal((outside.match(/<nav class="page-size"/g) || []).length, 0, pathname);
+
+    const selects = res.body.match(/data-page-size-select/g) || [];
+    const sizeNavs = res.body.match(/<nav class="page-size"/g) || [];
+    if (pathname.startsWith("/search")) {
+      assert.equal(selects.length, 0, pathname);
+      assert.equal(sizeNavs.length, 0, pathname);
+    } else {
+      assert.equal(selects.length, 1, pathname);
+      assert.equal(sizeNavs.length, 1, pathname);
+      assert.equal((bar.html.match(/data-page-size-select/g) || []).length, 1, pathname);
+      assert.equal((bar.html.match(/<nav class="page-size"/g) || []).length, 1, pathname);
+    }
+
+    const totalPages = Number((bar.html.match(/Page \d+ of (\d+)/) || [])[1]);
+    assert.ok(totalPages >= 1, pathname);
+    const hasRows = res.body.includes("tui-list");
+    const bottoms = res.body.match(/<nav class="pager pager--bottom"/g) || [];
+    const wantBottom = hasRows && totalPages > 1;
+    assert.equal(bottoms.length, wantBottom ? 1 : 0, pathname);
+    if (!hasRows) sawEmpty = true;
+    else if (totalPages === 1) sawSingle = true;
+    else sawMulti = true;
+    if (!wantBottom) continue;
+    const bottomAt = res.body.indexOf(`<nav class="pager pager--bottom"`);
+    const listAt = res.body.indexOf("tui-list");
+    assert.ok(bottomAt > bar.end, pathname);
+    assert.ok(bottomAt > listAt, pathname);
+    const bottom = sliceNavAt(res.body, bottomAt);
+    assert.match(bottom, /aria-label="Pagination \(bottom\)"/, pathname);
+    assert.match(bottom, /pager-controls/, pathname);
+    assert.match(bottom, /pager-pages/, pathname);
+    assert.match(bottom, /aria-label="Previous page"/, pathname);
+    assert.match(bottom, /aria-label="Next page"/, pathname);
+    assert.doesNotMatch(bottom, /pager-status/, pathname);
+    assert.doesNotMatch(bottom, /pager-count/, pathname);
+    assert.doesNotMatch(bottom, /data-page-size/, pathname);
+    assert.doesNotMatch(bottom, /page-size/, pathname);
+    assert.doesNotMatch(bottom, /Rows per page/, pathname);
+  }
+  assert.equal(sawEmpty, true);
+  assert.equal(sawSingle, true);
+  assert.equal(sawMulti, true);
+
+  const rank = await requestPage("/dashboard/reason");
+  assert.equal(rank.status, 200);
+  assert.equal(countToolbar(rank.body), 0);
+  assert.doesNotMatch(rank.body, /pager--bottom/);
+  assert.ok((rank.body.match(/<nav class="pager"/g) || []).length >= 2);
+  assert.ok((rank.body.match(/pager-status/g) || []).length >= 2);
+  assert.ok((rank.body.match(/data-page-size-select/g) || []).length >= 2);
 });

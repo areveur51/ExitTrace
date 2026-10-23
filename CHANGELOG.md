@@ -20,6 +20,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Fixed
 
+- List pages show the page status and the rows-per-page control once, inside the results bar. A compact previous / pages / next nav sits under the rows only when that list has more than one page.
 - The results pager keeps previous, page numbers, and next on one line at phone width.
 - A Trump nickname can also store the namer's own post and other accepted news cites as supporting sources; two official cites are still required.
 
