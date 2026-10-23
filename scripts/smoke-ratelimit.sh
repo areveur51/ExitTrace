@@ -17,10 +17,12 @@ code=$(curl -sS -o /dev/null -w "%{http_code}" "${BASE}/health")
 echo "health ${code}"
 test "$code" = "200"
 
+# One CF-Connecting-IP so the 13th search hits the per-IP search bucket.
+# Pass a different CF-Connecting-IP to simulate another client.
 echo "13x GET ${BASE}/search?q=a"
 last_code=""
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
-  last_code=$(curl -sS -o /dev/null -w "%{http_code}" "${BASE}/search?q=a")
+  last_code=$(curl -sS -o /dev/null -w "%{http_code}" -H "CF-Connecting-IP: 203.0.113.10" "${BASE}/search?q=a")
   echo "search $i -> ${last_code}"
 done
 if [[ "$last_code" != "429" ]]; then

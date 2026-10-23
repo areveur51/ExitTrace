@@ -60,7 +60,7 @@ function request(pathname, { method = "GET", headers = {} } = {}) {
     const req = {
       method,
       url: pathname,
-      headers: { host: "127.0.0.1", "x-forwarded-for": "198.51.100.10", ...headers },
+      headers: { host: "127.0.0.1", "cf-connecting-ip": "198.51.100.10", ...headers },
       socket: { remoteAddress: "127.0.0.1" },
     };
     const chunks = [];

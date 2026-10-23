@@ -11,7 +11,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Added
 
-- Per-IP process-local rate limits (120/min global, 12/min `/search`, 5/min `POST /add`), a 64-character search query cap, SQL `LIMIT 200` on catalog search, and statement/request timeouts so a slow search cannot wedge the pool.
+- Per-IP process-local rate limits keyed by CF-Connecting-IP then rightmost X-Forwarded-For after TRUSTED_PROXY_HOPS (120/min global, 12/min `/search`, 5/min `POST /add`), a 64-character search query cap, SQL `LIMIT 200` on catalog search, and statement/request timeouts so a slow search cannot wedge the pool.
 - Fact tag Fraud (`/tags/fraud`). It records a stored fraud charge, plea, conviction, indictment or official fraud finding. It is not an identity filter and is separate from the Operations category `/group-operations/fraud`.
 
 ### Changed

@@ -117,7 +117,7 @@ function fireSearches(port) {
   const searches = [];
   for (let i = 0; i < 5; i++) {
     searches.push(
-      get(port, "/search?q=a", { "x-forwarded-for": `203.0.113.${20 + i}` }),
+      get(port, "/search?q=a", { "cf-connecting-ip": `203.0.113.${20 + i}` }),
     );
   }
   return searches;
@@ -144,7 +144,7 @@ test("GET / stays under 1000ms while 5 searches occupy the pool", { timeout: 60_
     resetCatalogCacheForTests();
     const beforeNonIlike = pool.stats.nonIlikeQueries;
     const t0 = Date.now();
-    const home = await get(port, "/", { "x-forwarded-for": "203.0.113.99" });
+    const home = await get(port, "/", { "cf-connecting-ip": "203.0.113.99" });
     const homeMs = Date.now() - t0;
     t.diagnostic(`gated GET / completed in ${homeMs}ms while 5 searches were in flight`);
     console.log(`[search-concurrency] gated GET / ${homeMs}ms`);
@@ -195,7 +195,7 @@ test("CONTROL: GET / is >= 1000ms when the search gate fills the whole pool", { 
     resetCatalogCacheForTests();
     const beforeNonIlike = pool.stats.nonIlikeQueries;
     const t0 = Date.now();
-    const home = await get(port, "/", { "x-forwarded-for": "203.0.113.99" });
+    const home = await get(port, "/", { "cf-connecting-ip": "203.0.113.99" });
     const homeMs = Date.now() - t0;
     t.diagnostic(`control GET / completed in ${homeMs}ms while 5 searches were in flight`);
     console.log(`[search-concurrency] control GET / ${homeMs}ms`);

@@ -5,6 +5,7 @@ import {
   createRateLimiter,
   isExemptPath,
   resetRateLimiter,
+  trustedProxyHops,
 } from "../app/lib/rate-limit.mjs";
 import { handle, resetRateLimiter as resetServerLimiter } from "../app/server.mjs";
 
@@ -13,6 +14,7 @@ const PREV = {
   ET_RL_SEARCH: process.env.ET_RL_SEARCH,
   ET_RL_ADD: process.env.ET_RL_ADD,
   ET_RL_WINDOW_MS: process.env.ET_RL_WINDOW_MS,
+  TRUSTED_PROXY_HOPS: process.env.TRUSTED_PROXY_HOPS,
 };
 
 function setEnv(name, value) {
@@ -31,6 +33,7 @@ function applyDefaultLimits() {
   process.env.ET_RL_SEARCH = "12";
   process.env.ET_RL_ADD = "5";
   process.env.ET_RL_WINDOW_MS = "60000";
+  delete process.env.TRUSTED_PROXY_HOPS;
   resetRateLimiter();
   resetServerLimiter();
 }
@@ -47,7 +50,7 @@ function mockReq(pathname, { method = "GET", headers = {}, ip = "203.0.113.10", 
   return {
     method,
     url: pathname,
-    headers: { host: "127.0.0.1", "x-forwarded-for": ip, ...headers },
+    headers: { host: "127.0.0.1", "cf-connecting-ip": ip, ...headers },
     socket: { remoteAddress: "127.0.0.1" },
     body,
   };
@@ -112,6 +115,8 @@ test("search 12 then 13th is 429 with Retry-After via handle()", async () => {
   assert.equal(denied.headers["ratelimit-remaining"], "0");
   assert.ok(denied.headers["ratelimit-limit"]);
   assert.ok(denied.headers["ratelimit-reset"]);
+  const other = await request("/search?q=z", { ip: "203.0.113.11" });
+  assert.equal(other.status, 200);
 });
 
 test("add 5 then 6th POST /add is 429 with RateLimit headers via handle()", async () => {
@@ -126,6 +131,8 @@ test("add 5 then 6th POST /add is 429 with RateLimit headers via handle()", asyn
   assert.equal(denied.headers["ratelimit-remaining"], "0");
   assert.ok(denied.headers["ratelimit-limit"]);
   assert.ok(denied.headers["ratelimit-reset"]);
+  const other = await request("/add", { method: "POST", body: "kind=person", ip: "203.0.113.11" });
+  assert.notEqual(other.status, 429);
 });
 
 test("health, /api/health, /styles.css, /app.js exempt after limit hit", async () => {
@@ -176,74 +183,100 @@ test("memory bound: size() never exceeds maxKeys", () => {
   assert.ok(lim.size() <= maxKeys);
 });
 
-test("clientIp leftmost public XFF, skips private, strips port/brackets, mapped, garbage fallback", () => {
+test("clientIp uses CF-Connecting-IP, then rightmost XFF by hops, never socket", () => {
   assert.equal(
     clientIp({
-      headers: { "x-forwarded-for": "8.8.8.8, 1.1.1.1" },
-      socket: { remoteAddress: "9.9.9.9" },
-    }),
-    "8.8.8.8",
-  );
-  const rfc1918a = [10, 0, 0, 1].join(".");
-  const rfc1918b = [192, 168, 1, 1].join(".");
-  const cgnat = [100, 64, 0, 1].join(".");
-  assert.equal(
-    clientIp({
-      headers: { "x-forwarded-for": `${rfc1918a}, ${rfc1918b}, 203.0.113.9` },
-      socket: { remoteAddress: "9.9.9.9" },
-    }),
+      headers: {
+        "cf-connecting-ip": "203.0.113.9",
+        "x-forwarded-for": "6.6.6.6, 8.8.8.8",
+      },
+    }, { trustedProxyHops: 1 }),
     "203.0.113.9",
   );
   assert.equal(
-    clientIp({
-      headers: { "x-forwarded-for": "127.0.0.1, ::1, 1.1.1.1" },
-      socket: { remoteAddress: "9.9.9.9" },
-    }),
-    "1.1.1.1",
-  );
-  assert.equal(
-    clientIp({
-      headers: { "x-forwarded-for": `${cgnat}, 8.8.4.4` },
-      socket: { remoteAddress: "9.9.9.9" },
-    }),
-    "8.8.4.4",
-  );
-  assert.equal(
-    clientIp({
-      headers: { "x-forwarded-for": "1.2.3.4:5678" },
-      socket: { remoteAddress: "9.9.9.9" },
-    }),
+    clientIp({ headers: { "cf-connecting-ip": "1.2.3.4:5678" } }),
     "1.2.3.4",
   );
   assert.equal(
-    clientIp({
-      headers: { "x-forwarded-for": "[2001:db8::1]:80" },
-      socket: { remoteAddress: "9.9.9.9" },
-    }),
+    clientIp({ headers: { "cf-connecting-ip": "[2001:db8::1]:80" } }),
     "2001:db8::1",
   );
   assert.equal(
-    clientIp({
-      headers: { "x-forwarded-for": "::ffff:8.8.8.8" },
-      socket: { remoteAddress: "9.9.9.9" },
-    }),
+    clientIp({ headers: { "cf-connecting-ip": "::ffff:8.8.8.8" } }),
     "8.8.8.8",
   );
   assert.equal(
-    clientIp({
-      headers: { "x-forwarded-for": "not-an-ip, 10.1.1.1, :::" },
-      socket: { remoteAddress: "9.9.9.9" },
-    }),
-    "9.9.9.9",
+    clientIp({ headers: { "cf-connecting-ip": ["203.0.113.8", "1.1.1.1"] } }),
+    "203.0.113.8",
   );
   assert.equal(
     clientIp({
-      headers: { "x-forwarded-for": "fc00::1, fe80::1" },
-      socket: { remoteAddress: "203.0.113.50" },
-    }),
-    "203.0.113.50",
+      headers: {
+        "cf-connecting-ip": "nope",
+        "x-forwarded-for": "6.6.6.6, 203.0.113.5",
+      },
+    }, { trustedProxyHops: 1 }),
+    "203.0.113.5",
   );
-  assert.equal(clientIp({ headers: {}, socket: {} }), "unknown");
+
+  const xff = { headers: { "x-forwarded-for": "6.6.6.6, 198.51.100.2, 203.0.113.5" } };
+  assert.equal(clientIp(xff, { trustedProxyHops: 0 }), "unknown");
+  assert.equal(clientIp(xff, { trustedProxyHops: 1 }), "203.0.113.5");
+  assert.equal(clientIp(xff, { trustedProxyHops: 2 }), "198.51.100.2");
+  assert.equal(
+    clientIp(
+      { headers: { "x-forwarded-for": "6.6.6.6, 203.0.113.5" } },
+      { trustedProxyHops: 1 },
+    ),
+    "203.0.113.5",
+  );
+  assert.equal(
+    clientIp({ headers: { "x-forwarded-for": "1.2.3.4" } }, { trustedProxyHops: 2 }),
+    "unknown",
+  );
+  assert.equal(
+    clientIp(
+      { headers: { "x-forwarded-for": "1.2.3.4, not-an-ip" } },
+      { trustedProxyHops: 1 },
+    ),
+    "unknown",
+  );
+  assert.equal(
+    clientIp({ headers: {}, socket: { remoteAddress: "9.9.9.9" } }),
+    "unknown",
+  );
+
+  const pad = `${"8.8.8.8, ".repeat(150)}6.6.6.6, 203.0.113.44`;
+  assert.ok(pad.length > 1024);
+  assert.equal(
+    clientIp({ headers: { "x-forwarded-for": pad } }, { trustedProxyHops: 1 }),
+    "203.0.113.44",
+  );
+  assert.equal(
+    clientIp({ headers: { "x-forwarded-for": pad } }, { trustedProxyHops: 2 }),
+    "6.6.6.6",
+  );
+});
+
+test("TRUSTED_PROXY_HOPS env parsing", () => {
+  const xffReq = {
+    headers: { "x-forwarded-for": "198.51.100.1, 198.51.100.2, 203.0.113.5" },
+  };
+  delete process.env.TRUSTED_PROXY_HOPS;
+  assert.equal(trustedProxyHops(), 0);
+  assert.equal(clientIp(xffReq), "unknown");
+  process.env.TRUSTED_PROXY_HOPS = "0";
+  assert.equal(trustedProxyHops(), 0);
+  assert.equal(clientIp(xffReq), "unknown");
+  process.env.TRUSTED_PROXY_HOPS = "2";
+  assert.equal(trustedProxyHops(), 2);
+  assert.equal(clientIp(xffReq), "198.51.100.2");
+  process.env.TRUSTED_PROXY_HOPS = "-1";
+  assert.equal(trustedProxyHops(), 0);
+  assert.equal(clientIp(xffReq), "unknown");
+  process.env.TRUSTED_PROXY_HOPS = "abc";
+  assert.equal(trustedProxyHops(), 0);
+  assert.equal(clientIp(xffReq), "unknown");
 });
 
 test("env overrides and invalid env fallback", () => {

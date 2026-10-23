@@ -1,9 +1,20 @@
-import { BlockList, isIP } from "node:net";
+import { isIP } from "node:net";
 
 /**
- * Render sits behind Cloudflare; XFF is client-controllable, so spoofing is only
- * a concern if someone hits the origin directly without CF — accepted for this
- * increment per design lock.
+ * Client IP for rate limits, in this order:
+ * 1. CF-Connecting-IP (Cloudflare overwrites it). Trusted only because
+ *    production traffic arrives via Cloudflare; a request that reaches the
+ *    origin directly can forge that header (best-effort; origin lock-down
+ *    to CF is a follow-up).
+ * 2. Rightmost X-Forwarded-For after TRUSTED_PROXY_HOPS (N-th from the
+ *    right). Never leftmost — XFF is client-forgeable; CF and Render append.
+ *    hops=0 (default) ignores XFF completely.
+ * 3. "unknown". With no CF header and hops=0 (or not enough hops), every
+ *    such request shares the single "unknown" bucket, so the limits apply
+ *    to all of that traffic combined (lab direct hits, or origin hits that
+ *    bypass Cloudflare).
+ * Do not fall back to socket.remoteAddress — that fallback is being
+ * reconciled between Riker and Worf.
  */
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -13,20 +24,7 @@ const DEFAULT_SEARCH = 12;
 const DEFAULT_ADD = 5;
 const XFF_MAX_CHARS = 1024;
 const XFF_MAX_ENTRIES = 20;
-
-const PRIVATE = new BlockList();
-const v4 = (...octets) => octets.join(".");
-PRIVATE.addSubnet("0.0.0.0", 8, "ipv4");
-PRIVATE.addSubnet(v4(10, 0, 0, 0), 8, "ipv4");
-PRIVATE.addSubnet("127.0.0.0", 8, "ipv4");
-PRIVATE.addSubnet("169.254.0.0", 16, "ipv4");
-PRIVATE.addSubnet("172.16.0.0", 12, "ipv4");
-PRIVATE.addSubnet(v4(192, 168, 0, 0), 16, "ipv4");
-PRIVATE.addSubnet(v4(100, 64, 0, 0), 10, "ipv4");
-PRIVATE.addAddress("::1", "ipv6");
-PRIVATE.addAddress("::", "ipv6");
-PRIVATE.addSubnet("fc00::", 7, "ipv6");
-PRIVATE.addSubnet("fe80::", 10, "ipv6");
+const HOPS_CAP = 10;
 
 const EXEMPT_EXACT = new Set([
   "/health",
@@ -69,28 +67,51 @@ export function normalizeIp(raw) {
   return s;
 }
 
-function isPublicIp(ip) {
-  const v = isIP(ip);
-  if (v === 4) return !PRIVATE.check(ip, "ipv4");
-  if (v === 6) return !PRIVATE.check(ip, "ipv6");
-  return false;
+export function trustedProxyHops(value = process.env.TRUSTED_PROXY_HOPS) {
+  if (value === undefined || value === null || value === "") return 0;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(HOPS_CAP, Math.floor(n));
 }
 
-export function clientIp(req) {
-  const hdr = req?.headers?.["x-forwarded-for"];
-  if (hdr != null && hdr !== "") {
-    const raw = Array.isArray(hdr) ? hdr.join(",") : String(hdr);
-    const clipped = raw.length > XFF_MAX_CHARS ? raw.slice(0, XFF_MAX_CHARS) : raw;
-    const parts = clipped.split(",").slice(0, XFF_MAX_ENTRIES);
-    for (const part of parts) {
-      const ip = normalizeIp(part);
-      if (ip && isPublicIp(ip)) return ip;
+function headerRaw(headers, name) {
+  const v = headers?.[name];
+  if (v == null || v === "") return "";
+  if (Array.isArray(v)) return v;
+  return String(v);
+}
+
+function headerFirst(headers, name) {
+  const v = headerRaw(headers, name);
+  if (Array.isArray(v)) return String(v[0] ?? "");
+  return v;
+}
+
+export function clientIp(req, { trustedProxyHops: hopsOpt } = {}) {
+  const headers = req?.headers;
+  const cf = normalizeIp(headerFirst(headers, "cf-connecting-ip"));
+  if (cf) return cf;
+
+  const hops = hopsOpt !== undefined ? trustedProxyHops(hopsOpt) : trustedProxyHops();
+  if (hops > 0) {
+    const xff = headerRaw(headers, "x-forwarded-for");
+    const raw = Array.isArray(xff) ? xff.join(",") : xff;
+    if (raw) {
+      const clipped = raw.length > XFF_MAX_CHARS ? raw.slice(-XFF_MAX_CHARS) : raw;
+      const parts = clipped
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(-XFF_MAX_ENTRIES);
+      if (parts.length >= hops) {
+        const ip = normalizeIp(parts[parts.length - hops]);
+        if (ip) return ip;
+      }
     }
   }
-  const sock = normalizeIp(
-    req?.socket?.remoteAddress || req?.connection?.remoteAddress || "",
-  );
-  if (sock) return sock;
+
+  // Do not fall back to socket.remoteAddress — that fallback is being
+  // reconciled between Riker and Worf.
   return "unknown";
 }
 
@@ -99,10 +120,11 @@ function retryAfterSec(times, nowTs, windowMs) {
   return Math.max(1, Math.ceil((oldest + windowMs - nowTs) / 1000));
 }
 
-export function createRateLimiter({ windowMs, maxKeys, now } = {}) {
+export function createRateLimiter({ windowMs, maxKeys, now, trustedProxyHops: hopsOpt } = {}) {
   const win = positiveInt(windowMs, envPositive("ET_RL_WINDOW_MS", DEFAULT_WINDOW_MS));
   const cap = positiveInt(maxKeys, DEFAULT_MAX_KEYS);
   const clock = typeof now === "function" ? now : Date.now;
+  const hopsOverride = hopsOpt !== undefined ? trustedProxyHops(hopsOpt) : undefined;
   const limits = {
     global: envPositive("ET_RL_GLOBAL", DEFAULT_GLOBAL),
     search: envPositive("ET_RL_SEARCH", DEFAULT_SEARCH),
@@ -184,7 +206,10 @@ export function createRateLimiter({ windowMs, maxKeys, now } = {}) {
       return { allowed: true, exempt: true, limit: 0, remaining: 0, reset: 0, retryAfter: 0 };
     }
     const method = String(req?.method || "GET").toUpperCase();
-    const ip = clientIp(req);
+    const ip = clientIp(
+      req,
+      hopsOverride !== undefined ? { trustedProxyHops: hopsOverride } : {},
+    );
     const nowTs = clock();
     const buckets = applicableBuckets(method, pathname);
     const peeks = buckets.map((b) => ({
