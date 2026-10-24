@@ -11,6 +11,12 @@ alert() {
   printf 'ALERT exittrace %s\n' "$*" >&2
 }
 
+# Same ALERT line as alert, without marking ALERT_SEEN. A later failure that
+# has no terminal ALERT still gets the exit-trap line.
+alert_advisory() {
+  printf 'ALERT exittrace %s\n' "$*" >&2
+}
+
 on_ctl_exit() {
   local rc=$?
   trap - EXIT
@@ -19,6 +25,8 @@ on_ctl_exit() {
   fi
   exit "$rc"
 }
+# Applies to every subcommand, including non-ctl ones like seed, digest, logs,
+# pack and unknown commands, which print an ALERT line on a nonzero exit.
 trap on_ctl_exit EXIT
 
 ROOT="$(cd "$(dirname "$0")" && pwd -P)"
@@ -32,11 +40,11 @@ source "${ROOT}/scripts/lib/retire.sh"
 # shellcheck disable=SC1091
 source "${ROOT}/scripts/lib/proc.sh"
 
-# EXITTRACE_VAR_DIR may equal or sit under this checkout's var directory.
-# With EXITTRACE_CTL_TEST=1 it may also sit under a private et-ctl-test directory.
+# EXITTRACE_VAR_DIR is accepted only when its realpath -m equals or sits under
+# the realpath of ${ROOT}/var.
 validate_var_dir() {
   local request="${EXITTRACE_VAR_DIR:-${ROOT}/var}"
-  local root_var="" tmp="" rel="" base=""
+  local root_var=""
   if ! VAR_DIR="$(realpath -m -- "$request")"; then
     alert "var dir could not be resolved"
     exit 1
@@ -48,19 +56,6 @@ validate_var_dir() {
   case "$VAR_DIR" in
     "$root_var"|"$root_var"/*) return 0 ;;
   esac
-  if [[ "${EXITTRACE_CTL_TEST:-}" == "1" ]]; then
-    if tmp="$(realpath -m -- "${TMPDIR:-/tmp}")"; then
-      case "$VAR_DIR" in
-        "$tmp"/*)
-          rel="${VAR_DIR#"$tmp"/}"
-          base="${rel%%/*}"
-          if [[ "$base" == et-ctl-test.* ]]; then
-            return 0
-          fi
-          ;;
-      esac
-    fi
-  fi
   alert "var dir is outside the allowed tree"
   exit 1
 }
@@ -195,7 +190,7 @@ parse_stop_timeout() {
   fi
   t="$EXITTRACE_STOP_TIMEOUT"
   if [[ ! "$t" =~ ^[0-9]{1,4}$ ]]; then
-    alert "stop timeout rejected; using 20"
+    alert_advisory "stop timeout rejected; using 20"
     STOP_TIMEOUT=20
     return 0
   fi

@@ -15,16 +15,21 @@ CTL_OUT=""
 CTL_ERR=""
 VAR_CHECKED=0
 REPO_CHECKED=0
-SCRATCH_CHECKED=0
+OUTSIDE_CHECKED=0
+TMP_OUTSIDE_TAKEN=0
+TMP_OUTSIDE_BEFORE=""
 SUMMARY_DONE=0
+READY_N=0
 NODE=""
 
-# Snapshot the checkout var/ before any other work. Hold it in a shell variable.
+# Snapshot the checkout var/ and the repo top level before any other work.
+# Hold both in shell variables.
 if [[ -d "${REPO}/var" ]]; then
   VAR_BEFORE="$(find "${REPO}/var" -maxdepth 2 -printf '%y %s %P\n' | sort)"
 else
   VAR_BEFORE="absent"
 fi
+REPO_TOP_BEFORE="$(find "$REPO" -maxdepth 1 -printf '%y %f\n' | LC_ALL=C sort)"
 GIT_BEFORE="$(git -C "$REPO" status --porcelain --ignored | LC_ALL=C sort)"
 
 # shellcheck disable=SC1091
@@ -134,41 +139,82 @@ check_repo_status() {
   fi
 }
 
-check_scratch_paths() {
-  [[ "$SCRATCH_CHECKED" -eq 1 ]] && return 0
-  SCRATCH_CHECKED=1
-  local p="" bad=0
-  case "$SCRATCH" in
-    "${TMPDIR:-/tmp}/et-ctl-test."*) ;;
-    *)
-      fail "scratch pattern at the end"
-      bad=1
-      ;;
-  esac
-  case "$SCRATCH" in
-    "${REPO}"|"${REPO}/"*)
-      fail "scratch is inside the checkout at the end"
-      bad=1
-      ;;
-  esac
-  if [[ "$CTL" != "${SCRATCH}/exittracectl.sh" ]]; then
-    fail "ctl path at the end"
-    bad=1
+# A full listing of TMPDIR is flaky because other processes write there.
+# This is only the depth-1 names this test or the ctl could create:
+# et-ctl-test.*, exittrace*, var, scripts, app, data, media, ready.
+# A concurrent npm test of another checkout can also create an et-ctl-test.*
+# sibling. Entries present before must still be present unchanged. A new
+# et-ctl-test.* sibling is allowed. Any other new listed name is a failure.
+outside_tmp_listing() {
+  local dir="${TMPDIR:-/tmp}" entry="" base=""
+  [[ -d "$dir" ]] || return 0
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    base="${entry#* }"
+    case "$base" in
+      et-ctl-test.*|exittrace*|var|scripts|app|data|media|ready)
+        printf '%s\n' "$entry"
+        ;;
+    esac
+  done < <(find "$dir" -maxdepth 1 -mindepth 1 -printf '%y %f\n' 2>/dev/null | LC_ALL=C sort)
+}
+
+check_outside_writes() {
+  [[ "$OUTSIDE_CHECKED" -eq 1 ]] && return 0
+  OUTSIDE_CHECKED=1
+  local after_top="" after_tmp="" entry="" base="" scratch_base="" missing=0 newbad=0
+  after_top="$(find "$REPO" -maxdepth 1 -printf '%y %f\n' | LC_ALL=C sort)" || after_top="SNAPSHOT-FAILED"
+  if [[ "$REPO_TOP_BEFORE" == "$after_top" ]]; then
+    pass "repo top level name listing unchanged"
+  else
+    fail "repo top level name listing unchanged"
+    printf 'repo top before:\n%s\nrepo top after:\n%s\n' "$REPO_TOP_BEFORE" "$after_top" >&2
   fi
-  if [[ -n "${SCRATCH:-}" && -d "$SCRATCH" ]]; then
-    while IFS= read -r p; do
-      case "$p" in
-        "$SCRATCH"|"$SCRATCH"/*) ;;
-        *)
-          fail "path outside scratch"
-          bad=1
-          break
-          ;;
-      esac
-    done < <(find "$SCRATCH" -print)
+  if [[ "$TMP_OUTSIDE_TAKEN" -ne 1 ]]; then
+    return 0
   fi
-  if [[ "$bad" -eq 0 ]]; then
-    pass "created paths stay under scratch"
+  scratch_base=""
+  if [[ -n "${SCRATCH:-}" ]]; then
+    scratch_base="$(basename -- "$SCRATCH")"
+  fi
+  after_tmp=""
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    base="${entry#* }"
+    if [[ -n "$scratch_base" && "$base" == "$scratch_base" ]]; then
+      continue
+    fi
+    after_tmp+="${entry}"$'\n'
+  done < <(outside_tmp_listing)
+  after_tmp="${after_tmp%$'\n'}"
+  missing=0
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    if ! printf '%s\n' "$after_tmp" | grep -Fxq -- "$entry"; then
+      missing=1
+      break
+    fi
+  done <<< "$TMP_OUTSIDE_BEFORE"
+  newbad=0
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    if printf '%s\n' "$TMP_OUTSIDE_BEFORE" | grep -Fxq -- "$entry"; then
+      continue
+    fi
+    base="${entry#* }"
+    case "$base" in
+      et-ctl-test.*) ;;
+      *)
+        newbad=1
+        break
+        ;;
+    esac
+  done <<< "$after_tmp"
+  if [[ "$missing" -eq 0 && "$newbad" -eq 0 ]]; then
+    pass "tmp siblings outside scratch unchanged"
+  else
+    fail "tmp siblings outside scratch unchanged"
+    printf 'tmp before:\n%s\ntmp after:\n%s\n' "$TMP_OUTSIDE_BEFORE" "$after_tmp" >&2
   fi
 }
 
@@ -183,8 +229,8 @@ cleanup() {
   if [[ "$REPO_CHECKED" -ne 1 ]]; then
     check_repo_status
   fi
-  if [[ "$SCRATCH_CHECKED" -ne 1 && -n "${SCRATCH:-}" ]]; then
-    check_scratch_paths
+  if [[ "$OUTSIDE_CHECKED" -ne 1 ]]; then
+    check_outside_writes
   fi
   print_summary
   if [[ "$FAILS" -ne 0 ]]; then
@@ -213,6 +259,9 @@ case "${TMPDIR:-/tmp}" in
     exit 1
     ;;
 esac
+# Take the sibling snapshot before mktemp, then omit this scratch name later.
+TMP_OUTSIDE_BEFORE="$(outside_tmp_listing)"
+TMP_OUTSIDE_TAKEN=1
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/et-ctl-test.XXXXXX")"
 case "$SCRATCH" in
   "${TMPDIR:-/tmp}/et-ctl-test."*) ;;
@@ -250,19 +299,27 @@ if [[ -e "${SCRATCH}/.env" || -L "${SCRATCH}/.env" ]]; then
   exit 1
 fi
 
+# Hold mode stays up past the stop timeout and the later signal wait.
+# The exit-at-once mode writes no ready file. The others write ET_CTL_DUMMY_READY
+# only after their signal handlers are installed. Each launch uses a fresh path.
 write_server() {
   local mode="$1" dest="${SCRATCH}/app/server.mjs"
   if [[ "$mode" == "hold" ]]; then
     cat >"$dest" <<'EOF'
+import fs from "node:fs";
 // Scratch dummy. Keeps the event loop alive and does not open a socket.
 setInterval(() => {}, 1000);
 process.on("SIGTERM", () => {});
 process.on("SIGINT", () => {
   process.exit(0);
 });
+{
+  const ready = process.env.ET_CTL_DUMMY_READY;
+  if (ready) fs.writeFileSync(ready, "ready\n");
+}
 setTimeout(() => {
   process.exit(0);
-}, 10000);
+}, 30000);
 EOF
   elif [[ "$mode" == "exit" ]]; then
     cat >"$dest" <<'EOF'
@@ -271,11 +328,16 @@ process.exit(1);
 EOF
   else
     cat >"$dest" <<'EOF'
+import fs from "node:fs";
 // Scratch dummy. Keeps the event loop alive and does not open a socket.
 setInterval(() => {}, 1000);
 process.on("SIGTERM", () => {
   process.exit(0);
 });
+{
+  const ready = process.env.ET_CTL_DUMMY_READY;
+  if (ready) fs.writeFileSync(ready, "ready\n");
+}
 EOF
   fi
   if grep -q 'listen(' "$dest"; then
@@ -284,26 +346,77 @@ EOF
   fi
 }
 
+next_ready() {
+  READY_N=$((READY_N + 1))
+  mkdir -p -- "${SCRATCH}/ready"
+  printf '%s' "${SCRATCH}/ready/r${READY_N}"
+}
+
+# Up to 10s. The file is created by the dummy on a fresh path.
+wait_ready() {
+  local path="$1" i=0
+  while [[ "$i" -lt 200 ]]; do
+    if [[ -f "$path" ]]; then
+      return 0
+    fi
+    sleep 0.05
+    i=$((i + 1))
+  done
+  return 1
+}
+
+wait_kind() {
+  local pid="$1" kind="$2" i=0
+  while [[ "$i" -lt 200 ]]; do
+    if verify_expected "$pid" "$kind"; then
+      return 0
+    fi
+    if [[ ! -d "/proc/${pid}" ]]; then
+      return 1
+    fi
+    sleep 0.05
+    i=$((i + 1))
+  done
+  return 1
+}
+
+wait_not_live() {
+  local pid="$1" i=0
+  while [[ "$i" -lt 200 ]]; do
+    if ! pid_is_live "$pid"; then
+      return 0
+    fi
+    sleep 0.05
+    i=$((i + 1))
+  done
+  return 1
+}
+
 launch() {
   local sig="$1" kind="$2"
   shift 2
   LAUNCH_PID=""
-  "$@" </dev/null >/dev/null 2>&1 &
+  local ready=""
+  if [[ "$kind" == "server" ]]; then
+    ready="$(next_ready)"
+    ET_CTL_DUMMY_READY="$ready" "$@" </dev/null >/dev/null 2>&1 &
+  else
+    "$@" </dev/null >/dev/null 2>&1 &
+  fi
   LAUNCH_PID=$!
   disown "$LAUNCH_PID" 2>/dev/null || true
   REGISTERED+=("${LAUNCH_PID}|${sig}|${kind}")
-  local i
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-    if verify_expected "$LAUNCH_PID" "$kind"; then
-      return 0
+  if [[ "$kind" == "server" ]]; then
+    if ! wait_ready "$ready"; then
+      printf 'launch failed kind=%s pid=%s ready missing\n' "$kind" "$LAUNCH_PID" >&2
+      return 1
     fi
-    if [[ ! -d "/proc/${LAUNCH_PID}" ]]; then
-      break
-    fi
-    sleep 0.1
-  done
-  printf 'launch failed kind=%s pid=%s cmdline=%s\n' "$kind" "$LAUNCH_PID" "$(show_cmdline "$LAUNCH_PID")" >&2
-  return 1
+  fi
+  if ! wait_kind "$LAUNCH_PID" "$kind"; then
+    printf 'launch failed kind=%s pid=%s cmdline=%s\n' "$kind" "$LAUNCH_PID" "$(show_cmdline "$LAUNCH_PID")" >&2
+    return 1
+  fi
+  return 0
 }
 
 run_ctl() {
@@ -317,11 +430,6 @@ run_ctl() {
     EXITTRACE_VAR_DIR="${SCRATCH}/var"
     EXITTRACE_NODE="$NODE"
   )
-  if [[ "${1:-}" == "--no-test-flag" ]]; then
-    shift
-  else
-    env_cmd+=(EXITTRACE_CTL_TEST=1)
-  fi
   set +e
   # Inherited path variables stay unset. DATABASE_URL stays empty. The dummy opens no socket.
   # -u options stay before the assignments. env treats a later -u as the command.
@@ -427,7 +535,7 @@ case_2() {
     && "$out" == "Stopped" \
     && -z "$err" \
     && ! -e "${SCRATCH}/exittrace.pid" ]] \
-    && ! pid_is_live "$pid" \
+    && wait_not_live "$pid" \
     && retired_has stopped "$pid"; then
     wait "$pid" 2>/dev/null || true
     forget_registered
@@ -614,12 +722,23 @@ case_5() {
   fi
 
   write_server normal
+  local ready=""
+  ready="$(next_ready)"
   before="$(retired_names | sort)"
-  run_ctl bash "$CTL" start
+  run_ctl env ET_CTL_DUMMY_READY="$ready" bash "$CTL" start
   out="$(trim_nl "$CTL_OUT")"
   err="$(trim_nl "$CTL_ERR")"
   if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
     pid="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid")"
+  fi
+  if ! wait_ready "$ready"; then
+    if [[ -n "$pid" ]]; then
+      register_server_pid "$pid" || true
+    fi
+    fail "case 5a ready file missing"
+    return 0
+  fi
+  if [[ -n "$pid" ]]; then
     register_server_pid "$pid" || true
   fi
   after="$(retired_names | sort)"
@@ -644,7 +763,7 @@ case_5() {
     && "$out" == "Stopped" \
     && -z "$err" \
     && ! -e "${SCRATCH}/exittrace.pid" ]] \
-    && ! pid_is_live "$pid" \
+    && wait_not_live "$pid" \
     && retired_has stopped "$pid"; then
     wait "$pid" 2>/dev/null || true
     forget_registered
@@ -706,7 +825,11 @@ case_r2() {
   for row in "${rows[@]}"; do
     IFS='|' read -r id label raw reason expect_rc expect_out expect_err <<<"$row"
     if [[ "$raw" == "empty" ]]; then
-      : >"${SCRATCH}/exittrace.pid"
+      if [[ -e "${SCRATCH}/exittrace.pid" || -L "${SCRATCH}/exittrace.pid" ]]; then
+        fail "case ${id} pidfile path already present"
+        continue
+      fi
+      touch -- "${SCRATCH}/exittrace.pid"
       raw=""
     else
       printf '%s\n' "$raw" >"${SCRATCH}/exittrace.pid"
@@ -783,17 +906,27 @@ case_r1_stale_timeout() {
 }
 
 case_n5() {
-  local before="" after="" out="" err="" pid=""
+  local before="" after="" out="" err="" pid="" ready=""
   write_server normal
+  ready="$(next_ready)"
   printf '%s\n' "abc" >"${SCRATCH}/exittrace.pid"
   before="$(retired_names | sort)"
-  run_ctl bash "$CTL" start
+  run_ctl env ET_CTL_DUMMY_READY="$ready" bash "$CTL" start
   out="$(trim_nl "$CTL_OUT")"
   err="$(trim_nl "$CTL_ERR")"
   after="$(retired_names | sort)"
   pid=""
   if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
     pid="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid")"
+  fi
+  if ! wait_ready "$ready"; then
+    if [[ -n "$pid" ]]; then
+      register_server_pid "$pid" || true
+    fi
+    fail "case n5 ready file missing"
+    return 0
+  fi
+  if [[ -n "$pid" ]]; then
     register_server_pid "$pid" || true
   fi
   if [[ "$CTL_RC" -eq 0 \
@@ -815,7 +948,7 @@ case_n5() {
     && "$out" == "Stopped" \
     && -z "$err" \
     && ! -e "${SCRATCH}/exittrace.pid" ]] \
-    && ! pid_is_live "$pid" \
+    && wait_not_live "$pid" \
     && retired_has stopped "$pid"; then
     wait "$pid" 2>/dev/null || true
     forget_registered
@@ -826,7 +959,7 @@ case_n5() {
 }
 
 case_n6() {
-  local marker="keep-marker" before="" out="" err="" pid=""
+  local marker="keep-marker" before="" out="" err="" pid="" evil="" text=""
   printf '%s\n' "$marker" >"${SCRATCH}/exittrace.pid"
   run_ctl env EXITTRACE_VAR_DIR=/etc bash "$CTL" stop
   out="$(trim_nl "$CTL_OUT")"
@@ -839,13 +972,32 @@ case_n6() {
   else
     fail "case n6 outside rc=${CTL_RC} out=${out} err=${err}"
   fi
+  evil="${SCRATCH}/fake-tmp/et-ctl-test.evil/var"
+  mkdir -p -- "$evil"
+  chmod 777 -- "$evil"
+  marker="evil-marker"
+  printf '%s\n' "$marker" >"${SCRATCH}/exittrace.pid"
+  run_ctl env EXITTRACE_CTL_TEST=1 TMPDIR="${SCRATCH}/fake-tmp" EXITTRACE_VAR_DIR="$evil" bash "$CTL" stop
+  out="$(trim_nl "$CTL_OUT")"
+  err="$(trim_nl "$CTL_ERR")"
+  text=""
+  if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
+    text="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid")"
+  fi
+  if [[ "$CTL_RC" -ne 0 \
+    && "$err" == "ALERT exittrace var dir is outside the allowed tree" \
+    && "$text" == "$marker" ]]; then
+    pass "case n6 test flag outside the copy root is rejected and pidfile untouched"
+  else
+    fail "case n6 test-flag rc=${CTL_RC} out=${out} err=${err} pidfile=${text}"
+  fi
   pid="$(pick_dead_pid)" || {
     fail "case n6 could not pick a dead pid"
     return 0
   }
   printf '%s\n' "$pid" >"${SCRATCH}/exittrace.pid"
   before="$(retired_names | sort)"
-  run_ctl --no-test-flag bash "$CTL" stop
+  run_ctl bash "$CTL" stop
   out="$(trim_nl "$CTL_OUT")"
   err="$(trim_nl "$CTL_ERR")"
   if [[ "$CTL_RC" -eq 0 \
@@ -853,9 +1005,97 @@ case_n6() {
     && -z "$err" \
     && ! -e "${SCRATCH}/exittrace.pid" ]] \
     && retired_fresh stale "$pid" "$before" "$(retired_names | sort)"; then
-    pass "case n6 scratch var without the test flag is under the copy root"
+    pass "case n6 scratch var under the copy root is accepted"
   else
-    fail "case n6 no-flag rc=${CTL_RC} out=${out} err=${err}"
+    fail "case n6 accept rc=${CTL_RC} out=${out} err=${err}"
+  fi
+}
+
+# Invalid timeout is advisory, so a later mismatch still stands on its own
+# and the exit trap does not add a third line.
+case_ne() {
+  local pid="" out="" err="" want=""
+  if ! launch TERM sleep sleep 60; then
+    fail "case ne could not start sentinel"
+    return 0
+  fi
+  pid="$LAUNCH_PID"
+  printf '%s\n' "$pid" >"${SCRATCH}/exittrace.pid"
+  run_ctl env EXITTRACE_STOP_TIMEOUT=abc bash "$CTL" stop
+  out="$(trim_nl "$CTL_OUT")"
+  err="$(trim_nl "$CTL_ERR")"
+  want="ALERT exittrace stop timeout rejected; using 20"$'\n'"ALERT exittrace pid=${pid} is held by a different process; not signaling"
+  if [[ "$CTL_RC" -eq 1 \
+    && -z "$out" \
+    && "$err" == "$want" \
+    && ! -e "${SCRATCH}/exittrace.pid" ]] \
+    && pid_is_live "$pid" \
+    && retired_has mismatch "$pid"; then
+    pass "case ne invalid timeout and mismatch both alert"
+  else
+    fail "case ne rc=${CTL_RC} out=${out} err=${err}"
+  fi
+  finish_sleep "$pid" "case ne"
+}
+
+case_nb() {
+  local pid="" out="" err="" parent_before="" parent_after="" modes_ok=1 p="" mode=""
+  local found=0 dir="" f="" name="" content=""
+  if [[ -e "${SCRATCH}/var/deep" || -L "${SCRATCH}/var/deep" ]]; then
+    fail "case nb deep path already present"
+    return 0
+  fi
+  if [[ -d "${SCRATCH}/var" && ! -L "${SCRATCH}/var" ]]; then
+    chmod 751 -- "${SCRATCH}/var"
+    parent_before="$(stat -c '%a' -- "${SCRATCH}/var")"
+  fi
+  pid="$(pick_dead_pid)" || {
+    fail "case nb could not pick a dead pid"
+    return 0
+  }
+  printf '%s\n' "$pid" >"${SCRATCH}/exittrace.pid"
+  run_ctl env EXITTRACE_VAR_DIR="${SCRATCH}/var/deep/a/b" bash "$CTL" stop
+  out="$(trim_nl "$CTL_OUT")"
+  err="$(trim_nl "$CTL_ERR")"
+  modes_ok=1
+  for p in "${SCRATCH}/var/deep" "${SCRATCH}/var/deep/a" "${SCRATCH}/var/deep/a/b"; do
+    if [[ -L "$p" || ! -d "$p" ]]; then
+      modes_ok=0
+      break
+    fi
+    mode="$(stat -c '%a' -- "$p")"
+    if [[ "$mode" != "700" ]]; then
+      modes_ok=0
+      break
+    fi
+  done
+  parent_after=""
+  if [[ -n "$parent_before" && -d "${SCRATCH}/var" ]]; then
+    parent_after="$(stat -c '%a' -- "${SCRATCH}/var")"
+  fi
+  found=0
+  dir="${SCRATCH}/var/deep/a/b/retired"
+  if [[ -d "$dir" && ! -L "$dir" ]]; then
+    for f in "$dir"/exittrace.pid.*; do
+      [[ -e "$f" ]] || continue
+      name="$(basename -- "$f")"
+      [[ "$name" =~ ^exittrace\.pid\.[0-9]{8}-[0-9]{6}\.stale(\.[1-9][0-9]*)?$ ]] || continue
+      content="$(tr -d '[:space:]' <"$f")"
+      if [[ "$content" == "$pid" ]]; then
+        found=1
+      fi
+    done
+  fi
+  if [[ "$CTL_RC" -eq 0 \
+    && "$out" == "Stopped (stale pidfile)" \
+    && -z "$err" \
+    && ! -e "${SCRATCH}/exittrace.pid" \
+    && "$modes_ok" -eq 1 \
+    && "$found" -eq 1 \
+    && ( -z "$parent_before" || "$parent_after" == "$parent_before" ) ]]; then
+    pass "case nb nested retired parents are mode 700"
+  else
+    fail "case nb rc=${CTL_RC} out=${out} err=${err} modes=${modes_ok} found=${found} parent=${parent_before}->${parent_after}"
   fi
 }
 
@@ -886,9 +1126,13 @@ quiet_children
 case_n5
 quiet_children
 case_n6
+quiet_children
+case_ne
+quiet_children
+case_nb
 check_real_var
 check_repo_status
-check_scratch_paths
+check_outside_writes
 print_summary
 
 if [[ "$FAILS" -ne 0 ]]; then

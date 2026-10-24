@@ -1,8 +1,10 @@
 # Shared move-aside helper. Source this file; it defines retire_path and changes nothing else.
 # Callers pass any destination directory. The moved name is:
 #   <dir>/<basename>.<YYYYMMDD-HHMMSS>.<reason>[.N]
-# A new directory is created with install -d -m 700. An existing directory is mode 700
-# only when that does not add permission bits.
+# Missing path components are created in order, from the first missing ancestor
+# down to the leaf, each with install -d -m 700. An existing directory is left
+# as it is, except the leaf, which is mode 700 only when that does not add
+# permission bits. A symlink is refused.
 
 retire_note() {
   local msg="$1"
@@ -13,13 +15,56 @@ retire_note() {
   printf 'ALERT %s\n' "$msg" >&2
 }
 
+# Walk from the root. Existing directories are not chmod'd here.
+# Each missing component is created on its own so an existing ancestor is untouched.
+retire_create_chain() {
+  local dir="$1" part="" acc="" started=0
+  local -a parts=()
+  IFS='/' read -r -a parts <<< "${dir#/}"
+  for part in "${parts[@]}"; do
+    [[ -n "$part" ]] || continue
+    if [[ "$dir" == /* ]]; then
+      if [[ -z "$acc" ]]; then
+        acc="/${part}"
+      else
+        acc="${acc}/${part}"
+      fi
+    else
+      if [[ -z "$acc" ]]; then
+        acc="$part"
+      else
+        acc="${acc}/${part}"
+      fi
+    fi
+    if [[ "$started" -eq 0 ]]; then
+      if [[ -L "$acc" ]]; then
+        return 1
+      fi
+      if [[ -d "$acc" ]]; then
+        continue
+      fi
+      if [[ -e "$acc" ]]; then
+        return 1
+      fi
+      started=1
+    elif [[ -L "$acc" || -e "$acc" ]]; then
+      return 1
+    fi
+    install -d -m 700 -- "$acc" || return 1
+    if [[ -L "$acc" || ! -d "$acc" ]]; then
+      return 1
+    fi
+  done
+  [[ -n "$acc" ]]
+}
+
 retire_ensure_dir() {
   local dir="$1" mode="" tail="" perm=0 extra=0 desired=0 oct=""
   if [[ -L "$dir" ]]; then
     return 1
   fi
   if [[ ! -d "$dir" ]]; then
-    install -d -m 700 -- "$dir" || return 1
+    retire_create_chain "$dir" || return 1
   fi
   if [[ -L "$dir" || ! -d "$dir" ]]; then
     return 1
