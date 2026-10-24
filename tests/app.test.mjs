@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import jpeg from "jpeg-js";
 import { DEATH_KEEP_IDS } from "../app/lib/categories.mjs";
 import { PAGE_SIZE } from "../app/lib/paginate.mjs";
+import { readCheckoutGitSha } from "../app/lib/git-sha.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 15220;
@@ -129,7 +130,8 @@ test("health is 200 on file backend", async () => {
   assert.equal(json.keep_up.logical.lag_seconds, null);
   assert.equal(json.keep_up.logical.apply_state, null);
   assert.equal(json.keep_up.logical.apply_error_count, null);
-  assert.equal(json.git_sha, null);
+  // No RENDER_GIT_COMMIT in tests: the checkout HEAD (or null outside a git checkout).
+  assert.equal(json.git_sha, readCheckoutGitSha(ROOT));
   assert.equal(json.keep_up.media_delta.last_success, null);
   assert.equal(json.keep_up.media_delta.last_with_files, null);
   assert.equal(json.keep_up.daily_ingest.last_pass, null);

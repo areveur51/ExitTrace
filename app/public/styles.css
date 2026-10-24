@@ -1459,6 +1459,9 @@ img.empty-portrait { object-position: center center; }
   font-family: var(--font-ui);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  /* One line per tag in the rail; long names use a short menu label (title holds the full name). */
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .box-pane {
@@ -2782,6 +2785,10 @@ html[data-theme="glass"] .dash-stats {
     flex-wrap: nowrap;
     width: 100%;
     gap: 0.1rem;
+  }
+  /* Rail is 13.25rem: a slightly smaller tag font keeps an 18-character label on one line. */
+  .keymap .keymap-tag {
+    font-size: 0.94em;
   }
   body.tui-home .hud-stage {
     grid-template-rows: minmax(0, 1fr);

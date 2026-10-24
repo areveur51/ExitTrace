@@ -419,7 +419,8 @@ function keymapChip(item, activePath, { cls = "keychip", order = null } = {}) {
   const key = item.key ? ` data-key="${esc(item.key)}"` : "";
   const style = order == null ? "" : ` style="--key-order:${order}"`;
   const cap = item.key ? `<span class="br">[</span>${esc(item.key)}<span class="br">]</span> ` : "";
-  return `<a class="${cls}" href="${esc(item.href)}"${key}${style}${on ? ' aria-current="page"' : ""}>${cap}${esc(item.label)}</a>`;
+  const title = item.title ? ` title="${esc(item.title)}"` : "";
+  return `<a class="${cls}" href="${esc(item.href)}"${key}${style}${on ? ' aria-current="page"' : ""}${title}>${cap}${esc(item.label)}</a>`;
 }
 
 /** Shared keymap section (heading + grouped chips). Used by Comms and Tags; desktop and mobile share it. */
@@ -435,6 +436,24 @@ function keymapCommsSection(activePath) {
   );
 }
 
+/** Longest Tags-menu label that fits one line in the 13.25rem keymap rail. */
+export const TAG_MENU_MAX_LABEL = 18;
+
+/**
+ * Display-only short labels for the Tags menu. Tag ids, slugs, `nav`, and the tag
+ * pages' own titles are unchanged; the full `nav` name goes in the chip's title.
+ */
+const TAG_MENU_SHORT_LABELS = Object.freeze({
+  big_beautiful_bill_act: "Big Beautiful Bill",
+  secure_the_border_act: "Secure the Border",
+});
+
+/** One Tags-menu row: the short label when the full name is too long, plus the full name as title. */
+export function tagMenuItem(tag) {
+  const label = TAG_MENU_SHORT_LABELS[tag.id] || tag.nav;
+  return { href: tag.path, label, ...(label === tag.nav ? {} : { title: tag.nav }) };
+}
+
 function keymapTagSection(activePath) {
   return keymapSection(
     {
@@ -442,7 +461,7 @@ function keymapTagSection(activePath) {
       title: "Tags",
       ariaLabel: "Fact tags",
       chipClass: "keymap-tag",
-      items: ATTRIBUTE_TAGS.map((tag) => ({ href: tag.path, label: tag.nav })),
+      items: ATTRIBUTE_TAGS.map(tagMenuItem),
     },
     activePath,
   );

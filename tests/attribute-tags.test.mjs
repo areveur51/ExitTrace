@@ -76,11 +76,11 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/ukraine-aid"/);
   assert.match(facts, />Ukraine aid</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/one-big-beautiful-bill-act"/);
-  assert.match(facts, />One Big Beautiful Bill Act</);
+  assert.match(facts, /title="One Big Beautiful Bill Act">Big Beautiful Bill</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/save-act"/);
   assert.match(facts, />SAVE Act</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/secure-the-border-act"/);
-  assert.match(facts, />Secure the Border Act</);
+  assert.match(facts, /title="Secure the Border Act">Secure the Border</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/laken-riley-act"/);
   assert.match(facts, />Laken Riley Act</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/save-america-act"/);
