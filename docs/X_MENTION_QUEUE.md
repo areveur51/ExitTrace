@@ -192,3 +192,15 @@ Copy this into the hub runbook. This PR does not edit a live hub runbook and doe
 - Timers stay on a 10 minute band inside 5–15 minutes. Poll `OnBootSec=5min`, worker `OnBootSec=8min` (about 3 minutes later). Both `OnUnitActiveSec=10min`. No interval under 5 minutes. Install the templates on the host; do not tighten them for 402/429.
 - Mentions are leads, not cites. Fail closed. Do not invent cites. Do not publish `mention_queue`. Do not touch the parked database.
 - Final reply (Admiral CLEAR ~2026-09-23 7:28pm ET): `ExitTrace kept {name}.` plus a host screenshot of the public KEEP detail page, to the first mentioner only when the dig status is `kept` for a person, operation, dog comm, corona comm, red folder comm, or central casting comm. The text has no URL. The page is the public glass theme (dark chrome the world sees), not lab-auth, admin, localhost, or port 5220, and not an X post screenshot or a local HTML file. No reply on fail-closed, rejected, ambiguous, holiday, or dig failure. No second final for a later mention of that subject or another KEEP that shares the slug. Soft-ack stays off.
+
+## Capture profile
+
+Any manual or agent Chrome or Playwright run for a dig must put the browser profile outside this repo:
+
+```bash
+--user-data-dir="$(node scripts/capture-profile-dir.mjs <case>)"
+```
+
+Never pass a user-data directory under the repo, including `scratch/<case>/chrome-profile`. The case is a lowercase slug such as `guilfoyle-newsom`, not a path.
+
+The default base is `<repo>/../../exittrace/capture-profiles`, i.e. `/opt/GrokBuild/exittrace/capture-profiles` for the lab checkout under `/opt/GrokBuild/projects/`. The profile directory is `<base>/<case>`. Set `ET_CAPTURE_PROFILE_DIR` to an absolute directory outside the repo to override that base. `scripts/capture-profile-dir.mjs` prints the absolute path. `scratch/x-capture/capture-live-x.mjs` and `scratch/x-capture/batch-capture.mjs` keep an ephemeral profile. A persistent profile still has to come from `scripts/capture-profile-dir.mjs`.
