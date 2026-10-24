@@ -51,7 +51,7 @@ import {
 } from "./lib/store.mjs";
 import {
   getRateLimiter,
-  isExemptPath,
+  noteThumbFailure,
   resetRateLimiter,
 } from "./lib/rate-limit.mjs";
 import {
@@ -438,6 +438,7 @@ async function serveMedia(res, reqPath, req) {
     } catch {
       dest = null;
     }
+    if (!dest) noteThumbFailure(href);
     return serveFile(res, dest, req);
   }
   return serveFile(res, safeJoin(mediaDir, rel), req);
@@ -525,21 +526,20 @@ async function handle(req, res) {
     rateOpts = { trustCf: cfDecision.trustCf };
   }
 
-  if (!isExemptPath(p, req.method)) {
-    const decision = rateOpts
-      ? getRateLimiter().check(req, p, rateOpts)
-      : getRateLimiter().check(req, p);
-    if (!decision.allowed) {
-      const n = decision.retryAfter;
-      send(res, 429, `Too many requests. Retry after ${n} seconds.\n`, {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Retry-After": String(n),
-        "RateLimit-Limit": String(decision.limit),
-        "RateLimit-Remaining": "0",
-        "RateLimit-Reset": String(decision.reset),
-      });
-      return;
-    }
+  // check() applies the exemptions itself, so isExemptPath runs once.
+  const decision = rateOpts
+    ? getRateLimiter().check(req, p, rateOpts)
+    : getRateLimiter().check(req, p);
+  if (!decision.allowed) {
+    const n = decision.retryAfter;
+    send(res, 429, `Too many requests. Retry after ${n} seconds.\n`, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Retry-After": String(n),
+      "RateLimit-Limit": String(decision.limit),
+      "RateLimit-Remaining": "0",
+      "RateLimit-Reset": String(decision.reset),
+    });
+    return;
   }
 
   if (p.startsWith("/api/mention-queue")) {
