@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { test } from "node:test";
 import { fileURLToPath } from "url";
+import { DEFAULT_CAPTURE_PROFILE_BASE } from "../scripts/lib/capture-profile.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -45,30 +46,52 @@ function walk(dir, out = []) {
   return out;
 }
 
+// Narrow workflow exception: constraint comments like "No leftover touch" are
+// leftover-word FPs, not lab-path leaks. Skip ONLY the leftover pattern under
+// .github/workflows; still scan those YAML files for IPs/tailscale/lab paths
+// and other private-host needles (do not blanket-skip the whole workflows dir).
+const LEFTOVER = "left" + "over";
+const workflowSep = `${path.sep}.github${path.sep}workflows${path.sep}`;
+// DIG_NEEDLES are exempt only for the mention queue doc. That file names the
+// capture profile directory. The capture profile module is scanned after its
+// single default-base export line is taken out, with every pattern enforced.
+const DIG_DOC = `docs${path.sep}X_MENTION_QUEUE.md`;
+const CAPTURE_PROFILE = `scripts${path.sep}lib${path.sep}capture-profile.mjs`;
+const DIG_NEEDLES = new Set(["Grok" + "Build", "/o" + "pt/"]);
+const DEFAULT_BASE_LINE = `export const DEFAULT_CAPTURE_PROFILE_BASE = ${JSON.stringify(DEFAULT_CAPTURE_PROFILE_BASE)};`;
+
+function textForScan(rel, text) {
+  if (rel !== CAPTURE_PROFILE) return text;
+  const parts = text.split(DEFAULT_BASE_LINE);
+  assert.equal(parts.length, 2, "default base line must appear exactly once");
+  return parts.join("");
+}
+
+function collectHits(rel, text, isWorkflow) {
+  const body = textForScan(rel, text);
+  const hits = [];
+  for (const pat of PATTERNS) {
+    if (isWorkflow && pat === LEFTOVER) continue;
+    if (rel === DIG_DOC && DIG_NEEDLES.has(pat)) continue;
+    if (body.includes(pat)) hits.push(`${rel}: ${pat}`);
+  }
+  return hits;
+}
+
 test("public tree has no private-host strings", () => {
   const hits = [];
-  // Narrow workflow exception: constraint comments like "No leftover touch" are
-  // leftover-word FPs, not lab-path leaks. Skip ONLY the leftover pattern under
-  // .github/workflows; still scan those YAML files for IPs/tailscale/lab paths
-  // and other private-host needles (do not blanket-skip the whole workflows dir).
-  const LEFTOVER = "left" + "over";
-  const workflowSep = `${path.sep}.github${path.sep}workflows${path.sep}`;
-  // DIG_NEEDLES are exempt only for the mention queue doc and the capture
-  // profile module. Those files name the capture profile directory. Every
-  // other pattern is still enforced for both files.
-  const DIG_DOC = `docs${path.sep}X_MENTION_QUEUE.md`;
-  const CAPTURE_PROFILE = `scripts${path.sep}lib${path.sep}capture-profile.mjs`;
-  const DIG_NEEDLES = new Set(["Grok" + "Build", "/o" + "pt/"]);
   for (const file of walk(ROOT)) {
     if (file.endsWith(`${path.sep}tests${path.sep}sanitize.test.mjs`)) continue;
     const rel = path.relative(ROOT, file);
     const isWorkflow = file.includes(workflowSep);
     const text = fs.readFileSync(file, "utf8");
-    for (const pat of PATTERNS) {
-      if (isWorkflow && pat === LEFTOVER) continue;
-      if ((rel === DIG_DOC || rel === CAPTURE_PROFILE) && DIG_NEEDLES.has(pat)) continue;
-      if (text.includes(pat)) hits.push(`${rel}: ${pat}`);
-    }
+    hits.push(...collectHits(rel, text, isWorkflow));
   }
   assert.equal(hits.join("\n"), "", hits.join("\n"));
+});
+
+test("a second host string in the capture profile module is flagged", () => {
+  const text = `${DEFAULT_BASE_LINE}\nconst extra = ${JSON.stringify(DEFAULT_CAPTURE_PROFILE_BASE)};\n`;
+  const hits = collectHits(CAPTURE_PROFILE, text, false);
+  assert.ok(hits.some((hit) => [...DIG_NEEDLES].some((needle) => hit.includes(needle))));
 });
