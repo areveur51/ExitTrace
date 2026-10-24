@@ -2033,8 +2033,13 @@ export async function syncPersonEvents(client, row) {
   const person = normalizePerson(row);
   await assertMultiNotableReady(client, person);
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
+  const inserted = new Set();
   for (const ev of person.events) {
     const seq = String(ev.kind || "").trim() === "notable" ? notableSeq(ev) : 0;
+    // One companion row per kind except notable. Later recorded-vote events stay on people.events.
+    const slot = `${ev.kind}\0${seq}`;
+    if (inserted.has(slot)) continue;
+    inserted.add(slot);
     await client.query(
       `INSERT INTO person_events (
          person_id, kind, seq, event_date, sources, announced_date,

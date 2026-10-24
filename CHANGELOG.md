@@ -29,6 +29,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.28] - 2026-10-24
+
+### Added
+
+- Fact tags for recorded no votes. The label is the bill short name. S. 5271 keeps the measure number because that bill has no short title on file. Each roll call is its own event (`roll_call` on `people.events[]`) and does not replace the stored category or date. Former and deceased members stay on the list. Paths: `/tags/one-big-beautiful-bill-act`, `/tags/save-act`, `/tags/secure-the-border-act`, `/tags/laken-riley-act`, `/tags/save-america-act`, `/tags/s-5271`.
+
 ## [1.2.27] - 2026-10-21
 
 ### Changed

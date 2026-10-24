@@ -3,6 +3,7 @@
 import { asEventDate, personEvents } from "./promote.mjs";
 import { normalizeClearances } from "./clearances.mjs";
 import { isTrumpNickname, normalizeNicknames } from "./nicknames.mjs";
+import { VOTE_NO_KINDS } from "./vote-rolls.mjs";
 
 function day(raw) {
   return asEventDate(raw) || "";
@@ -121,6 +122,9 @@ export function personMenuDate(row, menu = {}) {
   if (tag === "epstein_transparency_act") return transparencyDate(row);
   if (tag === "harassment_records") return harassmentRecordsDate(row);
   if (tag === "ukraine_aid_flags") return ukraineAidFlagsDate(row);
+  if (VOTE_NO_KINDS.has(tag)) {
+    return newest(eventsOf(row, [tag]).map((ev) => ev.event_date));
+  }
   if (tag === "masks" || tag === "former_intel_agency_personnel" || tag === "fraud") return "";
   if (menu.centralCasting) {
     return newest(eventsOf(row, ["central_casting"]).map((ev) => ev.event_date));

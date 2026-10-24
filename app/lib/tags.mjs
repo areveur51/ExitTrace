@@ -1,5 +1,7 @@
 /** Person identity tags — independent of event kind. Multi-tag is allowed. */
 
+import { VOTE_NO_TAGS } from "./vote-rolls.mjs";
+
 export const IDENTITY_TAGS = [
   { id: "civilian", nav: "Civilians" },
   { id: "non_civilian", nav: "Non-civilians" },
@@ -82,6 +84,7 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People who voted yea on April 20, 2024, on H.R. 8035, the Ukraine Security Supplemental Appropriations Act, 2024. Roll Call 151 passed 311-112, with 1 present.",
   },
+  ...VOTE_NO_TAGS,
   {
     id: "former_intel_agency_personnel",
     nav: "Former intel",
