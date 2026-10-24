@@ -32,7 +32,7 @@ const PATTERNS = [
   "Wire" + "Guard",
 ];
 
-const SKIP_DIR = new Set([".git", "node_modules", "dist"]);
+const SKIP_DIR = new Set([".git", "node_modules", "dist", ".worktrees"]);
 const SKIP_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 
 function walk(dir, out = []) {
@@ -53,8 +53,11 @@ test("public tree has no private-host strings", () => {
   // and other private-host needles (do not blanket-skip the whole workflows dir).
   const LEFTOVER = "left" + "over";
   const workflowSep = `${path.sep}.github${path.sep}workflows${path.sep}`;
-  // The mention dig plant command is the one public host path. Docs only.
+  // DIG_NEEDLES are exempt only for the mention queue doc and the capture
+  // profile module. Those files name the capture profile directory. Every
+  // other pattern is still enforced for both files.
   const DIG_DOC = `docs${path.sep}X_MENTION_QUEUE.md`;
+  const CAPTURE_PROFILE = `scripts${path.sep}lib${path.sep}capture-profile.mjs`;
   const DIG_NEEDLES = new Set(["Grok" + "Build", "/o" + "pt/"]);
   for (const file of walk(ROOT)) {
     if (file.endsWith(`${path.sep}tests${path.sep}sanitize.test.mjs`)) continue;
@@ -63,7 +66,7 @@ test("public tree has no private-host strings", () => {
     const text = fs.readFileSync(file, "utf8");
     for (const pat of PATTERNS) {
       if (isWorkflow && pat === LEFTOVER) continue;
-      if (rel === DIG_DOC && DIG_NEEDLES.has(pat)) continue;
+      if ((rel === DIG_DOC || rel === CAPTURE_PROFILE) && DIG_NEEDLES.has(pat)) continue;
       if (text.includes(pat)) hits.push(`${rel}: ${pat}`);
     }
   }

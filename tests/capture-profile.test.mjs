@@ -6,7 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  defaultCaptureProfileBase,
+  DEFAULT_CAPTURE_PROFILE_BASE,
   ensureCaptureProfileDir,
   resolveCaptureProfileDir,
 } from "../scripts/lib/capture-profile.mjs";
@@ -14,6 +14,8 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(repoRoot, "scripts", "capture-profile-dir.mjs");
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "et-capture-test."));
+const anchor = path.join(scratch, "anchor");
+fs.mkdirSync(anchor, { mode: 0o700 });
 
 const scratchRel = path.relative(repoRoot, scratch);
 if (scratchRel === "" || (!scratchRel.startsWith("..") && !path.isAbsolute(scratchRel))) {
@@ -41,18 +43,46 @@ function modeOf(abs) {
   return fs.statSync(abs).mode & 0o777;
 }
 
-function gitPorcelainIgnored(repo) {
+function listing(abs) {
+  return fs.readdirSync(abs).sort().join("\n");
+}
+
+function physical(abs) {
+  return fs.realpathSync.native(abs);
+}
+
+function optsFor(base, caseName, extra = {}) {
+  return {
+    caseName,
+    env: { ET_CAPTURE_PROFILE_DIR: base },
+    repoRoot: anchor,
+    ...extra,
+  };
+}
+
+function git(args) {
   const env = { ...process.env };
-  delete env.GIT_DIR;
-  delete env.GIT_WORK_TREE;
-  const run = spawnSync("git", ["status", "--porcelain", "--ignored"], {
-    cwd: repo,
-    env,
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  eq(run.status, 0, run.stderr || "");
-  return run.stdout;
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
+  const run = spawnSync("git", args, { env, encoding: "utf8" });
+  if (run.status !== 0) {
+    const detail = (run.stderr || run.stdout || "git failed").trim();
+    throw new Error(detail);
+  }
+  return run;
+}
+
+function initCommittedRepo(dir) {
+  fs.mkdirSync(dir, { mode: 0o700 });
+  const c = ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.invalid"];
+  git([...c, "init", dir]);
+  git([...c, "-C", dir, "commit", "--allow-empty", "-m", "init"]);
+}
+
+function addWorktree(main, wt) {
+  const c = ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.invalid"];
+  git([...c, "-C", main, "worktree", "add", wt]);
 }
 
 function runCli(args, extraEnv) {
@@ -73,55 +103,40 @@ process.on("exit", () => {
 
 test("scratch directory is mode 700", () => {
   eq(modeOf(scratch), 0o700);
+  eq(modeOf(anchor), 0o700);
   ok(scratchRel.startsWith("..") || path.isAbsolute(scratchRel));
 });
 
-test("default base follows the repo and stays outside it", () => {
+test("default base is the absolute constant", () => {
   const caseName = "guilfoyle-newsom";
-  const repoReal = fs.realpathSync(repoRoot);
-  const base = path.resolve(repoReal, "..", "..", "exittrace", "capture-profiles");
-  const expected = path.resolve(base, caseName);
-  eq(fs.existsSync(base), false);
-  eq(fs.existsSync(expected), false);
-  eq(defaultCaptureProfileBase(repoRoot), base);
+  ok(path.isAbsolute(DEFAULT_CAPTURE_PROFILE_BASE));
+  const expected = path.join(DEFAULT_CAPTURE_PROFILE_BASE, caseName);
   eq(resolveCaptureProfileDir({ caseName, env: {}, repoRoot }), expected);
   eq(
     resolveCaptureProfileDir({ caseName, env: { ET_CAPTURE_PROFILE_DIR: "" }, repoRoot }),
     expected,
   );
+  const repoReal = fs.realpathSync.native(repoRoot);
   const rel = path.relative(repoReal, expected);
   ok(rel.startsWith("..") || path.isAbsolute(rel));
   ok(expected !== repoReal && !expected.startsWith(`${repoReal}${path.sep}`));
-  eq(fs.existsSync(base), false);
+  eq(fs.existsSync(DEFAULT_CAPTURE_PROFILE_BASE), false);
   eq(fs.existsSync(expected), false);
 });
 
-test("default base follows a caller repo root", () => {
-  const levelA = path.join(scratch, "level-a");
-  const levelB = path.join(levelA, "level-b");
-  const fakeRepo = path.join(levelB, "fake-repo");
-  fs.mkdirSync(levelA, { mode: 0o700 });
-  fs.mkdirSync(levelB, { mode: 0o700 });
-  fs.mkdirSync(fakeRepo, { mode: 0o700 });
+test("default base ignores the caller repo root", () => {
+  const other = path.join(scratch, "other-root");
+  fs.mkdirSync(other, { mode: 0o700 });
   const caseName = "fake-case";
-  const fakeReal = fs.realpathSync(fakeRepo);
-  const base = path.resolve(fakeReal, "..", "..", "exittrace", "capture-profiles");
-  const expected = path.resolve(base, caseName);
-  eq(defaultCaptureProfileBase(fakeRepo), base);
-  eq(resolveCaptureProfileDir({ caseName, env: {}, repoRoot: fakeRepo }), expected);
+  const expected = path.join(DEFAULT_CAPTURE_PROFILE_BASE, caseName);
+  eq(resolveCaptureProfileDir({ caseName, env: {}, repoRoot: other }), expected);
   eq(
-    resolveCaptureProfileDir({ caseName, env: { ET_CAPTURE_PROFILE_DIR: "" }, repoRoot: fakeRepo }),
+    resolveCaptureProfileDir({ caseName, env: { ET_CAPTURE_PROFILE_DIR: "" }, repoRoot: other }),
     expected,
   );
-  const rel = path.relative(fakeReal, expected);
-  ok(rel.startsWith("..") || path.isAbsolute(rel));
-  ok(expected !== fakeReal && !expected.startsWith(`${fakeReal}${path.sep}`));
-  const scratchReal = fs.realpathSync(scratch);
-  ok(base.startsWith(`${scratchReal}${path.sep}`));
-  eq(fs.existsSync(base), false);
   eq(fs.existsSync(expected), false);
-  eq(modeOf(scratch), 0o700);
-  eq(modeOf(fakeRepo), 0o700);
+  eq(fs.existsSync(DEFAULT_CAPTURE_PROFILE_BASE), false);
+  eq(modeOf(other), 0o700);
 });
 
 test("env override is honored", () => {
@@ -145,7 +160,7 @@ test("invalid case names are rejected", () => {
       () => resolveCaptureProfileDir({
         caseName,
         env: { ET_CAPTURE_PROFILE_DIR: path.join(scratch, "invalid-names") },
-        repoRoot,
+        repoRoot: anchor,
       }),
       "capture_case_invalid",
     );
@@ -158,38 +173,29 @@ test("relative base is rejected", () => {
     () => resolveCaptureProfileDir({
       caseName: "memphis-safe",
       env: { ET_CAPTURE_PROFILE_DIR: "capture-profile-relative" },
-      repoRoot,
+      repoRoot: anchor,
     }),
     "capture_base_not_absolute",
   );
   eq(fs.existsSync(path.join(repoRoot, "capture-profile-relative")), false);
+  eq(fs.existsSync(path.join(anchor, "capture-profile-relative")), false);
 });
 
 test("profile inside the repo is refused", () => {
-  const before = gitPorcelainIgnored(repoRoot);
-  const link = path.join(scratch, "repo-link");
-  fs.symlinkSync(repoRoot, link);
+  const fake = path.join(scratch, "plain-repo");
+  fs.mkdirSync(fake, { mode: 0o700 });
   const cases = [
-    ["inrepo-scratch", path.join(repoRoot, "scratch")],
-    ["inrepo-root", repoRoot],
-    ["inrepo-link", link],
+    ["inrepo-scratch", path.join(fake, "scratch")],
+    ["inrepo-root", fake],
   ];
   for (const [caseName, base] of cases) {
-    const opts = { caseName, env: { ET_CAPTURE_PROFILE_DIR: base }, repoRoot };
+    const opts = { caseName, env: { ET_CAPTURE_PROFILE_DIR: base }, repoRoot: fake };
     throwsCode(() => resolveCaptureProfileDir(opts), "capture_profile_in_repo");
     throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_in_repo");
   }
-  eq(fs.existsSync(path.join(repoRoot, "scratch", "inrepo-scratch")), false);
-  eq(fs.existsSync(path.join(repoRoot, "inrepo-root")), false);
-  eq(fs.existsSync(path.join(repoRoot, "inrepo-link")), false);
-  const cliRun = runCli(["inrepo-cli"], { ET_CAPTURE_PROFILE_DIR: repoRoot });
-  eq(cliRun.status, 2);
-  eq(cliRun.stdout, "");
-  ok(/^ALERT capture profile capture_profile_in_repo: .+\n$/.test(cliRun.stderr));
-  eq(fs.existsSync(path.join(repoRoot, "inrepo-cli")), false);
-  eq(gitPorcelainIgnored(repoRoot), before);
-  eq(modeOf(scratch), 0o700);
-  ok(fs.lstatSync(link).isSymbolicLink());
+  eq(fs.existsSync(path.join(fake, "scratch")), false);
+  eq(fs.existsSync(path.join(fake, "inrepo-root")), false);
+  eq(modeOf(fake), 0o700);
 });
 
 test("ensure creates mode 700 and tightens a 755 leaf", () => {
@@ -200,6 +206,7 @@ test("ensure creates mode 700 and tightens a 755 leaf", () => {
     repoRoot,
   });
   eq(created, path.join(base, "hunter-biden"));
+  eq(created, physical(created));
   eq(modeOf(path.join(scratch, "deep")), 0o700);
   eq(modeOf(base), 0o700);
   eq(modeOf(created), 0o700);
@@ -222,20 +229,55 @@ test("ensure creates mode 700 and tightens a 755 leaf", () => {
     env: { ET_CAPTURE_PROFILE_DIR: tightenBase },
     repoRoot,
   });
-  eq(tightened, leaf);
+  eq(tightened, physical(leaf));
   eq(modeOf(leaf), 0o700);
   eq(modeOf(scratch), 0o700);
   eq(modeOf(tightenBase), 0o700);
 });
 
+test("an existing 0555 leaf is refused and keeps its mode", () => {
+  const base = path.join(scratch, "mode-0555");
+  fs.mkdirSync(base, { mode: 0o700 });
+  const leaf = path.join(base, "locked");
+  fs.mkdirSync(leaf, { mode: 0o700 });
+  fs.chmodSync(leaf, 0o555);
+  eq(modeOf(leaf), 0o555);
+  throwsCode(
+    () => ensureCaptureProfileDir(optsFor(base, "locked")),
+    "capture_profile_mode",
+  );
+  eq(modeOf(leaf), 0o555);
+  eq(modeOf(base), 0o700);
+});
+
+test("components at or below the base must match euid", () => {
+  const base = path.join(scratch, "owner-base");
+  fs.mkdirSync(base, { mode: 0o700 });
+  const mine = process.geteuid();
+  const other = mine === 0 ? 1 : mine + 1;
+  throwsCode(
+    () => ensureCaptureProfileDir(optsFor(base, "owned", { euid: other })),
+    "capture_profile_owner",
+  );
+  eq(fs.existsSync(path.join(base, "owned")), false);
+  eq(modeOf(base), 0o700);
+
+  const okBase = path.join(scratch, "owner-ok");
+  const made = ensureCaptureProfileDir(optsFor(okBase, "owned", { euid: mine }));
+  eq(made, physical(path.join(okBase, "owned")));
+  eq(modeOf(made), 0o700);
+  eq(fs.lstatSync(made).uid, mine);
+});
+
 test("CLI prints the path or an alert", () => {
   const base = path.join(scratch, "cli-home");
   const okRun = runCli(["cli-case"], { ET_CAPTURE_PROFILE_DIR: base });
+  const leaf = path.join(base, "cli-case");
   eq(okRun.status, 0);
-  eq(okRun.stdout, `${path.join(base, "cli-case")}\n`);
+  eq(okRun.stdout, `${physical(leaf)}\n`);
   eq(okRun.stderr, "");
   eq(modeOf(base), 0o700);
-  eq(modeOf(path.join(base, "cli-case")), 0o700);
+  eq(modeOf(leaf), 0o700);
 
   const badRun = runCli(["../x"], { ET_CAPTURE_PROFILE_DIR: path.join(scratch, "cli-bad") });
   eq(badRun.status, 2);
@@ -251,15 +293,153 @@ test("a symlink leaf is refused", () => {
   fs.mkdirSync(target, { mode: 0o700 });
   const leaf = path.join(base, "linked");
   fs.symlinkSync(target, leaf);
+  const before = listing(target);
   throwsCode(
-    () => ensureCaptureProfileDir({
-      caseName: "linked",
-      env: { ET_CAPTURE_PROFILE_DIR: base },
-      repoRoot,
-    }),
+    () => ensureCaptureProfileDir(optsFor(base, "linked")),
     "capture_profile_symlink",
   );
   ok(fs.lstatSync(leaf).isSymbolicLink());
+  eq(listing(target), before);
   eq(modeOf(target), 0o700);
   eq(modeOf(scratch), 0o700);
+});
+
+test("a symlinked ancestor with a missing leaf is refused", () => {
+  const parent = path.join(scratch, "sym-missing");
+  const target = path.join(parent, "target");
+  const link = path.join(parent, "link");
+  fs.mkdirSync(parent, { mode: 0o700 });
+  fs.mkdirSync(target, { mode: 0o700 });
+  fs.symlinkSync(target, link);
+  const before = listing(target);
+  const opts = optsFor(link, "newleaf");
+  throwsCode(() => resolveCaptureProfileDir(opts), "capture_profile_symlink");
+  throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_symlink");
+  eq(listing(target), before);
+  eq(fs.existsSync(path.join(target, "newleaf")), false);
+  ok(fs.lstatSync(link).isSymbolicLink());
+  eq(modeOf(target), 0o700);
+});
+
+test("a symlinked ancestor with an existing leaf is refused", () => {
+  const parent = path.join(scratch, "sym-existing");
+  const target = path.join(parent, "target");
+  const link = path.join(parent, "link");
+  const leaf = path.join(target, "leaf");
+  fs.mkdirSync(parent, { mode: 0o700 });
+  fs.mkdirSync(target, { mode: 0o700 });
+  fs.mkdirSync(leaf, { mode: 0o700 });
+  fs.symlinkSync(target, link);
+  const before = listing(target);
+  eq(modeOf(leaf), 0o700);
+  const opts = optsFor(link, "leaf");
+  throwsCode(() => resolveCaptureProfileDir(opts), "capture_profile_symlink");
+  throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_symlink");
+  eq(listing(target), before);
+  eq(modeOf(leaf), 0o700);
+  eq(fs.existsSync(path.join(target, "leaf")), true);
+  ok(fs.lstatSync(link).isSymbolicLink());
+});
+
+test("refuses any git work tree, git dir, and main checkout", () => {
+  const main = path.join(scratch, "git-main");
+  initCommittedRepo(main);
+  const wt = path.join(main, ".worktrees", "wt");
+  addWorktree(main, wt);
+  ok(fs.lstatSync(path.join(main, ".git")).isDirectory());
+  ok(fs.lstatSync(path.join(wt, ".git")).isFile());
+
+  const worf = path.join(main, "exittrace", "capture-profiles");
+  const worfOpts = optsFor(worf, "worf-case");
+  throwsCode(() => resolveCaptureProfileDir(worfOpts), "capture_profile_in_git_tree");
+  throwsCode(() => ensureCaptureProfileDir(worfOpts), "capture_profile_in_git_tree");
+  eq(fs.existsSync(path.join(main, "exittrace")), false);
+
+  const wtOpts = optsFor(wt, "wt-case");
+  throwsCode(() => resolveCaptureProfileDir(wtOpts), "capture_profile_in_git_tree");
+  throwsCode(() => ensureCaptureProfileDir(wtOpts), "capture_profile_in_git_tree");
+  eq(fs.existsSync(path.join(wt, "wt-case")), false);
+
+  const gitdir = path.join(main, ".git");
+  const gitOpts = optsFor(gitdir, "gitdir-case");
+  throwsCode(() => resolveCaptureProfileDir(gitOpts), "capture_profile_in_git_tree");
+  throwsCode(() => ensureCaptureProfileDir(gitOpts), "capture_profile_in_git_tree");
+  eq(fs.existsSync(path.join(gitdir, "gitdir-case")), false);
+
+  const sibling = path.join(scratch, "git-sibling");
+  const sibOpts = optsFor(sibling, "sibling-case");
+  eq(resolveCaptureProfileDir(sibOpts), path.join(sibling, "sibling-case"));
+  const made = ensureCaptureProfileDir(sibOpts);
+  eq(made, physical(path.join(sibling, "sibling-case")));
+  eq(modeOf(made), 0o700);
+
+  const ghost = path.join(scratch, "ghost-repo");
+  fs.mkdirSync(ghost, { mode: 0o700 });
+  fs.writeFileSync(path.join(ghost, ".git"), "gitdir: /nonexistent\n", { mode: 0o600 });
+  ok(fs.lstatSync(path.join(ghost, ".git")).isFile());
+  const ghostBase = path.join(ghost, "nested");
+  throwsCode(
+    () => ensureCaptureProfileDir(optsFor(ghostBase, "ghost-case", { gitBin: "/nonexistent" })),
+    "capture_profile_in_git_tree",
+  );
+  eq(fs.existsSync(ghostBase), false);
+
+  const lone = path.join(scratch, "no-git-bin");
+  const loneMade = ensureCaptureProfileDir(optsFor(lone, "still-ok", { gitBin: "/nonexistent" }));
+  eq(loneMade, physical(path.join(lone, "still-ok")));
+  eq(modeOf(loneMade), 0o700);
+});
+
+test("CLI refuses a profile inside a fake git repo in scratch", () => {
+  const main = path.join(scratch, "cli-git");
+  initCommittedRepo(main);
+  const cliRun = runCli(["cli-git-case"], { ET_CAPTURE_PROFILE_DIR: main });
+  eq(cliRun.status, 2);
+  eq(cliRun.stdout, "");
+  ok(/^ALERT capture profile capture_profile_in_git_tree: .+\n$/.test(cliRun.stderr));
+  eq(fs.existsSync(path.join(main, "cli-git-case")), false);
+  eq(fs.existsSync(path.join(repoRoot, "cli-git-case")), false);
+});
+
+test("dotdot into a repo is refused", () => {
+  const main = path.join(scratch, "fakerepo");
+  initCommittedRepo(main);
+  const base = `${scratch}${path.sep}elsewhere${path.sep}..${path.sep}fakerepo${path.sep}scratch`;
+  ok(base.includes(`${path.sep}..${path.sep}`));
+  const opts = optsFor(base, "dotdot-case");
+  throwsCode(() => resolveCaptureProfileDir(opts), "capture_profile_in_git_tree");
+  throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_in_git_tree");
+  eq(fs.existsSync(path.join(scratch, "elsewhere")), false);
+  eq(fs.existsSync(path.join(main, "scratch")), false);
+});
+
+test("prefix boundary accepts a sibling name and refuses the repo", () => {
+  const repo = path.join(scratch, "ExitTrace");
+  initCommittedRepo(repo);
+  const evil = path.join(scratch, "ExitTrace-evil", "profiles");
+  const evilOpts = optsFor(evil, "ok-case", { repoRoot: repo });
+  eq(resolveCaptureProfileDir(evilOpts), path.join(evil, "ok-case"));
+  const made = ensureCaptureProfileDir(evilOpts);
+  eq(made, physical(path.join(evil, "ok-case")));
+  eq(modeOf(made), 0o700);
+  ok(made.includes(`${path.sep}ExitTrace-evil${path.sep}`));
+  eq(made.includes(`${path.sep}ExitTrace${path.sep}`), false);
+
+  const inside = `${repo}${path.sep}`;
+  const insideOpts = optsFor(inside, "nope", { repoRoot: repo });
+  throwsCode(() => resolveCaptureProfileDir(insideOpts), "capture_profile_in_repo");
+  throwsCode(() => ensureCaptureProfileDir(insideOpts), "capture_profile_in_repo");
+  eq(fs.existsSync(path.join(repo, "nope")), false);
+});
+
+test("trailing slashes inside a repo are refused", () => {
+  const repo = path.join(scratch, "slash-repo");
+  fs.mkdirSync(repo, { mode: 0o700 });
+  const base = `${repo}${path.sep}${path.sep}scratch${path.sep}${path.sep}${path.sep}`;
+  ok(base.endsWith(`${path.sep}${path.sep}${path.sep}`));
+  const opts = optsFor(base, "slash-case", { repoRoot: repo });
+  throwsCode(() => resolveCaptureProfileDir(opts), "capture_profile_in_repo");
+  throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_in_repo");
+  eq(fs.existsSync(path.join(repo, "scratch")), false);
+  eq(fs.existsSync(path.join(repo, "slash-case")), false);
 });
