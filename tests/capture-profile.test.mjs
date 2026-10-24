@@ -15,7 +15,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const cli = path.join(repoRoot, "scripts", "capture-profile-dir.mjs");
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "et-capture-test."));
 const anchor = path.join(scratch, "anchor");
+const gitHome = path.join(scratch, "home");
 fs.mkdirSync(anchor, { mode: 0o700 });
+fs.mkdirSync(gitHome, { mode: 0o700 });
 
 const scratchRel = path.relative(repoRoot, scratch);
 if (scratchRel === "" || (!scratchRel.startsWith("..") && !path.isAbsolute(scratchRel))) {
@@ -47,6 +49,19 @@ function listing(abs) {
   return fs.readdirSync(abs).sort().join("\n");
 }
 
+function treeList(abs) {
+  const out = [];
+  const visit = (dir) => {
+    for (const name of fs.readdirSync(dir).sort()) {
+      const full = path.join(dir, name);
+      out.push(path.relative(abs, full));
+      if (fs.lstatSync(full).isDirectory()) visit(full);
+    }
+  };
+  visit(abs);
+  return out.join("\n");
+}
+
 function physical(abs) {
   return fs.realpathSync.native(abs);
 }
@@ -60,12 +75,24 @@ function optsFor(base, caseName, extra = {}) {
   };
 }
 
+const gitConfigArgs = [
+  "-c", "commit.gpgsign=false",
+  "-c", "core.fsmonitor=false",
+  "-c", "core.hooksPath=/dev/null",
+  "-c", "user.name=t",
+  "-c", "user.email=t@example.invalid",
+  "-c", "init.defaultBranch=main",
+];
+
 function git(args) {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith("GIT_")) delete env[key];
-  }
-  const run = spawnSync("git", args, { env, encoding: "utf8" });
+  const env = {
+    PATH: process.env.PATH,
+    HOME: gitHome,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
+  const run = spawnSync("git", [...gitConfigArgs, ...args], { env, encoding: "utf8" });
+  if (run.error) throw run.error;
   if (run.status !== 0) {
     const detail = (run.stderr || run.stdout || "git failed").trim();
     throw new Error(detail);
@@ -75,14 +102,12 @@ function git(args) {
 
 function initCommittedRepo(dir) {
   fs.mkdirSync(dir, { mode: 0o700 });
-  const c = ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.invalid"];
-  git([...c, "init", dir]);
-  git([...c, "-C", dir, "commit", "--allow-empty", "-m", "init"]);
+  git(["init", dir]);
+  git(["-C", dir, "commit", "--allow-empty", "-m", "init"]);
 }
 
 function addWorktree(main, wt) {
-  const c = ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.invalid"];
-  git([...c, "-C", main, "worktree", "add", wt]);
+  git(["-C", main, "worktree", "add", wt]);
 }
 
 function runCli(args, extraEnv) {
@@ -104,24 +129,20 @@ process.on("exit", () => {
 test("scratch directory is mode 700", () => {
   eq(modeOf(scratch), 0o700);
   eq(modeOf(anchor), 0o700);
+  eq(modeOf(gitHome), 0o700);
   ok(scratchRel.startsWith("..") || path.isAbsolute(scratchRel));
 });
 
 test("default base is the absolute constant", () => {
   const caseName = "guilfoyle-newsom";
-  ok(path.isAbsolute(DEFAULT_CAPTURE_PROFILE_BASE));
   const expected = path.join(DEFAULT_CAPTURE_PROFILE_BASE, caseName);
+  ok(path.isAbsolute(DEFAULT_CAPTURE_PROFILE_BASE));
+  ok(path.isAbsolute(expected));
   eq(resolveCaptureProfileDir({ caseName, env: {}, repoRoot }), expected);
   eq(
     resolveCaptureProfileDir({ caseName, env: { ET_CAPTURE_PROFILE_DIR: "" }, repoRoot }),
     expected,
   );
-  const repoReal = fs.realpathSync.native(repoRoot);
-  const rel = path.relative(repoReal, expected);
-  ok(rel.startsWith("..") || path.isAbsolute(rel));
-  ok(expected !== repoReal && !expected.startsWith(`${repoReal}${path.sep}`));
-  eq(fs.existsSync(DEFAULT_CAPTURE_PROFILE_BASE), false);
-  eq(fs.existsSync(expected), false);
 });
 
 test("default base ignores the caller repo root", () => {
@@ -378,16 +399,10 @@ test("refuses any git work tree, git dir, and main checkout", () => {
   fs.writeFileSync(path.join(ghost, ".git"), "gitdir: /nonexistent\n", { mode: 0o600 });
   ok(fs.lstatSync(path.join(ghost, ".git")).isFile());
   const ghostBase = path.join(ghost, "nested");
-  throwsCode(
-    () => ensureCaptureProfileDir(optsFor(ghostBase, "ghost-case", { gitBin: "/nonexistent" })),
-    "capture_profile_in_git_tree",
-  );
+  const ghostOpts = optsFor(ghostBase, "ghost-case", { gitBin: "/nonexistent" });
+  throwsCode(() => resolveCaptureProfileDir(ghostOpts), "capture_profile_in_git_tree");
+  throwsCode(() => ensureCaptureProfileDir(ghostOpts), "capture_profile_in_git_tree");
   eq(fs.existsSync(ghostBase), false);
-
-  const lone = path.join(scratch, "no-git-bin");
-  const loneMade = ensureCaptureProfileDir(optsFor(lone, "still-ok", { gitBin: "/nonexistent" }));
-  eq(loneMade, physical(path.join(lone, "still-ok")));
-  eq(modeOf(loneMade), 0o700);
 });
 
 test("CLI refuses a profile inside a fake git repo in scratch", () => {
@@ -442,4 +457,107 @@ test("trailing slashes inside a repo are refused", () => {
   throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_in_repo");
   eq(fs.existsSync(path.join(repo, "scratch")), false);
   eq(fs.existsSync(path.join(repo, "slash-case")), false);
+});
+
+test("bare git dirs are refused", () => {
+  const bare = path.join(scratch, "bare.git");
+  git(["init", "--bare", bare]);
+  const before = treeList(bare);
+  const bareOpts = optsFor(bare, "bare-case");
+  throwsCode(() => resolveCaptureProfileDir(bareOpts), "capture_profile_in_git_tree");
+  throwsCode(() => ensureCaptureProfileDir(bareOpts), "capture_profile_in_git_tree");
+  eq(treeList(bare), before);
+
+  const nested = path.join(bare, "objects", "x");
+  const nestedOpts = optsFor(nested, "nested-case");
+  throwsCode(() => resolveCaptureProfileDir(nestedOpts), "capture_profile_in_git_tree");
+  throwsCode(() => ensureCaptureProfileDir(nestedOpts), "capture_profile_in_git_tree");
+  eq(treeList(bare), before);
+  eq(fs.existsSync(nested), false);
+});
+
+test("missing git fails closed", () => {
+  const plain = path.join(scratch, "plain-nongit");
+  fs.mkdirSync(plain, { mode: 0o700 });
+  const opts = optsFor(plain, "plain-case", { gitBin: "/nonexistent" });
+  throwsCode(() => resolveCaptureProfileDir(opts), "capture_profile_git_missing");
+  throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_git_missing");
+  eq(fs.existsSync(path.join(plain, "plain-case")), false);
+  eq(modeOf(plain), 0o700);
+
+  const emptyBin = path.join(scratch, "empty-bin");
+  fs.mkdirSync(emptyBin, { mode: 0o700 });
+  const cliBase = path.join(scratch, "cli-no-git");
+  const cliRun = runCli(["no-git-case"], {
+    PATH: emptyBin,
+    ET_CAPTURE_PROFILE_DIR: cliBase,
+  });
+  eq(cliRun.status, 2);
+  eq(cliRun.stdout, "");
+  ok(/^ALERT capture profile capture_profile_git_missing: .+\n$/.test(cliRun.stderr));
+  eq(fs.existsSync(cliBase), false);
+});
+
+test("an existing 0777 base is refused and keeps its mode", () => {
+  const base = path.join(scratch, "open-base");
+  fs.mkdirSync(base, { mode: 0o700 });
+  fs.chmodSync(base, 0o777);
+  eq(modeOf(base), 0o777);
+  const opts = optsFor(base, "open-case");
+  throwsCode(() => resolveCaptureProfileDir(opts), "capture_profile_writable");
+  throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_writable");
+  eq(modeOf(base), 0o777);
+  eq(fs.existsSync(path.join(base, "open-case")), false);
+});
+
+test("a non-sticky 0777 ancestor is refused", () => {
+  const ww = path.join(scratch, "ww");
+  fs.mkdirSync(ww, { mode: 0o700 });
+  fs.chmodSync(ww, 0o777);
+  eq(modeOf(ww), 0o777);
+  const base = path.join(ww, "base");
+  const opts = optsFor(base, "ww-case");
+  throwsCode(() => resolveCaptureProfileDir(opts), "capture_profile_ancestor_perm");
+  throwsCode(() => ensureCaptureProfileDir(opts), "capture_profile_ancestor_perm");
+  eq(modeOf(ww), 0o777);
+  eq(fs.existsSync(base), false);
+});
+
+test("a sticky 01777 ancestor is accepted", () => {
+  const sticky = path.join(scratch, "sticky");
+  fs.mkdirSync(sticky, { mode: 0o700 });
+  fs.chmodSync(sticky, 0o1777);
+  eq(fs.statSync(sticky).mode & 0o7777, 0o1777);
+  const base = path.join(sticky, "base");
+  const made = ensureCaptureProfileDir(optsFor(base, "leaf"));
+  eq(made, physical(path.join(base, "leaf")));
+  eq(modeOf(made), 0o700);
+  eq(modeOf(base), 0o700);
+  eq(fs.statSync(sticky).mode & 0o7777, 0o1777);
+});
+
+test("an ancestor owned by someone else is refused", () => {
+  const base = path.join(scratch, "anc-owner", "base");
+  const mine = process.geteuid();
+  const other = mine === 0 ? 1 : mine + 1;
+  const predOpts = optsFor(base, "pred-case", { ancestorOwnerOk: () => false });
+  throwsCode(() => resolveCaptureProfileDir(predOpts), "capture_profile_ancestor_owner");
+  throwsCode(() => ensureCaptureProfileDir(predOpts), "capture_profile_ancestor_owner");
+  if (fs.lstatSync(scratch).uid !== 0) {
+    const euidOpts = optsFor(base, "euid-case", { euid: other });
+    throwsCode(() => resolveCaptureProfileDir(euidOpts), "capture_profile_ancestor_owner");
+    throwsCode(() => ensureCaptureProfileDir(euidOpts), "capture_profile_ancestor_owner");
+  }
+  eq(fs.existsSync(path.join(scratch, "anc-owner")), false);
+});
+
+test("the mkdtemp parent is sticky, root-owned, and accepted", () => {
+  const parent = fs.realpathSync.native(path.dirname(scratch));
+  const st = fs.lstatSync(parent);
+  eq(parent, fs.realpathSync.native(os.tmpdir()));
+  eq(st.uid, 0);
+  eq(st.mode & 0o7777, 0o1777);
+  const made = ensureCaptureProfileDir(optsFor(path.join(scratch, "under-tmp"), "ok-case"));
+  eq(modeOf(made), 0o700);
+  eq(fs.lstatSync(made).uid, process.geteuid());
 });

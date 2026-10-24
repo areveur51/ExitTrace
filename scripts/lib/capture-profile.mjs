@@ -1,9 +1,11 @@
 /**
- * Dig capture profile directories live outside any git work tree.
+ * Dig capture profile directories live outside any git work tree or git dir.
  * resolveCaptureProfileDir does not create anything.
  * ensureCaptureProfileDir creates the leaf and keeps mode 0o700.
- * A symlink component, any git work tree, the wrong owner, or a mode
- * missing owner access is refused. This module does not launch a browser.
+ * A symlink, any git dir (including a bare repo), a missing git binary,
+ * a group or world writable base, a non-sticky writable ancestor, the wrong
+ * owner, or a mode missing owner access is refused. This module does not
+ * launch a browser.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -62,6 +64,76 @@ function isSameOrInside(candidate, rootReal) {
   if (child === root) return true;
   if (root === path.sep) return child.startsWith(path.sep);
   return child.startsWith(`${root}${path.sep}`);
+}
+
+function isStrictAncestor(dir, base) {
+  const parent = path.resolve(dir);
+  const child = path.resolve(base);
+  if (parent === child) return false;
+  if (parent === path.sep) return child !== path.sep;
+  return child.startsWith(`${parent}${path.sep}`);
+}
+
+function permBits(st) {
+  return st.mode & 0o7777;
+}
+
+function assertNotGroupWorldWritable(st) {
+  if ((permBits(st) & 0o022) !== 0) {
+    throw refusal("capture_profile_writable", "capture profile path is group or world writable");
+  }
+}
+
+function assertAncestorPerm(st) {
+  const mode = permBits(st);
+  if ((mode & 0o022) !== 0 && (mode & 0o1000) === 0) {
+    throw refusal(
+      "capture_profile_ancestor_perm",
+      "capture profile ancestor is group or world writable",
+    );
+  }
+}
+
+// Production accepts root or the euid. Tests may pass ancestorOwnerOk.
+function assertAncestorOwner(st, euid, opts) {
+  const ok = opts && typeof opts.ancestorOwnerOk === "function"
+    ? opts.ancestorOwnerOk(st, euid) === true
+    : (st.uid === 0 || st.uid === euid);
+  if (!ok) {
+    throw refusal("capture_profile_ancestor_owner", "capture profile ancestor owner mismatch");
+  }
+}
+
+function assertProfilePerms(dir, base, euid, opts) {
+  const baseAbs = path.resolve(base);
+  const within = [];
+  const ancestors = [];
+  const { root, parts } = splitAbs(path.resolve(dir));
+  let cursor = root;
+  const push = (abs, st) => {
+    if (isSameOrInside(abs, baseAbs)) within.push(st);
+    else if (isStrictAncestor(abs, baseAbs)) ancestors.push(st);
+  };
+  const rootStat = lstatOrNull(cursor);
+  if (rootStat && !rootStat.isSymbolicLink() && rootStat.isDirectory()) {
+    push(cursor, rootStat);
+  }
+  for (const part of parts) {
+    cursor = path.join(cursor, part);
+    const st = lstatOrNull(cursor);
+    if (!st) break;
+    assertNotSymlink(st);
+    if (!st.isDirectory()) break;
+    push(cursor, st);
+  }
+  for (const st of within) {
+    assertNotGroupWorldWritable(st);
+    assertOwner(st, euid);
+  }
+  for (const st of ancestors) {
+    assertAncestorPerm(st);
+    assertAncestorOwner(st, euid, opts);
+  }
 }
 
 function assertOutsideRepo(abs, repo) {
@@ -196,50 +268,43 @@ function ancestorsHaveGit(start) {
   return false;
 }
 
-function envWithoutGitVars() {
+function gitEnv() {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
     if (key.startsWith("GIT_")) delete env[key];
   }
+  // The acceptance phrase below is the English git message.
+  env.LC_ALL = "C";
   return env;
 }
 
-function gitCommonMainContains(abs, ancestor, stdout) {
-  const lines = String(stdout || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  const toplevel = lines[0] ? path.resolve(ancestor, lines[0]) : "";
-  const commonRaw = lines[1] || "";
-  if (toplevel && isSameOrInside(abs, toplevel)) return true;
-  if (!commonRaw) return false;
-  const commonAbs = path.resolve(ancestor, commonRaw);
-  if (path.basename(commonAbs) !== ".git") return false;
-  return isSameOrInside(abs, path.dirname(commonAbs));
-}
-
-function assertOutsideGitTree(abs, ancestor, gitBin) {
+function assertOutsideGitTree(ancestor, gitBin) {
   if (ancestorsHaveGit(ancestor)) {
     throw refusal("capture_profile_in_git_tree", "capture profile resolves inside a git tree");
   }
+  // safe.directory on the command line keeps another owner's repo from
+  // looking like "not a git repository".
   const run = spawnSync(
     gitBinary(gitBin),
-    ["-C", ancestor, "rev-parse", "--show-toplevel", "--git-common-dir"],
+    ["-c", "safe.directory=*", "-C", ancestor, "rev-parse", "--git-dir"],
     {
       encoding: "utf8",
-      env: envWithoutGitVars(),
+      env: gitEnv(),
       timeout: 20000,
     },
   );
-  if (run.error && run.error.code === "ENOENT") return;
-  if (run.error) throw run.error;
-  if (run.status !== 0) return;
-  // Success means this ancestor is a work tree or git dir.
-  // A common dir named .git also names that repo's main checkout.
-  const inMain = gitCommonMainContains(abs, ancestor, run.stdout);
-  if (inMain || run.status === 0) {
+  if (run.error && run.error.code === "ENOENT") {
+    throw refusal("capture_profile_git_missing", "git is required to validate the capture profile path");
+  }
+  if (run.error || run.signal) {
+    throw refusal("capture_profile_git_error", "git could not validate the capture profile path");
+  }
+  if (run.status === 0) {
     throw refusal("capture_profile_in_git_tree", "capture profile resolves inside a git tree");
   }
+  const stderr = typeof run.stderr === "string" ? run.stderr : "";
+  if (stderr.includes("not a git repository")) return;
+  throw refusal("capture_profile_git_error", "git could not validate the capture profile path");
 }
 
 function splitAbs(abs) {
@@ -265,7 +330,8 @@ function resolveCaptureProfile(opts) {
   assertNoSymlinkPath(located.dir);
   assertOutsideRepo(path.resolve(lexical), repo);
   assertOutsideRepo(located.dir, repo);
-  assertOutsideGitTree(located.dir, located.ancestor, options.gitBin);
+  assertOutsideGitTree(located.ancestor, options.gitBin);
+  assertProfilePerms(located.dir, baseLocated.dir, euidOf(options), options);
   return {
     dir: located.dir,
     repo,
@@ -275,7 +341,7 @@ function resolveCaptureProfile(opts) {
   };
 }
 
-function createProfileTree(dir, lexical, base, repo, euid) {
+function createProfileTree(dir, lexical, base, repo, euid, opts) {
   assertNoSymlinkPath(lexical);
   assertNoSymlinkPath(dir);
   const { root, parts } = splitAbs(dir);
@@ -290,7 +356,10 @@ function createProfileTree(dir, lexical, base, repo, euid) {
         throw refusal("capture_profile_not_dir", "capture profile path is not a directory");
       }
       if (st) {
-        if (isSameOrInside(cursor, base)) assertOwner(st, euid);
+        if (isSameOrInside(cursor, base)) {
+          assertNotGroupWorldWritable(st);
+          assertOwner(st, euid);
+        }
         continue;
       }
       assertOutsideRepo(cursor, repo);
@@ -305,7 +374,13 @@ function createProfileTree(dir, lexical, base, repo, euid) {
       if (!made.isDirectory()) {
         throw refusal("capture_profile_not_dir", "capture profile path is not a directory");
       }
-      if (isSameOrInside(cursor, base)) assertOwner(made, euid);
+      if (isSameOrInside(cursor, base)) {
+        assertNotGroupWorldWritable(made);
+        assertOwner(made, euid);
+      } else if (isStrictAncestor(cursor, base)) {
+        assertAncestorPerm(made);
+        assertAncestorOwner(made, euid, opts);
+      }
     }
   } finally {
     if (prevUmask !== null) process.umask(prevUmask);
@@ -328,7 +403,7 @@ export function resolveCaptureProfileDir(opts = {}) {
 export function ensureCaptureProfileDir(opts = {}) {
   const resolved = resolveCaptureProfile(opts);
   const euid = euidOf(opts);
-  createProfileTree(resolved.dir, resolved.lexical, resolved.base, resolved.repo, euid);
+  createProfileTree(resolved.dir, resolved.lexical, resolved.base, resolved.repo, euid, opts);
   const leafStat = fs.lstatSync(resolved.dir);
   assertNotSymlink(leafStat);
   if (!leafStat.isDirectory()) {
@@ -340,6 +415,7 @@ export function ensureCaptureProfileDir(opts = {}) {
   assertNoSymlinkPath(leaf);
   assertOutsideRepo(leaf, resolved.repo);
   const again = locatePhysical(leaf);
-  assertOutsideGitTree(leaf, again.ancestor, resolved.gitBin);
+  assertOutsideGitTree(again.ancestor, resolved.gitBin);
+  assertProfilePerms(leaf, resolved.base, euid, opts);
   return leaf;
 }
