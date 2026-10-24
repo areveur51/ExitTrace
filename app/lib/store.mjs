@@ -23,6 +23,7 @@ import {
   validateIdentifiedPersonInput,
   validatePromoteInput,
 } from "./promote.mjs";
+import { VOTE_NO_KINDS, normalizeRollCall } from "./vote-rolls.mjs";
 import { isPeopleMediaHref, isStoredPeoplePortrait, resolvePortrait } from "./portrait.mjs";
 import { normalizeScreenshotCredit, normalizeScreenshotHref } from "./screenshot.mjs";
 import { hasRecordedNetWorth, resolveNetWorth } from "./net-worth.mjs";
@@ -2029,17 +2030,50 @@ export async function assertMultiNotableReady(client, person) {
   );
 }
 
+function companionDay(ev) {
+  const text = String(ev?.event_date ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+/** Newest YYYY-MM-DD wins. An empty or invalid day loses to any valid day.
+ * Equal days: the greater normalized roll_call wins. Equal rolls: the first stays.
+ */
+function laterVoteCompanion(incoming, kept) {
+  const next = companionDay(incoming);
+  const prev = companionDay(kept);
+  if (next !== prev) {
+    if (!next) return false;
+    if (!prev) return true;
+    return next > prev;
+  }
+  const nextRoll = normalizeRollCall(incoming?.roll_call);
+  const prevRoll = normalizeRollCall(kept?.roll_call);
+  if (nextRoll === prevRoll) return false;
+  return nextRoll > prevRoll;
+}
+
 export async function syncPersonEvents(client, row) {
   const person = normalizePerson(row);
   await assertMultiNotableReady(client, person);
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
-  const inserted = new Set();
+  const bySlot = new Map();
   for (const ev of person.events) {
     const seq = String(ev.kind || "").trim() === "notable" ? notableSeq(ev) : 0;
-    // One companion row per kind except notable. Later recorded-vote events stay on people.events.
+    // One companion row per (kind, seq). Notable seq values stay distinct.
+    // A recorded-no kind keeps the newest-dated roll. The card still has every roll.
     const slot = `${ev.kind}\0${seq}`;
-    if (inserted.has(slot)) continue;
-    inserted.add(slot);
+    const kept = bySlot.get(slot);
+    if (!kept) {
+      bySlot.set(slot, ev);
+      continue;
+    }
+    // Other kinds keep the first folded event. See tests/multi-notable.test.mjs.
+    if (VOTE_NO_KINDS.has(String(ev.kind || "").trim()) && laterVoteCompanion(ev, kept)) {
+      bySlot.set(slot, ev);
+    }
+  }
+  for (const ev of bySlot.values()) {
+    const seq = String(ev.kind || "").trim() === "notable" ? notableSeq(ev) : 0;
     await client.query(
       `INSERT INTO person_events (
          person_id, kind, seq, event_date, sources, announced_date,

@@ -4,7 +4,7 @@ import { personDetail } from "../app/lib/html.mjs";
 import { personMenuDate } from "../app/lib/menu-date.mjs";
 import { projectPerson } from "../app/lib/promote.mjs";
 import { handle } from "../app/server.mjs";
-import { listPeople, setMemory } from "../app/lib/store.mjs";
+import { listPeople, setMemory, setPoolForTests, syncPersonEvents } from "../app/lib/store.mjs";
 import { ATTRIBUTE_TAG_IDS, attributeTagById, normalizeTags } from "../app/lib/tags.mjs";
 import {
   VOTE_NO_KIND_IDS,
@@ -13,6 +13,7 @@ import {
   houseClerkVoteUrl,
   houseClerkXmlUrl,
   officialRollUrls,
+  parseRollId,
   senateRollCallUrl,
 } from "../app/lib/vote-rolls.mjs";
 
@@ -246,6 +247,8 @@ test("a passage card shows Final passage and Voted no, with cites escaped", () =
   assert.doesNotMatch(section, /Quote <a>/);
   assert.doesNotMatch(html, /roll-clip\.jpg/);
   assert.doesNotMatch(html, /aria-label="Supporting media"/);
+  const keptMedia = row.events.find((ev) => ev.kind === "big_beautiful_bill_act");
+  assert.equal(keptMedia.media[0].src, "/media/people/vote-card/support/roll-clip.jpg");
   assert.equal(row.category, "notable");
   assert.equal(row.event_date, "2019-01-03");
 });
@@ -437,4 +440,285 @@ test("a deceased former member stays on the tag list and the card", async () => 
   assert.match(section, /H\.R\. 1 · House roll 145/);
   assert.match(section, /Final passage/);
   assert.match(section, /Position · Voted no/);
+});
+
+function recordingClient() {
+  const queries = [];
+  const client = {
+    async query(sql, params) {
+      queries.push({ sql: String(sql), params });
+      return { rows: [] };
+    },
+  };
+  return { client, queries };
+}
+
+function eventInserts(queries) {
+  return queries.filter((q) => /INSERT INTO person_events/.test(q.sql));
+}
+
+function ordersOf(items) {
+  if (items.length <= 1) return [items];
+  const out = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const head = items[i];
+    const rest = items.slice(0, i).concat(items.slice(i + 1));
+    for (const tail of ordersOf(rest)) out.push([head, ...tail]);
+  }
+  return out;
+}
+
+function hrefCount(html, url) {
+  return String(html || "").split(`href="${url}"`).length - 1;
+}
+
+function pageVariants(url) {
+  const parsed = new URL(url);
+  const host = parsed.hostname.replace(/^www\./, "");
+  const path = `${parsed.pathname}${parsed.search}`;
+  return [
+    `https://${host}${path}`,
+    `http://${host}${path}`,
+    `https://www.${host}${path}`,
+    `http://www.${host}${path}`,
+  ];
+}
+
+function voteSectionFor(kind, rollId, date, url) {
+  const row = personWith([
+    {
+      kind,
+      event_date: date,
+      roll_call: rollId,
+      sources: [
+        { url, publisher: "Record", date },
+        { url: "https://example.com/news-b", publisher: "Other", date },
+      ],
+    },
+  ]);
+  return voteSections(personDetail(row))[0];
+}
+
+test("the companion row is the newest H.R. 1 roll in every input order", async () => {
+  const rolls = [
+    {
+      kind: "big_beautiful_bill_act",
+      event_date: "2025-05-22",
+      roll_call: "H-119-1-145",
+      sources: [],
+    },
+    {
+      kind: "big_beautiful_bill_act",
+      event_date: "2025-07-01",
+      roll_call: "S-119-1-372",
+      sources: [],
+    },
+    {
+      kind: "big_beautiful_bill_act",
+      event_date: "2025-07-03",
+      roll_call: "H-119-1-190",
+      sources: [],
+    },
+  ];
+  const orders = ordersOf(rolls);
+  assert.equal(orders.length, 6);
+  for (const order of orders) {
+    const row = {
+      id: "hr1-member",
+      name: "HR One",
+      category: "firings",
+      event_date: "2019-01-03",
+      events: [{ kind: "firings", event_date: "2019-01-03", sources: [] }, ...order],
+    };
+    const { client, queries } = recordingClient();
+    await syncPersonEvents(client, row);
+    const inserts = eventInserts(queries);
+    const companions = inserts.filter((q) => q.params[1] === "big_beautiful_bill_act");
+    assert.equal(companions.length, 1);
+    assert.equal(companions[0].params[3], "2025-07-03");
+    assert.equal(companions[0].params[3], personMenuDate(row, { tag: "big_beautiful_bill_act" }));
+    assert.match(companions[0].sql, /ON CONFLICT \(person_id, kind, seq\)/);
+    assert.equal(queries.some((q) => /to_regclass\('person_events'\)/.test(q.sql)), false);
+  }
+});
+
+test("listed event date SQL reads person_events.event_date", async () => {
+  const queries = [];
+  setPoolForTests({
+    query(sql, params) {
+      queries.push({ sql: String(sql), params });
+      return Promise.resolve({ rows: [] });
+    },
+  });
+  try {
+    await listPeople({ category: "firings", minAge: 40, limit: 1 });
+  } finally {
+    setPoolForTests(null);
+  }
+  const sql = queries.map((q) => q.sql).join("\n");
+  assert.match(sql, /FROM person_events e/);
+  assert.match(sql, /MAX\(e\.event_date\)/);
+  assert.match(sql, /ORDER BY COALESCE\(\(\s*SELECT MAX\(e\.event_date\) FROM person_events e/s);
+  assert.match(sql, /EXTRACT\(YEAR FROM age\(/);
+});
+
+test("equal vote dates keep the greater roll id, and the same roll keeps the first", async () => {
+  const lower = {
+    kind: "big_beautiful_bill_act",
+    event_date: "2025-07-03",
+    roll_call: "H-119-1-145",
+    comments: "lower roll",
+    sources: [],
+  };
+  const higher = {
+    kind: "big_beautiful_bill_act",
+    event_date: "2025-07-03",
+    roll_call: "H-119-1-190",
+    comments: "higher roll",
+    sources: [],
+  };
+  for (const order of [ [lower, higher], [higher, lower] ]) {
+    const { client, queries } = recordingClient();
+    await syncPersonEvents(client, {
+      id: "tie-member",
+      name: "Tie Member",
+      category: "firings",
+      event_date: "2019-01-03",
+      events: order,
+    });
+    const companions = eventInserts(queries).filter((q) => q.params[1] === "big_beautiful_bill_act");
+    assert.equal(companions.length, 1);
+    assert.equal(companions[0].params[3], "2025-07-03");
+    assert.equal(companions[0].params[10], "higher roll");
+  }
+
+  const seenFirst = { ...higher, comments: "seen first" };
+  const seenSecond = { ...higher, comments: "seen second" };
+  for (const [first, second] of [
+    [seenFirst, seenSecond],
+    [seenSecond, seenFirst],
+  ]) {
+    const { client, queries } = recordingClient();
+    await syncPersonEvents(client, {
+      id: "tie-member",
+      name: "Tie Member",
+      category: "firings",
+      event_date: "2019-01-03",
+      events: [first, second],
+    });
+    const companions = eventInserts(queries).filter((q) => q.params[1] === "big_beautiful_bill_act");
+    assert.equal(companions.length, 1);
+    assert.equal(companions[0].params[10], first.comments);
+  }
+});
+
+test("a non-vote kind still keeps the first folded event on the companion row", async () => {
+  const { client, queries } = recordingClient();
+  await syncPersonEvents(client, {
+    id: "firing-member",
+    name: "Firing Member",
+    category: "firings",
+    event_date: "2024-01-01",
+    events: [
+      { kind: "firings", event_date: "2024-01-01", comments: "first firing", sources: [] },
+      { kind: "firings", event_date: "2024-06-15", comments: "later firing", sources: [] },
+    ],
+  });
+  const inserts = eventInserts(queries).filter((q) => q.params[1] === "firings");
+  assert.equal(inserts.length, 1);
+  assert.equal(inserts[0].params[3], "2024-01-01");
+  assert.equal(inserts[0].params[10], "first firing");
+});
+
+test("each roll number and tally appears in its tag lede", () => {
+  for (const roll of Object.values(VOTE_ROLLS)) {
+    const tag = VOTE_NO_TAGS.find((item) => item.id === roll.tag);
+    assert.ok(tag, roll.id);
+    const noun = roll.chamber === "Senate" ? "vote" : "roll";
+    assert.match(tag.lede, new RegExp(`\\b${noun} ${roll.number}\\b`), roll.id);
+    const ledeTokens = new Set(tag.lede.toLowerCase().match(/[a-z0-9]+/g) || []);
+    for (const token of String(roll.tally).toLowerCase().match(/[a-z0-9]+/g) || []) {
+      assert.equal(ledeTokens.has(token), true, `${roll.id} ${token}`);
+    }
+  }
+});
+
+test("a same-roll page does not suppress a different clerk or senate roll", () => {
+  const official = houseClerkVoteUrl("H-119-1-145", "2025-05-22");
+  const xml = houseClerkXmlUrl("H-119-1-145", "2025-05-22");
+  for (const url of [...pageVariants(official), ...pageVariants(xml)]) {
+    const section = voteSectionFor("big_beautiful_bill_act", "H-119-1-145", "2025-05-22", url);
+    assert.equal(hrefCount(section, url), 1, url);
+    assert.equal(hrefCount(section, official), url === official ? 1 : 0, url);
+  }
+
+  const otherHouse = houseClerkVoteUrl("H-119-1-190", "2025-07-03");
+  const houseSection = voteSectionFor(
+    "big_beautiful_bill_act",
+    "H-119-1-145",
+    "2025-05-22",
+    otherHouse,
+  );
+  assert.equal(hrefCount(houseSection, otherHouse), 1);
+  assert.equal(hrefCount(houseSection, official), 1);
+
+  const otherSenate = senateRollCallUrl("S-119-1-372");
+  const senateCite = voteSectionFor(
+    "big_beautiful_bill_act",
+    "H-119-1-145",
+    "2025-05-22",
+    otherSenate,
+  );
+  assert.equal(hrefCount(senateCite, otherSenate), 1);
+  assert.equal(hrefCount(senateCite, official), 1);
+
+  const senateOfficial = senateRollCallUrl("S-119-1-372");
+  for (const url of pageVariants(senateOfficial)) {
+    const section = voteSectionFor("big_beautiful_bill_act", "S-119-1-372", "2025-07-01", url);
+    assert.equal(hrefCount(section, url), 1, url);
+    assert.equal(hrefCount(section, senateOfficial), url === senateOfficial ? 1 : 0, url);
+  }
+  const differentSenate = senateRollCallUrl("S-119-2-231");
+  const senateSection = voteSectionFor(
+    "big_beautiful_bill_act",
+    "S-119-1-372",
+    "2025-07-01",
+    differentSenate,
+  );
+  assert.equal(hrefCount(senateSection, differentSenate), 1);
+  assert.equal(hrefCount(senateSection, senateOfficial), 1);
+});
+
+test("catalog roll years match congress and session", () => {
+  for (const roll of Object.values(VOTE_ROLLS)) {
+    const year = 1787 + 2 * roll.congress + (roll.session - 1);
+    assert.equal(Number(roll.date.slice(0, 4)), year, roll.id);
+  }
+});
+
+test("parseRollId rejects a leading zero", () => {
+  assert.equal(parseRollId("H-119-1-0145"), null);
+  assert.equal(parseRollId("H-019-1-145"), null);
+  assert.equal(parseRollId("H-119-1-145")?.number, 145);
+  assert.equal(parseRollId("H-119-1-145")?.congress, 119);
+});
+
+test("a non-vote kind does not keep a roll id from comments", () => {
+  const row = projectPerson({
+    id: "plain-firing",
+    name: "Plain Firing",
+    category: "firings",
+    event_date: "2019-06-01",
+    events: [
+      {
+        kind: "firings",
+        event_date: "2019-06-01",
+        comments: "H-119-1-145",
+        sources: [],
+      },
+    ],
+  });
+  const ev = row.events.find((item) => item.kind === "firings");
+  assert.equal(ev.roll_call, undefined);
+  assert.equal(ev.comments, "H-119-1-145");
 });

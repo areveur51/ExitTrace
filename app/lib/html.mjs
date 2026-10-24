@@ -91,6 +91,7 @@ import {
   VOTE_NO_KINDS,
   VOTE_ROLLS,
   normalizeRollCall,
+  officialRollPageUrl,
   voteRollTitle,
   voteStageLabel,
 } from "./vote-rolls.mjs";
@@ -1869,6 +1870,9 @@ function personSupportingMediaHtml(row, seen) {
   const figures = [];
   for (const ev of personEvents(row)) {
     const kind = String(ev?.kind || "").trim();
+    // Recorded-no media stays on people.events and is not rendered.
+    // It is not orphaned and must not be cleaned up.
+    // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
     if (kind === "notable" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     const media = normalizeEventMedia(ev.media);
@@ -2520,24 +2524,11 @@ export function ukraineAidFlagsEventHtml(row, sourceNumbers) {
     .join("");
 }
 
-function citeHost(url) {
-  try {
-    return new URL(String(url || "").trim()).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
-
-function sameCiteUrl(a, b) {
-  const left = canonicalPublicUrl(a);
-  const right = canonicalPublicUrl(b);
-  if (left && right) return left === right;
-  return String(a || "").trim() === String(b || "").trim();
-}
-
-function isClerkOrSenateUrl(url) {
-  const host = citeHost(url);
-  return host === "clerk.house.gov" || host === "senate.gov";
+/** Host and path, scheme and www dropped, so clerk and senate pages compare equal. */
+function rollPageKey(url) {
+  const canonical = canonicalPublicUrl(url);
+  if (!canonical) return "";
+  return canonical.replace(/^https?:\/\//, "");
 }
 
 /** Catalog roll for this event. A missing or mismatched id stays null. */
@@ -2565,10 +2556,10 @@ function metaLine(label, value) {
 function voteEventCites(ev, roll) {
   const cites = eventSectionCites(ev);
   if (!roll) return cites;
-  const official = String(roll.urls?.[0] || "").trim();
+  const official = officialRollPageUrl(roll.id);
   if (!official) return cites;
-  if (cites.some((cite) => sameCiteUrl(cite.url, official))) return cites;
-  if (cites.some((cite) => isClerkOrSenateUrl(cite.url))) return cites;
+  const pages = new Set((roll.urls || []).map(rollPageKey).filter(Boolean));
+  if (cites.some((cite) => pages.has(rollPageKey(cite.url)))) return cites;
   return cites.concat({
     url: official,
     source_label:

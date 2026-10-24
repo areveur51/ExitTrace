@@ -284,7 +284,9 @@ function findMergeIndex(events, ev) {
   return (events || []).findIndex((row) => row.kind === kind);
 }
 
-function keptRollCall(...raws) {
+/** Roll id for a recorded-no kind. Other kinds never store roll_call. */
+function keptRollCall(kind, ...raws) {
+  if (!VOTE_NO_KINDS.has(String(kind || "").trim())) return "";
   for (const raw of raws) {
     const roll = normalizeRollCall(raw?.roll_call);
     if (roll) return roll;
@@ -340,7 +342,7 @@ export function normalizePersonEvent(raw, fallback = {}) {
     ...(Array.isArray(raw.media) ? raw.media : []),
   ]);
   if (media.length) event.media = media;
-  const rollCall = keptRollCall(raw, fallback);
+  const rollCall = keptRollCall(kind, raw, fallback);
   if (rollCall) event.roll_call = rollCall;
   applyEventShot(event, raw, fallback);
   return event;
@@ -374,7 +376,7 @@ function mergePersonEvent(prior, ev) {
   }
   const media = normalizeEventMedia([...(prior.media || []), ...(ev.media || [])]);
   if (media.length) merged.media = media;
-  const rollCall = keptRollCall(prior, ev);
+  const rollCall = keptRollCall(prior.kind, prior, ev);
   if (rollCall) merged.roll_call = rollCall;
   applyEventShot(merged, prior, ev);
   return merged;
@@ -395,7 +397,7 @@ function copyEventRow(ev) {
   }
   const media = normalizeEventMedia(ev.media);
   if (media.length) row.media = media;
-  const rollCall = keptRollCall(ev);
+  const rollCall = keptRollCall(ev.kind, ev);
   if (rollCall) row.roll_call = rollCall;
   applyEventShot(row, ev);
   return row;
@@ -699,7 +701,7 @@ export function mergePersonAnnotate(gold, prior) {
     const existing = events[i];
     existing.sources = mergeCites(existing.sources, ev.sources).sources;
     Object.assign(existing, mergeEventAttrs(existing, ev));
-    const rollCall = keptRollCall(existing, ev);
+    const rollCall = keptRollCall(existing.kind, existing, ev);
     if (rollCall) existing.roll_call = rollCall;
     const headcount = parseHeadcount(existing.headcount) ?? parseHeadcount(ev.headcount);
     if (headcount != null) existing.headcount = headcount;

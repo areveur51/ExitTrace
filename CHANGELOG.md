@@ -17,6 +17,8 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Changed
 
+- A recorded-no companion row in `person_events` is the newest-dated roll of that kind. The same date keeps the roll id that sorts later. The same roll keeps the first row. List SQL reads that `person_events.event_date`. A duplicate of any other kind still folds to the first event, so its companion row stays that event.
+- Media stored on a recorded-no event stays on `people.events`. The card does not render it. It is not orphaned and must not be cleaned up.
 - List pages share one results-controls bar: view, card size, pager, and rows per page. Wide screens use a single toolbar from 1200px; narrower widths use a two-row panel.
 
 ### Fixed

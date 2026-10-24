@@ -1,12 +1,16 @@
 /** Closed catalog of recorded-no roll calls.
  * `roll_call` is stored on each `people.events[]` object and kept by
  * normalizePersonEvent, the same way headcount is. A comments value that is
- * only a roll id (`H-119-1-145`) is read when the field is empty.
+ * only a roll id (`H-119-1-145`) is read when the field is empty, and only
+ * for a recorded-no kind.
  * `person_events` has no roll_call column and allows seq 0 outside notable,
- * so that companion table holds one row per kind. The card reads people.events.
+ * so that companion table holds one row per kind: the newest-dated roll.
+ * The card reads every roll on people.events.
+ * Media on a recorded-no event stays on people.events. The card does not
+ * render it. It is not orphaned and must not be cleaned up.
  */
 
-const ROLL_ID_RE = /^([HS])-(\d{3})-([12])-(\d{1,4})$/;
+const ROLL_ID_RE = /^([HS])-([1-9]\d{2})-([12])-([1-9]\d{0,3})$/;
 
 export function parseRollId(raw) {
   const text = String(raw || "").trim();
