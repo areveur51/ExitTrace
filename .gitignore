@@ -22,6 +22,14 @@ var/
 # In-progress thumb writes
 media/thumbs/**/*.tmp
 
+# scratch/ holds per-case working files and must never hold browser profiles
+# or credentials. Tracked files already under scratch/ stay tracked (git keeps
+# tracking them). New files there need `git add -f`. The specific scratch/...
+# lines below are redundant and are left in place.
+# /.worktrees/ is local linked worktrees only, not source.
+/scratch/
+/.worktrees/
+
 # Local portrait review downloads and helper packages. Not catalog source.
 scratch/portrait-review/
 scratch/pydeps/
