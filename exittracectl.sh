@@ -1,11 +1,65 @@
 #!/usr/bin/env bash
 # ExitTrace control — start | stop | restart | status | logs | seed | pack
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+ALERT_SEEN=0
+CMD_NAME="${1:-help}"
+STOP_TIMEOUT=20
+
+alert() {
+  ALERT_SEEN=1
+  printf 'ALERT exittrace %s\n' "$*" >&2
+}
+
+# Same ALERT line as alert, without marking ALERT_SEEN. A later failure that
+# has no terminal ALERT still gets the exit-trap line.
+alert_advisory() {
+  printf 'ALERT exittrace %s\n' "$*" >&2
+}
+
+on_ctl_exit() {
+  local rc=$?
+  trap - EXIT
+  if [[ "$rc" -ne 0 && "$ALERT_SEEN" -eq 0 ]]; then
+    alert "${CMD_NAME} exited rc=${rc}"
+  fi
+  exit "$rc"
+}
+# Applies to every subcommand, including non-ctl ones like seed, digest, logs,
+# pack and unknown commands, which print an ALERT line on a nonzero exit.
+trap on_ctl_exit EXIT
+
+ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 PID_FILE="${ROOT}/exittrace.pid"
 LOG_FILE="${ROOT}/exittrace.log"
 ENV_FILE="${ROOT}/.env"
 DEFAULT_PORT=5220
+VAR_DIR="${ROOT}/var"
+# shellcheck disable=SC1091
+source "${ROOT}/scripts/lib/retire.sh"
+# shellcheck disable=SC1091
+source "${ROOT}/scripts/lib/proc.sh"
+
+# EXITTRACE_VAR_DIR is accepted only when its realpath -m equals or sits under
+# the realpath of ${ROOT}/var.
+validate_var_dir() {
+  local request="${EXITTRACE_VAR_DIR:-${ROOT}/var}"
+  local root_var=""
+  if ! VAR_DIR="$(realpath -m -- "$request")"; then
+    alert "var dir could not be resolved"
+    exit 1
+  fi
+  if ! root_var="$(realpath -m -- "${ROOT}/var")"; then
+    alert "var dir could not be resolved"
+    exit 1
+  fi
+  case "$VAR_DIR" in
+    "$root_var"|"$root_var"/*) return 0 ;;
+  esac
+  alert "var dir is outside the allowed tree"
+  exit 1
+}
+validate_var_dir
 
 usage() {
   cat <<EOF
@@ -64,9 +118,12 @@ load_env() {
 
 is_running() {
   [[ -f "$PID_FILE" ]] || return 1
-  local pid
-  pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-  [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null
+  local pid="" n=0
+  pid="$(read_pidfile)"
+  [[ "$pid" =~ ^[0-9]{1,10}$ ]] || return 1
+  n=$((10#$pid))
+  [[ "$n" -gt 1 ]] || return 1
+  kill -0 "$n" 2>/dev/null
 }
 
 cmd_status() {
@@ -78,34 +135,188 @@ cmd_status() {
   fi
 }
 
-cmd_stop() {
-  if is_running; then
-    kill "$(cat "$PID_FILE")" 2>/dev/null || true
-    sleep 0.4
-    if is_running; then
-      kill -9 "$(cat "$PID_FILE")" 2>/dev/null || true
-    fi
+# Move the pidfile aside under ${VAR_DIR}/retired. Tests may set EXITTRACE_VAR_DIR.
+retire_pidfile() {
+  local reason="${1:-moved}"
+  retire_path "$PID_FILE" "${VAR_DIR}/retired" "$reason"
+}
+
+read_pidfile() {
+  local raw=""
+  IFS= read -r raw <"$PID_FILE" || true
+  raw="${raw#"${raw%%[![:space:]]*}"}"
+  raw="${raw%"${raw##*[![:space:]]}"}"
+  printf '%s' "$raw"
+}
+
+# stdout: stale, mismatch, or ours. Pid 1 is mismatch and is not inspected in /proc.
+# Other non-integers and integers that are not greater than 1 are stale.
+classify_saved_pid() {
+  local pid="$1" n=0
+  if [[ ! "$pid" =~ ^[0-9]{1,10}$ ]]; then
+    printf '%s' stale
+    return 0
   fi
-  rm -f "$PID_FILE"
+  n=$((10#$pid))
+  if [[ "$n" -eq 1 ]]; then
+    printf '%s' mismatch
+    return 0
+  fi
+  if [[ "$n" -le 1 ]] || ! pid_is_live "$n"; then
+    printf '%s' stale
+    return 0
+  fi
+  if ! cmdline_is_our_server "$n"; then
+    printf '%s' mismatch
+    return 0
+  fi
+  printf '%s' ours
+}
+
+# argv0 basename is node, or the node binary find_node would run.
+# One argv element is exactly the physical ${ROOT}/app/server.mjs.
+cmdline_is_our_server() {
+  local pid="$1"
+  cmdline_matches_server "$pid" "${ROOT}/app/server.mjs" "$(find_node 2>/dev/null || true)"
+}
+
+# Unset or empty uses 20. One to four digits are parsed in base 10 and clamped to 1..600.
+# Anything else is refused. The caller must run this before a signal.
+parse_stop_timeout() {
+  local t="" n=0
+  if [[ -z "${EXITTRACE_STOP_TIMEOUT+x}" || -z "${EXITTRACE_STOP_TIMEOUT}" ]]; then
+    STOP_TIMEOUT=20
+    return 0
+  fi
+  t="$EXITTRACE_STOP_TIMEOUT"
+  if [[ ! "$t" =~ ^[0-9]{1,4}$ ]]; then
+    alert_advisory "stop timeout rejected; using 20"
+    STOP_TIMEOUT=20
+    return 0
+  fi
+  n=$((10#$t))
+  if [[ "$n" -lt 1 ]]; then
+    n=1
+  elif [[ "$n" -gt 600 ]]; then
+    n=600
+  fi
+  STOP_TIMEOUT=$n
+}
+
+# Exact pid only. One SIGTERM. Never escalate.
+cmd_stop() {
+  parse_stop_timeout
+  if [[ ! -e "$PID_FILE" && ! -L "$PID_FILE" ]]; then
+    echo "Stopped (not running)"
+    return 0
+  fi
+
+  local pid="" n=0 kind=""
+  pid="$(read_pidfile)"
+  kind="$(classify_saved_pid "$pid")"
+  case "$kind" in
+    stale)
+      retire_pidfile "stale" || return 1
+      echo "Stopped (stale pidfile)"
+      return 0
+      ;;
+    mismatch)
+      alert "pid=${pid} is held by a different process; not signaling"
+      retire_pidfile "mismatch" || return 1
+      return 1
+      ;;
+  esac
+
+  n=$((10#$pid))
+
+  # Re-check the same pid immediately before the signal.
+  # A pid reused in that gap is an accepted limit.
+  kind="$(classify_saved_pid "$pid")"
+  case "$kind" in
+    stale)
+      retire_pidfile "stale" || return 1
+      echo "Stopped (stale pidfile)"
+      return 0
+      ;;
+    mismatch)
+      alert "pid=${pid} is held by a different process; not signaling"
+      retire_pidfile "mismatch" || return 1
+      return 1
+      ;;
+  esac
+
+  if ! kill -s TERM "$n" 2>/dev/null; then
+    if ! pid_is_live "$n"; then
+      retire_pidfile "stopped" || return 1
+      echo "Stopped"
+      return 0
+    fi
+    if ! cmdline_is_our_server "$n"; then
+      alert "pid=${pid} is held by a different process; not signaling"
+      retire_pidfile "mismatch" || return 1
+      return 1
+    fi
+    alert "pid=${pid} SIGTERM was not delivered; not escalating"
+    return 1
+  fi
+
+  local start_ms now_ms limit_ms
+  start_ms="$(date +%s%3N)"
+  limit_ms=$((STOP_TIMEOUT * 1000))
+  while pid_is_live "$n"; do
+    if ! cmdline_is_our_server "$n"; then
+      break
+    fi
+    now_ms="$(date +%s%3N)"
+    if [[ $((now_ms - start_ms)) -ge $limit_ms ]]; then
+      alert "pid=${pid} still alive after ${STOP_TIMEOUT}s SIGTERM; not escalating"
+      return 1
+    fi
+    sleep 0.2
+  done
+
+  retire_pidfile "stopped" || return 1
   echo "Stopped"
 }
 
 cmd_start() {
   load_env
-  if is_running; then
-    echo "Already running pid=$(cat "$PID_FILE")"
-    return
+  if [[ -e "$PID_FILE" || -L "$PID_FILE" ]]; then
+    local pid="" kind=""
+    pid="$(read_pidfile)"
+    kind="$(classify_saved_pid "$pid")"
+    case "$kind" in
+      ours)
+        echo "Already running pid=${pid}"
+        return 0
+        ;;
+      mismatch)
+        alert "pid=${pid} is held by a different process; not signaling"
+        retire_pidfile "mismatch" || return 1
+        ;;
+      stale)
+        retire_pidfile "stale" || return 1
+        ;;
+    esac
   fi
-  local node
-  node="$(find_node)"
+  local node="" server="" canon=""
+  if ! node="$(find_node)"; then
+    alert "node not found"
+    return 1
+  fi
+  server="${ROOT}/app/server.mjs"
+  if canon="$(realpath -e -- "$server" 2>/dev/null)"; then
+    server="$canon"
+  fi
   mkdir -p "$(dirname "$LOG_FILE")" "$DATA_DIR" "$MEDIA_DIR"
-  nohup "$node" "${ROOT}/app/server.mjs" >>"$LOG_FILE" 2>&1 &
+  nohup "$node" "$server" >>"$LOG_FILE" 2>&1 &
   echo $! >"$PID_FILE"
   sleep 0.5
   if ! is_running; then
     echo "Failed to start — last log lines:" >&2
+    alert "start failed"
     tail -n 40 "$LOG_FILE" >&2 || true
-    rm -f "$PID_FILE"
+    retire_pidfile "start-fail" || return 1
     return 1
   fi
   echo "Started pid=$(cat "$PID_FILE") port=${PORT}"
@@ -152,7 +363,7 @@ cmd_pack() {
 case "${1:-help}" in
   start) cmd_start ;;
   stop) cmd_stop ;;
-  restart) cmd_stop; cmd_start ;;
+  restart) cmd_stop && cmd_start ;;
   status) cmd_status ;;
   logs) shift || true; cmd_logs "${1:-80}" ;;
   seed) cmd_seed ;;
