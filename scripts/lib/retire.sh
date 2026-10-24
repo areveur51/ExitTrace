@@ -1,10 +1,11 @@
 # Shared move-aside helper. Source this file; it defines retire_path and changes nothing else.
 # Callers pass any destination directory. The moved name is:
 #   <dir>/<basename>.<YYYYMMDD-HHMMSS>.<reason>[.N]
+# Every call walks from the root, including when the leaf already exists.
 # Missing path components are created in order, from the first missing ancestor
 # down to the leaf, each with install -d -m 700. An existing directory is left
 # as it is, except the leaf, which is mode 700 only when that does not add
-# permission bits. A symlink is refused.
+# permission bits. A symlink component, ancestor or leaf, is refused.
 
 retire_note() {
   local msg="$1"
@@ -60,12 +61,8 @@ retire_create_chain() {
 
 retire_ensure_dir() {
   local dir="$1" mode="" tail="" perm=0 extra=0 desired=0 oct=""
-  if [[ -L "$dir" ]]; then
-    return 1
-  fi
-  if [[ ! -d "$dir" ]]; then
-    retire_create_chain "$dir" || return 1
-  fi
+  # Walk even when the leaf is already a directory, so a symlink ancestor is refused.
+  retire_create_chain "$dir" || return 1
   if [[ -L "$dir" || ! -d "$dir" ]]; then
     return 1
   fi

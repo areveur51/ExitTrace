@@ -20,8 +20,14 @@ TMP_OUTSIDE_TAKEN=0
 TMP_OUTSIDE_BEFORE=""
 SUMMARY_DONE=0
 READY_N=0
+READY_PATH=""
+FINISH_NOTE=""
+WAIT_KIND_GONE=0
 NODE=""
 
+# Outside-write snapshots cover four places only: the TMPDIR top level
+# (allowlisted names only), the repo top level, the repo var/ listing, and
+# git status --porcelain --ignored. They do not cover $HOME or other locations.
 # Snapshot the checkout var/ and the repo top level before any other work.
 # Hold both in shell variables.
 if [[ -d "${REPO}/var" ]]; then
@@ -42,6 +48,9 @@ print_summary() {
   [[ "$SUMMARY_DONE" -eq 1 ]] && return 0
   SUMMARY_DONE=1
   local checks=$((PASSES + FAILS))
+  if [[ -n "${SCRATCH}" ]]; then
+    printf 'SCRATCH %s\n' "$SCRATCH"
+  fi
   printf 'SUMMARY checks=%s pass=%s fail=%s\n' "$checks" "$PASSES" "$FAILS"
 }
 
@@ -77,7 +86,7 @@ verify_expected() {
 stop_registered() {
   local n="${#REGISTERED[@]}"
   [[ "$n" -eq 0 ]] && return 0
-  local entry pid sig kind rest i
+  local entry pid sig kind rest
   for entry in "${REGISTERED[@]}"; do
     pid="${entry%%|*}"
     rest="${entry#*|}"
@@ -97,12 +106,8 @@ stop_registered() {
       continue
     fi
     kill -s "$sig" "$pid" 2>/dev/null || true
-    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
-      if [[ ! -d "/proc/${pid}" ]] || proc_is_zombie "$pid"; then
-        break
-      fi
-      sleep 0.2
-    done
+    # 120 * 0.05s = 6s, the previous 30 * 0.2s ceiling.
+    wait_until 120 proc_settled "$pid" || true
     wait "$pid" 2>/dev/null || true
   done
   return 0
@@ -346,60 +351,90 @@ EOF
   fi
 }
 
+# Poll every 0.05s. Return 0 once the command returns 0, or 1 at the limit.
+wait_until() {
+  local max="$1"
+  local i
+  shift
+  for ((i = 0; i < max; i++)); do
+    if "$@"; then
+      return 0
+    fi
+    sleep 0.05
+  done
+  return 1
+}
+
+proc_settled() {
+  local pid="$1"
+  [[ ! -d "/proc/${pid}" ]] || proc_is_zombie "$pid"
+}
+
+pid_is_dead() {
+  ! pid_is_live "$1"
+}
+
+ready_file_present() {
+  [[ -f "$1" ]]
+}
+
+# Sets READY_PATH in this shell. Callers must not wrap this in a command substitution.
 next_ready() {
   READY_N=$((READY_N + 1))
   mkdir -p -- "${SCRATCH}/ready"
-  printf '%s' "${SCRATCH}/ready/r${READY_N}"
+  READY_PATH="${SCRATCH}/ready/r${READY_N}"
+}
+
+# A repeat of an earlier ready file means the counter did not advance here.
+require_fresh_ready() {
+  next_ready
+  if [[ -e "$READY_PATH" || -L "$READY_PATH" ]]; then
+    printf 'ready path already present %s\n' "$READY_PATH" >&2
+    return 1
+  fi
+  return 0
 }
 
 # Up to 10s. The file is created by the dummy on a fresh path.
 wait_ready() {
-  local path="$1" i=0
-  while [[ "$i" -lt 200 ]]; do
-    if [[ -f "$path" ]]; then
-      return 0
-    fi
-    sleep 0.05
-    i=$((i + 1))
-  done
+  wait_until 200 ready_file_present "$1"
+}
+
+kind_is_ready() {
+  local pid="$1" kind="$2"
+  if verify_expected "$pid" "$kind"; then
+    WAIT_KIND_GONE=0
+    return 0
+  fi
+  if [[ ! -d "/proc/${pid}" ]]; then
+    WAIT_KIND_GONE=1
+    return 0
+  fi
   return 1
 }
 
 wait_kind() {
-  local pid="$1" kind="$2" i=0
-  while [[ "$i" -lt 200 ]]; do
-    if verify_expected "$pid" "$kind"; then
-      return 0
-    fi
-    if [[ ! -d "/proc/${pid}" ]]; then
-      return 1
-    fi
-    sleep 0.05
-    i=$((i + 1))
-  done
+  local pid="$1" kind="$2"
+  WAIT_KIND_GONE=0
+  if wait_until 200 kind_is_ready "$pid" "$kind" && [[ "$WAIT_KIND_GONE" -eq 0 ]]; then
+    return 0
+  fi
   return 1
 }
 
 wait_not_live() {
-  local pid="$1" i=0
-  while [[ "$i" -lt 200 ]]; do
-    if ! pid_is_live "$pid"; then
-      return 0
-    fi
-    sleep 0.05
-    i=$((i + 1))
-  done
-  return 1
+  wait_until 200 pid_is_dead "$1"
 }
 
 launch() {
   local sig="$1" kind="$2"
   shift 2
   LAUNCH_PID=""
-  local ready=""
   if [[ "$kind" == "server" ]]; then
-    ready="$(next_ready)"
-    ET_CTL_DUMMY_READY="$ready" "$@" </dev/null >/dev/null 2>&1 &
+    if ! require_fresh_ready; then
+      return 1
+    fi
+    ET_CTL_DUMMY_READY="$READY_PATH" "$@" </dev/null >/dev/null 2>&1 &
   else
     "$@" </dev/null >/dev/null 2>&1 &
   fi
@@ -407,7 +442,7 @@ launch() {
   disown "$LAUNCH_PID" 2>/dev/null || true
   REGISTERED+=("${LAUNCH_PID}|${sig}|${kind}")
   if [[ "$kind" == "server" ]]; then
-    if ! wait_ready "$ready"; then
+    if ! wait_ready "$READY_PATH"; then
       printf 'launch failed kind=%s pid=%s ready missing\n' "$kind" "$LAUNCH_PID" >&2
       return 1
     fi
@@ -546,46 +581,44 @@ case_2() {
 }
 
 finish_sleep() {
-  local pid="$1" label="$2" i
+  local pid="$1"
+  FINISH_NOTE=""
   if ! pid_is_live "$pid"; then
-    fail "${label} sleep already exited"
-    return 0
+    FINISH_NOTE="sleep already exited"
+    return 1
   fi
   if ! verify_expected "$pid" sleep; then
-    fail "${label} sleep cmdline changed before signal"
+    FINISH_NOTE="sleep cmdline changed before signal"
     show_cmdline "$pid" >&2 || true
-    return 0
+    return 1
   fi
   kill -s TERM "$pid" 2>/dev/null || true
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-    if ! pid_is_live "$pid"; then
-      wait "$pid" 2>/dev/null || true
-      forget_registered
-      return 0
-    fi
-    sleep 0.1
-  done
-  fail "${label} sleep still live after SIGTERM"
+  # 40 * 0.05s = 2s, the previous 20 * 0.1s ceiling.
+  if ! wait_until 40 pid_is_dead "$pid"; then
+    FINISH_NOTE="sleep still live after SIGTERM"
+    return 1
+  fi
+  wait "$pid" 2>/dev/null || true
+  forget_registered
   return 0
 }
 
 finish_hold() {
-  local pid="$1" label="$2" i
+  local pid="$1"
+  FINISH_NOTE=""
   if ! verify_expected "$pid" server; then
-    fail "${label} holder cmdline changed before SIGINT"
+    FINISH_NOTE="holder cmdline changed before SIGINT"
     show_cmdline "$pid" >&2 || true
-    return 0
+    return 1
   fi
   kill -s INT "$pid" 2>/dev/null || true
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40; do
-    if ! pid_is_live "$pid"; then
-      wait "$pid" 2>/dev/null || true
-      forget_registered
-      return 0
-    fi
-    sleep 0.2
-  done
-  fail "${label} holder still live after SIGINT"
+  # 160 * 0.05s = 8s, the previous 40 * 0.2s ceiling.
+  if ! wait_until 160 pid_is_dead "$pid"; then
+    FINISH_NOTE="holder still live after SIGINT"
+    return 1
+  fi
+  wait "$pid" 2>/dev/null || true
+  forget_registered
   return 0
 }
 
@@ -608,7 +641,7 @@ retired_fresh() {
 }
 
 case_3() {
-  local pid out err
+  local pid out err problems=""
   if ! launch TERM sleep sleep 60; then
     fail "case 3 could not start sleep"
     return 0
@@ -623,15 +656,22 @@ case_3() {
     && ! -e "${SCRATCH}/exittrace.pid" ]] \
     && pid_is_live "$pid" \
     && retired_has mismatch "$pid"; then
-    pass "case 3 mismatched cmdline was not signaled and pidfile moved aside"
+    problems=""
   else
-    fail "case 3 rc=${CTL_RC} out=${out} err=${err}"
+    problems+="rc=${CTL_RC} out=${out} err=${err}"
   fi
-  finish_sleep "$pid" "case 3"
+  if ! finish_sleep "$pid"; then
+    problems+="${problems:+; }${FINISH_NOTE}"
+  fi
+  if [[ -n "$problems" ]]; then
+    fail "case 3 ${problems}"
+  else
+    pass "case 3 mismatched cmdline was not signaled and pidfile moved aside"
+  fi
 }
 
 case_6() {
-  local pid out err
+  local pid out err problems=""
   if [[ -e "${SCRATCH}/exittrace.pid" || -e "${SCRATCH}/exittrace.log" || -d "${SCRATCH}/data" ]]; then
     fail "case 6 scratch was not clean before restart"
     return 0
@@ -652,15 +692,22 @@ case_6() {
     && ! -e "${SCRATCH}/exittrace.log" \
     && ! -d "${SCRATCH}/data" ]] \
     && pid_is_live "$pid"; then
-    pass "case 6 restart did not start after stop failed"
+    problems=""
   else
-    fail "case 6 rc=${CTL_RC} out=${out} err=${err}"
+    problems+="rc=${CTL_RC} out=${out} err=${err}"
   fi
-  finish_sleep "$pid" "case 6"
+  if ! finish_sleep "$pid"; then
+    problems+="${problems:+; }${FINISH_NOTE}"
+  fi
+  if [[ -n "$problems" ]]; then
+    fail "case 6 ${problems}"
+  else
+    pass "case 6 restart did not start after stop failed"
+  fi
 }
 
 case_4() {
-  local pid out err i
+  local pid="" out="" err="" pid_text="" problems=""
   write_server hold
   if ! launch INT server "$NODE" "${SCRATCH}/app/server.mjs"; then
     fail "case 4 could not start holding dummy"
@@ -671,149 +718,158 @@ case_4() {
   run_ctl env EXITTRACE_STOP_TIMEOUT=2 bash "$CTL" stop
   out="$(trim_nl "$CTL_OUT")"
   err="$(trim_nl "$CTL_ERR")"
-  local pid_text=""
   pid_text="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid" 2>/dev/null || true)"
   if [[ "$CTL_RC" -ne 0 \
     && "$err" == "ALERT exittrace pid=${pid} still alive after 2s SIGTERM; not escalating" \
     && "$pid_text" == "$pid" ]] \
     && pid_is_live "$pid"; then
-    pass "case 4 still alive after SIGTERM alert, pidfile left in place"
+    problems=""
   else
-    fail "case 4 rc=${CTL_RC} out=${out} err=${err} pidfile=${pid_text}"
+    problems+="rc=${CTL_RC} out=${out} err=${err} pidfile=${pid_text}"
   fi
-  if ! verify_expected "$pid" server; then
-    fail "case 4 cmdline changed before SIGINT"
-    show_cmdline "$pid" >&2 || true
-    return 0
+  if ! finish_hold "$pid"; then
+    problems+="${problems:+; }${FINISH_NOTE}"
+  elif [[ ! -f "${SCRATCH}/exittrace.pid" ]]; then
+    problems+="${problems:+; }pidfile disappeared after the timeout stop"
   fi
-  kill -s INT "$pid" 2>/dev/null || true
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40; do
-    if ! pid_is_live "$pid"; then
-      break
-    fi
-    sleep 0.2
-  done
-  if pid_is_live "$pid"; then
-    fail "case 4 dummy still live after SIGINT"
+  if [[ -n "$problems" ]]; then
+    fail "case 4 ${problems}"
   else
-    wait "$pid" 2>/dev/null || true
-    forget_registered
-    if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
-      pass "case 4 dummy stopped by SIGINT and pidfile still present"
-    else
-      fail "case 4 pidfile disappeared after the timeout stop"
-    fi
+    pass "case 4 still alive after SIGTERM alert, pidfile left in place, then stopped by SIGINT"
   fi
 }
 
 case_5() {
-  local before after out err pid=""
+  local before="" after="" out="" err="" pid=""
+  local bad_a="" bad_stop="" bad_b=""
+  local stop_ok=0 fresh="" name="" content="" found=0
   if [[ -e "${SCRATCH}/.env" ]]; then
-    fail "case 5 scratch has an env file"
-    return 0
-  fi
-  if [[ -e "${SCRATCH}/exittrace.pid" ]]; then
-    mkdir -p -- "${SCRATCH}/kept"
-    mv -n -- "${SCRATCH}/exittrace.pid" "${SCRATCH}/kept/prior.pid"
-  fi
-  if [[ -e "${SCRATCH}/exittrace.pid" ]]; then
-    fail "case 5 pidfile still present before start"
-    return 0
-  fi
-
-  write_server normal
-  local ready=""
-  ready="$(next_ready)"
-  before="$(retired_names | sort)"
-  run_ctl env ET_CTL_DUMMY_READY="$ready" bash "$CTL" start
-  out="$(trim_nl "$CTL_OUT")"
-  err="$(trim_nl "$CTL_ERR")"
-  if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
-    pid="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid")"
-  fi
-  if ! wait_ready "$ready"; then
-    if [[ -n "$pid" ]]; then
-      register_server_pid "$pid" || true
-    fi
-    fail "case 5a ready file missing"
-    return 0
-  fi
-  if [[ -n "$pid" ]]; then
-    register_server_pid "$pid" || true
-  fi
-  after="$(retired_names | sort)"
-  if [[ "$CTL_RC" -eq 0 \
-    && -z "$err" \
-    && "$out" == "Started pid=${pid} port="* \
-    && -n "$pid" \
-    && -f "${SCRATCH}/exittrace.pid" \
-    && "$before" == "$after" ]] \
-    && verify_expected "$pid" server \
-    && pid_is_live "$pid"; then
-    pass "case 5a start from nothing left the pidfile and did not retire it"
+    bad_a="case 5 scratch has an env file"
   else
-    fail "case 5a rc=${CTL_RC} out=${out} err=${err} pid=${pid}"
-    return 0
-  fi
-
-  run_ctl bash "$CTL" stop
-  out="$(trim_nl "$CTL_OUT")"
-  err="$(trim_nl "$CTL_ERR")"
-  if [[ "$CTL_RC" -eq 0 \
-    && "$out" == "Stopped" \
-    && -z "$err" \
-    && ! -e "${SCRATCH}/exittrace.pid" ]] \
-    && wait_not_live "$pid" \
-    && retired_has stopped "$pid"; then
-    wait "$pid" 2>/dev/null || true
-    forget_registered
-    pass "case 5a stop retired the pidfile"
-  else
-    fail "case 5a stop rc=${CTL_RC} out=${out} err=${err} pid=${pid}"
-    return 0
-  fi
-
-  write_server exit
-  before="$(retired_names | sort)"
-  run_ctl bash "$CTL" start
-  out="$(trim_nl "$CTL_OUT")"
-  err="$(trim_nl "$CTL_ERR")"
-  after="$(retired_names | sort)"
-  local fresh="" name="" content="" found=0
-  if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
-    pid="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid" || true)"
-    register_server_pid "$pid" || true
-  fi
-  while IFS= read -r name; do
-    [[ -n "$name" ]] || continue
-    if printf '%s\n' "$before" | grep -Fx -q -- "$name"; then
-      continue
+    if [[ -e "${SCRATCH}/exittrace.pid" ]]; then
+      mkdir -p -- "${SCRATCH}/kept"
+      mv -n -- "${SCRATCH}/exittrace.pid" "${SCRATCH}/kept/prior.pid"
     fi
-    if [[ "$name" =~ ^exittrace\.pid\.[0-9]{8}-[0-9]{6}\.start-fail(\.[1-9][0-9]*)?$ ]]; then
-      fresh="${SCRATCH}/var/retired/${name}"
-      content="$(tr -d '[:space:]' <"$fresh")"
-      if [[ "$content" =~ ^[1-9][0-9]*$ ]]; then
-        found=1
+    if [[ -e "${SCRATCH}/exittrace.pid" ]]; then
+      bad_a="case 5 pidfile still present before start"
+    fi
+  fi
+
+  if [[ -z "$bad_a" ]]; then
+    write_server normal
+    if ! require_fresh_ready; then
+      bad_a="case 5a ready path already present ${READY_PATH}"
+    else
+      before="$(retired_names | sort)"
+      run_ctl env ET_CTL_DUMMY_READY="$READY_PATH" bash "$CTL" start
+      out="$(trim_nl "$CTL_OUT")"
+      err="$(trim_nl "$CTL_ERR")"
+      if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
+        pid="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid")"
+      fi
+      if ! wait_ready "$READY_PATH"; then
+        if [[ -n "$pid" ]]; then
+          register_server_pid "$pid" || true
+        fi
+        bad_a="case 5a ready file missing"
+      else
+        if [[ -n "$pid" ]]; then
+          register_server_pid "$pid" || true
+        fi
+        after="$(retired_names | sort)"
+        if [[ "$CTL_RC" -eq 0 \
+          && -z "$err" \
+          && "$out" == "Started pid=${pid} port="* \
+          && -n "$pid" \
+          && -f "${SCRATCH}/exittrace.pid" \
+          && "$before" == "$after" ]] \
+          && verify_expected "$pid" server \
+          && pid_is_live "$pid"; then
+          bad_a=""
+        else
+          bad_a="case 5a rc=${CTL_RC} out=${out} err=${err} pid=${pid}"
+        fi
       fi
     fi
-  done < <(printf '%s\n' "$after")
-  if [[ "$CTL_RC" -ne 0 \
-    && ! -e "${SCRATCH}/exittrace.pid" \
-    && "$found" -eq 1 ]]; then
+  fi
+
+  if [[ -z "$bad_a" ]]; then
+    run_ctl bash "$CTL" stop
+    out="$(trim_nl "$CTL_OUT")"
+    err="$(trim_nl "$CTL_ERR")"
+    if [[ "$CTL_RC" -eq 0 \
+      && "$out" == "Stopped" \
+      && -z "$err" \
+      && ! -e "${SCRATCH}/exittrace.pid" ]] \
+      && wait_not_live "$pid" \
+      && retired_has stopped "$pid"; then
+      wait "$pid" 2>/dev/null || true
+      forget_registered
+      stop_ok=1
+    else
+      bad_stop="case 5a stop rc=${CTL_RC} out=${out} err=${err} pid=${pid}"
+    fi
+  else
+    bad_stop="case 5a stop not reached"
+  fi
+
+  if [[ "$stop_ok" -eq 1 ]]; then
+    write_server exit
+    before="$(retired_names | sort)"
+    run_ctl bash "$CTL" start
+    out="$(trim_nl "$CTL_OUT")"
+    err="$(trim_nl "$CTL_ERR")"
+    after="$(retired_names | sort)"
+    found=0
+    if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
+      pid="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid" || true)"
+      register_server_pid "$pid" || true
+    fi
+    while IFS= read -r name; do
+      [[ -n "$name" ]] || continue
+      if printf '%s\n' "$before" | grep -Fx -q -- "$name"; then
+        continue
+      fi
+      if [[ "$name" =~ ^exittrace\.pid\.[0-9]{8}-[0-9]{6}\.start-fail(\.[1-9][0-9]*)?$ ]]; then
+        fresh="${SCRATCH}/var/retired/${name}"
+        content="$(tr -d '[:space:]' <"$fresh")"
+        if [[ "$content" =~ ^[1-9][0-9]*$ ]]; then
+          found=1
+        fi
+      fi
+    done < <(printf '%s\n' "$after")
+    if [[ "$CTL_RC" -ne 0 \
+      && ! -e "${SCRATCH}/exittrace.pid" \
+      && "$found" -eq 1 ]]; then
+      bad_b=""
+    else
+      bad_b="case 5b rc=${CTL_RC} out=${out} err=${err} found=${found}"
+    fi
+  else
+    bad_b="case 5b not reached"
+  fi
+
+  if [[ -z "$bad_a" ]]; then
+    pass "case 5a start from nothing left the pidfile and did not retire it"
+  else
+    fail "$bad_a"
+  fi
+  if [[ -z "$bad_stop" ]]; then
+    pass "case 5a stop retired the pidfile"
+  else
+    fail "$bad_stop"
+  fi
+  if [[ -z "$bad_b" ]]; then
     pass "case 5b start failure moved the pidfile aside"
   else
-    fail "case 5b rc=${CTL_RC} out=${out} err=${err} found=${found}"
+    fail "$bad_b"
   fi
 }
 
 case_r2() {
   local sentinel="" label="" raw="" reason="" expect_rc="" expect_out="" expect_err=""
-  local before="" after="" out="" err=""
-  if ! launch TERM sleep sleep 60; then
-    fail "case r2 could not start sentinel"
-    return 0
-  fi
-  sentinel="$LAUNCH_PID"
+  local before="" after="" out="" err="" note=""
+  local row="" id="" r2e_note="" r2e_label="" saw_r2e=0
   local -a rows=(
     "r2a|empty pidfile retired stale and sentinel still live|empty|stale|0|Stopped (stale pidfile)|"
     "r2b|abc pidfile retired stale and sentinel still live|abc|stale|0|Stopped (stale pidfile)|"
@@ -821,40 +877,68 @@ case_r2() {
     "r2d|0 pidfile retired stale and sentinel still live|0|stale|0|Stopped (stale pidfile)|"
     "r2e|pid 1 retired mismatch and sentinel still live|1|mismatch|1||ALERT exittrace pid=1 is held by a different process; not signaling"
   )
-  local row id
+  if ! launch TERM sleep sleep 60; then
+    for id in r2a r2b r2c r2d r2e; do
+      fail "case ${id} could not start sentinel"
+    done
+    return 0
+  fi
+  sentinel="$LAUNCH_PID"
   for row in "${rows[@]}"; do
     IFS='|' read -r id label raw reason expect_rc expect_out expect_err <<<"$row"
+    note=""
     if [[ "$raw" == "empty" ]]; then
       if [[ -e "${SCRATCH}/exittrace.pid" || -L "${SCRATCH}/exittrace.pid" ]]; then
-        fail "case ${id} pidfile path already present"
-        continue
+        note="pidfile path already present"
+      else
+        touch -- "${SCRATCH}/exittrace.pid"
+        raw=""
       fi
-      touch -- "${SCRATCH}/exittrace.pid"
-      raw=""
     else
       printf '%s\n' "$raw" >"${SCRATCH}/exittrace.pid"
     fi
-    before="$(retired_names | sort)"
-    run_ctl bash "$CTL" stop
-    out="$(trim_nl "$CTL_OUT")"
-    err="$(trim_nl "$CTL_ERR")"
-    after="$(retired_names | sort)"
-    if [[ "$CTL_RC" -eq "$expect_rc" \
-      && "$out" == "$expect_out" \
-      && "$err" == "$expect_err" ]] \
-      && retired_fresh "$reason" "$raw" "$before" "$after" \
-      && pid_is_live "$sentinel" \
-      && verify_expected "$sentinel" sleep; then
+    if [[ -z "$note" ]]; then
+      before="$(retired_names | sort)"
+      run_ctl bash "$CTL" stop
+      out="$(trim_nl "$CTL_OUT")"
+      err="$(trim_nl "$CTL_ERR")"
+      after="$(retired_names | sort)"
+      if [[ "$CTL_RC" -eq "$expect_rc" \
+        && "$out" == "$expect_out" \
+        && "$err" == "$expect_err" ]] \
+        && retired_fresh "$reason" "$raw" "$before" "$after" \
+        && pid_is_live "$sentinel" \
+        && verify_expected "$sentinel" sleep; then
+        note=""
+      else
+        note="rc=${CTL_RC} out=${out} err=${err}"
+      fi
+    fi
+    if [[ "$id" == "r2e" ]]; then
+      r2e_note="$note"
+      r2e_label="$label"
+      saw_r2e=1
+    elif [[ -z "$note" ]]; then
       pass "case ${id} ${label}"
     else
-      fail "case ${id} rc=${CTL_RC} out=${out} err=${err}"
+      fail "case ${id} ${note}"
     fi
   done
-  finish_sleep "$sentinel" "case r2"
+  if ! finish_sleep "$sentinel"; then
+    r2e_note+="${r2e_note:+; }${FINISH_NOTE}"
+  fi
+  if [[ "$saw_r2e" -eq 1 ]]; then
+    if [[ -z "$r2e_note" ]]; then
+      pass "case r2e ${r2e_label}"
+    else
+      fail "case r2e ${r2e_note}"
+    fi
+  fi
 }
 
 case_r1_hold() {
   local timeout="$1" label="$2" pid="" out="" err="" elapsed=0 start_ms=0 end_ms=0 pid_text=""
+  local problems=""
   write_server hold
   if ! launch INT server "$NODE" "${SCRATCH}/app/server.mjs"; then
     fail "${label} could not start holding dummy"
@@ -876,11 +960,18 @@ case_r1_hold() {
     && "$elapsed" -lt 4000 ]] \
     && pid_is_live "$pid" \
     && verify_expected "$pid" server; then
-    pass "${label}"
+    problems=""
   else
-    fail "${label} rc=${CTL_RC} out=${out} err=${err} elapsed=${elapsed} pidfile=${pid_text}"
+    problems+="rc=${CTL_RC} out=${out} err=${err} elapsed=${elapsed} pidfile=${pid_text}"
   fi
-  finish_hold "$pid" "$label"
+  if ! finish_hold "$pid"; then
+    problems+="${problems:+; }${FINISH_NOTE}"
+  fi
+  if [[ -n "$problems" ]]; then
+    fail "${label} ${problems}"
+  else
+    pass "${label}"
+  fi
 }
 
 case_r1_stale_timeout() {
@@ -906,12 +997,17 @@ case_r1_stale_timeout() {
 }
 
 case_n5() {
-  local before="" after="" out="" err="" pid="" ready=""
+  local before="" after="" out="" err="" pid=""
+  local bad_start="" bad_stop="" start_ok=0
   write_server normal
-  ready="$(next_ready)"
+  if ! require_fresh_ready; then
+    fail "case n5 ready path already present ${READY_PATH}"
+    fail "case n5 stop not reached"
+    return 0
+  fi
   printf '%s\n' "abc" >"${SCRATCH}/exittrace.pid"
   before="$(retired_names | sort)"
-  run_ctl env ET_CTL_DUMMY_READY="$ready" bash "$CTL" start
+  run_ctl env ET_CTL_DUMMY_READY="$READY_PATH" bash "$CTL" start
   out="$(trim_nl "$CTL_OUT")"
   err="$(trim_nl "$CTL_ERR")"
   after="$(retired_names | sort)"
@@ -919,42 +1015,54 @@ case_n5() {
   if [[ -f "${SCRATCH}/exittrace.pid" ]]; then
     pid="$(tr -d '[:space:]' <"${SCRATCH}/exittrace.pid")"
   fi
-  if ! wait_ready "$ready"; then
+  if ! wait_ready "$READY_PATH"; then
     if [[ -n "$pid" ]]; then
       register_server_pid "$pid" || true
     fi
-    fail "case n5 ready file missing"
-    return 0
+    bad_start="case n5 ready file missing"
+  else
+    if [[ -n "$pid" ]]; then
+      register_server_pid "$pid" || true
+    fi
+    if [[ "$CTL_RC" -eq 0 \
+      && -z "$err" \
+      && "$out" == "Started pid=${pid} port="* \
+      && -n "$pid" ]] \
+      && retired_fresh stale "abc" "$before" "$after" \
+      && verify_expected "$pid" server \
+      && pid_is_live "$pid"; then
+      start_ok=1
+    else
+      bad_start="case n5 start rc=${CTL_RC} out=${out} err=${err} pid=${pid}"
+    fi
   fi
-  if [[ -n "$pid" ]]; then
-    register_server_pid "$pid" || true
+  if [[ "$start_ok" -eq 1 ]]; then
+    run_ctl bash "$CTL" stop
+    out="$(trim_nl "$CTL_OUT")"
+    err="$(trim_nl "$CTL_ERR")"
+    if [[ "$CTL_RC" -eq 0 \
+      && "$out" == "Stopped" \
+      && -z "$err" \
+      && ! -e "${SCRATCH}/exittrace.pid" ]] \
+      && wait_not_live "$pid" \
+      && retired_has stopped "$pid"; then
+      wait "$pid" 2>/dev/null || true
+      forget_registered
+    else
+      bad_stop="case n5 stop rc=${CTL_RC} out=${out} err=${err} pid=${pid}"
+    fi
+  else
+    bad_stop="case n5 stop not reached"
   fi
-  if [[ "$CTL_RC" -eq 0 \
-    && -z "$err" \
-    && "$out" == "Started pid=${pid} port="* \
-    && -n "$pid" ]] \
-    && retired_fresh stale "abc" "$before" "$after" \
-    && verify_expected "$pid" server \
-    && pid_is_live "$pid"; then
+  if [[ "$start_ok" -eq 1 ]]; then
     pass "case n5 start retires a garbage pidfile then starts"
   else
-    fail "case n5 start rc=${CTL_RC} out=${out} err=${err} pid=${pid}"
-    return 0
+    fail "$bad_start"
   fi
-  run_ctl bash "$CTL" stop
-  out="$(trim_nl "$CTL_OUT")"
-  err="$(trim_nl "$CTL_ERR")"
-  if [[ "$CTL_RC" -eq 0 \
-    && "$out" == "Stopped" \
-    && -z "$err" \
-    && ! -e "${SCRATCH}/exittrace.pid" ]] \
-    && wait_not_live "$pid" \
-    && retired_has stopped "$pid"; then
-    wait "$pid" 2>/dev/null || true
-    forget_registered
+  if [[ -z "$bad_stop" ]]; then
     pass "case n5 stop after the garbage-pidfile start"
   else
-    fail "case n5 stop rc=${CTL_RC} out=${out} err=${err} pid=${pid}"
+    fail "$bad_stop"
   fi
 }
 
@@ -1014,7 +1122,7 @@ case_n6() {
 # Invalid timeout is advisory, so a later mismatch still stands on its own
 # and the exit trap does not add a third line.
 case_ne() {
-  local pid="" out="" err="" want=""
+  local pid="" out="" err="" want="" problems=""
   if ! launch TERM sleep sleep 60; then
     fail "case ne could not start sentinel"
     return 0
@@ -1031,11 +1139,18 @@ case_ne() {
     && ! -e "${SCRATCH}/exittrace.pid" ]] \
     && pid_is_live "$pid" \
     && retired_has mismatch "$pid"; then
-    pass "case ne invalid timeout and mismatch both alert"
+    problems=""
   else
-    fail "case ne rc=${CTL_RC} out=${out} err=${err}"
+    problems+="rc=${CTL_RC} out=${out} err=${err}"
   fi
-  finish_sleep "$pid" "case ne"
+  if ! finish_sleep "$pid"; then
+    problems+="${problems:+; }${FINISH_NOTE}"
+  fi
+  if [[ -n "$problems" ]]; then
+    fail "case ne ${problems}"
+  else
+    pass "case ne invalid timeout and mismatch both alert"
+  fi
 }
 
 case_nb() {
@@ -1099,6 +1214,82 @@ case_nb() {
   fi
 }
 
+# The ctl resolves VAR_DIR with realpath first, so a symlink ancestor never
+# reaches retire_path through the ctl. Drive the refusal at the library.
+case_nh() {
+  local real="${SCRATCH}/var/realdir"
+  local link="${SCRATCH}/var/linkdir"
+  local retired="${SCRATCH}/var/linkdir/sub"
+  local dummy="${SCRATCH}/nh-dummy"
+  local dummy_b="${SCRATCH}/nh-dummy-b"
+  local rc_text="" alert="" problems="" extra="" inner=""
+  mkdir -p -- "$real"
+  ln -s -- realdir "$link"
+  printf 'keep\n' >"$dummy"
+  (
+    set +e
+    # shellcheck disable=SC1091
+    source "${REPO}/scripts/lib/retire.sh"
+    retire_path "$dummy" "$retired" "probe"
+    printf '%s\n' "$?"
+  ) >"${SCRATCH}/nh.rc" 2>"${SCRATCH}/nh.err"
+  rc_text="$(tr -d '[:space:]' <"${SCRATCH}/nh.rc")"
+  alert="$(cat -- "${SCRATCH}/nh.err" 2>/dev/null || true)"
+  if [[ "$rc_text" != "1" ]]; then
+    problems+="rc=${rc_text}; "
+  fi
+  if [[ ! -f "$dummy" || -L "$dummy" ]]; then
+    problems+="dummy missing; "
+  elif [[ "$(tr -d '[:space:]' <"$dummy")" != "keep" ]]; then
+    problems+="dummy changed; "
+  fi
+  extra="$(find "$real" -mindepth 1 -printf '%P\n')"
+  if [[ -n "$extra" ]]; then
+    problems+="created under realdir; "
+  fi
+  if [[ "$alert" != *"ALERT ${dummy} remains; move aside failed"* ]]; then
+    problems+="alert missing; "
+  fi
+  if [[ -e "$retired" || -L "$retired" ]]; then
+    problems+="retired sub path exists; "
+  fi
+  if [[ ! -L "$link" ]]; then
+    problems+="linkdir is not a symlink; "
+  fi
+  # The leaf now exists through the symlink. The walk must still refuse it.
+  mkdir -p -- "${real}/sub"
+  printf 'keep\n' >"$dummy_b"
+  (
+    set +e
+    # shellcheck disable=SC1091
+    source "${REPO}/scripts/lib/retire.sh"
+    retire_path "$dummy_b" "$retired" "probe"
+    printf '%s\n' "$?"
+  ) >"${SCRATCH}/nh-b.rc" 2>"${SCRATCH}/nh-b.err"
+  rc_text="$(tr -d '[:space:]' <"${SCRATCH}/nh-b.rc")"
+  alert="$(cat -- "${SCRATCH}/nh-b.err" 2>/dev/null || true)"
+  if [[ "$rc_text" != "1" ]]; then
+    problems+="existing rc=${rc_text}; "
+  fi
+  if [[ ! -f "$dummy_b" || -L "$dummy_b" ]]; then
+    problems+="second dummy missing; "
+  elif [[ "$(tr -d '[:space:]' <"$dummy_b")" != "keep" ]]; then
+    problems+="second dummy changed; "
+  fi
+  inner="$(find "${real}/sub" -mindepth 1 -printf '%P\n')"
+  if [[ -n "$inner" ]]; then
+    problems+="file landed under realdir; "
+  fi
+  if [[ "$alert" != *"ALERT ${dummy_b} remains; move aside failed"* ]]; then
+    problems+="existing alert missing; "
+  fi
+  if [[ -n "$problems" ]]; then
+    fail "case nh ${problems}"
+  else
+    pass "case nh symlink retired dir is refused and the dummy stays"
+  fi
+}
+
 quiet_children
 case_1
 quiet_children
@@ -1130,6 +1321,8 @@ quiet_children
 case_ne
 quiet_children
 case_nb
+quiet_children
+case_nh
 check_real_var
 check_repo_status
 check_outside_writes
