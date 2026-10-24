@@ -23,6 +23,7 @@ import {
   unsealedFromEvidence,
 } from "./event-attrs.mjs";
 import { personTags } from "./tags.mjs";
+import { VOTE_FACT_KINDS, VOTE_NO_KINDS, normalizeRollCall } from "./vote-rolls.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeCentralCasting } from "./kind-comms.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
@@ -268,12 +269,33 @@ function compareUniqueEvents(a, b) {
   return notableSeq(a) - notableSeq(b);
 }
 
+function sameVoteRoll(row, ev) {
+  return normalizeRollCall(row?.roll_call) === normalizeRollCall(ev?.roll_call);
+}
+
 function findMergeIndex(events, ev) {
   if (isNotableKind(ev?.kind)) {
     return (events || []).findIndex((row) => sameNotable(row, ev));
   }
   const kind = String(ev?.kind || "").trim();
+  if (VOTE_NO_KINDS.has(kind)) {
+    return (events || []).findIndex((row) => row.kind === kind && sameVoteRoll(row, ev));
+  }
   return (events || []).findIndex((row) => row.kind === kind);
+}
+
+/** Roll id for a recorded-no kind. Other kinds never store roll_call. */
+function keptRollCall(kind, ...raws) {
+  if (!VOTE_NO_KINDS.has(String(kind || "").trim())) return "";
+  for (const raw of raws) {
+    const roll = normalizeRollCall(raw?.roll_call);
+    if (roll) return roll;
+  }
+  for (const raw of raws) {
+    const roll = normalizeRollCall(raw?.comments);
+    if (roll) return roll;
+  }
+  return "";
 }
 
 export function normalizePersonEvent(raw, fallback = {}) {
@@ -320,6 +342,8 @@ export function normalizePersonEvent(raw, fallback = {}) {
     ...(Array.isArray(raw.media) ? raw.media : []),
   ]);
   if (media.length) event.media = media;
+  const rollCall = keptRollCall(kind, raw, fallback);
+  if (rollCall) event.roll_call = rollCall;
   applyEventShot(event, raw, fallback);
   return event;
 }
@@ -352,6 +376,8 @@ function mergePersonEvent(prior, ev) {
   }
   const media = normalizeEventMedia([...(prior.media || []), ...(ev.media || [])]);
   if (media.length) merged.media = media;
+  const rollCall = keptRollCall(prior.kind, prior, ev);
+  if (rollCall) merged.roll_call = rollCall;
   applyEventShot(merged, prior, ev);
   return merged;
 }
@@ -371,6 +397,8 @@ function copyEventRow(ev) {
   }
   const media = normalizeEventMedia(ev.media);
   if (media.length) row.media = media;
+  const rollCall = keptRollCall(ev.kind, ev);
+  if (rollCall) row.roll_call = rollCall;
   applyEventShot(row, ev);
   return row;
 }
@@ -481,10 +509,10 @@ export function personHasKind(row, kinds) {
   return events.some((ev) => allow.includes(ev.kind));
 }
 
-/** Shot, Endorsement, and recorded House-vote facts are not catalog kinds. They must not replace the stored category or its date. */
+/** Shot, Endorsement, and recorded-vote facts are not catalog kinds. They must not replace the stored category or its date. */
 function catalogEventKind(kind, stored) {
   const key = String(kind || "").trim();
-  if (!key || key === "shot" || key === "endorsement" || key === "harassment_records" || key === "ukraine_aid_flags") return false;
+  if (!key || key === "shot" || key === "endorsement" || VOTE_FACT_KINDS.has(key)) return false;
   if (PROMOTE_CATEGORY_IDS.includes(key) || isDeathUnconfirmed(key)) return true;
   return key === stored;
 }
@@ -665,7 +693,7 @@ export function mergePersonAnnotate(gold, prior) {
     // Non-notable: origin/main merge. Gold event_date stays as-is (no
     // death_unconfirmed fill from the prior row). age_at_event fills only
     // when null. applyEventShot(existing, ev).
-    const i = events.findIndex((row) => row.kind === ev.kind);
+    const i = findMergeIndex(events, ev);
     if (i < 0) {
       events.push(copyEventRow(ev));
       continue;
@@ -673,6 +701,8 @@ export function mergePersonAnnotate(gold, prior) {
     const existing = events[i];
     existing.sources = mergeCites(existing.sources, ev.sources).sources;
     Object.assign(existing, mergeEventAttrs(existing, ev));
+    const rollCall = keptRollCall(existing.kind, existing, ev);
+    if (rollCall) existing.roll_call = rollCall;
     const headcount = parseHeadcount(existing.headcount) ?? parseHeadcount(ev.headcount);
     if (headcount != null) existing.headcount = headcount;
     if (existing.age_at_event == null) {

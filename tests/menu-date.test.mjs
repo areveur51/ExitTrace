@@ -159,6 +159,30 @@ test("nickname, file, transparency, and flight menus ignore the other event year
   };
   assert.equal(personMenuDate(stanton, { tag: "ukraine_aid_flags" }), "2024-04-20");
 
+  const bill = {
+    id: "vote-example",
+    name: "Vote Example",
+    category: "notable",
+    event_date: "2019-01-03",
+    tags: ["big_beautiful_bill_act"],
+    events: [
+      { kind: "notable", event_date: "2019-01-03", comments: "Earlier record.", sources: [] },
+      {
+        kind: "big_beautiful_bill_act",
+        event_date: "2025-05-22",
+        roll_call: "H-119-1-145",
+        sources: [],
+      },
+      {
+        kind: "big_beautiful_bill_act",
+        event_date: "2025-07-03",
+        roll_call: "H-119-1-190",
+        sources: [],
+      },
+    ],
+  };
+  assert.equal(personMenuDate(bill, { tag: "big_beautiful_bill_act" }), "2025-07-03");
+
   const rubio = {
     id: "marco-rubio",
     name: "Marco Rubio",

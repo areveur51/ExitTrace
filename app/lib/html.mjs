@@ -86,6 +86,15 @@ import {
   normalizeTags,
   personTags,
 } from "./tags.mjs";
+import {
+  VOTE_FACT_KINDS,
+  VOTE_NO_KINDS,
+  VOTE_ROLLS,
+  normalizeRollCall,
+  officialRollPageUrl,
+  voteRollTitle,
+  voteStageLabel,
+} from "./vote-rolls.mjs";
 import { AGE_BANDS, parseAgeBand } from "./age.mjs";
 import {
   DASH_AGE,
@@ -1335,7 +1344,7 @@ function isHttpUrl(raw) {
 /**
  * Shared cite link. One place decides the markup:
  * http(s) URL → `<a class="source-link">` whose visible text is that URL
- * (href and title stay the full URL; CSS may truncate the display).
+ * (href and title stay the full URL; CSS may shorten the display).
  * Optional muted outlet sits after the anchor so a leading snippet
  * stays flush against the link. Any other scheme is escaped plain text
  * with no href. No URL → plain text, no anchor.
@@ -1861,7 +1870,10 @@ function personSupportingMediaHtml(row, seen) {
   const figures = [];
   for (const ev of personEvents(row)) {
     const kind = String(ev?.kind || "").trim();
-    if (kind === "notable" || kind === "shot" || kind === "endorsement" || kind === "harassment_records" || kind === "ukraine_aid_flags") continue;
+    // Recorded-no media stays on people.events and is not rendered.
+    // It is not orphaned and must not be cleaned up.
+    // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
+    if (kind === "notable" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     const media = normalizeEventMedia(ev.media);
     const items = kind === "dog_comms" ? collapseDogPostMedia(media) : media;
@@ -2512,6 +2524,83 @@ export function ukraineAidFlagsEventHtml(row, sourceNumbers) {
     .join("");
 }
 
+/** Host and path, scheme and www dropped, so clerk and senate pages compare equal. */
+function rollPageKey(url) {
+  const canonical = canonicalPublicUrl(url);
+  if (!canonical) return "";
+  return canonical.replace(/^https?:\/\//, "");
+}
+
+/** Catalog roll for this event. A missing or mismatched id stays null. */
+function rollForEvent(ev) {
+  const id = normalizeRollCall(ev?.roll_call);
+  if (!id) return null;
+  const roll = VOTE_ROLLS[id];
+  if (!roll || roll.tag !== String(ev?.kind || "").trim()) return null;
+  return roll;
+}
+
+function recordedVoteTitle(ev) {
+  const kind = String(ev?.kind || "").trim();
+  const roll = rollForEvent(ev);
+  if (roll) return voteRollTitle(roll);
+  return attributeTagById(kind)?.nav || "Recorded vote";
+}
+
+function metaLine(label, value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return `<p class="meta-line">${esc(label)} · ${esc(text)}</p>`;
+}
+
+function voteEventCites(ev, roll) {
+  const cites = eventSectionCites(ev);
+  if (!roll) return cites;
+  const official = officialRollPageUrl(roll.id);
+  if (!official) return cites;
+  const pages = new Set((roll.urls || []).map(rollPageKey).filter(Boolean));
+  if (cites.some((cite) => pages.has(rollPageKey(cite.url)))) return cites;
+  return cites.concat({
+    url: official,
+    source_label:
+      roll.chamber === "House"
+        ? "Office of the Clerk, U.S. House of Representatives"
+        : "United States Senate",
+    date: String(ev?.event_date || roll.date || "").trim(),
+  });
+}
+
+/** One recorded-no roll. The same section serves every vote-no kind. */
+function voteNoEventSection(ev) {
+  const kind = String(ev?.kind || "").trim();
+  const roll = rollForEvent(ev);
+  const when = String(ev?.event_date || "").trim().slice(0, 10);
+  const dateHtml = when
+    ? `<p class="meta-line">Date · <time datetime="${esc(when)}">${esc(formatDate(when))}</time></p>`
+    : "";
+  const comments = String(ev?.comments || "").trim();
+  const prose = comments && comments !== roll?.id ? commitProseHtml(comments) : "";
+  const catalog = roll
+    ? [
+        metaLine(
+          "Chamber",
+          `${roll.chamber} · Congress ${roll.congress}, session ${roll.session} · ${roll.chamber === "Senate" ? "vote" : "roll"} ${roll.number}`,
+        ),
+        metaLine("Question", roll.question),
+        metaLine("Stage", voteStageLabel(roll.stage)),
+        metaLine("Result", `${roll.result} · ${roll.tally}`),
+      ].join("")
+    : "";
+  return personEventSection({
+    headHtml: eventHeadHtml(esc(recordedVoteTitle(ev)), ev?.event_date),
+    kind,
+    cites: voteEventCites(ev, roll),
+    bodyHtml: `${dateHtml}${catalog}${metaLine("Position", "Voted no")}${prose}`,
+    className: "detail-recorded-vote detail-supporting",
+    tag: "section",
+  });
+}
+
 /** Vote and endorsement cards oldest first; notables newest date first at the bottom. */
 function specialEventNodes(row, sourceNumbers) {
   const render = {
@@ -2519,6 +2608,7 @@ function specialEventNodes(row, sourceNumbers) {
     harassment_records: harassmentEventSection,
     ukraine_aid_flags: ukraineEventSection,
   };
+  for (const kind of VOTE_NO_KINDS) render[kind] = voteNoEventSection;
   const nodes = personEvents(row)
     .filter((ev) => render[String(ev?.kind || "").trim()])
     .sort(compareTimelineEvents)
@@ -2806,6 +2896,7 @@ function eventSourceLabel(ev) {
   if (kind === "notable") title = notableSectionTitle(ev);
   else if (kind === "harassment_records") title = "H. Res. 1100";
   else if (kind === "ukraine_aid_flags") title = "H.R. 8035";
+  else if (VOTE_NO_KINDS.has(kind)) title = recordedVoteTitle(ev);
   else if (kind === "endorsement") title = "Endorsement";
   else if (kind === "shot") title = "Shot";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";

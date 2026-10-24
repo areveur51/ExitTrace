@@ -33,8 +33,8 @@ function requestPage(pathname) {
 
 test("fact tags stay on the person and are not identity filters", () => {
   assert.deepEqual(
-    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "former_intel_agency_personnel", "fraud", "nope"]),
-    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "former_intel_agency_personnel", "fraud"],
+    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "big_beautiful_bill_act", "save_act", "secure_the_border_act", "laken_riley_act", "save_america_act", "s_5271_photo_id", "former_intel_agency_personnel", "fraud", "nope"]),
+    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "big_beautiful_bill_act", "save_act", "secure_the_border_act", "laken_riley_act", "save_america_act", "s_5271_photo_id", "former_intel_agency_personnel", "fraud"],
   );
   assert.deepEqual(
     personTags({
@@ -75,6 +75,18 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.match(facts, />Harassment records</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/ukraine-aid"/);
   assert.match(facts, />Ukraine aid</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/one-big-beautiful-bill-act"/);
+  assert.match(facts, />One Big Beautiful Bill Act</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/save-act"/);
+  assert.match(facts, />SAVE Act</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/secure-the-border-act"/);
+  assert.match(facts, />Secure the Border Act</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/laken-riley-act"/);
+  assert.match(facts, />Laken Riley Act</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/save-america-act"/);
+  assert.match(facts, />SAVE America Act</);
+  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/s-5271"/);
+  assert.match(facts, />S\. 5271</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/former-intel-agency-personnel"/);
   assert.match(facts, />Former intel</);
   assert.doesNotMatch(facts, />Federal investigation</);
@@ -403,6 +415,12 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.doesNotMatch(firings.body, /<option[^>]*>Endorsements<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Harassment records<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Ukraine aid<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>One Big Beautiful Bill Act<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>SAVE Act<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>Secure the Border Act<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>Laken Riley Act<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>SAVE America Act<\/option>/);
+  assert.doesNotMatch(firings.body, /<option[^>]*>S\. 5271<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Former intel<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Federal investigation<\/option>/);
   assert.doesNotMatch(firings.body, /<option[^>]*>Fraud<\/option>/);
@@ -411,6 +429,12 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.match(firings.body, /href="\/tags\/endorsements"/);
   assert.match(firings.body, /href="\/tags\/harassment-records"/);
   assert.match(firings.body, /href="\/tags\/ukraine-aid"/);
+  assert.match(firings.body, /href="\/tags\/one-big-beautiful-bill-act"/);
+  assert.match(firings.body, /href="\/tags\/save-act"/);
+  assert.match(firings.body, /href="\/tags\/secure-the-border-act"/);
+  assert.match(firings.body, /href="\/tags\/laken-riley-act"/);
+  assert.match(firings.body, /href="\/tags\/save-america-act"/);
+  assert.match(firings.body, /href="\/tags\/s-5271"/);
   assert.match(firings.body, /href="\/tags\/former-intel-agency-personnel"/);
   assert.match(firings.body, /href="\/tags\/fraud"/);
 
