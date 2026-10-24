@@ -1427,18 +1427,49 @@ export function officePosition(raw) {
   return standardizePosition(raw);
 }
 
+/** A U.S. congressional office title, current or former. */
+const CONGRESS_OFFICE = /^(?:Former )?U\.S\. (?:Senator|Representative)\b/;
+
 /**
- * Title on a person result card. The event this card is about supplies
- * position. Role is the person-level title when that event has none.
- * Another event's position is not borrowed.
+ * Body implied by a current congressional role. Only these two are mapped.
+ * Any other role keeps the stored event organization.
  */
-export function personCardPosition(row) {
-  const events = personEvents(row);
+const BODY_BY_CURRENT_OFFICE = [
+  [/^U\.S\. Senator\b/, "U.S. Senate"],
+  [/^U\.S\. Representative\b/, "U.S. House of Representatives"],
+];
+
+/** The event this card is about: the first event of the card category. */
+function personCardEvent(row) {
   const kind = String(row?.category || "").trim();
-  const match = kind ? events.find((ev) => String(ev?.kind || "") === kind) : null;
-  const position = officePosition(match?.position);
-  if (position) return position;
-  return officePosition(row?.role);
+  if (!kind) return null;
+  return personEvents(row).find((ev) => String(ev?.kind || "") === kind) || null;
+}
+
+/**
+ * Office on a person result card. The event this card is about supplies position and
+ * organization. Role is the person-level title when that event has none.
+ * When both the role and that event name a U.S. congressional office, the
+ * role wins: it is the current cited office, while the event keeps the office
+ * held on that day. A current Senator or Representative role then implies
+ * its chamber as the organization. Another event's office is not borrowed,
+ * and the stored event is not changed.
+ */
+export function personCardOffice(row) {
+  const match = personCardEvent(row);
+  const eventPosition = officePosition(match?.position);
+  const eventOrganization = String(match?.organization || "").trim();
+  const role = officePosition(row?.role);
+  const roleWins =
+    role && (!eventPosition || (CONGRESS_OFFICE.test(role) && CONGRESS_OFFICE.test(eventPosition)));
+  if (!roleWins) return { position: eventPosition, organization: eventOrganization };
+  const implied = BODY_BY_CURRENT_OFFICE.find(([re]) => re.test(role))?.[1] || "";
+  return { position: role, organization: implied || eventOrganization };
+}
+
+/** Title on a person result card. See personCardOffice. */
+export function personCardPosition(row) {
+  return personCardOffice(row).position;
 }
 
 /** Shared KEEP person row: dashboard slices, category lists, and search. */

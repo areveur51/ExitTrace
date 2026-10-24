@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.29] - 2026-10-24
+
+### Changed
+
+- A person result card shows the current cited role (`people.role`) as its position when that role and the event the card is about both name a U.S. congressional office, so a sitting Senator whose card event is a House vote reads "U.S. Senator …". A card event with no position also uses the role. Otherwise, and whenever the role is empty, the card keeps the event office as before. `personCardOffice` pairs that position with an organization: U.S. Senate for a current U.S. Senator role, U.S. House of Representatives for a current U.S. Representative role, and the stored event organization for anything else. Each event's own text and office line stay as stored, and the detail header is unchanged.
+
 ## [1.2.28] - 2026-10-24
 
 ### Added
