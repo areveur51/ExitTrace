@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   DEFAULT_CAPTURE_PROFILE_BASE,
+  captureProfileBase,
   ensureCaptureProfileDir,
   resolveCaptureProfileDir,
 } from "../scripts/lib/capture-profile.mjs";
@@ -134,29 +135,44 @@ test("scratch directory is mode 700", () => {
 });
 
 test("default base is the absolute constant", () => {
-  const caseName = "guilfoyle-newsom";
-  const expected = path.join(DEFAULT_CAPTURE_PROFILE_BASE, caseName);
+  eq(captureProfileBase({}), DEFAULT_CAPTURE_PROFILE_BASE);
+  ok(path.isAbsolute(captureProfileBase({})));
   ok(path.isAbsolute(DEFAULT_CAPTURE_PROFILE_BASE));
+  const expected = path.join(captureProfileBase({}), "c1");
+  eq(expected, path.join(DEFAULT_CAPTURE_PROFILE_BASE, "c1"));
   ok(path.isAbsolute(expected));
-  eq(resolveCaptureProfileDir({ caseName, env: {}, repoRoot }), expected);
-  eq(
-    resolveCaptureProfileDir({ caseName, env: { ET_CAPTURE_PROFILE_DIR: "" }, repoRoot }),
-    expected,
-  );
+  eq(captureProfileBase({ ET_CAPTURE_PROFILE_DIR: "" }), DEFAULT_CAPTURE_PROFILE_BASE);
+  eq(captureProfileBase({ ET_CAPTURE_PROFILE_DIR: "/x/y" }), "/x/y");
 });
 
 test("default base ignores the caller repo root", () => {
+  const before = DEFAULT_CAPTURE_PROFILE_BASE;
   const other = path.join(scratch, "other-root");
   fs.mkdirSync(other, { mode: 0o700 });
+  const base = path.join(scratch, "repo-independent");
   const caseName = "fake-case";
-  const expected = path.join(DEFAULT_CAPTURE_PROFILE_BASE, caseName);
-  eq(resolveCaptureProfileDir({ caseName, env: {}, repoRoot: other }), expected);
+  const expected = path.join(base, caseName);
   eq(
-    resolveCaptureProfileDir({ caseName, env: { ET_CAPTURE_PROFILE_DIR: "" }, repoRoot: other }),
+    resolveCaptureProfileDir({
+      caseName,
+      env: { ET_CAPTURE_PROFILE_DIR: base },
+      repoRoot: other,
+    }),
     expected,
   );
+  eq(
+    resolveCaptureProfileDir({
+      caseName,
+      env: { ET_CAPTURE_PROFILE_DIR: base },
+      repoRoot: anchor,
+    }),
+    expected,
+  );
+  eq(captureProfileBase({}), before);
+  eq(captureProfileBase({ ET_CAPTURE_PROFILE_DIR: "" }), before);
+  eq(DEFAULT_CAPTURE_PROFILE_BASE, before);
   eq(fs.existsSync(expected), false);
-  eq(fs.existsSync(DEFAULT_CAPTURE_PROFILE_BASE), false);
+  eq(fs.existsSync(base), false);
   eq(modeOf(other), 0o700);
 });
 

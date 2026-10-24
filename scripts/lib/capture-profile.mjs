@@ -41,7 +41,7 @@ function envTable(env) {
   return process.env;
 }
 
-function baseFromEnv(env) {
+export function captureProfileBase(env = process.env) {
   const table = envTable(env);
   const raw = table.ET_CAPTURE_PROFILE_DIR;
   if (typeof raw === "string" && raw.length > 0) return raw;
@@ -318,7 +318,7 @@ function splitAbs(abs) {
 function resolveCaptureProfile(opts) {
   const options = opts && typeof opts === "object" ? opts : {};
   assertCaseName(options.caseName);
-  const base = baseFromEnv(options.env);
+  const base = captureProfileBase(options.env);
   if (!path.isAbsolute(base)) {
     throw refusal("capture_base_not_absolute", "capture profile base is not absolute");
   }
