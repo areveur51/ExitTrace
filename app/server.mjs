@@ -64,7 +64,7 @@ import {
 } from "./lib/cf-origin.mjs";
 import { bootDatabase } from "./lib/boot-guard.mjs";
 import { emptyKeepUp, readKeepUp } from "./lib/keep-up.mjs";
-import { publicGitSha } from "./lib/logical-heal.mjs";
+import { healthGitSha, readCheckoutGitSha } from "./lib/git-sha.mjs";
 import {
   addBody,
   identityFilterNav,
@@ -151,6 +151,8 @@ loadDotEnv(path.join(ROOT, ".env"));
 const port = Number(process.env.PORT || 5220);
 const host = process.env.HOST || "0.0.0.0";
 const { mediaDir, dataDir } = resolveRoot(ROOT);
+/** Checkout HEAD, read once at boot; /api/health uses it only when RENDER_GIT_COMMIT is unset. */
+const CHECKOUT_GIT_SHA = readCheckoutGitSha(ROOT);
 const seedPath = path.join(dataDir, "seed.json");
 const APP_VERSION = JSON.parse(
   fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
@@ -494,7 +496,7 @@ async function healthPayload() {
     source_posts: c.source_posts,
     byCategory: c.byCategory,
     keep_up,
-    git_sha: publicGitSha(process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION),
+    git_sha: healthGitSha(process.env, CHECKOUT_GIT_SHA),
     cf_only: cfOnlyStats(),
   };
 }
