@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.30] - 2026-10-24
+
+### Fixed
+
+- Opening a tag page or two no longer returns `429 Too many requests`. A `/tags/...` page loads two thumbnails per person, and each one counted against the 120 requests per minute global limit. GET and HEAD requests for `/favicon.ico` and derived thumbnails (`/media/thumbs/<kind>/<stem>[.2x|.card|.card2x|.hero].jpg|webp`) now skip the rate limiter. The thumbnail match is exact on the URL pathname: no `%`, no dot segment, no extra directory, and no other extension, so traversal or encoded forms are still counted. A POST or other write to those paths is still counted. `/search` (12/min), `POST /add` (5/min), the global limit (120/min), and every other default are unchanged.
+
 ## [1.2.29] - 2026-10-24
 
 ### Changed

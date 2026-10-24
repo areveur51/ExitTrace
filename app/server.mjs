@@ -525,7 +525,7 @@ async function handle(req, res) {
     rateOpts = { trustCf: cfDecision.trustCf };
   }
 
-  if (!isExemptPath(p)) {
+  if (!isExemptPath(p, req.method)) {
     const decision = rateOpts
       ? getRateLimiter().check(req, p, rateOpts)
       : getRateLimiter().check(req, p);

@@ -47,10 +47,35 @@ function envPositive(name, fallback, env = process.env) {
   return positiveInt(env[name], fallback);
 }
 
-export function isExemptPath(pathname) {
+/**
+ * GET/HEAD-only exemptions. These are cheap static reads that a single page
+ * load can request dozens of times (a /tags page loads two thumbs per person).
+ * Thumbs must match the derived-thumb shape exactly: one kind directory, one
+ * stem, an optional known variant, and .jpg or .webp. No "%", no dot segment,
+ * no extra directory, so a decoded or traversed path cannot match.
+ * Callers pass the URL pathname (dot segments already resolved, no query).
+ */
+const EXEMPT_GET_EXACT = new Set(["/favicon.ico"]);
+const EXEMPT_GET_THUMB =
+  /^\/media\/thumbs\/[a-z0-9][a-z0-9_-]*\/[a-z0-9][a-z0-9_-]*(?:\.(?:2x|card2x|card|hero))?\.(?:jpg|webp)$/i;
+
+function isReadMethod(method) {
+  const m = String(method || "").toUpperCase();
+  return m === "GET" || m === "HEAD";
+}
+
+/**
+ * True when the limiter skips this request.
+ * method is optional. Without it only the method-agnostic exemptions apply;
+ * /favicon.ico and /media/thumbs/* need GET or HEAD.
+ */
+export function isExemptPath(pathname, method) {
   const p = String(pathname || "");
   if (EXEMPT_EXACT.has(p)) return true;
-  return p.startsWith("/media/themes/");
+  if (p.startsWith("/media/themes/")) return true;
+  if (!isReadMethod(method)) return false;
+  if (EXEMPT_GET_EXACT.has(p)) return true;
+  return EXEMPT_GET_THUMB.test(p);
 }
 
 export function normalizeIp(raw) {
@@ -268,10 +293,10 @@ export function createRateLimiter({ windowMs, maxKeys, now, trustedProxyHops: ho
    * is report or enforce.
    */
   function check(req, pathname, opts) {
-    if (isExemptPath(pathname)) {
+    const method = String(req?.method || "GET").toUpperCase();
+    if (isExemptPath(pathname, method)) {
       return { allowed: true, exempt: true, limit: 0, remaining: 0, reset: 0, retryAfter: 0 };
     }
-    const method = String(req?.method || "GET").toUpperCase();
     const ipOpts = {};
     if (hopsOverride !== undefined) ipOpts.trustedProxyHops = hopsOverride;
     if (opts && opts.trustCf !== undefined) ipOpts.trustCf = opts.trustCf;
