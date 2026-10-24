@@ -4,6 +4,7 @@
  */
 
 import { commsThumbKinds } from "./kind-comms.mjs";
+import { parseThumbRel } from "./thumb-path.mjs";
 
 import fs from "fs";
 import path from "path";
@@ -64,10 +65,6 @@ const AGENCIES = "/media/agencies/";
 const COMM_DIRS = commsThumbKinds();
 const THUMBS = "/media/thumbs/";
 const EXTS = [".jpg", ".jpeg", ".png", ".webp"];
-const THUMB_REL = new RegExp(
-  `^thumbs/(people|agencies|${COMM_DIRS.join("|")})/([a-z0-9][a-z0-9_-]*)(\\.(?:2x|card2x|card|hero))?\\.(jpg|webp)$`,
-  "i",
-);
 const VARIANT_SIZE = {
   "": { w: LIST_THUMB_PX_W, h: LIST_THUMB_PX_H },
   ".2x": { w: LIST_THUMB_2X_W, h: LIST_THUMB_2X_H },
@@ -82,21 +79,7 @@ function stemOf(name) {
   return path.parse(path.basename(String(name || ""))).name;
 }
 
-export function parseThumbRel(thumbRel) {
-  const m = String(thumbRel || "").match(THUMB_REL);
-  if (!m) return null;
-  const kind = m[1];
-  const stem = m[2];
-  const variant = (m[3] || "").toLowerCase();
-  const ext = m[4].toLowerCase();
-  return {
-    kind,
-    stem,
-    variant,
-    ext,
-    rel: `thumbs/${kind}/${stem}${variant}.${ext}`,
-  };
-}
+export { parseThumbRel };
 
 export function variantSize(variant) {
   return VARIANT_SIZE[String(variant || "").toLowerCase()] || VARIANT_SIZE[""];
