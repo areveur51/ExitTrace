@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.32] - 2026-10-25
+
+### Added
+
+- Every fact-tag page (`/tags/<slug>`) opens with a short general description above the list. Bill tags (One Big Beautiful Bill Act, SAVE Act, Secure the Border Act, Laken Riley Act, SAVE America Act, S. 5271, Transparency Act, Ukraine aid) say what the bill does and list its recorded votes with date and tally, plus two or three source links (congress.gov, clerk.house.gov or senate.gov, and a news outlet). The other tags get a one-line definition of what qualifies a card. All 17 descriptions live in one map, `TAG_DESCRIPTIONS` in `app/lib/tags.mjs`. Vote lines for the recorded-no tags are built from the existing `VOTE_ROLLS` catalog, and roll-page links reuse its official URLs. Text and URLs are escaped, and a link that is not https on a .gov or official news host is dropped. Tag lists, ledes, slugs, and the menu are unchanged.
+
 ## [1.2.31] - 2026-10-25
 
 ### Changed
