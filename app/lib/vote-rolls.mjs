@@ -8,6 +8,14 @@
  * The card reads every roll on people.events.
  * Media on a recorded-no event stays on people.events. The card does not
  * render it. It is not orphaned and must not be cleaned up.
+ *
+ * Each roll also carries the official party split, `party.D|R|I` as
+ * [yea, nay, present, not voting], copied from the House Clerk roll XML
+ * (<totals-by-party>) or counted from the senate.gov roll-call page. It is
+ * never derived from ExitTrace cards. `source` is the page the numbers came
+ * from. The last three rolls back vote-fact tags (Ukraine aid, Transparency
+ * Act, Harassment records). Those kinds never store roll_call, so their
+ * rolls feed the dashboard party split only.
  */
 
 const ROLL_ID_RE = /^([HS])-([1-9]\d{2})-([12])-([1-9]\d{0,3})$/;
@@ -79,6 +87,7 @@ const ROLL_FACTS = [
     stage: "passage",
     result: "Passed",
     tally: "215-214, 1 present, 2 not voting",
+    party: { D: [0, 212, 0, 0], R: [215, 2, 1, 2], I: [0, 0, 0, 0] },
   },
   {
     id: "S-119-1-372",
@@ -89,6 +98,8 @@ const ROLL_FACTS = [
     stage: "passage",
     result: "Passed",
     tally: "50-50, Vice President voted yea",
+    party: { D: [0, 45, 0, 0], R: [50, 3, 0, 0], I: [0, 2, 0, 0] },
+    note: "Vice President voted yea",
   },
   {
     id: "H-119-1-190",
@@ -99,6 +110,7 @@ const ROLL_FACTS = [
     stage: "passage",
     result: "Passed",
     tally: "218-214",
+    party: { D: [0, 212, 0, 0], R: [218, 2, 0, 0], I: [0, 0, 0, 0] },
   },
   {
     id: "H-119-1-102",
@@ -109,6 +121,7 @@ const ROLL_FACTS = [
     stage: "passage",
     result: "Passed",
     tally: "220-208, 5 not voting",
+    party: { D: [4, 208, 0, 1], R: [216, 0, 0, 4], I: [0, 0, 0, 0] },
   },
   {
     id: "H-118-1-209",
@@ -119,6 +132,7 @@ const ROLL_FACTS = [
     stage: "passage",
     result: "Passed",
     tally: "219-213, 3 not voting",
+    party: { D: [0, 211, 0, 2], R: [219, 2, 0, 1], I: [0, 0, 0, 0] },
   },
   {
     id: "H-119-1-23",
@@ -129,6 +143,7 @@ const ROLL_FACTS = [
     stage: "passage",
     result: "Passed",
     tally: "263-156, 14 not voting",
+    party: { D: [46, 156, 0, 13], R: [217, 0, 0, 1], I: [0, 0, 0, 0] },
   },
   {
     id: "S-119-1-7",
@@ -139,6 +154,7 @@ const ROLL_FACTS = [
     stage: "passage",
     result: "Passed",
     tally: "64-35",
+    party: { D: [12, 33, 0, 0], R: [52, 0, 0, 0], I: [0, 2, 0, 0] },
   },
   {
     id: "H-119-2-69",
@@ -149,6 +165,7 @@ const ROLL_FACTS = [
     stage: "passage",
     result: "Passed",
     tally: "218-213, 1 not voting",
+    party: { D: [1, 213, 0, 0], R: [217, 0, 0, 1], I: [0, 0, 0, 0] },
   },
   {
     id: "S-119-2-73",
@@ -159,6 +176,7 @@ const ROLL_FACTS = [
     stage: "procedural",
     result: "Cloture Motion Rejected (3/5 required)",
     tally: "53-47",
+    party: { D: [0, 45, 0, 0], R: [53, 0, 0, 0], I: [0, 2, 0, 0] },
   },
   {
     id: "S-119-2-231",
@@ -169,12 +187,82 @@ const ROLL_FACTS = [
     stage: "procedural",
     result: "Cloture on the Motion to Proceed Rejected (3/5 required)",
     tally: "52-46, 2 not voting",
+    party: { D: [0, 44, 0, 1], R: [52, 0, 0, 1], I: [0, 2, 0, 0] },
+  },
+  {
+    id: "H-118-2-151",
+    tag: "ukraine_aid_flags",
+    date: "2024-04-20",
+    measure: "H.R. 8035",
+    question: "On Passage",
+    stage: "passage",
+    result: "Passed",
+    tally: "311-112, 1 present, 7 not voting",
+    party: { D: [210, 0, 0, 3], R: [101, 112, 1, 4], I: [0, 0, 0, 0] },
+  },
+  {
+    id: "H-119-1-289",
+    tag: "epstein_transparency_act",
+    date: "2025-11-18",
+    measure: "H.R. 4405",
+    question: "On Motion to Suspend the Rules and Pass",
+    stage: "passage",
+    result: "Passed",
+    tally: "427-1, 5 not voting",
+    party: { D: [211, 0, 0, 3], R: [216, 1, 0, 2], I: [0, 0, 0, 0] },
+  },
+  {
+    id: "H-119-2-83",
+    tag: "harassment_records",
+    date: "2026-03-04",
+    measure: "H. Res. 1100",
+    question: "On Motion to Refer",
+    stage: "procedural",
+    procedure: "motion to refer",
+    result: "Passed",
+    tally: "357-65, 1 present, 9 not voting",
+    party: { D: [182, 27, 0, 5], R: [175, 38, 1, 4], I: [0, 0, 0, 0] },
   },
 ];
+
+/** Party keys in display order. Each count is [yea, nay, present, not voting]. */
+export const VOTE_PARTIES = Object.freeze([
+  Object.freeze({ id: "D", label: "Democratic" }),
+  Object.freeze({ id: "R", label: "Republican" }),
+  Object.freeze({ id: "I", label: "Independent" }),
+]);
+
+export const VOTE_POSITIONS = Object.freeze(["yea", "nay", "present", "not_voting"]);
+
+function partyRecord(raw, id) {
+  const out = {};
+  for (const { id: key } of VOTE_PARTIES) {
+    const counts = raw?.[key];
+    if (!Array.isArray(counts) || counts.length !== VOTE_POSITIONS.length) {
+      throw new Error(`roll ${id} has no ${key} party counts`);
+    }
+    out[key] = Object.freeze(Object.fromEntries(VOTE_POSITIONS.map((pos, i) => [pos, Number(counts[i])])));
+  }
+  return Object.freeze(out);
+}
+
+function sumParties(party) {
+  const out = {};
+  for (const pos of VOTE_POSITIONS) {
+    out[pos] = VOTE_PARTIES.reduce((n, { id }) => n + party[id][pos], 0);
+  }
+  return Object.freeze(out);
+}
+
+/** House: the Clerk roll XML. Senate: the senate.gov roll-call page. */
+function sourceFor(id, date, chamber) {
+  return chamber === "House" ? houseClerkXmlUrl(id, date) : senateRollCallUrl(id);
+}
 
 function rollRecord(fact) {
   const parsed = parseRollId(fact.id);
   if (!parsed) throw new Error(`roll id ${fact.id} is not a catalog id`);
+  const party = partyRecord(fact.party, parsed.id);
   return Object.freeze({
     id: parsed.id,
     tag: fact.tag,
@@ -188,6 +276,11 @@ function rollRecord(fact) {
     stage: fact.stage,
     result: fact.result,
     tally: fact.tally,
+    procedure: fact.procedure || (fact.stage === "procedural" ? "cloture" : ""),
+    note: fact.note || "",
+    party,
+    totals: sumParties(party),
+    source: sourceFor(parsed.id, fact.date, parsed.chamber),
     urls: urlsFor(parsed.id, fact.date, parsed.chamber),
   });
 }
@@ -198,6 +291,23 @@ export const VOTE_ROLLS = Object.freeze(
     return [row.id, row];
   })),
 );
+
+/** Every catalog roll, grouped by tag in catalog order, oldest roll first within a tag. */
+export function voteTallyGroups() {
+  const order = [];
+  const byTag = new Map();
+  for (const roll of Object.values(VOTE_ROLLS)) {
+    if (!byTag.has(roll.tag)) {
+      byTag.set(roll.tag, []);
+      order.push(roll.tag);
+    }
+    byTag.get(roll.tag).push(roll);
+  }
+  return order.map((tag) => ({
+    tag,
+    rolls: byTag.get(tag).slice().sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
+  }));
+}
 
 /** Human page for a catalog roll. House Votes URL, or the Senate roll-call page. */
 export function officialRollPageUrl(id) {
@@ -217,8 +327,8 @@ export function voteRollTitle(roll) {
   return `${roll.measure} · ${roll.chamber} ${noun} ${roll.number}`;
 }
 
-export function voteStageLabel(stage) {
-  if (stage === "procedural") return "Procedural (cloture)";
+export function voteStageLabel(stage, procedure = "cloture") {
+  if (stage === "procedural") return `Procedural (${procedure || "cloture"})`;
   if (stage === "passage") return "Final passage";
   return "";
 }

@@ -31,6 +31,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.36] - 2026-10-26
+
+### Added
+
+- `/dashboard` has a "Roll calls · by party" panel. For every Congress vote tag (One Big Beautiful Bill Act, SAVE Act, Secure the Border Act, Laken Riley Act, SAVE America Act, S. 5271, Ukraine aid, Transparency Act, Harassment records) each roll call shows the official Yea, Nay, Present (when any) and Not voting counts for Democrats, Republicans and Independents, plus the roll total. Each roll links to its official clerk.house.gov or senate.gov page and is labeled final passage or procedural, as on the event rows. A separate line shows the number of ExitTrace cards on that roll (recorded-no tags) or tag (other vote tags). The panel is a plain table with no party colors and does not follow the dashboard range.
+- `app/lib/vote-rolls.mjs` roll facts now carry the official party split (`party.D|R|I`, from the House Clerk roll XML `<totals-by-party>` or counted from the senate.gov roll-call page), the summed `totals`, and the `source` page. Three rolls were added for vote-fact tags that store no roll id: House roll 151 (2024, H.R. 8035), House roll 289 (2025, H.R. 4405) and House roll 83 (2026, H. Res. 1100, motion to refer). Card rendering, imports and the companion table are unchanged.
+
 ## [1.2.35] - 2026-10-26
 
 ### Changed

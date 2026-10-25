@@ -1927,6 +1927,33 @@ pre {
 .dash-table td { padding: 0.3rem 0.4rem; border-top: 1px solid color-mix(in srgb, var(--rule) 45%, transparent); }
 .dash-box .dash-table + .dash-table { margin-top: 0.85rem; }
 .dash-standings [data-dash-dim="missing"] { grid-column: 1 / -1; }
+/* Roll calls by party: neutral table, no party colors. Wraps to one column on a phone. */
+.dash-votes { margin: 0 0 1rem; }
+.dash-vote-legend { margin: 0 0 0.6rem; color: var(--muted); font-size: 0.85rem; }
+.dash-vote-tag-h { margin: 0 0 0.1rem; font-size: 0.82rem; font-weight: 600; }
+.dash-vote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem 1.25rem;
+}
+.dash-vote { min-width: 0; }
+.dash-vote-h { margin: 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+.dash-vote-meta,
+.dash-vote-q,
+.dash-vote-cards { margin: 0.15rem 0; color: var(--muted); font-size: 0.82rem; overflow-wrap: anywhere; }
+.dash-vote-stage { color: var(--ink); }
+.dash-vote-table { table-layout: fixed; margin-top: 0.3rem; }
+.dash-vote-table th,
+.dash-vote-table td { padding: 0.2rem 0.3rem; }
+.dash-vote-table th:first-child { width: 3.4rem; }
+.dash-vote-table thead th:not(:first-child),
+.dash-vote-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.dash-vote-table tbody th,
+.dash-vote-table tfoot th { font-weight: 600; text-align: left; }
+.dash-vote-table tbody th { border-top: 1px solid color-mix(in srgb, var(--rule) 45%, transparent); }
+.dash-vote-table tfoot th,
+.dash-vote-table tfoot td { border-top: 1px solid var(--rule); }
+.dash-vote-table abbr { text-decoration: none; }
 .dash-missing {
   display: grid;
   gap: 0.9rem;

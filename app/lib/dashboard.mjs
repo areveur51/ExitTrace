@@ -20,6 +20,8 @@ import { EVENT_ATTR_FIELDS, eventHeadcount, personHeadcount, originText } from "
 import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { EVENTS_READY, deathPersonEvent, markEventsReady, personEvents } from "./promote.mjs";
+import { attributeTagById } from "./tags.mjs";
+import { VOTE_NO_KINDS, normalizeRollCall, voteTallyGroups } from "./vote-rolls.mjs";
 
 export { AGE_BANDS, parseAgeBand } from "./age.mjs";
 
@@ -712,6 +714,39 @@ export function countUnsealedIndictments(people) {
   return n;
 }
 
+/** ExitTrace cards on one roll. A recorded-no kind counts its own roll_call; other vote kinds store no roll id, so the tag counts. */
+function rollCardCount(people, roll) {
+  const perRoll = VOTE_NO_KINDS.has(roll.tag);
+  let n = 0;
+  for (const row of people || []) {
+    const hit = personEvents(row).some((ev) => {
+      if (String(ev?.kind || "").trim() !== roll.tag) return false;
+      return perRoll ? normalizeRollCall(ev?.roll_call) === roll.id : true;
+    });
+    if (hit) n += 1;
+  }
+  return n;
+}
+
+/**
+ * Official party split for every catalog roll, grouped by vote tag.
+ * Tallies come from vote-rolls (House Clerk XML, senate.gov). They are not
+ * counted from cards and do not follow the dashboard range.
+ * `cards` is the separate ExitTrace card count for the same roll or tag.
+ */
+export function voteTallyStanding(people) {
+  return voteTallyGroups().map(({ tag, rolls }) => {
+    const meta = attributeTagById(tag);
+    return {
+      tag,
+      label: meta?.nav || tag,
+      href: meta?.path || "",
+      perRoll: VOTE_NO_KINDS.has(tag),
+      rolls: rolls.map((roll) => ({ roll, cards: rollCardCount(people, roll) })),
+    };
+  });
+}
+
 export function buildDashboard(people, range, operations = []) {
   const rows = filterPeopleToRange(people, range);
   const dimensions = DASH_DIMENSIONS.map((dim) => {
@@ -733,5 +768,6 @@ export function buildDashboard(people, range, operations = []) {
     age: ageStanding(people, range),
     missing: missingStanding(people, range),
     operationsMissing: operationMissingStanding(operations, range),
+    votes: voteTallyStanding(people),
   };
 }

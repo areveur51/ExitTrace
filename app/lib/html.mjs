@@ -98,6 +98,7 @@ import {
 import {
   VOTE_FACT_KINDS,
   VOTE_NO_KINDS,
+  VOTE_PARTIES,
   VOTE_ROLLS,
   normalizeRollCall,
   officialRollPageUrl,
@@ -3790,6 +3791,7 @@ export function dashboardBody(model, { path = "/dashboard", range } = {}) {
       ${ageStandingBlock(model.age, active)}
       ${missingStandingBlock(model.missing, model.operationsMissing, active)}
     </div>
+    ${voteTallyBlock(model.votes)}
     <div class="dash-grid">${dims}</div>
     <section class="dash-trends" aria-label="Event-date trends">
       <section class="dash-block">
@@ -3976,6 +3978,61 @@ export function dashboardMissingBody({ range, field } = {}) {
     ${dashRangeNav(active, { path: DASH_MISSING.path, extra })}
     ${missingFieldFilterNav({ field: field?.id, range: active })}
   </div>`;
+}
+
+/** One official roll: party rows D, R, I and a total row. Present shows only when the roll has any. */
+function voteRollTable(roll) {
+  const showPresent = roll.totals.present > 0;
+  const cell = (n) => `<td class="num">${Math.max(0, Number(n) || 0)}</td>`;
+  const row = (labelHtml, counts, extra = "") => {
+    const total = counts.yea + counts.nay + counts.present + counts.not_voting;
+    return `<tr${extra}><th scope="row">${labelHtml}</th>${cell(counts.yea)}${cell(counts.nay)}${showPresent ? cell(counts.present) : ""}${cell(counts.not_voting)}${cell(total)}</tr>`;
+  };
+  const body = VOTE_PARTIES.map((p) =>
+    row(`<abbr title="${esc(p.label)}">${esc(p.id)}</abbr>`, roll.party[p.id], ` data-party="${esc(p.id)}"`),
+  ).join("");
+  return `<table class="dash-table dash-vote-table">
+      <thead><tr><th scope="col">Party</th><th scope="col">Yea</th><th scope="col">Nay</th>${showPresent ? `<th scope="col"><abbr title="Present">Pres</abbr></th>` : ""}<th scope="col"><abbr title="Not voting">NV</abbr></th><th scope="col">Total</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot>${row("All", roll.totals, ` data-party="all"`)}</tfoot>
+    </table>`;
+}
+
+/** Official party split per Congress vote tag. Numbers are from vote-rolls, not from cards. */
+function voteTallyBlock(groups) {
+  const list = Array.isArray(groups) ? groups : [];
+  if (!list.length) return "";
+  const articles = list
+    .flatMap((group) => {
+      const head = group.href
+        ? `<a href="${esc(group.href)}">${esc(group.label)}</a>`
+        : esc(group.label);
+      const cardNoun = group.perRoll ? "on this roll" : "on this tag";
+      return group.rolls.map(({ roll, cards }) => {
+        const official = officialRollPageUrl(roll.id);
+        const title = esc(voteRollTitle(roll));
+        const titleHtml = official
+          ? `<a href="${esc(official)}" rel="noopener" target="_blank">${title}</a>`
+          : title;
+        const stage = voteStageLabel(roll.stage, roll.procedure);
+        const note = roll.note ? ` · ${esc(roll.note)}` : "";
+        const count = Math.max(0, Number(cards) || 0);
+        return `<article class="dash-vote" data-roll="${esc(roll.id)}" data-vote-tag="${esc(group.tag)}" data-stage="${esc(roll.stage)}">
+          <p class="dash-vote-tag-h">${head}</p>
+          <h3 class="dash-vote-h">${titleHtml}</h3>
+          <p class="dash-vote-meta"><time datetime="${esc(roll.date)}">${esc(formatDate(roll.date))}</time> · <span class="dash-vote-stage">${esc(stage)}</span> · ${esc(roll.result)}${note}</p>
+          <p class="dash-vote-q">${esc(roll.question)}</p>
+          ${voteRollTable(roll)}
+          <p class="dash-vote-cards" data-roll-cards="${count}">ExitTrace cards ${cardNoun}: ${count}</p>
+        </article>`;
+      });
+    })
+    .join("");
+  const body = `<div class="dash-vote-grid">${articles}</div>`;
+  const legend = `<p class="dash-vote-legend">Official roll-call tallies by party from the House Clerk and senate.gov. NV is not voting. Card counts are ExitTrace cards, not tallies.</p>`;
+  return `<section class="dash-block dash-votes" data-dash-dim="votes" aria-label="Roll-call votes by party">
+    ${boxFrame("Roll calls · by party", `${legend}${body}`, { extraClass: "dash-box" })}
+  </section>`;
 }
 
 function operationStandingBlock(standing) {

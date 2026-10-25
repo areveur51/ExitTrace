@@ -17,6 +17,10 @@ import {
   senateRollCallUrl,
 } from "../app/lib/vote-rolls.mjs";
 
+/** Recorded-no rolls. The catalog also holds vote-fact rolls for the dashboard party split. */
+const NO_ROLLS = Object.values(VOTE_ROLLS).filter((roll) => VOTE_NO_KIND_IDS.includes(roll.tag));
+const PROCEDURAL = new Set(["S-119-2-73", "S-119-2-231", "H-119-2-83"]);
+
 const LABELS = {
   big_beautiful_bill_act: ["One Big Beautiful Bill Act", "/tags/one-big-beautiful-bill-act"],
   save_act: ["SAVE Act", "/tags/save-act"],
@@ -91,7 +95,8 @@ test("the closed catalog has six labels and normalizeTags keeps them", () => {
 
 test("VOTE_ROLLS entries are dated, staged, and point at catalog tags", () => {
   const ids = Object.keys(VOTE_ROLLS);
-  assert.equal(ids.length, 10);
+  assert.equal(ids.length, 13);
+  assert.equal(NO_ROLLS.length, 10);
   for (const id of ids) {
     const roll = VOTE_ROLLS[id];
     assert.equal(roll.id, id);
@@ -100,11 +105,8 @@ test("VOTE_ROLLS entries are dated, staged, and point at catalog tags", () => {
     assert.equal(ATTRIBUTE_TAG_IDS.includes(roll.tag), true, roll.tag);
     assert.equal(roll.chamber === "House" || roll.chamber === "Senate", true);
   }
-  assert.equal(VOTE_ROLLS["S-119-2-73"].stage, "procedural");
-  assert.equal(VOTE_ROLLS["S-119-2-231"].stage, "procedural");
   for (const id of ids) {
-    if (id === "S-119-2-73" || id === "S-119-2-231") continue;
-    assert.equal(VOTE_ROLLS[id].stage, "passage", id);
+    assert.equal(VOTE_ROLLS[id].stage, PROCEDURAL.has(id) ? "procedural" : "passage", id);
   }
 });
 
@@ -340,7 +342,7 @@ test("a missing roll_call renders from the event and does not throw", () => {
 
 test("menuDate for each vote tag is the newest event of that kind", () => {
   const byTag = new Map();
-  for (const roll of Object.values(VOTE_ROLLS)) {
+  for (const roll of NO_ROLLS) {
     const list = byTag.get(roll.tag) || [];
     list.push({
       kind: roll.tag,
@@ -631,7 +633,7 @@ test("a non-vote kind still keeps the first folded event on the companion row", 
 });
 
 test("each roll number and tally appears in its tag lede", () => {
-  for (const roll of Object.values(VOTE_ROLLS)) {
+  for (const roll of NO_ROLLS) {
     const tag = VOTE_NO_TAGS.find((item) => item.id === roll.tag);
     assert.ok(tag, roll.id);
     const noun = roll.chamber === "Senate" ? "vote" : "roll";
