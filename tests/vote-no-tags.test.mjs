@@ -5,7 +5,7 @@ import { personMenuDate } from "../app/lib/menu-date.mjs";
 import { projectPerson } from "../app/lib/promote.mjs";
 import { handle } from "../app/server.mjs";
 import { listPeople, setMemory, setPoolForTests, syncPersonEvents } from "../app/lib/store.mjs";
-import { ATTRIBUTE_TAG_IDS, attributeTagById, normalizeTags } from "../app/lib/tags.mjs";
+import { ATTRIBUTE_TAG_IDS, attributeTagById, normalizeTags, tagDescription } from "../app/lib/tags.mjs";
 import {
   VOTE_NO_KIND_IDS,
   VOTE_NO_TAGS,
@@ -630,16 +630,19 @@ test("a non-vote kind still keeps the first folded event on the companion row", 
   assert.equal(inserts[0].params[10], "first firing");
 });
 
-test("each roll number and tally appears in its tag lede", () => {
+test("each roll number and tally is in its tag description vote line, and the lede only says who is listed", () => {
   for (const roll of Object.values(VOTE_ROLLS)) {
     const tag = VOTE_NO_TAGS.find((item) => item.id === roll.tag);
     assert.ok(tag, roll.id);
+    const votes = tagDescription(roll.tag).votes;
     const noun = roll.chamber === "Senate" ? "vote" : "roll";
-    assert.match(tag.lede, new RegExp(`\\b${noun} ${roll.number}\\b`), roll.id);
-    const ledeTokens = new Set(tag.lede.toLowerCase().match(/[a-z0-9]+/g) || []);
-    for (const token of String(roll.tally).toLowerCase().match(/[a-z0-9]+/g) || []) {
-      assert.equal(ledeTokens.has(token), true, `${roll.id} ${token}`);
-    }
+    assert.match(votes, new RegExp(`\\b${noun} ${roll.number}\\b`), roll.id);
+    assert.ok(votes.includes(roll.tally), `${roll.id} ${roll.tally}`);
+  }
+  for (const tag of VOTE_NO_TAGS) {
+    assert.match(tag.lede, /^People who voted no on .+\.$/, tag.id);
+    assert.doesNotMatch(tag.lede, /\.\s+[A-Z][a-z]/, `${tag.id} lede is one sentence`);
+    assert.doesNotMatch(tag.lede, /\b(?:roll|vote) \d+|\d+-\d+|Recorded votes/, tag.id);
   }
 });
 

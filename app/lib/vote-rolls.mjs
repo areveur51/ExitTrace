@@ -271,48 +271,46 @@ export function voteStageLabel(stage) {
   return "";
 }
 
+/**
+ * The six recorded-no kinds. A lede only says who is listed; the tag description
+ * (TAG_DESCRIPTIONS in tags.mjs) carries the recorded votes, built from ROLLS.
+ */
 export const VOTE_NO_TAGS = Object.freeze([
   Object.freeze({
     id: "big_beautiful_bill_act",
     nav: "One Big Beautiful Bill Act",
     path: "/tags/one-big-beautiful-bill-act",
-    lede:
-      "People who voted no on H.R. 1, the One Big Beautiful Bill Act. House roll 145 on May 22, 2025 passed 215-214, with 1 present and 2 not voting. Senate vote 372 on July 1, 2025 passed 50-50, and the Vice President voted yea. House roll 190 on July 3, 2025, the motion to concur in the Senate amendment, passed 218-214.",
+    lede: "People who voted no on H.R. 1, the One Big Beautiful Bill Act.",
   }),
   Object.freeze({
     id: "save_act",
     nav: "SAVE Act",
     path: "/tags/save-act",
-    lede:
-      "People who voted no on H.R. 22, the SAVE Act. House roll 102 on April 10, 2025 passed 220-208, with 5 not voting.",
+    lede: "People who voted no on H.R. 22, the SAVE Act.",
   }),
   Object.freeze({
     id: "secure_the_border_act",
     nav: "Secure the Border Act",
     path: "/tags/secure-the-border-act",
-    lede:
-      "People who voted no on H.R. 2, the Secure the Border Act. House roll 209 on May 11, 2023 passed 219-213, with 3 not voting.",
+    lede: "People who voted no on H.R. 2, the Secure the Border Act.",
   }),
   Object.freeze({
     id: "laken_riley_act",
     nav: "Laken Riley Act",
     path: "/tags/laken-riley-act",
-    lede:
-      "People who voted no on S. 5, the Laken Riley Act. Senate vote 7 on January 20, 2025 passed 64-35. House roll 23 on January 22, 2025 passed 263-156, with 14 not voting.",
+    lede: "People who voted no on S. 5, the Laken Riley Act.",
   }),
   Object.freeze({
     id: "save_america_act",
     nav: "SAVE America Act",
     path: "/tags/save-america-act",
-    lede:
-      "People who voted no on the SAVE America Act. House roll 69 on February 11, 2026 passed the House-substituted text of S. 1383, 218-213, with 1 not voting. Senate vote 73 on March 26, 2026 rejected cloture on S. Amdt. 4732, 53-47. Cloture requires three-fifths.",
+    lede: "People who voted no on the SAVE America Act.",
   }),
   Object.freeze({
     id: "s_5271_photo_id",
     nav: "S. 5271",
     path: "/tags/s-5271",
-    lede:
-      "People who voted no on S. 5271. Senate vote 231 on August 8, 2026 rejected cloture on the motion to proceed, 52-46, with 2 not voting. Cloture requires three-fifths.",
+    lede: "People who voted no on S. 5271.",
   }),
 ]);
 

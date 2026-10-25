@@ -74,7 +74,7 @@ test("every bill description has 2-3 allowed cites: congress.gov, a clerk or sen
   for (const id of BILL_TAGS) {
     const d = tagDescription(id);
     const raw = TAG_DESCRIPTIONS[id].cites;
-    assert.equal(d.cites.length, raw.length, `${id}: no cite was dropped by the host allowlist`);
+    assert.equal(d.cites.length, raw.length, `${id}: every cite resolves`);
     assert.ok(d.cites.length >= 2 && d.cites.length <= 3, `${id} has 2-3 cites`);
     const hosts = d.cites.map((c) => new URL(c.url).hostname.replace(/^www\./, ""));
     assert.ok(hosts.includes("congress.gov"), `${id} cites congress.gov`);
@@ -153,6 +153,58 @@ test("the cite host allowlist takes https .gov and official news hosts only", ()
   assert.equal(isTagCiteUrl("https://user:pw@www.congress.gov/x"), false);
   assert.equal(isTagCiteUrl("javascript:alert(1)"), false);
   assert.equal(isTagCiteUrl(""), false);
+  assert.equal(isTagCiteUrl("https://www.congress.gov:443/x"), true, "explicit default port");
+});
+
+test("the cite host filter refuses lookalikes, foreign gov suffixes, bare gov, data: and non-default ports", () => {
+  for (const bad of [
+    "https://evilgov.com/x",
+    "https://www.evilgov.com/x",
+    "https://congress-gov.com/x",
+    "https://gov/x",
+    "https://www.gov/x",
+    "https://congress.gov./x",
+    "https://www.gov.uk/government/x",
+    "https://www.legislation.gov.uk/x",
+    "https://www.canada.ca/x",
+    "https://www.parl.gc.ca/x",
+    "data:text/html,<script>alert(1)</script>",
+    "data:text/html;base64,PHNjcmlwdD4=",
+    "https://www.c\u043engress.gov/x",
+    "https://xn--cngress-0nf.gov/x",
+    "https://www.xn--npr-9na.org/x",
+    "https://www.n\u0440r.org/x",
+    "https://clerk.house.gov:8443/Votes/2025102",
+    "https://www.congress.gov:80/x",
+    "https://www.npr.org:444/x",
+    "https://[::1]/x",
+    "https://127.0.0.1/x",
+    "ftp://www.congress.gov/x",
+    "//www.congress.gov/x",
+  ]) {
+    assert.equal(isTagCiteUrl(bad), false, bad);
+  }
+  for (const bad of [null, undefined, 42, {}, ["https://www.congress.gov/x"]]) assert.equal(isTagCiteUrl(bad), false, String(bad));
+  const html = tagDescriptionHtml({
+    text: "Bill text that is long enough.",
+    cites: [
+      { label: "ok", url: "https://www.congress.gov/x" },
+      { label: "lookalike", url: "https://www.c\u043engress.gov/x" },
+      { label: "uk", url: "https://www.gov.uk/x" },
+      { label: "port", url: "https://www.congress.gov:8443/x" },
+      { label: "data", url: "data:text/html,x" },
+    ],
+  });
+  assert.equal((html.match(/<a /g) || []).length, 1);
+});
+
+test("all 23 shipped cites pass the tightened filter and render as links", () => {
+  const all = Object.keys(TAG_DESCRIPTIONS).flatMap((id) => tagDescription(id).cites.map((c) => ({ id, ...c })));
+  assert.equal(all.length, 23);
+  for (const c of all) {
+    assert.equal(isTagCiteUrl(c.url), true, `${c.id} ${c.url}`);
+    assert.ok(tagDescriptionBlock(c.id).includes(`href="${c.url.replace(/&/g, "&amp;")}"`), `${c.id} links ${c.url}`);
+  }
 });
 
 test("the description renderer escapes text, labels, and URLs and drops a disallowed link", () => {
