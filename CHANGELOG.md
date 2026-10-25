@@ -31,6 +31,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.31] - 2026-10-25
+
+### Changed
+
+- Every row in the right-side Tags menu fits on one line at 1280 and 1440 wide, in the 721–1100 rail, and on mobile. Two long names get a display-only short menu label: "One Big Beautiful Bill Act" shows as "Big Beautiful Bill" and "Secure the Border Act" as "Secure the Border", each with the full name as the chip's `title`. Menu labels are at most 18 characters (`TAG_MENU_MAX_LABEL`). Tag chips are `white-space: nowrap`, and in the rail (≥721px) use a slightly smaller font (0.94em). Tag ids, slugs, `nav` names, and the tag pages' own titles are unchanged. Background, header, and keymap keys are unchanged.
+- `/api/health` `git_sha` on the lab now reports the checkout's HEAD sha. Public is unchanged: `RENDER_GIT_COMMIT` (then `SOURCE_VERSION`) still wins. When neither is set, the server reads HEAD once at boot from the `.git` files (a branch ref, a detached HEAD, `packed-refs`, or a worktree `.git` file), with no shell and no git binary, and caches it. If the checkout can't be read, `git_sha` is `null` and nothing throws. No new env vars.
+
 ## [1.2.30] - 2026-10-24
 
 ### Fixed
