@@ -31,12 +31,18 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
-## [1.2.30] - 2026-10-24
+## [1.2.31] - 2026-10-25
 
 ### Changed
 
 - Every row in the right-side Tags menu fits on one line at 1280 and 1440 wide, in the 721–1100 rail, and on mobile. Two long names get a display-only short menu label: "One Big Beautiful Bill Act" shows as "Big Beautiful Bill" and "Secure the Border Act" as "Secure the Border", each with the full name as the chip's `title`. Menu labels are at most 18 characters (`TAG_MENU_MAX_LABEL`). Tag chips are `white-space: nowrap`, and in the rail (≥721px) use a slightly smaller font (0.94em). Tag ids, slugs, `nav` names, and the tag pages' own titles are unchanged. Background, header, and keymap keys are unchanged.
 - `/api/health` `git_sha` on the lab now reports the checkout's HEAD sha. Public is unchanged: `RENDER_GIT_COMMIT` (then `SOURCE_VERSION`) still wins. When neither is set, the server reads HEAD once at boot from the `.git` files (a branch ref, a detached HEAD, `packed-refs`, or a worktree `.git` file), with no shell and no git binary, and caches it. If the checkout can't be read, `git_sha` is `null` and nothing throws. No new env vars.
+
+## [1.2.30] - 2026-10-24
+
+### Fixed
+
+- Opening a tag page or two no longer returns `429 Too many requests`. A `/tags/...` page loads two thumbnails per person, and each one counted against the 120 requests per minute global limit. GET and HEAD requests for `/favicon.ico` and derived thumbnails (`/media/thumbs/<kind>/<stem>[.2x|.card|.card2x|.hero].jpg|webp`) now skip the rate limiter. The thumbnail match is exact on the raw URL pathname and shares its shape with the thumbnail server (`app/lib/thumb-path.mjs`): lowercase only, a known kind folder (people, agencies, or a comms kind), a name of at most 200 characters, no `%`, no dot segment, no extra slash or `;` parameter, and no other extension. Anything else, including a request with no method, is still counted. A POST, OPTIONS, or other non-read request to those paths is still counted. A thumbnail that could not be served (no source or a failed render) loses the exemption for 60 seconds, so repeat requests for it are counted. `/search` (12/min), `POST /add` (5/min), the global limit (120/min), and every other default are unchanged.
 
 ## [1.2.29] - 2026-10-24
 
