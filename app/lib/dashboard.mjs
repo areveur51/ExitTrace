@@ -20,8 +20,8 @@ import { EVENT_ATTR_FIELDS, eventHeadcount, personHeadcount, originText } from "
 import { normalizeOperationTags, operationHasTag, operationTagLabel } from "./operation.mjs";
 import { isPeopleMediaHref } from "./portrait.mjs";
 import { EVENTS_READY, deathPersonEvent, markEventsReady, personEvents } from "./promote.mjs";
-import { attributeTagById } from "./tags.mjs";
-import { VOTE_NO_KINDS, normalizeRollCall, voteTallyGroups } from "./vote-rolls.mjs";
+import { ATTRIBUTE_TAG_IDS, attributeTagById, tagRollIds } from "./tags.mjs";
+import { ROLLS, VOTE_NO_KINDS, normalizeRollCall } from "./vote-rolls.mjs";
 
 export { AGE_BANDS, parseAgeBand } from "./age.mjs";
 
@@ -719,16 +719,16 @@ export function countUnsealedIndictments(people) {
  * Other vote kinds store no roll id, so a card counts when it carries the tag (the tag
  * page's membership) or an event of that kind.
  */
-function rollCardCount(people, roll) {
-  const perRoll = VOTE_NO_KINDS.has(roll.tag);
+function rollCardCount(people, roll, tag) {
+  const perRoll = VOTE_NO_KINDS.has(tag);
   let n = 0;
   for (const row of people || []) {
-    if (!perRoll && Array.isArray(row?.tags) && row.tags.includes(roll.tag)) {
+    if (!perRoll && Array.isArray(row?.tags) && row.tags.includes(tag)) {
       n += 1;
       continue;
     }
     const hit = personEvents(row).some((ev) => {
-      if (String(ev?.kind || "").trim() !== roll.tag) return false;
+      if (String(ev?.kind || "").trim() !== tag) return false;
       return perRoll ? normalizeRollCall(ev?.roll_call) === roll.id : true;
     });
     if (hit) n += 1;
@@ -737,8 +737,39 @@ function rollCardCount(people, roll) {
 }
 
 /**
- * Official party split for every catalog roll, grouped by vote tag.
- * Tallies come from vote-rolls (House Clerk XML, senate.gov). They are not
+ * Vote tag a ROLLS entry is shown under: its own `tag` for a recorded-no roll,
+ * else the fact tag that cites the roll (tagRollIds). "" when none does.
+ */
+function rollGroupTag(roll) {
+  if (roll.tag) return roll.tag;
+  for (const tag of ATTRIBUTE_TAG_IDS) {
+    if (!VOTE_NO_KINDS.has(tag) && tagRollIds(tag).includes(roll.id)) return tag;
+  }
+  return "";
+}
+
+/** Every ROLLS entry, grouped by vote tag in catalog order, oldest roll first within a tag. */
+export function voteTallyGroups() {
+  const order = [];
+  const byTag = new Map();
+  for (const roll of ROLLS) {
+    const tag = rollGroupTag(roll);
+    if (!tag) continue;
+    if (!byTag.has(tag)) {
+      byTag.set(tag, []);
+      order.push(tag);
+    }
+    byTag.get(tag).push(roll);
+  }
+  return order.map((tag) => ({
+    tag,
+    rolls: byTag.get(tag).slice().sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
+  }));
+}
+
+/**
+ * Official party split for every ROLLS entry, grouped by vote tag.
+ * Tallies are fields on ROLLS (House Clerk XML, senate.gov). They are not
  * counted from cards and do not follow the dashboard range.
  * `cards` is the separate ExitTrace card count for the same roll or tag.
  */
@@ -750,7 +781,7 @@ export function voteTallyStanding(people) {
       label: meta?.nav || tag,
       href: meta?.path || "",
       perRoll: VOTE_NO_KINDS.has(tag),
-      rolls: rolls.map((roll) => ({ roll, cards: rollCardCount(people, roll) })),
+      rolls: rolls.map((roll) => ({ roll, cards: rollCardCount(people, roll, tag) })),
     };
   });
 }

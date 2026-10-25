@@ -6,17 +6,40 @@ import { buildDashboard, voteTallyStanding } from "../app/lib/dashboard.mjs";
 import { dashboardBody } from "../app/lib/html.mjs";
 import { attributeTagById } from "../app/lib/tags.mjs";
 import {
+  ROLLS,
   VOTE_NO_KIND_IDS,
   VOTE_PARTIES,
   VOTE_POSITIONS,
   VOTE_ROLLS,
   houseClerkXmlUrl,
   officialRollPageUrl,
+  rollById,
   senateRollCallUrl,
   voteStageLabel,
 } from "../app/lib/vote-rolls.mjs";
 
-const ROLLS = Object.values(VOTE_ROLLS);
+/**
+ * Official party tallies as published in TALLIES.md for PR #236 (head 49899b5), checked
+ * against the House Clerk roll XML and senate.gov on 2026-10-25.
+ * [roll, D, R, I, total (each yea/nay/present/not voting), numbers source, stage label, "question; result[; note]").
+ */
+const TALLIES_MD = [
+  ["H-119-1-145", "0/212/0/0", "215/2/1/2", "0/0/0/0", "215/214/1/2", "https://clerk.house.gov/evs/2025/roll145.xml", "Final passage", "On Passage; Passed"],
+  ["S-119-1-372", "0/45/0/0", "50/3/0/0", "0/2/0/0", "50/50/0/0", "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00372.htm", "Final passage", "On Passage of the Bill, as amended; Passed; Vice President voted yea"],
+  ["H-119-1-190", "0/212/0/0", "218/2/0/0", "0/0/0/0", "218/214/0/0", "https://clerk.house.gov/evs/2025/roll190.xml", "Final passage", "On Motion to Concur in the Senate Amendment; Passed"],
+  ["H-119-1-102", "4/208/0/1", "216/0/0/4", "0/0/0/0", "220/208/0/5", "https://clerk.house.gov/evs/2025/roll102.xml", "Final passage", "On Passage; Passed"],
+  ["H-118-1-209", "0/211/0/2", "219/2/0/1", "0/0/0/0", "219/213/0/3", "https://clerk.house.gov/evs/2023/roll209.xml", "Final passage", "On Passage; Passed"],
+  ["H-119-1-23", "46/156/0/13", "217/0/0/1", "0/0/0/0", "263/156/0/14", "https://clerk.house.gov/evs/2025/roll023.xml", "Final passage", "On Passage; Passed"],
+  ["S-119-1-7", "12/33/0/0", "52/0/0/0", "0/2/0/0", "64/35/0/0", "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00007.htm", "Final passage", "On Passage of the Bill; Passed"],
+  ["H-119-2-69", "1/213/0/0", "217/0/0/1", "0/0/0/0", "218/213/0/1", "https://clerk.house.gov/evs/2026/roll069.xml", "Final passage", "On Passage; Passed"],
+  ["S-119-2-73", "0/45/0/0", "53/0/0/0", "0/2/0/0", "53/47/0/0", "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00073.htm", "Procedural (cloture)", "On the Cloture Motion; Cloture Motion Rejected (3/5 required)"],
+  ["S-119-2-231", "0/44/0/1", "52/0/0/1", "0/2/0/0", "52/46/0/2", "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00231.htm", "Procedural (cloture)", "On Cloture on the Motion to Proceed; Cloture on the Motion to Proceed Rejected (3/5 required)"],
+  ["H-118-2-151", "210/0/0/3", "101/112/1/4", "0/0/0/0", "311/112/1/7", "https://clerk.house.gov/evs/2024/roll151.xml", "Final passage", "On Passage; Passed"],
+  ["H-119-1-289", "211/0/0/3", "216/1/0/2", "0/0/0/0", "427/1/0/5", "https://clerk.house.gov/evs/2025/roll289.xml", "Final passage", "On Motion to Suspend the Rules and Pass; Passed"],
+  ["H-119-2-83", "182/27/0/5", "175/38/1/4", "0/0/0/0", "357/65/1/9", "https://clerk.house.gov/evs/2026/roll083.xml", "Procedural (motion to refer)", "On Motion to Refer; Passed"],
+];
+
+const ynpn = (c) => VOTE_POSITIONS.map((pos) => c[pos]).join("/");
 
 function requestPage(pathname) {
   return new Promise((resolve, reject) => {
@@ -54,8 +77,35 @@ function parseTally(text) {
   };
 }
 
-test("every roll has D, R and I counts that sum to the roll totals and the stated tally", () => {
+test("every ROLLS tally value is identical to TALLIES.md", () => {
+  assert.equal(ROLLS.length, TALLIES_MD.length);
+  assert.deepEqual(ROLLS.map((r) => r.id).sort(), TALLIES_MD.map((t) => t[0]).sort());
+  for (const [id, d, r, i, total, source, stage, line] of TALLIES_MD) {
+    const roll = rollById(id);
+    assert.ok(roll, id);
+    assert.equal(ynpn(roll.party.D), d, `${id} D`);
+    assert.equal(ynpn(roll.party.R), r, `${id} R`);
+    assert.equal(ynpn(roll.party.I), i, `${id} I`);
+    assert.equal(ynpn(roll.totals), total, `${id} total`);
+    assert.equal(roll.source, source, `${id} source`);
+    assert.equal(voteStageLabel(roll.stage, roll.procedure), stage, `${id} stage`);
+    assert.equal(`${roll.question}; ${roll.result}${roll.note ? `; ${roll.note}` : ""}`, line, `${id} question/result/note`);
+  }
+});
+
+test("party counts live on the one ROLLS catalog; VOTE_ROLLS is its recorded-no view", () => {
   assert.equal(ROLLS.length, 13);
+  assert.equal(new Set(ROLLS.map((r) => r.id)).size, ROLLS.length);
+  assert.equal(Object.keys(VOTE_ROLLS).length, 10);
+  for (const roll of Object.values(VOTE_ROLLS)) assert.equal(roll, rollById(roll.id), roll.id);
+  for (const id of ["H-119-1-289", "H-118-2-151", "H-119-2-83"]) {
+    assert.equal(rollById(id).tag, undefined, `${id} stays untagged`);
+    assert.equal(VOTE_ROLLS[id], undefined, id);
+    assert.ok(rollById(id).party && rollById(id).totals, id);
+  }
+});
+
+test("every roll has D, R and I counts that sum to the roll totals and the stated tally", () => {
   for (const roll of ROLLS) {
     for (const pos of VOTE_POSITIONS) {
       const sum = VOTE_PARTIES.reduce((n, p) => n + roll.party[p.id][pos], 0);
@@ -75,18 +125,18 @@ test("member totals match the chamber size for each roll", () => {
     else assert.ok(members >= 428 && members <= 435, `${roll.id} ${members}`);
   }
   // Senate vote 7 had 99 sitting senators; vote 372 tied 50-50 and the Vice President voted yea.
-  assert.equal(VOTE_POSITIONS.reduce((n, pos) => n + VOTE_ROLLS["S-119-1-7"].totals[pos], 0), 99);
-  assert.match(VOTE_ROLLS["S-119-1-372"].note, /Vice President voted yea/);
+  assert.equal(VOTE_POSITIONS.reduce((n, pos) => n + rollById("S-119-1-7").totals[pos], 0), 99);
+  assert.match(rollById("S-119-1-372").note, /Vice President voted yea/);
 });
 
 test("spot-check party splits against the official roll calls", () => {
-  assert.deepEqual({ ...VOTE_ROLLS["H-119-1-145"].party.R }, { yea: 215, nay: 2, present: 1, not_voting: 2 });
-  assert.deepEqual({ ...VOTE_ROLLS["H-119-1-145"].party.D }, { yea: 0, nay: 212, present: 0, not_voting: 0 });
-  assert.deepEqual({ ...VOTE_ROLLS["S-119-1-372"].party.R }, { yea: 50, nay: 3, present: 0, not_voting: 0 });
-  assert.deepEqual({ ...VOTE_ROLLS["S-119-2-73"].party.I }, { yea: 0, nay: 2, present: 0, not_voting: 0 });
-  assert.deepEqual({ ...VOTE_ROLLS["S-119-2-231"].party.D }, { yea: 0, nay: 44, present: 0, not_voting: 1 });
-  assert.deepEqual({ ...VOTE_ROLLS["S-119-2-231"].party.R }, { yea: 52, nay: 0, present: 0, not_voting: 1 });
-  assert.deepEqual({ ...VOTE_ROLLS["H-118-2-151"].party.R }, { yea: 101, nay: 112, present: 1, not_voting: 4 });
+  assert.deepEqual({ ...rollById("H-119-1-145").party.R }, { yea: 215, nay: 2, present: 1, not_voting: 2 });
+  assert.deepEqual({ ...rollById("H-119-1-145").party.D }, { yea: 0, nay: 212, present: 0, not_voting: 0 });
+  assert.deepEqual({ ...rollById("S-119-1-372").party.R }, { yea: 50, nay: 3, present: 0, not_voting: 0 });
+  assert.deepEqual({ ...rollById("S-119-2-73").party.I }, { yea: 0, nay: 2, present: 0, not_voting: 0 });
+  assert.deepEqual({ ...rollById("S-119-2-231").party.D }, { yea: 0, nay: 44, present: 0, not_voting: 1 });
+  assert.deepEqual({ ...rollById("S-119-2-231").party.R }, { yea: 52, nay: 0, present: 0, not_voting: 1 });
+  assert.deepEqual({ ...rollById("H-118-2-151").party.R }, { yea: 101, nay: 112, present: 1, not_voting: 4 });
 });
 
 test("every roll has an official source URL and roll number", () => {
@@ -97,15 +147,17 @@ test("every roll has an official source URL and roll number", () => {
     assert.equal(roll.source, expected, roll.id);
     assert.ok(roll.source.includes(String(roll.number).padStart(3, "0")), roll.id);
     assert.ok(officialRollPageUrl(roll.id), roll.id);
-    assert.ok(attributeTagById(roll.tag), roll.tag);
   }
+  // Every roll shows under a Tags-menu tag on the dashboard.
+  for (const group of voteTallyStanding([])) assert.ok(attributeTagById(group.tag), group.tag);
+  assert.equal(voteTallyStanding([]).reduce((n, g) => n + g.rolls.length, 0), ROLLS.length);
 });
 
 test("procedural rolls are labeled procedural; the event-row label is unchanged", () => {
   assert.equal(voteStageLabel("procedural"), "Procedural (cloture)");
-  assert.equal(voteStageLabel(VOTE_ROLLS["S-119-2-73"].stage, VOTE_ROLLS["S-119-2-73"].procedure), "Procedural (cloture)");
-  assert.equal(voteStageLabel(VOTE_ROLLS["H-119-2-83"].stage, VOTE_ROLLS["H-119-2-83"].procedure), "Procedural (motion to refer)");
-  assert.equal(voteStageLabel(VOTE_ROLLS["H-119-1-145"].stage, VOTE_ROLLS["H-119-1-145"].procedure), "Final passage");
+  assert.equal(voteStageLabel(rollById("S-119-2-73").stage, rollById("S-119-2-73").procedure), "Procedural (cloture)");
+  assert.equal(voteStageLabel(rollById("H-119-2-83").stage, rollById("H-119-2-83").procedure), "Procedural (motion to refer)");
+  assert.equal(voteStageLabel(rollById("H-119-1-145").stage, rollById("H-119-1-145").procedure), "Final passage");
 });
 
 test("card counts are separate from tallies and count per roll for recorded-no tags", () => {

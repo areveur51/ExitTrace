@@ -1,4 +1,4 @@
-/** Closed catalog of recorded-no roll calls.
+/** Closed roll-call catalog: ROLLS. VOTE_ROLLS is its recorded-no view.
  * `roll_call` is stored on each `people.events[]` object and kept by
  * normalizePersonEvent, the same way headcount is. A comments value that is
  * only a roll id (`H-119-1-145`) is read when the field is empty, and only
@@ -13,9 +13,9 @@
  * [yea, nay, present, not voting], copied from the House Clerk roll XML
  * (<totals-by-party>) or counted from the senate.gov roll-call page. It is
  * never derived from ExitTrace cards. `source` is the page the numbers came
- * from. The last three rolls back vote-fact tags (Ukraine aid, Transparency
- * Act, Harassment records). Those kinds never store roll_call, so their
- * rolls feed the dashboard party split only.
+ * from. The three untagged rolls (Transparency Act, Ukraine aid, the
+ * H. Res. 1100 referral) back vote-fact tags that never store roll_call; the
+ * dashboard groups them under the tag that cites them (tagRollIds in tags.mjs).
  */
 
 const ROLL_ID_RE = /^([HS])-([1-9]\d{2})-([12])-([1-9]\d{0,3})$/;
@@ -77,7 +77,87 @@ function urlsFor(id, date, chamber) {
   return Object.freeze(page ? [page] : []);
 }
 
-const ROLL_FACTS = [
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** `2025-04-10` -> `April 10, 2025`; "" when the value is not a YYYY-MM-DD date. */
+export function longDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  if (!m) return "";
+  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+}
+
+/** Party keys in display order. Each count is [yea, nay, present, not voting]. */
+export const VOTE_PARTIES = Object.freeze([
+  Object.freeze({ id: "D", label: "Democratic" }),
+  Object.freeze({ id: "R", label: "Republican" }),
+  Object.freeze({ id: "I", label: "Independent" }),
+]);
+
+export const VOTE_POSITIONS = Object.freeze(["yea", "nay", "present", "not_voting"]);
+
+function partyRecord(raw, id) {
+  const out = {};
+  for (const { id: key } of VOTE_PARTIES) {
+    const counts = raw?.[key];
+    if (!Array.isArray(counts) || counts.length !== VOTE_POSITIONS.length) {
+      throw new Error(`roll ${id} has no ${key} party counts`);
+    }
+    out[key] = Object.freeze(Object.fromEntries(VOTE_POSITIONS.map((pos, i) => [pos, Number(counts[i])])));
+  }
+  return Object.freeze(out);
+}
+
+function sumParties(party) {
+  const out = {};
+  for (const pos of VOTE_POSITIONS) {
+    out[pos] = VOTE_PARTIES.reduce((n, { id }) => n + party[id][pos], 0);
+  }
+  return Object.freeze(out);
+}
+
+/** House: the Clerk roll XML. Senate: the senate.gov roll-call page. */
+function sourceFor(id, date, chamber) {
+  return chamber === "House" ? houseClerkXmlUrl(id, date) : senateRollCallUrl(id);
+}
+
+/**
+ * Every roll entry is built here, so id, chamber, congress, session, number and urls
+ * always come from the roll id and date. `tag` is optional and set only on a
+ * recorded-no row (a VOTE_NO_TAGS kind). `party`, `totals`, `source`,
+ * `procedure` and `note` carry the official party split for every row.
+ */
+function rollRecord(entry) {
+  const parsed = parseRollId(entry.id);
+  if (!parsed) throw new Error(`roll id ${entry.id} is not a catalog id`);
+  const party = partyRecord(entry.party, parsed.id);
+  return Object.freeze({
+    id: parsed.id,
+    ...(entry.tag ? { tag: entry.tag } : {}),
+    chamber: parsed.chamber,
+    congress: parsed.congress,
+    session: parsed.session,
+    number: parsed.number,
+    date: entry.date,
+    measure: entry.measure,
+    question: entry.question,
+    stage: entry.stage,
+    result: entry.result,
+    tally: entry.tally,
+    procedure: entry.procedure || (entry.stage === "procedural" ? "cloture" : ""),
+    note: entry.note || "",
+    party,
+    totals: sumParties(party),
+    source: sourceFor(parsed.id, entry.date, parsed.chamber),
+    urls: urlsFor(parsed.id, entry.date, parsed.chamber),
+  });
+}
+
+/**
+ * One roll catalog. Recorded-no rows carry the `tag` of their VOTE_NO_TAGS kind;
+ * untagged rows are rolls that tag descriptions cite by id (Transparency Act,
+ * Ukraine aid, the H. Res. 1100 referral).
+ */
+export const ROLLS = Object.freeze([
   {
     id: "H-119-1-145",
     tag: "big_beautiful_bill_act",
@@ -190,19 +270,7 @@ const ROLL_FACTS = [
     party: { D: [0, 44, 0, 1], R: [52, 0, 0, 1], I: [0, 2, 0, 0] },
   },
   {
-    id: "H-118-2-151",
-    tag: "ukraine_aid_flags",
-    date: "2024-04-20",
-    measure: "H.R. 8035",
-    question: "On Passage",
-    stage: "passage",
-    result: "Passed",
-    tally: "311-112, 1 present, 7 not voting",
-    party: { D: [210, 0, 0, 3], R: [101, 112, 1, 4], I: [0, 0, 0, 0] },
-  },
-  {
     id: "H-119-1-289",
-    tag: "epstein_transparency_act",
     date: "2025-11-18",
     measure: "H.R. 4405",
     question: "On Motion to Suspend the Rules and Pass",
@@ -212,8 +280,17 @@ const ROLL_FACTS = [
     party: { D: [211, 0, 0, 3], R: [216, 1, 0, 2], I: [0, 0, 0, 0] },
   },
   {
+    id: "H-118-2-151",
+    date: "2024-04-20",
+    measure: "H.R. 8035",
+    question: "On Passage",
+    stage: "passage",
+    result: "Passed",
+    tally: "311-112, 1 present, 7 not voting",
+    party: { D: [210, 0, 0, 3], R: [101, 112, 1, 4], I: [0, 0, 0, 0] },
+  },
+  {
     id: "H-119-2-83",
-    tag: "harassment_records",
     date: "2026-03-04",
     measure: "H. Res. 1100",
     question: "On Motion to Refer",
@@ -223,101 +300,25 @@ const ROLL_FACTS = [
     tally: "357-65, 1 present, 9 not voting",
     party: { D: [182, 27, 0, 5], R: [175, 38, 1, 4], I: [0, 0, 0, 0] },
   },
-];
+]
+  .map(rollRecord));
 
-/** Party keys in display order. Each count is [yea, nay, present, not voting]. */
-export const VOTE_PARTIES = Object.freeze([
-  Object.freeze({ id: "D", label: "Democratic" }),
-  Object.freeze({ id: "R", label: "Republican" }),
-  Object.freeze({ id: "I", label: "Independent" }),
-]);
+const ROLLS_BY_ID = Object.freeze(Object.fromEntries(ROLLS.map((roll) => [roll.id, roll])));
 
-export const VOTE_POSITIONS = Object.freeze(["yea", "nay", "present", "not_voting"]);
-
-function partyRecord(raw, id) {
-  const out = {};
-  for (const { id: key } of VOTE_PARTIES) {
-    const counts = raw?.[key];
-    if (!Array.isArray(counts) || counts.length !== VOTE_POSITIONS.length) {
-      throw new Error(`roll ${id} has no ${key} party counts`);
-    }
-    out[key] = Object.freeze(Object.fromEntries(VOTE_POSITIONS.map((pos, i) => [pos, Number(counts[i])])));
-  }
-  return Object.freeze(out);
-}
-
-function sumParties(party) {
-  const out = {};
-  for (const pos of VOTE_POSITIONS) {
-    out[pos] = VOTE_PARTIES.reduce((n, { id }) => n + party[id][pos], 0);
-  }
-  return Object.freeze(out);
-}
-
-/** House: the Clerk roll XML. Senate: the senate.gov roll-call page. */
-function sourceFor(id, date, chamber) {
-  return chamber === "House" ? houseClerkXmlUrl(id, date) : senateRollCallUrl(id);
-}
-
-function rollRecord(fact) {
-  const parsed = parseRollId(fact.id);
-  if (!parsed) throw new Error(`roll id ${fact.id} is not a catalog id`);
-  const party = partyRecord(fact.party, parsed.id);
-  return Object.freeze({
-    id: parsed.id,
-    tag: fact.tag,
-    chamber: parsed.chamber,
-    congress: parsed.congress,
-    session: parsed.session,
-    number: parsed.number,
-    date: fact.date,
-    measure: fact.measure,
-    question: fact.question,
-    stage: fact.stage,
-    result: fact.result,
-    tally: fact.tally,
-    procedure: fact.procedure || (fact.stage === "procedural" ? "cloture" : ""),
-    note: fact.note || "",
-    party,
-    totals: sumParties(party),
-    source: sourceFor(parsed.id, fact.date, parsed.chamber),
-    urls: urlsFor(parsed.id, fact.date, parsed.chamber),
-  });
-}
-
-export const VOTE_ROLLS = Object.freeze(
-  Object.fromEntries(ROLL_FACTS.map((fact) => {
-    const row = rollRecord(fact);
-    return [row.id, row];
-  })),
-);
-
-/** Every catalog roll, grouped by tag in catalog order, oldest roll first within a tag. */
-export function voteTallyGroups() {
-  const order = [];
-  const byTag = new Map();
-  for (const roll of Object.values(VOTE_ROLLS)) {
-    if (!byTag.has(roll.tag)) {
-      byTag.set(roll.tag, []);
-      order.push(roll.tag);
-    }
-    byTag.get(roll.tag).push(roll);
-  }
-  return order.map((tag) => ({
-    tag,
-    rolls: byTag.get(tag).slice().sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
-  }));
+/** Catalog roll for an id, tagged or not; null when the id is not in ROLLS. */
+export function rollById(id) {
+  return ROLLS_BY_ID[normalizeRollCall(id)] || null;
 }
 
 /** Human page for a catalog roll. House Votes URL, or the Senate roll-call page. */
 export function officialRollPageUrl(id) {
-  const roll = VOTE_ROLLS[normalizeRollCall(id)];
+  const roll = rollById(id);
   return roll?.urls?.[0] ? String(roll.urls[0]) : "";
 }
 
 /** Both House pages, or the one Senate page. Empty when the id is not in the catalog. */
 export function officialRollUrls(id) {
-  const roll = VOTE_ROLLS[normalizeRollCall(id)];
+  const roll = rollById(id);
   return roll ? roll.urls : Object.freeze([]);
 }
 
@@ -379,6 +380,14 @@ export const VOTE_NO_TAGS = Object.freeze([
 ]);
 
 export const VOTE_NO_KIND_IDS = Object.freeze(VOTE_NO_TAGS.map((tag) => tag.id));
+
+/** Recorded-no rolls by id: the ROLLS entries whose tag is a VOTE_NO_TAGS kind. */
+export const VOTE_ROLLS = Object.freeze(
+  Object.fromEntries(ROLLS.filter((roll) => VOTE_NO_KIND_IDS.includes(roll.tag)).map((roll) => [roll.id, roll])),
+);
+for (const roll of ROLLS) {
+  if (roll.tag && !VOTE_ROLLS[roll.id]) throw new Error(`roll ${roll.id} has tag ${roll.tag}, which is not a recorded-no kind`);
+}
 
 /** The six recorded-no kinds. Each roll call is its own event of this kind. */
 export const VOTE_NO_KINDS = new Set(VOTE_NO_KIND_IDS);

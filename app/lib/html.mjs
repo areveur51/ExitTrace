@@ -92,8 +92,10 @@ import {
   catalogMainPath,
   filterPath,
   indictmentUnsealedSelectOptions,
+  isTagCiteUrl,
   normalizeTags,
   personTags,
+  tagDescription,
 } from "./tags.mjs";
 import {
   VOTE_FACT_KINDS,
@@ -477,6 +479,30 @@ function keymapTagSection(activePath) {
   );
 }
 
+/**
+ * General description block for a tag page. Text and labels are escaped; a cite URL
+ * that is not https on a .gov or official news host is dropped, not linked.
+ */
+export function tagDescriptionHtml(desc) {
+  if (!desc || !String(desc.text || "").trim()) return "";
+  const text = [desc.text, desc.votes].map((part) => String(part || "").trim()).filter(Boolean).join(" ");
+  const links = (desc.cites || [])
+    .filter((c) => c && String(c.label || "").trim() && isTagCiteUrl(c.url))
+    .map(
+      (c) =>
+        `<a class="tag-desc-cite" href="${esc(String(c.url).trim())}" target="_blank" rel="noopener noreferrer">${esc(String(c.label).trim())}</a>`,
+    );
+  const cites = links.length
+    ? `<p class="tag-desc-cites"><span class="tag-desc-label">Sources</span> ${links.join(" ")}</p>`
+    : "";
+  return `<section class="tag-desc" aria-label="About this tag"><p class="tag-desc-text">${esc(text)}</p>${cites}</section>`;
+}
+
+/** Description block for a tag id from TAG_DESCRIPTIONS (tags.mjs). Empty when the id has none. */
+export function tagDescriptionBlock(id) {
+  return tagDescriptionHtml(tagDescription(id));
+}
+
 /** Fact-tag index. Same rows as the catalog Tags menu. */
 export function tagsIndexBody() {
   const chips = MENU_ATTRIBUTE_TAGS.map(
@@ -709,6 +735,7 @@ export function layout({
   title,
   path,
   heading,
+  intro,
   lede,
   body,
   mode,
@@ -751,6 +778,7 @@ export function layout({
   <div class="hud-stage">
     <main class="${home ? "home-stage" : "tui-main"}">
       ${home ? "" : `<h1 class="vh">${esc(heading || title)}</h1>`}
+      ${!home && intro ? intro : ""}
       ${!home && lede ? `<p class="lede">${lede}</p>` : ""}
       ${body}
     </main>

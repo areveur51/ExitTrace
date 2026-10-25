@@ -411,6 +411,34 @@ body.tui-home .home-stage {
 .tui-main::before { top: 0.35rem; right: 0.45rem; border-bottom: 0; border-left: 0; }
 .tui-main::after { bottom: 0.35rem; left: 0.45rem; border-top: 0; border-right: 0; }
 .lede, .hint, .empty { color: var(--muted); }
+/* Tag page description: one short record-only paragraph plus its cites. Wraps at any width. */
+.tag-desc {
+  max-width: 72ch;
+  margin: 0 0 0.75rem;
+  overflow-wrap: anywhere;
+}
+.tag-desc-text {
+  margin: 0 0 0.35rem;
+  line-height: 1.45;
+}
+.tag-desc-cites {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.65rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.tag-desc-label {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tag-desc-cite {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
 .death-nav,
 .identity-filters {
   display: flex;
