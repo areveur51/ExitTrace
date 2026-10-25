@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { nonNegativeInt, positiveInt } from "./num.mjs";
+import { isThumbPathname } from "./thumb-path.mjs";
 
 /**
  * Client IP for rate limits, in this order:
@@ -47,10 +48,67 @@ function envPositive(name, fallback, env = process.env) {
   return positiveInt(env[name], fallback);
 }
 
-export function isExemptPath(pathname) {
-  const p = String(pathname || "");
+/**
+ * GET/HEAD-only exemptions. These are cheap static reads that a single page
+ * load can request dozens of times (a /tags page loads two thumbs per person).
+ * A thumb must pass isThumbPathname (app/lib/thumb-path.mjs): the exact
+ * lowercase derived-thumb shape, an allowed kind directory, a stem of at most
+ * THUMB_STEM_MAX characters. Callers pass the raw URL pathname (dot segments
+ * resolved by URL, nothing decoded, no query), so a "%" form never matches.
+ */
+const EXEMPT_GET_EXACT = new Set(["/favicon.ico"]);
+
+/**
+ * Failed thumbs lose the exemption for THUMB_FAIL_TTL_MS. serveMedia calls
+ * noteThumbFailure when a thumb could not be served (no source, render
+ * failed). The next request for the same kind/stem/variant/format within
+ * the TTL is counted like any other request, so a broken image cannot be
+ * re-rendered without limit. The map is bounded; the oldest entry goes first.
+ */
+const THUMB_FAIL_TTL_MS = 60_000;
+const THUMB_FAIL_MAX = 5_000;
+const thumbFailures = new Map();
+
+export function noteThumbFailure(pathname, now = Date.now()) {
+  if (!isThumbPathname(pathname)) return;
+  thumbFailures.delete(pathname);
+  thumbFailures.set(pathname, now + THUMB_FAIL_TTL_MS);
+  while (thumbFailures.size > THUMB_FAIL_MAX) {
+    thumbFailures.delete(thumbFailures.keys().next().value);
+  }
+}
+
+function recentThumbFailure(pathname, now) {
+  const until = thumbFailures.get(pathname);
+  if (until === undefined) return false;
+  if (until <= now) {
+    thumbFailures.delete(pathname);
+    return false;
+  }
+  return true;
+}
+
+export function resetThumbFailures() {
+  thumbFailures.clear();
+}
+
+function isReadMethod(method) {
+  const m = String(method || "").toUpperCase();
+  return m === "GET" || m === "HEAD";
+}
+
+/**
+ * True when the limiter skips this request.
+ * method is optional. Without it only the method-agnostic exemptions apply;
+ * /favicon.ico and /media/thumbs/* need GET or HEAD.
+ */
+export function isExemptPath(pathname, method, now = Date.now()) {
+  const p = typeof pathname === "string" ? pathname : "";
   if (EXEMPT_EXACT.has(p)) return true;
-  return p.startsWith("/media/themes/");
+  if (p.startsWith("/media/themes/")) return true;
+  if (!isReadMethod(method)) return false;
+  if (EXEMPT_GET_EXACT.has(p)) return true;
+  return isThumbPathname(p) && !recentThumbFailure(p, now);
 }
 
 export function normalizeIp(raw) {
@@ -268,10 +326,12 @@ export function createRateLimiter({ windowMs, maxKeys, now, trustedProxyHops: ho
    * is report or enforce.
    */
   function check(req, pathname, opts) {
-    if (isExemptPath(pathname)) {
+    const rawMethod = req?.method;
+    const method = String(rawMethod || "GET").toUpperCase();
+    // A missing method is counted (fails closed) but still meters as GET.
+    if (isExemptPath(pathname, rawMethod ? method : "")) {
       return { allowed: true, exempt: true, limit: 0, remaining: 0, reset: 0, retryAfter: 0 };
     }
-    const method = String(req?.method || "GET").toUpperCase();
     const ipOpts = {};
     if (hopsOverride !== undefined) ipOpts.trustedProxyHops = hopsOverride;
     if (opts && opts.trustCf !== undefined) ipOpts.trustCf = opts.trustCf;
@@ -363,6 +423,7 @@ export function getRateLimiter() {
 }
 
 export function resetRateLimiter() {
+  thumbFailures.clear();
   sharedLimiter = createRateLimiter();
   return sharedLimiter;
 }
