@@ -7,7 +7,7 @@ import { keymapFooter, tagDescriptionBlock, tagDescriptionHtml } from "../app/li
 import { handle } from "../app/server.mjs";
 import { setMemory } from "../app/lib/store.mjs";
 import { ATTRIBUTE_TAGS, TAG_DESCRIPTIONS, isTagCiteUrl, tagDescription } from "../app/lib/tags.mjs";
-import { VOTE_NO_KIND_IDS, VOTE_ROLLS, officialRollPageUrl } from "../app/lib/vote-rolls.mjs";
+import { ROLLS, VOTE_NO_KIND_IDS, VOTE_ROLLS, houseClerkVoteUrl, houseClerkXmlUrl, officialRollPageUrl, parseRollId, rollById, senateRollCallUrl } from "../app/lib/vote-rolls.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BILL_TAGS = [...VOTE_NO_KIND_IDS, "epstein_transparency_act", "ukraine_aid_flags"];
@@ -104,6 +104,43 @@ test("recorded-no bill tags reuse every VOTE_ROLLS roll of that tag, and roll ci
   assert.match(tagDescription("save_america_act").text, /photo ID/);
   assert.match(tagDescription("save_act").text, /proof of U\.S\. citizenship/);
   assert.doesNotMatch(tagDescription("save_act").text, /photo/i);
+});
+
+test("ROLLS is the one roll catalog; VOTE_ROLLS is its recorded-no view", () => {
+  const ids = ROLLS.map((r) => r.id);
+  assert.equal(new Set(ids).size, ids.length, "roll ids are unique");
+  for (const r of ROLLS) {
+    const p = parseRollId(r.id);
+    assert.equal(r.chamber, p.chamber, r.id);
+    assert.equal(r.congress, p.congress, r.id);
+    assert.equal(r.session, p.session, r.id);
+    assert.equal(r.number, p.number, r.id);
+    const urls = r.chamber === "House" ? [houseClerkVoteUrl(r.id, r.date), houseClerkXmlUrl(r.id, r.date)] : [senateRollCallUrl(r.id)];
+    assert.deepEqual([...r.urls], urls, `${r.id} urls are derived`);
+    assert.ok(Object.isFrozen(r), r.id);
+    if ("tag" in r) assert.ok(VOTE_NO_KIND_IDS.includes(r.tag), `${r.id} tag is a recorded-no kind`);
+  }
+  assert.deepEqual(Object.keys(VOTE_ROLLS).sort(), ROLLS.filter((r) => VOTE_NO_KIND_IDS.includes(r.tag)).map((r) => r.id).sort());
+  for (const id of ["H-119-1-289", "H-118-2-151", "H-119-2-83"]) {
+    assert.ok(rollById(id), id);
+    assert.equal("tag" in rollById(id), false, `${id} is untagged`);
+    assert.equal(VOTE_ROLLS[id], undefined, `${id} is not a recorded-no roll`);
+  }
+  assert.equal(officialRollPageUrl("H-119-1-289"), "https://clerk.house.gov/Votes/2025289");
+  assert.equal(officialRollPageUrl("H-118-2-151"), "https://clerk.house.gov/Votes/2024151");
+  for (const id of Object.keys(TAG_DESCRIPTIONS)) {
+    for (const r of TAG_DESCRIPTIONS[id].rolls || []) assert.equal(typeof r, "string", `${id} names rolls by id only`);
+    for (const c of TAG_DESCRIPTIONS[id].cites || []) {
+      if (/clerk\.house\.gov|senate\.gov/.test(String(c.url || ""))) assert.fail(`${id} hand-types a roll URL: ${c.url}`);
+    }
+  }
+  assert.deepEqual(tagDescription("epstein_transparency_act").rolls.map((r) => r.id), ["H-119-1-289"]);
+  assert.deepEqual(tagDescription("ukraine_aid_flags").rolls.map((r) => r.id), ["H-118-2-151"]);
+  const harassment = tagDescription("harassment_records").text;
+  const r83 = rollById("H-119-2-83");
+  assert.equal(harassment, "A card gets this tag when the member voted yea on House roll 83 on March 4, 2026, the motion to refer H. Res. 1100 to the House Committee on Ethics, which passed 357-65, with 1 present and 9 not voting.");
+  assert.equal(r83.tally, "357-65, 1 present, 9 not voting");
+  assert.match(ATTRIBUTE_TAGS.find((t) => t.id === "harassment_records").lede, /Roll Call 83 passed 357-65, with 1 present and 9 not voting\./);
 });
 
 test("the cite host allowlist takes https .gov and official news hosts only", () => {
