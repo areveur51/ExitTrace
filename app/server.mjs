@@ -49,6 +49,10 @@ import {
   searchCatalog,
   writeFileStore,
 } from "./lib/store.mjs";
+import { tagMembership } from "./lib/store.mjs";
+import { searchFormHtml, tagFilterHtml } from "./lib/html.mjs";
+import { parseTagSearch, tagSearchHref } from "./lib/tag-search.mjs";
+import { tagShortLabel } from "./lib/tags.mjs";
 import {
   getRateLimiter,
   noteThumbFailure,
@@ -549,6 +553,41 @@ function centralCastingQuery(url) {
   return q ? `?${q}` : "";
 }
 
+/** Tags-only /search: everyone on every (All) or at least one (Any) selected fact-tag list. */
+async function sendTagSearch(req, res, url, tagState, membership) {
+  const { tags, match } = tagState;
+  const pageSize = parseCookiePageSize(req.headers.cookie);
+  const matched = await listPeople({ tags, tagMatch: match });
+  const flightDates =
+    tags[0] === "epstein_clients" ? await earliestEpsteinFlights(matched.map((row) => row.id)) : null;
+  // Same order as the first tag's /tags list.
+  const { ordered, dateOf } = orderPeopleByMenuDate(matched, { tag: tags[0], flightDates });
+  const meta = paginate({ total: ordered.length, page: parsePage(url.searchParams), pageSize });
+  const rows = ordered.slice(meta.offset, meta.offset + meta.limit);
+  const label = tags.map((id) => tagShortLabel(id)).join(match === "any" ? " or " : " + ");
+  const basePath = tagSearchHref("/search", tagState);
+  return sendHtml(
+    res,
+    layout({
+      title: `Search · ${label}`,
+      path: "/search",
+      heading: "Search",
+      crumbLabel: label,
+      query: label,
+      pageSize,
+      countLabel: countText(label, meta, rows.length),
+      lede: match === "any"
+        ? "People stored with at least one of the selected tags."
+        : "People stored with every selected tag.",
+      body: `${searchFormHtml({ state: tagState, membership })}${listSection(
+        peopleList(rows, { listDate: dateOf }),
+        pager(meta, { basePath, noun: "rows", pageSizes: PAGE_SIZES }),
+        listHead({ title: label, total: meta.total, index: 1, of: rows.length }),
+      )}`,
+    }),
+  );
+}
+
 async function healthPayload() {
   const c = await counts();
   let keep_up = emptyKeepUp();
@@ -830,7 +869,9 @@ async function handle(req, res) {
   }
 
   if (p === "/") {
-    const c = await counts();
+    const [c, membership] = await Promise.all([counts(), tagMembership()]);
+    // Home preselects chips from /?tags=…&match=… (chip picks write that URL); it never lists results.
+    const homeTags = parseTagSearch(url.searchParams);
     return sendHtml(
       res,
       layout({
@@ -840,7 +881,10 @@ async function handle(req, res) {
         mode: "home",
         query: "home",
         countLabel: `${c.people} people · ${c.operations || 0} operations · ${commsHomeCountLabel(c)} · ${c.central_casting || 0} central casting`,
-        body: homeBody({ version: APP_VERSION }),
+        body: homeBody({
+          version: APP_VERSION,
+          tagFilter: tagFilterHtml({ state: { tags: homeTags.tags, match: homeTags.match }, membership, basePath: "/" }),
+        }),
       }),
     );
   }
@@ -848,6 +892,11 @@ async function handle(req, res) {
   if (p === "/search") {
     const prepared = prepareSearchQuery(url.searchParams.get("q") || "");
     const q = prepared ? prepared.raw : "";
+    const tagSearch = parseTagSearch(url.searchParams);
+    const tagState = { q, tags: tagSearch.tags, match: tagSearch.match, ignored: tagSearch.ignored };
+    if (tagSearch.tags.length && !prepared) {
+      return sendTagSearch(req, res, url, tagState, await tagMembership());
+    }
     let all = [];
     if (prepared) {
       const ac = new AbortController();
@@ -871,13 +920,32 @@ async function handle(req, res) {
         if (typeof res.removeListener === "function") res.removeListener("close", onClose);
       }
     }
+    // Blank or oversized q with no tags stays query-free: the form renders without counts.
+    let membership = null;
+    if (prepared) {
+      try {
+        membership = await tagMembership();
+      } catch (err) {
+        console.error(err?.message);
+      }
+      if (res.writableFinished) return;
+    }
+    if (prepared && tagSearch.tags.length) {
+      // Keyword within the tag set: the same keyword hits, kept only for people in the set.
+      const inSet = new Set(
+        (await listPeople({ tags: tagSearch.tags, tagMatch: tagSearch.match })).map((row) => row.id),
+      );
+      all = all.filter((item) => item.type === "person" && inSet.has(item.row?.id));
+    }
     const meta = paginate({
       total: all.length,
       page: parsePage(url.searchParams),
       pageSize: DOG_PAGE_SIZE,
     });
     const windowed = all.slice(meta.offset, meta.offset + meta.limit);
-    const searchPath = q ? `/search?q=${encodeURIComponent(q)}` : "/search";
+    const searchPath = tagSearch.tags.length
+      ? tagSearchHref("/search", tagState)
+      : q ? `/search?q=${encodeURIComponent(q)}` : "/search";
     return sendHtml(
       res,
       layout({
@@ -888,7 +956,7 @@ async function handle(req, res) {
         query: q || "search",
         countLabel: q ? countText(q, meta, windowed.length) : "local",
         lede: "Matches names, operation titles, roles, summaries, handles, and stored post text in the local catalog.",
-        body: listSection(
+        body: searchFormHtml({ state: tagState, membership }) + listSection(
           searchBody(windowed, q),
           q
             ? pager(meta, { basePath: searchPath, noun: "results" })

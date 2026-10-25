@@ -3605,3 +3605,112 @@ html[data-theme="glass"] .results-controls .pager-pages a[aria-current="page"] {
   object-fit: contain;
   object-position: center top;
 }
+
+/* Tag search under the search bar (home and /search). Plain GET form; app.js enhances it. */
+.tf-form { position: relative; z-index: 5; }
+.tui-main > .tf-form { z-index: 5; margin: 0 0 0.9rem; }
+/* An open menu can run past main into the keymap footer (z-index 1) on phones; lift main while it is open. */
+.home-stage:has(.tf-add-wrap[open]),
+.tui-main:has(.tf-add-wrap[open]) { z-index: 2; }
+.tf { width: 100%; margin-top: 0.7rem; text-align: left; font-family: var(--font-ui); }
+.tf [hidden] { display: none !important; }
+.tf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+.tf-row + .tf-row { margin-top: 0.55rem; }
+.tf-label {
+  font-size: var(--hud-label); font-weight: 600; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted);
+}
+.tf-add-wrap { position: relative; }
+.tf-add, .tf-chip, .tf-radio, .tf-go {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  min-height: 34px; padding: 0.2rem 0.6rem; box-sizing: border-box;
+  font: inherit; font-family: var(--font-ui); font-size: 0.94em;
+  letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+  color: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
+  cursor: pointer;
+}
+.tf-add { color: var(--label); list-style: none; user-select: none; }
+.tf-add::-webkit-details-marker { display: none; }
+.tf-add::marker { content: ""; }
+.tf-add-wrap[open] > .tf-add { border-color: var(--amber); box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 40%, transparent); }
+.tf-add:focus-visible, .tf-radio:focus-within, .tf-go:focus-visible, .tf-opt:focus-within { outline: 1px solid var(--amber); outline-offset: 1px; }
+.tf-caret { color: var(--amber); font-size: 0.85em; }
+.tf-match { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: auto; }
+.tf-match .tf-label { margin-right: 0.15rem; }
+.tf-radio input, .tf-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.tf-radio { position: relative; }
+.tf-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.45); box-sizing: border-box;
+}
+.tf-radio:has(input:checked) { border-color: var(--amber); color: var(--amber); }
+.tf-radio:has(input:checked) .tf-dot { border-color: var(--amber); background: radial-gradient(circle, var(--amber) 0 3px, transparent 3.5px); }
+.tf-chip { cursor: default; border-color: color-mix(in srgb, var(--amber) 55%, transparent); background: rgba(255, 176, 0, 0.08); padding-right: 0.25rem; }
+.tf-chip-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; border: 0; background: none;
+  color: var(--muted); font-size: 0.8rem; text-decoration: none; cursor: pointer;
+}
+.tf-chip-x:hover, .tf-chip-x:focus-visible { color: var(--amber); }
+.tf-clear {
+  font-size: var(--hud-label); letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); text-decoration: underline; text-underline-offset: 3px; margin-left: 0.15rem;
+}
+.tf-count-row { justify-content: space-between; }
+.tf-count {
+  margin: 0.2rem 0 0.1rem; font-family: var(--font-ui); letter-spacing: 0.06em;
+  color: var(--label); font-size: 0.95rem;
+}
+.tf-count .dot { color: var(--amber); }
+.tf-count strong { color: var(--amber); }
+.tf-go { margin-left: auto; color: var(--label); }
+.tf-go:hover { border-color: var(--amber); color: var(--amber); }
+.tf-note { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.8rem; }
+html[data-tf-pending] .tui-main .tui-list,
+html[data-tf-pending] .tui-main .people-list { opacity: 0.45; transition: opacity 120ms; }
+html[data-tf-pending] .tf-go { border-color: var(--amber); color: var(--amber); }
+.tf-menu {
+  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0;
+  width: 19rem; padding: 0.5rem; box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+  background: rgba(8, 10, 14, 0.94);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+}
+.tf-find {
+  display: flex; align-items: center; gap: 0.4rem; min-height: 36px; padding: 0 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent); background: var(--panel);
+}
+.tf-find .chev { color: var(--amber); }
+.tf-find input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-family: var(--font); font-size: 0.85rem; outline: none; }
+.tf-find input::placeholder { color: var(--muted); }
+.tf-opts { margin-top: 0.4rem; display: flex; flex-direction: column; gap: 2px; }
+.tf-opt {
+  position: relative; display: flex; align-items: center; gap: 0.55rem;
+  min-height: 28px; padding: 0.12rem 0.4rem;
+  font-size: 0.9rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink);
+  border: 1px solid transparent; cursor: pointer;
+}
+.tf-opt:hover { background: rgba(255, 176, 0, 0.1); }
+.tf-opt:has(input:checked) { background: rgba(255, 176, 0, 0.07); border-color: rgba(255, 176, 0, 0.25); }
+.tf-box {
+  flex: 0 0 auto; width: 13px; height: 13px; box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tf-opt:has(input:checked) .tf-box { border-color: var(--amber); background: var(--amber); }
+.tf-opt:has(input:checked) .tf-box::after { content: "✓"; color: var(--void); font-size: 10px; font-weight: 700; line-height: 1; }
+.tf-opt-t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-opt-n { color: var(--muted); font-family: var(--font); font-size: 0.75rem; letter-spacing: 0; }
+.tf-menu-foot { margin: 0.45rem 0.2rem 0.1rem; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.04em; font-family: var(--font); line-height: 1.3; }
+@media (max-width: 720px) {
+  .tf-match { margin-left: 0; }
+  .tf { position: relative; }
+  .tf-add-wrap { position: static; }
+  .tf-menu { left: 0; right: 0; width: auto; top: 42px; }
+}

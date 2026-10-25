@@ -34,6 +34,8 @@ import {
   matchesTags,
   normalizeTags,
 } from "./tags.mjs";
+import { ATTRIBUTE_TAG_IDS } from "./tags.mjs";
+import { membershipMasks } from "./tag-search.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
 import { mergeNicknames, nicknameCatalogDate, normalizeNicknames } from "./nicknames.mjs";
@@ -223,6 +225,7 @@ let countsCache = null;
 let countsInflight = null;
 let allPeopleCache = null;
 let allPeopleInflight = null;
+let tagMembershipCache = null;
 
 function dropCatalogCache() {
   catalogEpoch += 1;
@@ -230,6 +233,7 @@ function dropCatalogCache() {
   countsInflight = null;
   allPeopleCache = null;
   allPeopleInflight = null;
+  tagMembershipCache = null;
 }
 
 function catalogCacheFresh(entry) {
@@ -1237,6 +1241,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       minAge: maybeOpts?.minAge,
       maxAge: maybeOpts?.maxAge,
       tags: maybeOpts?.tags,
+      tagMatch: maybeOpts?.tagMatch,
       unsealed: maybeOpts?.unsealed === true,
       cardOrder: maybeOpts?.cardOrder === true,
     };
@@ -1249,6 +1254,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       minAge: categoryOrOpts.minAge,
       maxAge: categoryOrOpts.maxAge,
       tags: categoryOrOpts.tags,
+      tagMatch: categoryOrOpts.tagMatch,
       unsealed: categoryOrOpts.unsealed === true,
       cardOrder: categoryOrOpts.cardOrder === true,
     };
@@ -1260,6 +1266,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
     minAge: maybeOpts?.minAge,
     maxAge: maybeOpts?.maxAge,
     tags: maybeOpts?.tags,
+    tagMatch: maybeOpts?.tagMatch,
     unsealed: maybeOpts?.unsealed === true,
     cardOrder: maybeOpts?.cardOrder === true,
   };
@@ -1428,9 +1435,17 @@ function peopleAgeWhere(params, { minAge, maxAge } = {}, categories = []) {
   return ` AND ${clauses.join(" AND ")}`;
 }
 
-function peopleTagWhere(params, tags) {
+/**
+ * Fact/identity tag filter. Default is OR (any selected tag). `match === "all"`
+ * ANDs one single-tag clause per tag, so each tag keeps the exact membership
+ * test the /tags/<slug> list uses.
+ */
+function peopleTagWhere(params, tags, match = "any") {
   const selected = normalizeTags(tags);
   if (!selected.length) return "";
+  if (match === "all" && selected.length > 1) {
+    return selected.map((id) => peopleTagWhere(params, [id])).join("");
+  }
   params.push(selected);
   const tagN = params.length;
   const implied = kindsImplyingTags(selected);
@@ -1485,9 +1500,9 @@ export function peopleUnsealedWhere(params, unsealed, categories) {
   )`;
 }
 
-function peopleWhere(categories, params, ageFilter, tags, unsealed) {
+function peopleWhere(categories, params, ageFilter, tags, unsealed, tagMatch = "any") {
   const kindSql = peopleKindWhere(categories, params);
-  const tagSql = peopleTagWhere(params, tags);
+  const tagSql = peopleTagWhere(params, tags, tagMatch);
   const ageSql = peopleAgeWhere(params, ageFilter, categories);
   const unsealedSql = peopleUnsealedWhere(params, unsealed, categories);
   const extra = `${tagSql}${ageSql}${unsealedSql}`;
@@ -1569,6 +1584,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const categories = asCategories(args.category);
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const tags = normalizeTags(args.tags);
+  const tagMatch = args.tagMatch === "all" ? "all" : "any";
   const unsealed = args.unsealed === true;
   const cardOrder = args.cardOrder === true;
   const p = await getPool();
@@ -1580,7 +1596,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
       rows = rows.filter((r) => personHasKind(r, categories));
     }
     if (tags.length) {
-      rows = rows.filter((r) => matchesTags(r, tags));
+      rows = rows.filter((r) => matchesTags(r, tags, { match: tagMatch }));
     }
     if (unsealed) {
       rows = rows.filter((r) => personIndictmentUnsealed(r, categories));
@@ -1595,7 +1611,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
     return rows.slice();
   }
   const params = [];
-  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed)}`;
+  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed, tagMatch)}`;
   sql += peopleKindOrder(categories, params, { cardDate: cardOrder });
   if (limit != null) {
     params.push(limit);
@@ -1655,6 +1671,7 @@ export async function countPeople(categoryOrOpts) {
   const categories = asCategories(args.category);
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const tags = normalizeTags(args.tags);
+  const tagMatch = args.tagMatch === "all" ? "all" : "any";
   const unsealed = args.unsealed === true;
   const p = await getPool();
   if (!p) {
@@ -1663,7 +1680,7 @@ export async function countPeople(categoryOrOpts) {
       rows = rows.filter((r) => personHasKind(r, categories));
     }
     if (tags.length) {
-      rows = rows.filter((r) => matchesTags(r, tags));
+      rows = rows.filter((r) => matchesTags(r, tags, { match: tagMatch }));
     }
     if (unsealed) {
       rows = rows.filter((r) => personIndictmentUnsealed(r, categories));
@@ -1681,10 +1698,49 @@ export async function countPeople(categoryOrOpts) {
   }
   const params = [];
   const q = await p.query(
-    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed)}`,
+    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed, tagMatch)}`,
     params,
   );
   return q.rows[0].n;
+}
+
+/**
+ * Fact-tag membership for the home tag search. Each tag's members come from the
+ * same filter listPeople({ tags: [id] }) uses for /tags/<slug> (peopleWhere in
+ * Postgres, matchesTags in memory), in one read. Returns per-tag counts and a
+ * mask histogram (tag-search.mjs) for client-side All/Any counts. No ids leave here.
+ */
+export async function tagMembership() {
+  const p = await getPool();
+  if (!p) return buildTagMembership(memoryTagMembers());
+  if (catalogCacheFresh(tagMembershipCache)) return tagMembershipCache.value;
+  const epoch = catalogEpoch;
+  const params = [];
+  const parts = ATTRIBUTE_TAG_IDS.map(
+    (id, i) => `SELECT ${i}::int AS i, id FROM people${peopleWhere([], params, {}, [id], false)}`,
+  );
+  const q = await p.query(parts.join(" UNION ALL "), params);
+  const members = Object.fromEntries(ATTRIBUTE_TAG_IDS.map((id) => [id, []]));
+  for (const row of q.rows) {
+    const id = ATTRIBUTE_TAG_IDS[Number(row.i)];
+    if (id) members[id].push(row.id);
+  }
+  const value = buildTagMembership(members);
+  if (epoch === catalogEpoch) tagMembershipCache = { at: Date.now(), value };
+  return value;
+}
+
+function memoryTagMembers() {
+  const rows = getMemory().people.map((r) => projectPerson(r));
+  return Object.fromEntries(
+    ATTRIBUTE_TAG_IDS.map((id) => [id, rows.filter((r) => matchesTags(r, [id])).map((r) => r.id)]),
+  );
+}
+
+function buildTagMembership(members) {
+  const counts = {};
+  for (const id of ATTRIBUTE_TAG_IDS) counts[id] = new Set(members[id] || []).size;
+  return { ids: ATTRIBUTE_TAG_IDS.slice(), counts, masks: membershipMasks(members) };
 }
 
 export async function countKindComms(kind) {

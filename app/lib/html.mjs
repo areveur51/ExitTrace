@@ -108,6 +108,8 @@ import {
   voteStageLabel,
 } from "./vote-rolls.mjs";
 import { AGE_BANDS, parseAgeBand } from "./age.mjs";
+import { tagShortLabel } from "./tags.mjs";
+import { TAG_MATCH_ALL, TAG_MATCH_ANY, countTagMatches, tagSearchHref } from "./tag-search.mjs";
 import {
   DASH_AGE,
   DASH_DIMENSIONS,
@@ -451,18 +453,9 @@ function keymapCommsSection(activePath) {
 /** Longest Tags-menu label that fits one line in the 13.25rem keymap rail. */
 export const TAG_MENU_MAX_LABEL = 18;
 
-/**
- * Display-only short labels for the Tags menu. Tag ids, slugs, `nav`, and the tag
- * pages' own titles are unchanged; the full `nav` name goes in the chip's title.
- */
-const TAG_MENU_SHORT_LABELS = Object.freeze({
-  big_beautiful_bill_act: "Big Beautiful Bill",
-  secure_the_border_act: "Secure the Border",
-});
-
-/** One Tags-menu row: the short label when the full name is too long, plus the full name as title. */
+/** One Tags-menu row: the short label when the full name is too long, plus the full name as title. Labels come from tagShortLabel (tags.mjs). */
 export function tagMenuItem(tag) {
-  const label = TAG_MENU_SHORT_LABELS[tag.id] || tag.nav;
+  const label = tagShortLabel(tag);
   return { href: attributeTagHref(tag), label, ...(label === tag.nav ? {} : { title: tag.nav }) };
 }
 
@@ -2421,19 +2414,99 @@ export function dogRow(row) {
   return dogListRow(row, {});
 }
 
-export function homeBody({ version }) {
+const SEARCH_PLACEHOLDER =
+  "Search people, operations, dog comms, red-folder comms, central casting, and unsorted posts...";
+
+export function homeBody({ version, tagFilter = "" }) {
   return `
     <div class="home-wordmark">
       <a class="pixel-link" href="/" aria-label="ExitTrace home">${pixelWordmark("EXITTRACE")}</a>
     </div>
     <p class="ver">v${esc(version || "unknown")}</p>
-    <form class="tui-search" action="/search" method="get" role="search">
+    <form class="tui-search${tagFilter ? " tf-form" : ""}" action="/search" method="get" role="search">
       <label class="tui-search-label">
         <span class="chev" aria-hidden="true">〉</span>
-        <input type="search" name="q" placeholder="Search people, operations, dog comms, red-folder comms, central casting, and unsorted posts..." autocomplete="off" enterkeyhint="search">
-      </label>
+        <input type="search" name="q" placeholder="${esc(SEARCH_PLACEHOLDER)}" autocomplete="off" enterkeyhint="search">
+      </label>${tagFilter}
     </form>
     <p class="home-tag">Sourced public-role exits and official government dog-comms since 2017. A seed set, not a census.</p>`;
+}
+
+/**
+ * Fact-tag filter under a search bar. Plain GET controls inside the search form:
+ * a <details> "+ Add tag" menu of checkboxes (name="tags"), All/Any radios
+ * (name="match"), removable chips, Clear, and an "N people match" line. Works
+ * without JS. app.js adds type-to-filter, live chips and counts, and URL state from
+ * the inline mask payload, with no network calls. Labels are tagShortLabel.
+ *
+ * state: { q, tags, match, ignored }. membership: tagMembership() from store.mjs.
+ * basePath is where chip and Clear links point ("/" on home, "/search" on search).
+ */
+export function tagFilterHtml({ state = {}, membership, basePath = "/search" } = {}) {
+  const selected = (state.tags || []).filter((id) => ATTRIBUTE_TAGS.some((t) => t.id === id));
+  const match = state.match === TAG_MATCH_ANY ? TAG_MATCH_ANY : TAG_MATCH_ALL;
+  const q = String(state.q || "");
+  const counts = membership?.counts || null;
+  const masks = Array.isArray(membership?.masks) ? membership.masks : null;
+  const on = new Set(selected);
+  const opts = ATTRIBUTE_TAGS.map((tag) => {
+    const label = tagShortLabel(tag);
+    const isOn = on.has(tag.id);
+    const n = counts && Number.isFinite(counts[tag.id]) ? `<span class="tf-opt-n">${counts[tag.id]}</span>` : "";
+    const title = label === tag.nav ? "" : ` title="${esc(tag.nav)}"`;
+    return `<label class="tf-opt${isOn ? " is-on" : ""}" data-tf-opt data-tf-find-text="${esc(`${label} ${tag.nav}`.toLowerCase())}"${title}><input type="checkbox" name="tags" value="${esc(tag.id)}"${isOn ? " checked" : ""}><span class="tf-box" aria-hidden="true"></span><span class="tf-opt-t">${esc(label)}</span>${n}</label>`;
+  }).join("");
+  const chips = selected
+    .map((id) => {
+      const tag = ATTRIBUTE_TAGS.find((t) => t.id === id);
+      const label = tagShortLabel(tag);
+      const href = tagSearchHref(basePath, { q, tags: selected.filter((x) => x !== id), match });
+      return `<span class="tf-chip" data-tf-chip="${esc(id)}">${esc(label)}<a class="tf-chip-x" href="${esc(href)}" data-tf-remove="${esc(id)}" aria-label="Remove ${esc(label)}">✕</a></span>`;
+    })
+    .join("");
+  const clearHref = tagSearchHref(basePath, { q });
+  const n = masks ? countTagMatches(masks, selected, match) : null;
+  const radio = (value, text) =>
+    `<label class="tf-radio${match === value ? " is-on" : ""}"><input type="radio" name="match" value="${value}"${match === value ? " checked" : ""}><span class="tf-dot" aria-hidden="true"></span>${text}</label>`;
+  const payload = JSON.stringify({ ids: ATTRIBUTE_TAGS.map((t) => t.id), masks }).replace(/</g, "\\u003c");
+  const ignored = Number(state.ignored) > 0
+    ? `<p class="tf-note">Ignored ${Number(state.ignored)} unknown tag${Number(state.ignored) === 1 ? "" : "s"}.</p>`
+    : "";
+  return `
+      <div class="tf" data-tag-filter data-tf-base="${esc(basePath)}" data-tf-applied="${esc(tagSearchHref("/search", { q, tags: selected, match }))}">
+        <div class="tf-row">
+          <span class="tf-label">Tags</span>
+          <details class="tf-add-wrap" data-tf-add>
+            <summary class="tf-add">+ Add tag <span class="tf-caret" aria-hidden="true">▾</span></summary>
+            <div class="tf-menu" role="group" aria-label="Tags">
+              <label class="tf-find" data-tf-find-wrap hidden><span class="chev" aria-hidden="true">〉</span><input type="text" data-tf-find placeholder="Filter tags..." aria-label="Filter tags" autocomplete="off"></label>
+              <div class="tf-opts">${opts}</div>
+              ${counts ? `<p class="tf-menu-foot">Counts are the people on each tag's list.</p>` : ""}
+            </div>
+          </details>
+          <div class="tf-match" role="radiogroup" aria-label="Match">
+            <span class="tf-label">Match</span>
+            ${radio(TAG_MATCH_ALL, "All")}
+            ${radio(TAG_MATCH_ANY, "Any")}
+          </div>
+        </div>
+        <div class="tf-row tf-chips" data-tf-chips${selected.length ? "" : " hidden"}>${chips}<a class="tf-clear" href="${esc(clearHref)}" data-tf-clear>Clear</a></div>${ignored}
+        <div class="tf-row tf-count-row">
+          <p class="tf-count" data-tf-count aria-live="polite"${selected.length && n != null ? "" : " hidden"}><span class="dot">•</span> <strong data-tf-n>${n ?? ""}</strong> <span data-tf-noun>${n === 1 ? "person matches" : "people match"}</span></p>
+          <button type="submit" class="tf-go">Show results</button>
+        </div>
+        <script type="application/json" data-tf-data>${payload}</script>
+      </div>`;
+}
+
+/** Search page form: the home search bar plus the tag filter, prefilled from the URL. */
+export function searchFormHtml({ state = {}, membership } = {}) {
+  return `<form class="tui-search tf-form tf-form-search" action="/search" method="get" role="search">
+      <label class="tui-search-label">
+        <span class="chev" aria-hidden="true">〉</span>
+        <input type="search" name="q" value="${esc(state.q || "")}" placeholder="${esc(SEARCH_PLACEHOLDER)}" autocomplete="off" enterkeyhint="search" aria-label="Search">
+      </label>${tagFilterHtml({ state, membership, basePath: "/search" })}
+    </form>`;
 }
 
 function eventKindTitle(kind) {
