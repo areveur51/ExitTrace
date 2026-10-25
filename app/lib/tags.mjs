@@ -21,9 +21,6 @@ export const IDENTITY_TAG_IDS = IDENTITY_TAGS.map((t) => t.id);
 /** Person category for a flight-log card that has no other catalog entry. Not a nav page. */
 export const EPSTEIN_CLIENTS_CATEGORY = "epstein_clients";
 
-/** The H. Res. 1100 referral roll. Its number, date and tally come from ROLLS, not prose. */
-const HARASSMENT_ROLL = rollById("H-119-2-83");
-
 /** `219-213, 1 present, 3 not voting` -> `219-213, with 1 present and 3 not voting`. */
 function tallyProse(tally) {
   const [count, ...rest] = String(tally || "").split(", ");
@@ -31,6 +28,22 @@ function tallyProse(tally) {
   const tail = rest.length === 1 ? rest[0] : `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}`;
   return `${count}, with ${tail}`;
 }
+
+/**
+ * TAG_DESCRIPTIONS.harassment_records. It is a rule, so its roll is `basisRolls`
+ * (not `rolls`, which would add a vote line). Built first so HARASSMENT_ROLL and
+ * the lede can read the roll id from this entry.
+ */
+const HARASSMENT_DESCRIPTION = {
+  kind: "rule",
+  basisRolls: Object.freeze(["H-119-2-83"]),
+};
+
+/** The H. Res. 1100 referral roll. Its number, date and tally come from ROLLS, not prose. */
+const HARASSMENT_ROLL = rollById(HARASSMENT_DESCRIPTION.basisRolls[0]);
+
+HARASSMENT_DESCRIPTION.text = `A card gets this tag when the member voted yea on House roll ${HARASSMENT_ROLL.number} on ${longDate(HARASSMENT_ROLL.date)}, the motion to refer ${HARASSMENT_ROLL.measure} to the House Committee on Ethics, which passed ${tallyProse(HARASSMENT_ROLL.tally)}.`;
+Object.freeze(HARASSMENT_DESCRIPTION);
 
 export const ATTRIBUTE_TAGS = [
   {
@@ -175,10 +188,7 @@ export const TAG_DESCRIPTIONS = Object.freeze({
     kind: "rule",
     text: "A card gets this tag when it stores an endorsement of the person by Donald Trump.",
   },
-  harassment_records: {
-    kind: "rule",
-    text: `A card gets this tag when the member voted yea on House roll ${HARASSMENT_ROLL.number} on ${longDate(HARASSMENT_ROLL.date)}, the motion to refer ${HARASSMENT_ROLL.measure} to the House Committee on Ethics, which passed ${tallyProse(HARASSMENT_ROLL.tally)}.`,
-  },
+  harassment_records: HARASSMENT_DESCRIPTION,
   ukraine_aid_flags: {
     kind: "bill",
     text:
@@ -266,14 +276,12 @@ export const TAG_DESCRIPTIONS = Object.freeze({
 });
 
 /**
- * Roll ids a Tags-menu tag rests on: a bill description's `rolls`, and for
- * harassment_records (a rule, so no vote line) its referral roll. Ids only;
- * the roll facts live in ROLLS.
+ * Roll ids a Tags-menu tag rests on: a bill description's `rolls` plus a rule's
+ * `basisRolls` (no vote line). Ids only; the roll facts live in ROLLS.
  */
 export function tagRollIds(id) {
-  if (id === "harassment_records") return Object.freeze([HARASSMENT_ROLL.id]);
   const raw = Object.prototype.hasOwnProperty.call(TAG_DESCRIPTIONS, id) ? TAG_DESCRIPTIONS[id] : null;
-  return Object.freeze([...(raw?.rolls || [])]);
+  return Object.freeze([...(raw?.rolls || []), ...(raw?.basisRolls || [])]);
 }
 
 /**

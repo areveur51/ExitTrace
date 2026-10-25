@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { keymapFooter, tagDescriptionBlock, tagDescriptionHtml } from "../app/lib/html.mjs";
 import { handle } from "../app/server.mjs";
 import { setMemory } from "../app/lib/store.mjs";
-import { ATTRIBUTE_TAGS, TAG_DESCRIPTIONS, isTagCiteUrl, tagDescription } from "../app/lib/tags.mjs";
+import { ATTRIBUTE_TAGS, TAG_DESCRIPTIONS, isTagCiteUrl, tagDescription, tagRollIds } from "../app/lib/tags.mjs";
 import { ROLLS, VOTE_NO_KIND_IDS, VOTE_ROLLS, houseClerkVoteUrl, houseClerkXmlUrl, officialRollPageUrl, parseRollId, rollById, senateRollCallUrl } from "../app/lib/vote-rolls.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -141,6 +141,17 @@ test("ROLLS is the one roll catalog; VOTE_ROLLS is its recorded-no view", () => 
   assert.equal(harassment, "A card gets this tag when the member voted yea on House roll 83 on March 4, 2026, the motion to refer H. Res. 1100 to the House Committee on Ethics, which passed 357-65, with 1 present and 9 not voting.");
   assert.equal(r83.tally, "357-65, 1 present, 9 not voting");
   assert.match(ATTRIBUTE_TAGS.find((t) => t.id === "harassment_records").lede, /Roll Call 83 passed 357-65, with 1 present and 9 not voting\./);
+});
+
+test("harassment_records names its roll once, as basisRolls on its rule entry", () => {
+  assert.deepEqual([...TAG_DESCRIPTIONS.harassment_records.basisRolls], ["H-119-2-83"]);
+  assert.equal(TAG_DESCRIPTIONS.harassment_records.rolls, undefined);
+  assert.equal(tagDescription("harassment_records").votes, "");
+  assert.deepEqual([...tagRollIds("harassment_records")], ["H-119-2-83"]);
+  assert.deepEqual([...tagRollIds("ukraine_aid_flags")], ["H-118-2-151"]);
+  for (const id of Object.keys(TAG_DESCRIPTIONS)) {
+    for (const r of TAG_DESCRIPTIONS[id].basisRolls || []) assert.ok(rollById(r), `${id} basis roll ${r} is in ROLLS`);
+  }
 });
 
 test("the cite host allowlist takes https .gov and official news hosts only", () => {

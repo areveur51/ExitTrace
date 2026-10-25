@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handle } from "../app/server.mjs";
 import { setMemory } from "../app/lib/store.mjs";
-import { buildDashboard, voteTallyStanding } from "../app/lib/dashboard.mjs";
+import { buildDashboard, voteCardCounts, voteTallyGroups, voteTallyStanding } from "../app/lib/dashboard.mjs";
+import { personEvents } from "../app/lib/promote.mjs";
 import { dashboardBody } from "../app/lib/html.mjs";
 import { attributeTagById } from "../app/lib/tags.mjs";
 import {
@@ -181,6 +182,46 @@ test("card counts are separate from tallies and count per roll for recorded-no t
   assert.equal(groups.find((g) => g.tag === "laken_riley_act").rolls.every((r) => r.cards === 0), true);
   // Tallies are the official numbers no matter how many cards exist.
   assert.equal(save.rolls[1].roll.totals.nay, 47);
+});
+
+test("card counts come from a single pass over people", () => {
+  const reads = { iter: 0, tags: 0, events: 0 };
+  const fake = (base) => {
+    const row = { ...base };
+    const { tags, events } = row;
+    delete row.tags;
+    delete row.events;
+    Object.defineProperty(row, "tags", { enumerable: true, get() { reads.tags += 1; return tags; } });
+    Object.defineProperty(row, "events", { enumerable: true, get() { reads.events += 1; return events; } });
+    return row;
+  };
+  const base = [
+    { id: "a", name: "A", category: "notable", tags: ["ukraine_aid_flags"], events: [{ kind: "save_america_act", event_date: "2026-03-26", roll_call: "S-119-2-73", sources: [] }] },
+    { id: "b", name: "B", category: "notable", tags: [], events: [{ kind: "harassment_records", event_date: "2026-03-04", sources: [] }] },
+    { id: "c", name: "C", category: "notable", tags: ["epstein_transparency_act"], events: [{ kind: "big_beautiful_bill_act", event_date: "2025-05-22", roll_call: "H-119-1-145", sources: [] }] },
+  ];
+  // Event reads for ONE personEvents() call per person, measured on a separate fake set.
+  for (const row of base.map(fake)) personEvents(row);
+  const perCall = reads.events;
+  reads.tags = 0;
+  reads.events = 0;
+  const rows = base.map(fake);
+  const people = { [Symbol.iterator]() { reads.iter += 1; return rows[Symbol.iterator](); } };
+  const standing = voteTallyStanding(people);
+  assert.equal(reads.iter, 1, "people is iterated once");
+  assert.equal(reads.tags, rows.length, "each card's tags are read once");
+  assert.equal(reads.events, perCall, "personEvents() runs once per card, not once per roll");
+  const cards = Object.fromEntries(standing.flatMap((g) => g.rolls.map((r) => [r.roll.id, r.cards])));
+  assert.equal(cards["S-119-2-73"], 1);
+  assert.equal(cards["H-119-2-69"], 0);
+  assert.equal(cards["H-119-1-145"], 1);
+  assert.equal(cards["S-119-1-372"], 0);
+  assert.equal(cards["H-118-2-151"], 1);
+  assert.equal(cards["H-119-2-83"], 1);
+  assert.equal(cards["H-119-1-289"], 1);
+  assert.equal(voteCardCounts(base).get("save_america_act|S-119-2-73"), 1);
+  assert.equal(voteTallyGroups(), voteTallyGroups(), "groups are built once");
+  assert.ok(Object.isFrozen(voteTallyGroups()));
 });
 
 test("dashboardBody renders one panel per roll with party rows and official links", () => {

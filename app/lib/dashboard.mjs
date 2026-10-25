@@ -715,28 +715,6 @@ export function countUnsealedIndictments(people) {
 }
 
 /**
- * ExitTrace cards on one roll. A recorded-no kind counts events with its own roll_call.
- * Other vote kinds store no roll id, so a card counts when it carries the tag (the tag
- * page's membership) or an event of that kind.
- */
-function rollCardCount(people, roll, tag) {
-  const perRoll = VOTE_NO_KINDS.has(tag);
-  let n = 0;
-  for (const row of people || []) {
-    if (!perRoll && Array.isArray(row?.tags) && row.tags.includes(tag)) {
-      n += 1;
-      continue;
-    }
-    const hit = personEvents(row).some((ev) => {
-      if (String(ev?.kind || "").trim() !== tag) return false;
-      return perRoll ? normalizeRollCall(ev?.roll_call) === roll.id : true;
-    });
-    if (hit) n += 1;
-  }
-  return n;
-}
-
-/**
  * Vote tag a ROLLS entry is shown under: its own `tag` for a recorded-no roll,
  * else the fact tag that cites the roll (tagRollIds). "" when none does.
  */
@@ -748,8 +726,8 @@ function rollGroupTag(roll) {
   return "";
 }
 
-/** Every ROLLS entry, grouped by vote tag in catalog order, oldest roll first within a tag. */
-export function voteTallyGroups() {
+/** ROLLS grouped by vote tag in catalog order, oldest roll first within a tag. Built once: ROLLS and TAG_DESCRIPTIONS are frozen. */
+const VOTE_TALLY_GROUPS = (() => {
   const order = [];
   const byTag = new Map();
   for (const roll of ROLLS) {
@@ -761,10 +739,58 @@ export function voteTallyGroups() {
     }
     byTag.get(tag).push(roll);
   }
-  return order.map((tag) => ({
+  return Object.freeze(order.map((tag) => Object.freeze({
     tag,
-    rolls: byTag.get(tag).slice().sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
-  }));
+    rolls: Object.freeze(byTag.get(tag).slice().sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))),
+  })));
+})();
+
+/** Every ROLLS entry, grouped by vote tag (computed once at module load). */
+export function voteTallyGroups() {
+  return VOTE_TALLY_GROUPS;
+}
+
+const rollCardKey = (tag, rollId) => `${tag}|${rollId}`;
+
+/**
+ * Card-count lookups, built once. A recorded-no kind counts events with its own roll_call.
+ * Other vote kinds store no roll id, so a card counts for every roll of the tag when it
+ * carries the tag (the tag page's membership) or an event of that kind.
+ */
+const PER_ROLL_KEYS = new Set();
+const TAG_ROLL_IDS = new Map();
+for (const { tag, rolls } of VOTE_TALLY_GROUPS) {
+  if (VOTE_NO_KINDS.has(tag)) for (const roll of rolls) PER_ROLL_KEYS.add(rollCardKey(tag, roll.id));
+  else TAG_ROLL_IDS.set(tag, rolls.map((roll) => roll.id));
+}
+
+/**
+ * ExitTrace cards per roll, in ONE pass over people: each card's tags are read once and
+ * personEvents() is walked once. Returns a Map of `tag|rollId` -> card count.
+ */
+export function voteCardCounts(people) {
+  const counts = new Map();
+  const hit = new Set();
+  for (const row of people || []) {
+    hit.clear();
+    const tags = row?.tags;
+    if (Array.isArray(tags)) {
+      for (const [tag, ids] of TAG_ROLL_IDS) {
+        if (tags.includes(tag)) for (const id of ids) hit.add(rollCardKey(tag, id));
+      }
+    }
+    for (const ev of personEvents(row)) {
+      const kind = String(ev?.kind || "").trim();
+      if (VOTE_NO_KINDS.has(kind)) {
+        const key = rollCardKey(kind, normalizeRollCall(ev?.roll_call));
+        if (PER_ROLL_KEYS.has(key)) hit.add(key);
+      } else if (TAG_ROLL_IDS.has(kind)) {
+        for (const id of TAG_ROLL_IDS.get(kind)) hit.add(rollCardKey(kind, id));
+      }
+    }
+    for (const key of hit) counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
 }
 
 /**
@@ -774,14 +800,15 @@ export function voteTallyGroups() {
  * `cards` is the separate ExitTrace card count for the same roll or tag.
  */
 export function voteTallyStanding(people) {
-  return voteTallyGroups().map(({ tag, rolls }) => {
+  const counts = voteCardCounts(people);
+  return VOTE_TALLY_GROUPS.map(({ tag, rolls }) => {
     const meta = attributeTagById(tag);
     return {
       tag,
       label: meta?.nav || tag,
       href: meta?.path || "",
       perRoll: VOTE_NO_KINDS.has(tag),
-      rolls: rolls.map((roll) => ({ roll, cards: rollCardCount(people, roll, tag) })),
+      rolls: rolls.map((roll) => ({ roll, cards: counts.get(rollCardKey(tag, roll.id)) || 0 })),
     };
   });
 }
