@@ -1,6 +1,6 @@
 /** Person identity tags — independent of event kind. Multi-tag is allowed. */
 
-import { hostOf, isGovHost, isOfficialNewsHost } from "./official.mjs";
+import { isOfficialNewsHost } from "./official.mjs";
 import { VOTE_NO_TAGS, longDate, officialRollPageUrl, rollById } from "./vote-rolls.mjs";
 
 export const IDENTITY_TAGS = [
@@ -150,7 +150,7 @@ export const MENU_ATTRIBUTE_TAGS = ATTRIBUTE_TAGS.filter((t) => t.menu !== false
  * Record-only text: what a bill does plus its recorded votes, or what qualifies a card for the tag.
  * A bill names its rolls by id only, and the vote line is built from ROLLS (vote-rolls.mjs).
  * A cite is `{ label, url }` or `{ label, roll }`; a roll cite is the roll's derived official page URL.
- * Cites must be https on a .gov host or an official news host (official.mjs), or they are dropped.
+ * Cites must pass isTagCiteUrl; tagDescriptionHtml (html.mjs) is the one filter and drops any that do not.
  */
 export const TAG_DESCRIPTIONS = Object.freeze({
   clearance_revoked: {
@@ -295,17 +295,33 @@ export function rollVoteText(roll) {
   return `${roll.chamber} ${noun} ${roll.number} (${longDate(roll.date)}), ${roll.question}${measure}: ${roll.result}, ${roll.tally}`;
 }
 
-/** True for an https URL on a .gov host or an official news host. */
+const DNS_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/**
+ * True for an https URL, on the default port, with no credentials, whose host is
+ * an exact `.gov` name or on the named allowlist (OFFICIAL_NEWS_HOSTS, official.mjs).
+ * The host is read after WHATWG IDN-to-ASCII normalization,
+ * so a Unicode lookalike arrives as punycode; any `xn--` label is refused, as is a
+ * bare `gov` or `www.gov`, a trailing dot, an IP, `.gov.uk`, `.gc.ca`, and any explicit port
+ * other than 443.
+ */
 export function isTagCiteUrl(raw) {
+  if (typeof raw !== "string" && !(raw instanceof URL)) return false;
   let parsed;
   try {
-    parsed = new URL(String(raw || "").trim());
+    parsed = new URL(String(raw).trim());
   } catch {
     return false;
   }
-  if (parsed.protocol !== "https:" || parsed.username || parsed.password) return false;
-  const host = hostOf(parsed);
-  return Boolean(host) && (isGovHost(host) || isOfficialNewsHost(host));
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port !== "") return false;
+  const host = parsed.hostname;
+  if (!host || host.endsWith(".")) return false;
+  const labels = host.split(".");
+  if (!labels.every((label) => DNS_LABEL_RE.test(label) && !label.startsWith("xn--"))) return false;
+  const bare = host.replace(/^www\./, "");
+  if (bare.split(".").length < 2) return false;
+  if (bare.endsWith(".gov")) return true;
+  return isOfficialNewsHost(bare);
 }
 
 /**
@@ -321,9 +337,10 @@ export function tagDescription(id) {
     return roll;
   });
   const votes = rolls.length ? `Recorded votes: ${rolls.map(rollVoteText).join("; ")}.` : "";
-  const cites = (raw.cites || [])
-    .map((c) => ({ label: String(c.label || "").trim(), url: c.roll ? officialRollPageUrl(c.roll) : String(c.url || "").trim() }))
-    .filter((c) => c.label && isTagCiteUrl(c.url));
+  // Not filtered here: tagDescriptionHtml drops a cite that fails isTagCiteUrl.
+  const cites = (raw.cites || []).map((c) =>
+    Object.freeze({ label: String(c.label || "").trim(), url: c.roll ? officialRollPageUrl(c.roll) : String(c.url || "").trim() }),
+  );
   return Object.freeze({ id, kind: raw.kind, text: raw.text, votes, cites: Object.freeze(cites), rolls: Object.freeze(rolls) });
 }
 

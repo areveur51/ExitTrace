@@ -480,8 +480,8 @@ function keymapTagSection(activePath) {
 }
 
 /**
- * General description block for a tag page. Text and labels are escaped; a cite URL
- * that is not https on a .gov or official news host is dropped, not linked.
+ * General description block for a tag page. Text and labels are escaped. This is the
+ * one cite filter: a cite URL that fails isTagCiteUrl (tags.mjs) is dropped, not linked.
  */
 export function tagDescriptionHtml(desc) {
   if (!desc || !String(desc.text || "").trim()) return "";
@@ -731,6 +731,11 @@ function topBar({ query, countLabel, path, crumbLabel, categoryId, mode, heading
   </header>`;
 }
 
+/**
+ * Page shell. `intro` is inserted as raw HTML, unescaped, above the lede (which is
+ * also raw). Pass only markup built by an escaping helper such as tagDescriptionBlock,
+ * never request or stored text.
+ */
 export function layout({
   title,
   path,
