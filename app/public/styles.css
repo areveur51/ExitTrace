@@ -911,7 +911,7 @@ body.tui-home .home-stage {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.3rem 0.45rem;
+  gap: 0.3rem 0.5rem;
   margin: 0;
   font-size: 0.86rem;
 }
@@ -923,6 +923,10 @@ body.tui-home .home-stage {
   color: var(--amber);
 }
 .person-detail .source-ref {
+  display: inline-block;
+  min-width: 3ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
   color: var(--cyan);
   font-weight: 700;
   white-space: nowrap;
@@ -966,6 +970,40 @@ body.tui-home .home-stage {
   color: var(--amber);
 }
 .person-sources .cite-list > li { margin: 0 0 0.55rem; }
+/* Numbered cite lists (Sources box and per-event cites).
+   Numbers sit right-aligned in a fixed gutter so 1-, 2- and 3-digit numbers
+   line up and never touch the box edge or the cite text. counter(list-item)
+   keeps <ol start>. Long URLs and titles wrap inside the box. */
+ol.cite-list {
+  --cite-num-w: 4ch;
+  --cite-gap: 0.6rem;
+  list-style: none;
+  margin-left: 0;
+  padding-left: 0;
+  min-width: 0;
+}
+ol.cite-list > li {
+  position: relative;
+  min-width: 0;
+  padding-left: calc(var(--cite-num-w) + var(--cite-gap));
+  overflow-wrap: anywhere;
+}
+ol.cite-list > li::before {
+  content: counter(list-item) ".";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--cite-num-w);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+ol.cite-list time { white-space: nowrap; }
+ol.cite-list .cite-outlet { overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  ol.cite-list { --cite-gap: 0.45rem; }
+}
 /* Bottom supporting strip: one minimum width, height from the file. No square crop. */
 .detail-support-masonry .detail-tile--support {
   break-inside: avoid;
