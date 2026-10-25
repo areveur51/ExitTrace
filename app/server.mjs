@@ -81,6 +81,7 @@ import {
   homeBody,
   layout,
   listHead,
+  tagDescriptionBlock,
   tagsIndexBody,
   listSection,
   operationDetail,
@@ -1035,6 +1036,7 @@ async function handle(req, res) {
         pageSize,
         crumbLabel: factTag.nav,
         countLabel: countText(factTag.nav, meta, rows.length),
+        intro: tagDescriptionBlock(factTag.id),
         lede: factTag.lede,
         body: `${listSection(
           peopleList(rows, { listDate: dateOf }),
