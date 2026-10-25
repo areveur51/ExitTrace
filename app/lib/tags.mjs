@@ -1,7 +1,7 @@
 /** Person identity tags — independent of event kind. Multi-tag is allowed. */
 
 import { hostOf, isGovHost, isOfficialNewsHost } from "./official.mjs";
-import { VOTE_NO_TAGS, VOTE_ROLLS, normalizeRollCall, officialRollPageUrl } from "./vote-rolls.mjs";
+import { VOTE_NO_TAGS, longDate, officialRollPageUrl, rollById } from "./vote-rolls.mjs";
 
 export const IDENTITY_TAGS = [
   { id: "civilian", nav: "Civilians" },
@@ -20,6 +20,17 @@ export const IDENTITY_TAG_IDS = IDENTITY_TAGS.map((t) => t.id);
  */
 /** Person category for a flight-log card that has no other catalog entry. Not a nav page. */
 export const EPSTEIN_CLIENTS_CATEGORY = "epstein_clients";
+
+/** The H. Res. 1100 referral roll. Its number, date and tally come from ROLLS, not prose. */
+const HARASSMENT_ROLL = rollById("H-119-2-83");
+
+/** `219-213, 1 present, 3 not voting` -> `219-213, with 1 present and 3 not voting`. */
+function tallyProse(tally) {
+  const [count, ...rest] = String(tally || "").split(", ");
+  if (!rest.length) return count;
+  const tail = rest.length === 1 ? rest[0] : `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}`;
+  return `${count}, with ${tail}`;
+}
 
 export const ATTRIBUTE_TAGS = [
   {
@@ -75,8 +86,7 @@ export const ATTRIBUTE_TAGS = [
     id: "harassment_records",
     nav: "Harassment records",
     path: "/tags/harassment-records",
-    lede:
-      "People who voted yea on March 4, 2026 to refer H. Res. 1100 to the House Committee on Ethics. Roll Call 83 passed 357-65, with 1 present. The resolution would have directed the committee to preserve and publicly release records of its reviews of sexual harassment and of clause 18 of House Rule XXIII.",
+    lede: `People who voted yea on ${longDate(HARASSMENT_ROLL.date)} to refer ${HARASSMENT_ROLL.measure} to the House Committee on Ethics. Roll Call ${HARASSMENT_ROLL.number} passed ${tallyProse(HARASSMENT_ROLL.tally)}. The resolution would have directed the committee to preserve and publicly release records of its reviews of sexual harassment and of clause 18 of House Rule XXIII.`,
   },
   {
     id: "ukraine_aid_flags",
@@ -125,9 +135,8 @@ export const MENU_ATTRIBUTE_TAGS = ATTRIBUTE_TAGS.filter((t) => t.menu !== false
 /**
  * General description at the top of each `/tags/<slug>` page. One map for every Tags-menu tag.
  * Record-only text: what a bill does plus its recorded votes, or what qualifies a card for the tag.
- * A bill names its catalog rolls by id, and the vote line is built from VOTE_ROLLS (vote-rolls.mjs).
- * A roll that is not in that catalog is listed inline under `rolls` in the same shape.
- * A cite is `{ label, url }` or `{ label, roll }`; a roll cite reuses the official roll page URL.
+ * A bill names its rolls by id only, and the vote line is built from ROLLS (vote-rolls.mjs).
+ * A cite is `{ label, url }` or `{ label, roll }`; a roll cite is the roll's derived official page URL.
  * Cites must be https on a .gov host or an official news host (official.mjs), or they are dropped.
  */
 export const TAG_DESCRIPTIONS = Object.freeze({
@@ -155,19 +164,10 @@ export const TAG_DESCRIPTIONS = Object.freeze({
     kind: "bill",
     text:
       "H.R. 4405, the Epstein Files Transparency Act, requires the Justice Department to publish its unclassified records on the investigation and prosecution of Jeffrey Epstein, with limited withholding such as victims' personal information; it became Public Law 119-38 on November 19, 2025.",
-    rolls: [
-      {
-        chamber: "House",
-        number: 289,
-        date: "2025-11-18",
-        question: "On Motion to Suspend the Rules and Pass",
-        result: "Passed",
-        tally: "427-1, 5 not voting",
-      },
-    ],
+    rolls: ["H-119-1-289"],
     cites: [
       { label: "congress.gov", url: "https://www.congress.gov/bill/119th-congress/house-bill/4405" },
-      { label: "clerk.house.gov", url: "https://clerk.house.gov/Votes/2025289" },
+      { label: "clerk.house.gov", roll: "H-119-1-289" },
       { label: "ABC News", url: "https://abcnews.go.com/Politics/house-vote-full-epstein-files-release-move-speaker/story?id=127593181" },
     ],
   },
@@ -177,26 +177,16 @@ export const TAG_DESCRIPTIONS = Object.freeze({
   },
   harassment_records: {
     kind: "rule",
-    text:
-      "A card gets this tag when the member voted yea on House roll 83 on March 4, 2026, the motion to refer H. Res. 1100 to the House Committee on Ethics, which passed 357-65 with 1 present.",
+    text: `A card gets this tag when the member voted yea on House roll ${HARASSMENT_ROLL.number} on ${longDate(HARASSMENT_ROLL.date)}, the motion to refer ${HARASSMENT_ROLL.measure} to the House Committee on Ethics, which passed ${tallyProse(HARASSMENT_ROLL.tally)}.`,
   },
   ukraine_aid_flags: {
     kind: "bill",
     text:
       "H.R. 8035, the Ukraine Security Supplemental Appropriations Act, 2024, provides FY2024 emergency supplemental appropriations to respond to the conflict in Ukraine, including funds for the Defense Department, the State Department, and USAID.",
-    rolls: [
-      {
-        chamber: "House",
-        number: 151,
-        date: "2024-04-20",
-        question: "On Passage",
-        result: "Passed",
-        tally: "311-112, 1 present, 7 not voting",
-      },
-    ],
+    rolls: ["H-118-2-151"],
     cites: [
       { label: "congress.gov", url: "https://www.congress.gov/bill/118th-congress/house-bill/8035" },
-      { label: "clerk.house.gov", url: "https://clerk.house.gov/Votes/2024151" },
+      { label: "clerk.house.gov", roll: "H-118-2-151" },
       { label: "CBS News", url: "https://www.cbsnews.com/news/house-vote-aid-bill-ukraine-israel-taiwan/" },
     ],
   },
@@ -275,14 +265,6 @@ export const TAG_DESCRIPTIONS = Object.freeze({
   },
 });
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-function longDate(iso) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
-  if (!m) return "";
-  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
-}
-
 /**
  * `House roll 102 (April 10, 2025), On Passage: Passed, 220-208, 5 not voting`.
  * A procedural roll also names its measure, since that is often an amendment or motion.
@@ -307,11 +289,6 @@ export function isTagCiteUrl(raw) {
   return Boolean(host) && (isGovHost(host) || isOfficialNewsHost(host));
 }
 
-function resolveRoll(entry) {
-  if (typeof entry === "string") return VOTE_ROLLS[normalizeRollCall(entry)] || null;
-  return entry && typeof entry === "object" ? entry : null;
-}
-
 /**
  * Resolved description for a tag id: `{ id, kind, text, votes, cites: [{ label, url }] }`, or null.
  * `votes` is "Recorded votes: …." for a bill and "" otherwise.
@@ -319,7 +296,11 @@ function resolveRoll(entry) {
 export function tagDescription(id) {
   const raw = Object.prototype.hasOwnProperty.call(TAG_DESCRIPTIONS, id) ? TAG_DESCRIPTIONS[id] : null;
   if (!raw) return null;
-  const rolls = (raw.rolls || []).map(resolveRoll).filter(Boolean);
+  const rolls = (raw.rolls || []).map((rollId) => {
+    const roll = rollById(rollId);
+    if (!roll) throw new Error(`${id}: description roll ${rollId} is not in ROLLS`);
+    return roll;
+  });
   const votes = rolls.length ? `Recorded votes: ${rolls.map(rollVoteText).join("; ")}.` : "";
   const cites = (raw.cites || [])
     .map((c) => ({ label: String(c.label || "").trim(), url: c.roll ? officialRollPageUrl(c.roll) : String(c.url || "").trim() }))

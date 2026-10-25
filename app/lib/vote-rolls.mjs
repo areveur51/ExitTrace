@@ -1,4 +1,4 @@
-/** Closed catalog of recorded-no roll calls.
+/** Closed roll-call catalog: ROLLS. VOTE_ROLLS is its recorded-no view.
  * `roll_call` is stored on each `people.events[]` object and kept by
  * normalizePersonEvent, the same way headcount is. A comments value that is
  * only a roll id (`H-119-1-145`) is read when the field is empty, and only
@@ -69,7 +69,47 @@ function urlsFor(id, date, chamber) {
   return Object.freeze(page ? [page] : []);
 }
 
-const ROLL_FACTS = [
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** `2025-04-10` -> `April 10, 2025`; "" when the value is not a YYYY-MM-DD date. */
+export function longDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  if (!m) return "";
+  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+}
+
+/**
+ * Every roll entry is built here, so id, chamber, congress, session, number and urls
+ * always come from the roll id and date. `tag` is optional and set only on a
+ * recorded-no row (a VOTE_NO_TAGS kind).
+ */
+function rollRecord(entry) {
+  const parsed = parseRollId(entry.id);
+  if (!parsed) throw new Error(`roll id ${entry.id} is not a catalog id`);
+  return Object.freeze({
+    id: parsed.id,
+    ...(entry.tag ? { tag: entry.tag } : {}),
+    chamber: parsed.chamber,
+    congress: parsed.congress,
+    session: parsed.session,
+    number: parsed.number,
+    date: entry.date,
+    measure: entry.measure,
+    question: entry.question,
+    stage: entry.stage,
+    result: entry.result,
+    tally: entry.tally,
+    urls: urlsFor(parsed.id, entry.date, parsed.chamber),
+  });
+}
+
+/**
+ * One roll catalog. Recorded-no rows carry the `tag` of their VOTE_NO_TAGS kind;
+ * untagged rows are rolls that tag descriptions cite by id (Transparency Act,
+ * Ukraine aid, the H. Res. 1100 referral).
+ */
+export const ROLLS = Object.freeze([
+
   {
     id: "H-119-1-145",
     tag: "big_beautiful_bill_act",
@@ -170,44 +210,52 @@ const ROLL_FACTS = [
     result: "Cloture on the Motion to Proceed Rejected (3/5 required)",
     tally: "52-46, 2 not voting",
   },
-];
+  {
+    id: "H-119-1-289",
+    date: "2025-11-18",
+    measure: "H.R. 4405",
+    question: "On Motion to Suspend the Rules and Pass",
+    stage: "passage",
+    result: "Passed",
+    tally: "427-1, 5 not voting",
+  },
+  {
+    id: "H-118-2-151",
+    date: "2024-04-20",
+    measure: "H.R. 8035",
+    question: "On Passage",
+    stage: "passage",
+    result: "Passed",
+    tally: "311-112, 1 present, 7 not voting",
+  },
+  {
+    id: "H-119-2-83",
+    date: "2026-03-04",
+    measure: "H. Res. 1100",
+    question: "On Motion to Refer",
+    stage: "procedural",
+    result: "Passed",
+    tally: "357-65, 1 present, 9 not voting",
+  },
+]
+  .map(rollRecord));
 
-function rollRecord(fact) {
-  const parsed = parseRollId(fact.id);
-  if (!parsed) throw new Error(`roll id ${fact.id} is not a catalog id`);
-  return Object.freeze({
-    id: parsed.id,
-    tag: fact.tag,
-    chamber: parsed.chamber,
-    congress: parsed.congress,
-    session: parsed.session,
-    number: parsed.number,
-    date: fact.date,
-    measure: fact.measure,
-    question: fact.question,
-    stage: fact.stage,
-    result: fact.result,
-    tally: fact.tally,
-    urls: urlsFor(parsed.id, fact.date, parsed.chamber),
-  });
+const ROLLS_BY_ID = Object.freeze(Object.fromEntries(ROLLS.map((roll) => [roll.id, roll])));
+
+/** Catalog roll for an id, tagged or not; null when the id is not in ROLLS. */
+export function rollById(id) {
+  return ROLLS_BY_ID[normalizeRollCall(id)] || null;
 }
-
-export const VOTE_ROLLS = Object.freeze(
-  Object.fromEntries(ROLL_FACTS.map((fact) => {
-    const row = rollRecord(fact);
-    return [row.id, row];
-  })),
-);
 
 /** Human page for a catalog roll. House Votes URL, or the Senate roll-call page. */
 export function officialRollPageUrl(id) {
-  const roll = VOTE_ROLLS[normalizeRollCall(id)];
+  const roll = rollById(id);
   return roll?.urls?.[0] ? String(roll.urls[0]) : "";
 }
 
 /** Both House pages, or the one Senate page. Empty when the id is not in the catalog. */
 export function officialRollUrls(id) {
-  const roll = VOTE_ROLLS[normalizeRollCall(id)];
+  const roll = rollById(id);
   return roll ? roll.urls : Object.freeze([]);
 }
 
@@ -269,6 +317,14 @@ export const VOTE_NO_TAGS = Object.freeze([
 ]);
 
 export const VOTE_NO_KIND_IDS = Object.freeze(VOTE_NO_TAGS.map((tag) => tag.id));
+
+/** Recorded-no rolls by id: the ROLLS entries whose tag is a VOTE_NO_TAGS kind. */
+export const VOTE_ROLLS = Object.freeze(
+  Object.fromEntries(ROLLS.filter((roll) => VOTE_NO_KIND_IDS.includes(roll.tag)).map((roll) => [roll.id, roll])),
+);
+for (const roll of ROLLS) {
+  if (roll.tag && !VOTE_ROLLS[roll.id]) throw new Error(`roll ${roll.id} has tag ${roll.tag}, which is not a recorded-no kind`);
+}
 
 /** The six recorded-no kinds. Each roll call is its own event of this kind. */
 export const VOTE_NO_KINDS = new Set(VOTE_NO_KIND_IDS);
