@@ -113,6 +113,8 @@ test("card counts are separate from tallies and count per roll for recorded-no t
     { id: "a", name: "A", category: "notable", events: [{ kind: "save_america_act", event_date: "2026-03-26", roll_call: "S-119-2-73", sources: [] }] },
     { id: "b", name: "B", category: "notable", events: [{ kind: "save_america_act", event_date: "2026-02-11", roll_call: "H-119-2-69", sources: [] }] },
     { id: "c", name: "C", category: "notable", events: [{ kind: "ukraine_aid_flags", event_date: "2024-04-20", sources: [] }] },
+    { id: "d", name: "D", category: "notable", tags: ["ukraine_aid_flags", "epstein_transparency_act"], events: [{ kind: "notable", event_date: "2020-01-01", sources: [] }] },
+    { id: "e", name: "E", category: "notable", tags: ["save_america_act"], events: [{ kind: "notable", event_date: "2020-01-01", sources: [] }] },
   ];
   const groups = voteTallyStanding(people);
   const tags = groups.map((g) => g.tag);
@@ -120,7 +122,10 @@ test("card counts are separate from tallies and count per roll for recorded-no t
   for (const id of ["ukraine_aid_flags", "epstein_transparency_act", "harassment_records"]) assert.ok(tags.includes(id), id);
   const save = groups.find((g) => g.tag === "save_america_act");
   assert.deepEqual(save.rolls.map((r) => [r.roll.id, r.cards]), [["H-119-2-69", 1], ["S-119-2-73", 1]]);
-  assert.equal(groups.find((g) => g.tag === "ukraine_aid_flags").rolls[0].cards, 1);
+  // Vote-fact tags store no roll id: a card counts by tag membership or an event of that kind.
+  assert.equal(groups.find((g) => g.tag === "ukraine_aid_flags").rolls[0].cards, 2);
+  assert.equal(groups.find((g) => g.tag === "epstein_transparency_act").rolls[0].cards, 1);
+  assert.equal(groups.find((g) => g.tag === "harassment_records").rolls[0].cards, 0);
   assert.equal(groups.find((g) => g.tag === "laken_riley_act").rolls.every((r) => r.cards === 0), true);
   // Tallies are the official numbers no matter how many cards exist.
   assert.equal(save.rolls[1].roll.totals.nay, 47);

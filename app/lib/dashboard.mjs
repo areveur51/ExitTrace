@@ -714,11 +714,19 @@ export function countUnsealedIndictments(people) {
   return n;
 }
 
-/** ExitTrace cards on one roll. A recorded-no kind counts its own roll_call; other vote kinds store no roll id, so the tag counts. */
+/**
+ * ExitTrace cards on one roll. A recorded-no kind counts events with its own roll_call.
+ * Other vote kinds store no roll id, so a card counts when it carries the tag (the tag
+ * page's membership) or an event of that kind.
+ */
 function rollCardCount(people, roll) {
   const perRoll = VOTE_NO_KINDS.has(roll.tag);
   let n = 0;
   for (const row of people || []) {
+    if (!perRoll && Array.isArray(row?.tags) && row.tags.includes(roll.tag)) {
+      n += 1;
+      continue;
+    }
     const hit = personEvents(row).some((ev) => {
       if (String(ev?.kind || "").trim() !== roll.tag) return false;
       return perRoll ? normalizeRollCall(ev?.roll_call) === roll.id : true;
