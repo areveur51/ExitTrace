@@ -51,7 +51,7 @@ import {
 } from "./lib/store.mjs";
 import { tagMembership } from "./lib/store.mjs";
 import { searchFormHtml, tagFilterHtml } from "./lib/html.mjs";
-import { parseTagSearch, tagSearchHref } from "./lib/tag-search.mjs";
+import { memberIdSet, parseTagSearch, tagSearchHref } from "./lib/tag-search.mjs";
 import { tagShortLabel } from "./lib/tags.mjs";
 import {
   getRateLimiter,
@@ -554,6 +554,16 @@ function centralCastingQuery(url) {
 }
 
 /** Tags-only /search: everyone on every (All) or at least one (Any) selected fact-tag list. */
+/** tagMembership() for page renders: on failure, log and return null (counts hidden). */
+async function tagMembershipOrNull() {
+  try {
+    return await tagMembership();
+  } catch (err) {
+    console.error(`[tag-search] membership unavailable: ${err?.message || err}`);
+    return null;
+  }
+}
+
 async function sendTagSearch(req, res, url, tagState, membership) {
   const { tags, match } = tagState;
   const pageSize = parseCookiePageSize(req.headers.cookie);
@@ -869,7 +879,8 @@ async function handle(req, res) {
   }
 
   if (p === "/") {
-    const [c, membership] = await Promise.all([counts(), tagMembership()]);
+    // A membership failure degrades to the filter without numbers; it never 500s home.
+    const [c, membership] = await Promise.all([counts(), tagMembershipOrNull()]);
     // Home preselects chips from /?tags=…&match=… (chip picks write that URL); it never lists results.
     const homeTags = parseTagSearch(url.searchParams);
     return sendHtml(
@@ -895,7 +906,7 @@ async function handle(req, res) {
     const tagSearch = parseTagSearch(url.searchParams);
     const tagState = { q, tags: tagSearch.tags, match: tagSearch.match, ignored: tagSearch.ignored };
     if (tagSearch.tags.length && !prepared) {
-      return sendTagSearch(req, res, url, tagState, await tagMembership());
+      return sendTagSearch(req, res, url, tagState, await tagMembershipOrNull());
     }
     let all = [];
     if (prepared) {
@@ -923,18 +934,14 @@ async function handle(req, res) {
     // Blank or oversized q with no tags stays query-free: the form renders without counts.
     let membership = null;
     if (prepared) {
-      try {
-        membership = await tagMembership();
-      } catch (err) {
-        console.error(err?.message);
-      }
+      membership = await tagMembershipOrNull();
       if (res.writableFinished) return;
     }
     if (prepared && tagSearch.tags.length) {
       // Keyword within the tag set: the same keyword hits, kept only for people in the set.
-      const inSet = new Set(
-        (await listPeople({ tags: tagSearch.tags, tagMatch: tagSearch.match })).map((row) => row.id),
-      );
+      const inSet =
+        memberIdSet(membership, tagSearch.tags, tagSearch.match) ||
+        new Set((await listPeople({ tags: tagSearch.tags, tagMatch: tagSearch.match })).map((row) => row.id));
       all = all.filter((item) => item.type === "person" && inSet.has(item.row?.id));
     }
     const meta = paginate({

@@ -5,18 +5,27 @@ import vm from "node:vm";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { handle } from "../app/server.mjs";
-import { countPeople, listPeople, setMemory, setPoolForTests, tagMembership } from "../app/lib/store.mjs";
+import {
+  cachedCatalogRead,
+  countPeople,
+  listPeople,
+  resetCatalogCacheForTests,
+  setMemory,
+  setPoolForTests,
+  tagMembership,
+} from "../app/lib/store.mjs";
 import { ATTRIBUTE_TAGS, ATTRIBUTE_TAG_IDS, tagShortLabel } from "../app/lib/tags.mjs";
 import {
   TAG_SEARCH_MAX_RAW,
   TAG_SEARCH_MAX_TAGS,
   countTagMatches,
+  memberIdSet,
   membershipMasks,
   parseTagSearch,
   tagSearchHref,
 } from "../app/lib/tag-search.mjs";
 import { createRateLimiter, isExemptPath } from "../app/lib/rate-limit.mjs";
-import { tagMenuItem } from "../app/lib/html.mjs";
+import { inlineJson, tagMenuItem } from "../app/lib/html.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const APP_JS = fs.readFileSync(path.join(ROOT, "app", "public", "app.js"), "utf8");
@@ -117,6 +126,83 @@ test("tags param is escaped and never echoed raw", async () => {
   const payload = page.body.match(/<script type="application\/json" data-tf-data>([\s\S]*?)<\/script>/);
   assert.ok(payload);
   assert.doesNotMatch(payload[1], /</);
+});
+
+test("hostile tag, match and q values: no reflection, escaped in HTML and inline JSON", async () => {
+  setMemory({ people: PEOPLE });
+  const hostileQ = `"'><script>alert('q')</script>\u2028\u2029é漢🙂\u202e&amp;`;
+  const hostileTags = [`"><script>alert(1)</script>`, `save_act'onload='x`, "ſave_act", "save_act\u2028", "\u202eevil", "pwned&lt;"];
+  const hostileMatch = `any"><script>alert(2)</script>`;
+  const qs = new URLSearchParams();
+  qs.set("q", hostileQ);
+  qs.set("tags", ["fraud", ...hostileTags].join(","));
+  qs.set("match", hostileMatch);
+  for (const path of [`/search?${qs}`, `/?${qs}`, `/search?${new URLSearchParams({ tags: qs.get("tags"), match: hostileMatch })}`]) {
+    const page = await requestPage(path);
+    assert.equal(page.status, 200, path);
+    const body = page.body;
+    assert.doesNotMatch(body, /<script>alert/, path);
+    assert.doesNotMatch(body, /alert\(1\)|alert\(2\)|onload=|pwned|evil|ſave/, `${path}: unknown tags and match are not echoed`);
+    assert.doesNotMatch(body, /any&quot;|any"&gt;|any%22/, "match is normalized, never reflected");
+    assert.match(body, /name="match" value="all" checked/, "a hostile match falls back to All");
+    // Only known ids survive: fraud, plus save_act from "save_act\u2028" (trim strips U+2028 like any space).
+    assert.deepEqual([...body.matchAll(/data-tf-chip="([^"]*)"/g)].map((m) => m[1]), ["save_act", "fraud"].sort(
+      (a, b) => ATTRIBUTE_TAG_IDS.indexOf(a) - ATTRIBUTE_TAG_IDS.indexOf(b),
+    ));
+    if (path.startsWith("/search")) assert.match(body, /Ignored 5 unknown tags\./);
+    // Every data-tf-* attribute value is entity-safe (no raw quotes or angle brackets inside).
+    for (const m of body.matchAll(/data-tf-[a-z-]+="([^"]*)"/g)) assert.doesNotMatch(m[1], /[<>']/);
+    const payload = body.match(/<script type="application\/json" data-tf-data>([\s\S]*?)<\/script>/)[1];
+    assert.doesNotMatch(payload, /[<>&\u2028\u2029]/);
+    assert.deepEqual(Object.keys(JSON.parse(payload)).sort(), ["ids", "masks"]);
+    assert.doesNotMatch(payload, /script|alert|evil/);
+    if (path.startsWith("/search?q=")) {
+      // q is the one value that is shown back, and only entity-escaped.
+      // Attributes are double-quoted, so " < > & are entity-escaped and ' is inert.
+      assert.match(body, /name="q" value="&quot;'&gt;&lt;script&gt;alert\('q'\)&lt;\/script&gt;\u2028\u2029é漢🙂\u202e&amp;amp;"/);
+      assert.match(body, /é漢🙂/);
+      assert.doesNotMatch(body, /&amp;amp;amp;/);
+    }
+  }
+});
+
+test("inline JSON escapes <, >, & and U+2028/U+2029 and round-trips", () => {
+  const value = { s: "</script><!-- & \u2028 \u2029 > é🙂", n: [1, 2] };
+  const out = inlineJson(value);
+  assert.doesNotMatch(out, /[<>&\u2028\u2029]/);
+  assert.match(out, /\\u003c\/script\\u003e\\u003c!-- \\u0026 \\u2028 \\u2029 \\u003e é🙂/);
+  assert.deepEqual(JSON.parse(out), value);
+  assert.equal(inlineJson(undefined), "null");
+});
+
+test("a tagMembership failure degrades home and /search to the filter without counts", async () => {
+  const errors = [];
+  const origError = console.error;
+  console.error = (...args) => errors.push(args.join(" "));
+  setPoolForTests({
+    query: (sql) =>
+      String(sql).includes("UNION ALL")
+        ? Promise.reject(new Error("membership boom"))
+        : Promise.resolve({ rows: [{ n: 0 }] }),
+  });
+  resetCatalogCacheForTests();
+  try {
+    for (const path of ["/", "/?tags=fraud&match=any", "/search?tags=fraud", "/search?q=Able&tags=fraud"]) {
+      const page = await requestPage(path);
+      assert.equal(page.status, 200, path);
+      assert.match(page.body, /data-tag-filter/, path);
+      assert.doesNotMatch(page.body, /class="tf-opt-n"/, `${path}: no per-tag numbers`);
+      assert.doesNotMatch(page.body, /tf-menu-foot/);
+      assert.match(page.body, /<p class="tf-count" data-tf-count[^>]* hidden>/, `${path}: count line hidden`);
+      const payload = JSON.parse(page.body.match(/data-tf-data>([\s\S]*?)<\/script>/)[1]);
+      assert.equal(payload.masks, null);
+    }
+  } finally {
+    console.error = origError;
+    setPoolForTests(null);
+    resetCatalogCacheForTests();
+  }
+  assert.ok(errors.some((e) => e.includes("[tag-search] membership unavailable: membership boom")));
 });
 
 test("All needs every tag, Any needs at least one (memory store and SQL)", async () => {
@@ -286,5 +372,136 @@ test("dropdown counts equal /tags/<slug> membership for all 17 tags", async () =
     }
   } finally {
     setPoolForTests(null);
+    resetCatalogCacheForTests();
   }
+});
+
+test("client ET_TAG_SEARCH parse/href/count agree with the server on the same fixture cases", async () => {
+  setMemory({ people: PEOPLE });
+  const core = loadClientCore();
+  const m = await tagMembership();
+  const data = JSON.parse(JSON.stringify({ ids: m.ids, masks: m.masks }));
+  const cases = [
+    "tags=save_act",
+    "tags=save_america_act,save_act&match=any",
+    "tags=SAVE-ACT,save_act,official,nope,%3Cscript%3E&match=ANY",
+    "tags=save_act&tags=fraud&match=all",
+    "tags=fraud&match=bogus",
+    "q=Able&tags=fraud,save_america_act&match=any",
+    `tags=${ATTRIBUTE_TAG_IDS.join(",")}&match=any`,
+    `tags=${Array(40).fill("x").join(",")},fraud`,
+    `tags=${"save_act,".repeat(Math.ceil(TAG_SEARCH_MAX_RAW / 9) + 1)}`,
+    "match=any",
+    "",
+  ];
+  for (const qs of cases) {
+    const server = parseTagSearch(qs);
+    const client = core.parse(`?${qs}`, ATTRIBUTE_TAG_IDS);
+    assert.deepEqual([...client.tags], server.tags, `tags for ${qs.slice(0, 60)}`);
+    assert.equal(client.match, server.match, `match for ${qs.slice(0, 60)}`);
+    const q = new URLSearchParams(qs).get("q") || "";
+    assert.equal(
+      core.href("/search", { q, tags: client.tags, match: client.match }, ATTRIBUTE_TAG_IDS),
+      tagSearchHref("/search", { q, tags: server.tags, match: server.match }),
+      `href for ${qs.slice(0, 60)}`,
+    );
+    assert.equal(core.count(data, client.tags, client.match), countTagMatches(m.masks, server.tags, server.match), `count for ${qs.slice(0, 60)}`);
+    if (server.tags.length) {
+      assert.equal(countTagMatches(m.masks, server.tags, server.match), await countPeople({ tags: server.tags, tagMatch: server.match }));
+    }
+  }
+});
+
+test("cachedCatalogRead: N concurrent calls after a drop make 1 loader call; an epoch bump discards a stale in-flight result", async () => {
+  const fake = { query: () => Promise.resolve({ rows: [] }) };
+  setPoolForTests(fake);
+  resetCatalogCacheForTests(); // dropCatalogCache
+  try {
+    let calls = 0;
+    const loader = () => new Promise((resolve) => setTimeout(() => resolve(++calls), 5));
+    const got = await Promise.all(Array.from({ length: 8 }, () => cachedCatalogRead("t-dedupe", loader)));
+    assert.equal(calls, 1);
+    assert.deepEqual(got, Array(8).fill(1));
+    assert.equal(await cachedCatalogRead("t-dedupe", loader), 1, "fresh value is cached");
+    assert.equal(calls, 1);
+
+    // Stale in-flight: a drop (catalog write) while the loader runs.
+    const releases = [];
+    const slow = () => new Promise((resolve) => { const v = `v${releases.length + 1}`; releases.push(() => resolve(v)); });
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    resetCatalogCacheForTests();
+    const first = cachedCatalogRead("t-stale", slow);
+    await tick();
+    assert.equal(releases.length, 1);
+    resetCatalogCacheForTests(); // epoch bump while v1 is in flight
+    const second = cachedCatalogRead("t-stale", slow); // new epoch: not deduped onto the stale read
+    await tick();
+    assert.equal(releases.length, 2);
+    releases[1]();
+    assert.equal(await second, "v2");
+    releases[0](); // the stale read lands late
+    assert.equal(await first, "v1");
+    await tick();
+    assert.equal(await cachedCatalogRead("t-stale", slow), "v2", "stale v1 did not replace the cache");
+    // And a stale read that lands into an empty slot is not cached either.
+    resetCatalogCacheForTests();
+    const third = cachedCatalogRead("t-stale", slow);
+    await tick();
+    resetCatalogCacheForTests();
+    releases[2]();
+    assert.equal(await third, "v3");
+    await tick();
+    const fourth = cachedCatalogRead("t-stale", slow);
+    await tick();
+    assert.equal(releases.length, 4, "discarded v3 forced a fresh load");
+    releases[3]();
+    assert.equal(await fourth, "v4");
+
+    // tagMembership and counts both go through the helper: concurrent misses share one query.
+    const seen = [];
+    setPoolForTests({ query: (sql) => (seen.push(sql), new Promise((r) => setTimeout(() => r({ rows: [] }), 5))) });
+    resetCatalogCacheForTests();
+    await Promise.all(Array.from({ length: 6 }, () => tagMembership()));
+    assert.equal(seen.filter((sql) => sql.includes("UNION ALL")).length, 1);
+  } finally {
+    setPoolForTests(null);
+    resetCatalogCacheForTests();
+  }
+});
+
+test("keyword + tags builds the tag set from tagMembership Sets, not a second listPeople", async () => {
+  setMemory({ people: PEOPLE });
+  const m = await tagMembership();
+  for (const [tags, match] of [[["save_act", "save_america_act"], "all"], [["save_act", "fraud"], "any"], [["fraud"], "all"]]) {
+    const fromSets = [...memberIdSet(m, tags, match)].sort();
+    const fromList = (await listPeople({ tags, tagMatch: match })).map((r) => r.id).sort();
+    assert.deepEqual(fromSets, fromList);
+  }
+  assert.equal(memberIdSet({ counts: {} }, ["fraud"]), null);
+  // The Sets never reach the page.
+  const page = await requestPage("/search?q=Able&tags=save_act&match=all");
+  const payload = page.body.match(/<script type="application\/json" data-tf-data>([\s\S]*?)<\/script>/)[1];
+  assert.deepEqual(Object.keys(JSON.parse(payload)).sort(), ["ids", "masks"]);
+  assert.doesNotMatch(payload, /alma-able|members/);
+  // Postgres: the keyword path issues no tag-filtered people list query.
+  const seen = [];
+  setPoolForTests({ query: (sql) => (seen.push(String(sql)), Promise.resolve({ rows: [] })) });
+  resetCatalogCacheForTests();
+  try {
+    const res = await requestPage("/search?q=Able&tags=save_act,fraud&match=any");
+    assert.equal(res.status, 200);
+  } finally {
+    setPoolForTests(null);
+  }
+  assert.equal(seen.filter((sql) => /^SELECT \* FROM people WHERE/.test(sql.trim())).length, 0);
+  assert.equal(seen.filter((sql) => sql.includes("UNION ALL")).length, 1);
+});
+
+test("home and /search share one search input", async () => {
+  setMemory({ people: PEOPLE });
+  const home = await requestPage("/");
+  const search = await requestPage("/search?q=Able&tags=fraud");
+  const strip = (h) => h.match(/<label class="tui-search-label">[\s\S]*?<\/label>/)[0].replace(/ value="[^"]*"/, "");
+  assert.equal(strip(home.body), strip(search.body));
+  assert.match(search.body, /<input type="search" name="q" value="Able"/);
 });

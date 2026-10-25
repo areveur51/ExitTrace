@@ -2417,6 +2417,23 @@ export function dogRow(row) {
 const SEARCH_PLACEHOLDER =
   "Search people, operations, dog comms, red-folder comms, central casting, and unsorted posts...";
 
+/**
+ * JSON for an inline <script type="application/json">: <, >, & and U+2028/U+2029
+ * become \\u escapes, so the text can never close the script or break a JS parse.
+ */
+export function inlineJson(value) {
+  return JSON.stringify(value ?? null).replace(/[<>&\u2028\u2029]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+/** The search bar's input row. Home and /search share it; q prefills the value. */
+export function searchInputHtml({ q = "" } = {}) {
+  const value = String(q || "");
+  return `<label class="tui-search-label">
+        <span class="chev" aria-hidden="true">〉</span>
+        <input type="search" name="q"${value ? ` value="${esc(value)}"` : ""} placeholder="${esc(SEARCH_PLACEHOLDER)}" autocomplete="off" enterkeyhint="search" aria-label="Search">
+      </label>`;
+}
+
 export function homeBody({ version, tagFilter = "" }) {
   return `
     <div class="home-wordmark">
@@ -2424,10 +2441,7 @@ export function homeBody({ version, tagFilter = "" }) {
     </div>
     <p class="ver">v${esc(version || "unknown")}</p>
     <form class="tui-search${tagFilter ? " tf-form" : ""}" action="/search" method="get" role="search">
-      <label class="tui-search-label">
-        <span class="chev" aria-hidden="true">〉</span>
-        <input type="search" name="q" placeholder="${esc(SEARCH_PLACEHOLDER)}" autocomplete="off" enterkeyhint="search">
-      </label>${tagFilter}
+      ${searchInputHtml()}${tagFilter}
     </form>
     <p class="home-tag">Sourced public-role exits and official government dog-comms since 2017. A seed set, not a census.</p>`;
 }
@@ -2468,7 +2482,7 @@ export function tagFilterHtml({ state = {}, membership, basePath = "/search" } =
   const n = masks ? countTagMatches(masks, selected, match) : null;
   const radio = (value, text) =>
     `<label class="tf-radio${match === value ? " is-on" : ""}"><input type="radio" name="match" value="${value}"${match === value ? " checked" : ""}><span class="tf-dot" aria-hidden="true"></span>${text}</label>`;
-  const payload = JSON.stringify({ ids: ATTRIBUTE_TAGS.map((t) => t.id), masks }).replace(/</g, "\\u003c");
+  const payload = inlineJson({ ids: ATTRIBUTE_TAGS.map((t) => t.id), masks });
   const ignored = Number(state.ignored) > 0
     ? `<p class="tf-note">Ignored ${Number(state.ignored)} unknown tag${Number(state.ignored) === 1 ? "" : "s"}.</p>`
     : "";
@@ -2502,10 +2516,7 @@ export function tagFilterHtml({ state = {}, membership, basePath = "/search" } =
 /** Search page form: the home search bar plus the tag filter, prefilled from the URL. */
 export function searchFormHtml({ state = {}, membership } = {}) {
   return `<form class="tui-search tf-form tf-form-search" action="/search" method="get" role="search">
-      <label class="tui-search-label">
-        <span class="chev" aria-hidden="true">〉</span>
-        <input type="search" name="q" value="${esc(state.q || "")}" placeholder="${esc(SEARCH_PLACEHOLDER)}" autocomplete="off" enterkeyhint="search" aria-label="Search">
-      </label>${tagFilterHtml({ state, membership, basePath: "/search" })}
+      ${searchInputHtml({ q: state.q })}${tagFilterHtml({ state, membership, basePath: "/search" })}
     </form>`;
 }
 

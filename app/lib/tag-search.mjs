@@ -134,3 +134,20 @@ export function countTagMatches(masks, tags, match = TAG_MATCH_DEFAULT) {
   }
   return n;
 }
+
+/**
+ * Person ids in the tag set from tagMembership().members (per-tag id Sets):
+ * All is the intersection, Any the union. Same membership as listPeople({ tags, tagMatch })
+ * for fact tags, which imply no event kinds. Null when the Sets are missing.
+ */
+export function memberIdSet(membership, tags, match = TAG_MATCH_DEFAULT) {
+  const sets = (tags || []).map((id) => membership?.members?.[id]);
+  if (!sets.length || sets.some((set) => !(set instanceof Set))) return null;
+  if (parseTagMatch(match) === TAG_MATCH_ANY) {
+    const out = new Set();
+    for (const set of sets) for (const id of set) out.add(id);
+    return out;
+  }
+  const [smallest, ...rest] = sets.slice().sort((a, b) => a.size - b.size);
+  return new Set([...smallest].filter((id) => rest.every((set) => set.has(id))));
+}

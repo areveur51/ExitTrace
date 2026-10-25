@@ -221,23 +221,60 @@ async function withSearchSlot(signal, fn) {
 /** Postgres catalog reads only. Memory tests stay live. Direct SQL shows up within this window. An expired snapshot is served once while it refreshes. */
 const CATALOG_CACHE_MS = 12_000;
 let catalogEpoch = 0;
-let countsCache = null;
-let countsInflight = null;
 let allPeopleCache = null;
 let allPeopleInflight = null;
-let tagMembershipCache = null;
+/** cachedCatalogRead slots by name: { cache: { at, value } | null, inflight: { epoch, promise } | null }. */
+const catalogSlots = new Map();
 
 function dropCatalogCache() {
   catalogEpoch += 1;
-  countsCache = null;
-  countsInflight = null;
   allPeopleCache = null;
   allPeopleInflight = null;
-  tagMembershipCache = null;
+  for (const slot of catalogSlots.values()) {
+    slot.cache = null;
+    slot.inflight = null;
+  }
 }
 
 function catalogCacheFresh(entry) {
   return Boolean(entry) && Date.now() - entry.at < CATALOG_CACHE_MS;
+}
+
+function refreshCatalogSlot(slot, loader) {
+  const epoch = catalogEpoch;
+  if (slot.inflight && slot.inflight.epoch === epoch) return slot.inflight.promise;
+  const promise = Promise.resolve()
+    .then(loader)
+    .then((value) => {
+      // A catalog write during the read bumps the epoch: the stale result is not cached.
+      if (epoch === catalogEpoch) slot.cache = { at: Date.now(), value };
+      return value;
+    })
+    .finally(() => {
+      if (slot.inflight && slot.inflight.promise === promise) slot.inflight = null;
+    });
+  slot.inflight = { epoch, promise };
+  return promise;
+}
+
+/**
+ * Postgres catalog read behind the shared cache: a fresh value is returned as is,
+ * an expired one is served once while one refresh runs, and concurrent misses in
+ * the same epoch share one in-flight loader call. dropCatalogCache clears every slot.
+ * Used by counts() and tagMembership().
+ */
+export function cachedCatalogRead(name, loader) {
+  let slot = catalogSlots.get(name);
+  if (!slot) {
+    slot = { cache: null, inflight: null };
+    catalogSlots.set(name, slot);
+  }
+  if (catalogCacheFresh(slot.cache)) return Promise.resolve(slot.cache.value);
+  if (slot.cache) {
+    refreshCatalogSlot(slot, loader).catch(() => {});
+    return Promise.resolve(slot.cache.value);
+  }
+  return refreshCatalogSlot(slot, loader);
 }
 
 export function backendName() {
@@ -1708,13 +1745,16 @@ export async function countPeople(categoryOrOpts) {
  * Fact-tag membership for the home tag search. Each tag's members come from the
  * same filter listPeople({ tags: [id] }) uses for /tags/<slug> (peopleWhere in
  * Postgres, matchesTags in memory), in one read. Returns per-tag counts and a
- * mask histogram (tag-search.mjs) for client-side All/Any counts. No ids leave here.
+ * mask histogram (tag-search.mjs) for client-side All/Any counts. `members` holds
+ * per-tag id Sets for server-side use only; the page payload gets counts and masks.
  */
 export async function tagMembership() {
   const p = await getPool();
   if (!p) return buildTagMembership(memoryTagMembers());
-  if (catalogCacheFresh(tagMembershipCache)) return tagMembershipCache.value;
-  const epoch = catalogEpoch;
+  return cachedCatalogRead("tagMembership", () => tagMembershipUncached(p));
+}
+
+async function tagMembershipUncached(p) {
   const params = [];
   const parts = ATTRIBUTE_TAG_IDS.map(
     (id, i) => `SELECT ${i}::int AS i, id FROM people${peopleWhere([], params, {}, [id], false)}`,
@@ -1725,9 +1765,7 @@ export async function tagMembership() {
     const id = ATTRIBUTE_TAG_IDS[Number(row.i)];
     if (id) members[id].push(row.id);
   }
-  const value = buildTagMembership(members);
-  if (epoch === catalogEpoch) tagMembershipCache = { at: Date.now(), value };
-  return value;
+  return buildTagMembership(members);
 }
 
 function memoryTagMembers() {
@@ -1739,8 +1777,12 @@ function memoryTagMembers() {
 
 function buildTagMembership(members) {
   const counts = {};
-  for (const id of ATTRIBUTE_TAG_IDS) counts[id] = new Set(members[id] || []).size;
-  return { ids: ATTRIBUTE_TAG_IDS.slice(), counts, masks: membershipMasks(members) };
+  const sets = {};
+  for (const id of ATTRIBUTE_TAG_IDS) {
+    sets[id] = new Set(members[id] || []);
+    counts[id] = sets[id].size;
+  }
+  return { ids: ATTRIBUTE_TAG_IDS.slice(), counts, masks: membershipMasks(members), members: sets };
 }
 
 export async function countKindComms(kind) {
@@ -2972,28 +3014,10 @@ export async function insertCentralCastingClip(row) {
   return clip;
 }
 
-function refreshCounts() {
-  const epoch = catalogEpoch;
-  if (countsInflight && countsInflight.epoch === epoch) return countsInflight.promise;
-  const promise = countsUncached().then((value) => {
-    if (epoch === catalogEpoch) countsCache = { at: Date.now(), value };
-    return value;
-  }).finally(() => {
-    if (countsInflight && countsInflight.promise === promise) countsInflight = null;
-  });
-  countsInflight = { epoch, promise };
-  return promise;
-}
-
 export async function counts() {
   const p = await getPool();
   if (!p) return countsUncached();
-  if (catalogCacheFresh(countsCache)) return countsCache.value;
-  if (countsCache) {
-    refreshCounts().catch(() => {});
-    return countsCache.value;
-  }
-  return refreshCounts();
+  return cachedCatalogRead("counts", countsUncached);
 }
 
 /** Per person, per kind: largest eventHeadcount (default 1). Matches the census MAX. */
