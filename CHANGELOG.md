@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.32] - 2026-10-25
+
+### Fixed
+
+- Numbered cites on person and card pages no longer overlap. In the Sources box and in per-event cite lists, numbers sit right-aligned in a fixed gutter (`4ch` wide, with a gap before the cite text), so 1-, 2- and 3-digit numbers line up and stay inside the box. The numbers come from `counter(list-item)`, so an `<ol start>` still numbers correctly. Long URLs, titles and outlet names wrap inside the box (`overflow-wrap: anywhere`), and a cite date no longer splits across lines. Inline `[n]` source pointers in event rows have fixed-width digits and even spacing. CSS only. The markup, numbering and data are unchanged.
+
 ## [1.2.31] - 2026-10-25
 
 ### Changed
