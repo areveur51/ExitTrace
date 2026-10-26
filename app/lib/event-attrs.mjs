@@ -458,13 +458,22 @@ function eventMediaCaption(raw) {
     .slice(0, 240);
 }
 
-/** Fail closed. Remote URLs, portraits, and nested screenshot paths stay out. */
-export function normalizeEventMedia(raw) {
+/** Stored media per event: every unique item, up to this safety cap. */
+export const EVENT_MEDIA_STORE_MAX = 24;
+/** Media tiles a card shows per event. Items past this stay stored. */
+export const EVENT_MEDIA_DISPLAY_MAX = 8;
+
+/**
+ * Fail closed. Remote URLs, portraits, and nested screenshot paths stay out.
+ * Storage normalization: keeps up to EVENT_MEDIA_STORE_MAX unique items.
+ * Renderers use displayEventMedia, which shows the first EVENT_MEDIA_DISPLAY_MAX.
+ */
+export function normalizeEventMedia(raw, max = EVENT_MEDIA_STORE_MAX) {
   const list = Array.isArray(raw) ? raw : [];
   const out = [];
   const seen = new Set();
   for (const item of list) {
-    if (out.length >= 8) break;
+    if (out.length >= max) break;
     const src = eventMediaHref(typeof item === "string" ? item : item?.src);
     if (!src || seen.has(src)) continue;
     seen.add(src);
@@ -486,6 +495,11 @@ export function normalizeEventMedia(raw) {
     out.push(row);
   }
   return out;
+}
+
+/** Display only: the first EVENT_MEDIA_DISPLAY_MAX normalized items, in stored order. */
+export function displayEventMedia(raw) {
+  return normalizeEventMedia(raw, EVENT_MEDIA_DISPLAY_MAX);
 }
 
 export function mergeEventAttrs(prior = {}, incoming = {}) {

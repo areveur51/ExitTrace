@@ -16,7 +16,7 @@ import {
 } from "./categories.mjs";
 import { normalizeOperationTags, operationPortraitFrom, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
-import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount, normalizeEventMedia, originText } from "./event-attrs.mjs";
+import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, displayEventMedia, eventHeadcount, originText } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
 import { standardizePosition } from "./position-format.mjs";
@@ -1925,7 +1925,7 @@ function personSupportingMediaHtml(row, seen) {
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
     if (kind === "notable" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
-    const media = normalizeEventMedia(ev.media);
+    const media = displayEventMedia(ev.media);
     const items = kind === "dog_comms" ? collapseDogPostMedia(media) : media;
     for (const item of items) {
       const want = canonicalPublicUrl(item.url);
@@ -2527,7 +2527,7 @@ function notableMediaFigures(ev) {
     );
   }
   const sources = Array.isArray(ev?.sources) ? ev.sources : [];
-  for (const item of normalizeEventMedia(ev?.media)) {
+  for (const item of displayEventMedia(ev?.media)) {
     const want = canonicalPublicUrl(item.url);
     const source = sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
     figures.push(supportingMediaFigure(item, source));
