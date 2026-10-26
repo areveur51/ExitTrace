@@ -1,6 +1,6 @@
 # Multiple dated notables per person
 
-> **Superseded (2026-10-26).** The phase B flow below is replaced by the multi-event migration in `docs/MIGRATION.md` (`scripts/migrations/2026-10-26-multi-event-*`), which adds no CHECK. `2026-10-22-multi-notable-phase-b.sql` now refuses to run (its first statement raises `superseded`). This page is kept for history and for the r1-r7 rollback files.
+> **Superseded (2026-10-26).** The phase B flow below is replaced by the multi-event migration in `docs/MIGRATION.md` (`scripts/migrations/2026-10-26-multi-event-*`), which adds no CHECK. `2026-10-22-multi-notable-phase-b.sql` now refuses to run: its whole body is one `DO` block that raises `superseded` (the old body is in git history). This page is kept for history and for the r1-r7 rollback files.
 
 A person may carry more than one dated `notable` event. Every other kind stays one row per `(person_id, kind)` — one firing, not two.
 

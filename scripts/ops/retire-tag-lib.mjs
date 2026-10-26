@@ -16,6 +16,23 @@ export const CONFIRM_ENV = "ET_RETIRE_TAG_CONFIRM";
 export const LAB_HOSTS = Object.freeze(["127.0.0.1", "localhost"]);
 export const LAB_DB_PORT = "5433";
 
+/** The lab database name. The URL path must be exactly /exittrace. */
+export const LAB_DB_NAME = "exittrace";
+
+/**
+ * What the lab server reports about itself after connect (Worf r5 MED-3). Lab
+ * Postgres runs in Docker: the client reaches 127.0.0.1:5433, the server sees
+ * its container address and port. The publication and the slot of the Render
+ * subscription exist only on lab.
+ */
+export const LAB_IDENTITY = Object.freeze({
+  addr: "172.19.0.2",
+  port: 5432,
+  database: LAB_DB_NAME,
+  publication: "exittrace_lab_pub",
+  slot: "exittrace_lab_sub",
+});
+
 /** Hosted database names that are always refused, before the allowlist. */
 const DENY_HOST = [/^dpg-/i, /render\.com/i, /oregon-postgres/i];
 
@@ -124,8 +141,11 @@ export function planUndo(manifest, currentRows) {
 
 /**
  * Lab-only gate: an allowlist, not a denylist. The URL host must be 127.0.0.1 or
- * localhost and the port must be the lab Postgres port. dpg-*, render.com and
- * oregon-postgres hosts are refused first. Messages never include the URL or host.
+ * localhost, the port the lab Postgres port and the path /exittrace. No query
+ * string or fragment (Worf r5 MED-3: node-postgres honours ?host=, ?hostaddr=,
+ * ?port= over the URL host). dpg-*, render.com and oregon-postgres hosts are
+ * refused first. withClient then connects with explicit fields (never the URL
+ * string) and checks LAB_IDENTITY. Messages never include the URL or host.
  */
 export function labGuard(env = {}, { apply = false } = {}) {
   const raw = env.DATABASE_URL;
@@ -141,6 +161,9 @@ export function labGuard(env = {}, { apply = false } = {}) {
   } catch {
     return { ok: false, code: 1, message: "DATABASE_URL is not a usable database URL" };
   }
+  if (String(raw).includes("?") || String(raw).includes("#") || url.search || url.hash) {
+    return { ok: false, code: 1, message: "refused: DATABASE_URL must not have a query string or fragment" };
+  }
   const host = url.hostname.toLowerCase();
   if (!host) return { ok: false, code: 1, message: "DATABASE_URL is not a usable database URL" };
   if (DENY_HOST.some((re) => re.test(host))) {
@@ -149,10 +172,66 @@ export function labGuard(env = {}, { apply = false } = {}) {
   if (!LAB_HOSTS.includes(host) || url.port !== LAB_DB_PORT) {
     return { ok: false, code: 1, message: "refused: database host is not the lab (loopback on the lab port)" };
   }
+  if (url.pathname !== `/${LAB_DB_NAME}`) {
+    return { ok: false, code: 1, message: "refused: database is not the lab database" };
+  }
+  if (!labConnectionConfig(raw)) {
+    return { ok: false, code: 1, message: "DATABASE_URL is not a usable database URL" };
+  }
   if (apply && env[CONFIRM_ENV] !== "lab") {
     return { ok: false, code: 1, message: `refused: --apply requires ${CONFIRM_ENV}=lab` };
   }
   return { ok: true, code: 0, label: "lab" };
+}
+
+/**
+ * Explicit pg.Client fields for a DATABASE_URL that passed labGuard: host, the
+ * lab port, the lab database, and the URL's user and password (decoded). Never
+ * a connectionString. Null when the URL is not a plain lab URL.
+ */
+export function labConnectionConfig(raw) {
+  let url;
+  try {
+    url = new URL(String(raw));
+  } catch {
+    return null;
+  }
+  if (String(raw).includes("?") || String(raw).includes("#") || url.search || url.hash) return null;
+  const host = url.hostname.toLowerCase();
+  if (!LAB_HOSTS.includes(host) || url.port !== LAB_DB_PORT || url.pathname !== `/${LAB_DB_NAME}`) return null;
+  const config = { host, port: Number(LAB_DB_PORT), database: LAB_DB_NAME };
+  try {
+    if (url.username) config.user = decodeURIComponent(url.username);
+    if (url.password) config.password = decodeURIComponent(url.password);
+  } catch {
+    return null;
+  }
+  return config;
+}
+
+export const LAB_IDENTITY_SQL = `SELECT host(inet_server_addr()) AS addr, inet_server_port() AS port, current_database() AS db,
+  EXISTS (SELECT 1 FROM pg_publication WHERE pubname = $1) AS publication,
+  EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = $2) AS slot`;
+
+/**
+ * After connect: the server must report LAB_IDENTITY (address, port, database)
+ * and have the lab publication and slot. Messages name the field, never a value.
+ */
+export async function labIdentityCheck(client) {
+  let row;
+  try {
+    const r = await client.query(LAB_IDENTITY_SQL, [LAB_IDENTITY.publication, LAB_IDENTITY.slot]);
+    row = (r && r.rows && r.rows[0]) || {};
+  } catch {
+    return { ok: false, message: "refused: lab identity check failed" };
+  }
+  const want = LAB_IDENTITY;
+  if (row.addr == null || String(row.addr) !== want.addr) return { ok: false, message: "refused: connected server address is not the lab" };
+  if (Number(row.port) !== want.port) return { ok: false, message: "refused: connected server port is not the lab" };
+  if (row.db !== want.database) return { ok: false, message: "refused: connected database is not the lab database" };
+  if (row.publication !== true) return { ok: false, message: "refused: connected database has no lab publication" };
+  if (row.slot !== true) return { ok: false, message: "refused: connected server has no lab replication slot" };
+  return { ok: true };
 }
 
 export function manifestStamp(date) {
@@ -230,11 +309,17 @@ export async function rollback(client) {
   }
 }
 
-/** Connect with the repo's pg only when no client was injected. */
-export async function withClient(client, url, fn) {
+/**
+ * Connect with the repo's pg only when no client was injected: explicit fields
+ * from labConnectionConfig, then labIdentityCheck before fn runs. opts.pg lets
+ * tests inject a pg-like module.
+ */
+export async function withClient(client, url, fn, opts = {}) {
   if (client) return fn(client);
-  const { default: pg } = await import("pg");
-  const own = new pg.Client({ connectionString: url });
+  const config = labConnectionConfig(url);
+  if (!config) return { code: 1, lines: ["refused: DATABASE_URL is not a plain lab URL"], manifestPath: null };
+  const pg = opts.pg || (await import("pg")).default;
+  const own = new pg.Client(config);
   try {
     await own.connect();
   } catch {
@@ -246,6 +331,8 @@ export async function withClient(client, url, fn) {
     return { code: 1, lines: ["database connection failed"], manifestPath: null };
   }
   try {
+    const identity = await labIdentityCheck(own);
+    if (!identity.ok) return { code: 1, lines: [identity.message], manifestPath: null };
     return await fn(own);
   } finally {
     try {

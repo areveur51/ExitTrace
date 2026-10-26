@@ -13,9 +13,13 @@
  *    ones PGPASSWORD and PGPASSFILE (they cannot change where pg connects);
  *  - the pg config is built from explicit fields, never connectionString;
  *    the user is ET_SCRATCH_PG_USER (default postgres);
- *  - after connect, inet_server_addr() must be NULL or loopback,
- *    inet_server_port() (or current_setting('port') on a socket) must be the
- *    URL's port, and current_database() must be the database asked for.
+ *  - after connect, inet_server_addr() must be loopback (NULL, a socket, is
+ *    refused: the config is always TCP), inet_server_port() must be the URL's
+ *    port, and current_database() must be the database asked for;
+ *  - after connect, the cluster must look like a throwaway (Worf r5 LOW-2): no
+ *    database whose name contains exittrace, and no publication, subscription
+ *    or replication slot. A loopback-local lab cluster fails here even when
+ *    its address and port match.
  *
  * Any violation throws before (or right after) connecting; the caller's test
  * fails, it never skips. Never lab, never Render.
@@ -27,6 +31,15 @@ const LOOPBACK_HOSTS = new Map([
   ["127.0.0.1", "127.0.0.1"],
   ["[::1]", "::1"],
 ]);
+// Worf r5 ruling: PGPASSWORD and PGPASSFILE stay allowed because they cannot
+// change where pg connects, for SCRATCH credentials only. Never set them to a
+// lab or Render credential, and never point PGPASSFILE at an operator pgpass
+// with lab or Render entries. Prefer PGPASSFILE (mode 0600, path-only);
+// PGPASSWORD is for CI and throwaway clusters only (it is visible in
+// /proc/<pid>/environ and inherited by children). This helper never logs
+// either one. node-pg also falls back to ~/.pgpass when no password is set, so
+// the cluster fingerprint check in assertScratchIdentity is what keeps a
+// loopback lab cluster out.
 const CREDENTIAL_ONLY_PG_ENV = new Set(["PGPASSWORD", "PGPASSFILE"]);
 const DB_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 const USER_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
@@ -93,24 +106,41 @@ export function scratchPgConfig(target, database = target.database, env = proces
     user: target.user,
     ssl: false,
   };
-  // Credential only, in-process; never logged. Unset means trust auth or PGPASSFILE.
+  // Scratch credential only (see CREDENTIAL_ONLY_PG_ENV), in-process; never logged.
+  // Unset means trust auth or PGPASSFILE.
   if (env.PGPASSWORD !== undefined && env.PGPASSWORD !== "") config.password = env.PGPASSWORD;
   return config;
 }
 
 const isLoopbackAddr = (addr) => addr === "::1" || /^127\./.test(addr) || /^::ffff:127\./i.test(addr);
 
-/** After connect: the server is the loopback cluster on target.port, on the database asked for. */
+export const SCRATCH_IDENTITY_SQL = `SELECT host(inet_server_addr()) AS addr, inet_server_port() AS port, current_database() AS db,
+  (SELECT count(*)::int FROM pg_database WHERE datname ILIKE '%exittrace%') AS exittrace_dbs,
+  (SELECT count(*)::int FROM pg_publication) AS publications,
+  (SELECT count(*)::int FROM pg_subscription) AS subscriptions,
+  (SELECT count(*)::int FROM pg_replication_slots) AS slots`;
+
+/**
+ * After connect: the server is a throwaway loopback cluster on target.port, on
+ * the database asked for. Any failure refuses (the caller ends the client).
+ */
 export async function assertScratchIdentity(client, target, database = target.database) {
-  const r = await client.query(
-    "SELECT host(inet_server_addr()) AS addr, inet_server_port() AS port, current_setting('port')::int AS setting_port, current_database() AS db",
-  );
-  const row = r.rows[0] || {};
-  if (row.addr != null && !isLoopbackAddr(row.addr)) refuse(`connected server address ${row.addr} is not loopback`);
-  const port = row.addr == null ? row.setting_port : row.port;
-  if (Number(port) !== target.port) refuse(`connected server port ${port} is not ${target.port}`);
+  const r = await client.query(SCRATCH_IDENTITY_SQL);
+  const row = (r && r.rows && r.rows[0]) || {};
+  if (row.addr == null || row.addr === "") refuse("connected server address is empty (a socket or unknown); scratch must be TCP loopback");
+  if (!isLoopbackAddr(String(row.addr))) refuse(`connected server address ${row.addr} is not loopback`);
+  if (Number(row.port) !== target.port) refuse(`connected server port ${row.port} is not ${target.port}`);
   if (row.db !== database) refuse(`connected database ${row.db} is not ${database}`);
   if (/exittrace/i.test(String(row.db))) refuse("connected to an exittrace database");
+  const fingerprint = [
+    ["exittrace_dbs", "a database named like exittrace exists on this cluster"],
+    ["publications", "this database has a publication"],
+    ["subscriptions", "this cluster has a subscription"],
+    ["slots", "this cluster has a replication slot"],
+  ];
+  for (const [key, why] of fingerprint) {
+    if (!(Number.isInteger(row[key]) && row[key] === 0)) refuse(`${why} (not a throwaway cluster)`);
+  }
 }
 
 /** Connect to target (or another database of it) and check identity; ends the client on refusal. */
