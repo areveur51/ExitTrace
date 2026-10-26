@@ -16,6 +16,10 @@ import {
 import { handle } from "../app/server.mjs";
 import { assertMultiNotableReady, getPerson, listPeople, savePerson, setMemory, syncPersonEvents } from "../app/lib/store.mjs";
 
+// These tests model a database after F7 (both sides migrated): the operator switch is on.
+// The off-by-default case is its own test in tests/multi-event.test.mjs.
+process.env.ET_MULTI_EVENT_WRITES = "on";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
@@ -195,6 +199,36 @@ test("multi-event: the write guard refuses seq > 0 until this database has the m
   const c = fakeClient({ pkHasSeq: false });
   await assertMultiNotableReady(c, one);
   assert.equal(c.calls.length, 0);
+});
+
+test("multi-event: ET_MULTI_EVENT_WRITES is off by default and seq > 0 needs both the switch and the migrated key", async () => {
+  const two = attachPersonEvent(attachPersonEvent(projectPerson(melania()), RF_A).person, RF_B).person;
+  const k = attachPersonEvent(projectPerson(keith()), { kind: "notable", event_date: "2026-10-05", sources: [AP("plot", "2026-10-22")] }).person;
+  const migrated = () => fakeClient({ pkHasSeq: true, notableOnly: false });
+  for (const env of [{}, { ET_MULTI_EVENT_WRITES: "" }, { ET_MULTI_EVENT_WRITES: "1" }, { ET_MULTI_EVENT_WRITES: "true" }, { ET_MULTI_EVENT_WRITES: "off" }]) {
+    for (const p of [two, k]) {
+      const c = migrated();
+      await assert.rejects(assertMultiNotableReady(c, p, env), { code: "multi_event_writes_off" }, JSON.stringify(env));
+      assert.equal(c.calls.length, 0, "switch off refuses before any catalog query");
+    }
+  }
+  // Switch on but the key is still (person_id, kind): still refused.
+  await assert.rejects(assertMultiNotableReady(fakeClient({ pkHasSeq: false }), k, { ET_MULTI_EVENT_WRITES: "on" }), { code: "multi_notable_needs_phase_b" });
+  // Both: allowed.
+  await assertMultiNotableReady(migrated(), two, { ET_MULTI_EVENT_WRITES: "on" });
+  // seq 0 only (one red_folder) needs neither.
+  const one = attachPersonEvent(projectPerson(melania()), RF_B).person;
+  await assertMultiNotableReady(fakeClient({ pkHasSeq: false }), one, {});
+  // syncPersonEvents reads process.env: off refuses before the DELETE.
+  const saved = process.env.ET_MULTI_EVENT_WRITES;
+  delete process.env.ET_MULTI_EVENT_WRITES;
+  try {
+    const c = migrated();
+    await assert.rejects(syncPersonEvents(c, two), { code: "multi_event_writes_off" });
+    assert.equal(c.calls.filter((x) => /DELETE|INSERT/.test(x.text)).length, 0);
+  } finally {
+    process.env.ET_MULTI_EVENT_WRITES = saved;
+  }
 });
 
 test("multi-event: syncPersonEvents writes one companion row per (kind, seq)", async () => {

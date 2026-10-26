@@ -2126,10 +2126,27 @@ async function personEventsSeqNotableOnly(client) {
  * multi-event migration, which replaces person_events_seq_notable_only with
  * seq >= 0. No catalog query when every event is seq 0.
  */
-export async function assertMultiNotableReady(client, person) {
+/**
+ * ET_MULTI_EVENT_WRITES=on is the operator switch for seq > 0 person_events rows
+ * (a second notable, a second red_folder). Off by default; set it only after F7 of
+ * docs/MIGRATION.md, when lab AND Render both have PRIMARY KEY (person_id, kind, seq).
+ * The schema check below still runs, so both must hold.
+ */
+export function multiEventWritesEnabled(env = process.env) {
+  return String(env.ET_MULTI_EVENT_WRITES || "").trim() === "on";
+}
+
+export async function assertMultiNotableReady(client, person, env = process.env) {
   const normalized = normalizePerson(person);
   const multi = (normalized.events || []).filter((ev) => eventSeq(ev) > 0);
   if (!multi.length) return;
+  if (!multiEventWritesEnabled(env)) {
+    const kind = String(multi[0].kind || "").trim();
+    throw new PromoteError(
+      `Second ${kind} event not saved: seq > 0 person_events writes are off (set ET_MULTI_EVENT_WRITES=on only after both lab and Render are migrated; docs/MIGRATION.md F7).`,
+      "multi_event_writes_off",
+    );
+  }
   if (!(await personEventsKeyHasSeq(client))) {
     const kind = String(multi[0].kind || "").trim();
     throw new PromoteError(

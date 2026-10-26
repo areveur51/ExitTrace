@@ -16,6 +16,10 @@ import { keymapFooter, personDetail } from "../app/lib/html.mjs";
 import { pickRow, buildUpsertSql } from "../app/lib/gap-upsert.mjs";
 import { counts, insertPersonTx, savePersonTx, setMemory, syncPersonEvents } from "../app/lib/store.mjs";
 
+// These tests model a database after F7 (both sides migrated): the operator switch is on.
+// The off-by-default case is its own test in tests/multi-event.test.mjs.
+process.env.ET_MULTI_EVENT_WRITES = "on";
+
 const CITE_A = { url: "https://www.example.com/news/a" };
 const CITE_B = { url: "https://www.example.net/world/b" };
 const CITE_C = { url: "https://www.example.org/desk/c" };
