@@ -280,7 +280,7 @@ test("bootstrap-db.sql has no person_events PK swap; fresh tables get the multi-
   assert.doesNotMatch(sql, /DROP CONSTRAINT(?: IF EXISTS)? person_events_pkey/);
   assert.match(
     sql,
-    /CREATE TABLE IF NOT EXISTS person_events \([\s\S]*?seq INTEGER NOT NULL DEFAULT 0,[\s\S]*?PRIMARY KEY \(person_id, kind, seq\),[\s\S]*?person_events_seq_nonneg CHECK \(seq >= 0\)/s,
+    /CREATE TABLE IF NOT EXISTS person_events \([\s\S]*?seq INTEGER NOT NULL DEFAULT 0,[\s\S]*?PRIMARY KEY \(person_id, kind, seq\)\n\);/s,
   );
 });
 

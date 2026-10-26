@@ -1,22 +1,24 @@
 -- Multi-event DOWN for RENDER step F5 (undoes 2026-10-26-multi-event-up-render-b.sql):
 -- back to PRIMARY KEY (person_id, kind) and re-creates the unique index
--- person_events_person_kind_seq_key. Keeps the seq column and CHECK
--- person_events_seq_nonneg (render-a state).
+-- person_events_person_kind_seq_key. Keeps the seq column (render-a state).
 --
 -- Rollback order (docs/MIGRATION.md): freeze; r1 lab REPLICA IDENTITY FULL; r2 lab
 -- backup + delete of seq > 0 rows (Admiral's words at that moment); r3 catch-up
 -- (Render has applied the deletes); THIS FILE on Render; down-lab on lab; r6.
 -- While lab is FULL it sends the whole old row, which covers either key.
 --
--- One transaction. Does not change rows. Refuses while any seq > 0 row or
+-- One transaction. Does not change rows. Refuses while any seq <> 0 row or
 -- duplicate (person_id, kind) exists. Idempotent.
 
 BEGIN;
+-- Fail fast instead of queueing behind (and in front of) the apply worker or the app.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM public.person_events WHERE seq > 0) THEN
-    RAISE EXCEPTION 'multi-event down-render-b guard: person_events still has seq > 0 rows (run r2 first)';
+  IF EXISTS (SELECT 1 FROM public.person_events WHERE seq <> 0) THEN
+    RAISE EXCEPTION 'multi-event down-render-b guard: person_events still has seq > 0 (or negative) rows (run r2 first)';
   END IF;
   IF EXISTS (
     SELECT 1 FROM public.person_events GROUP BY person_id, kind HAVING count(*) > 1

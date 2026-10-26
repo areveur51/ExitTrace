@@ -4,7 +4,7 @@
 -- ON CONFLICT (person_id, kind, seq) (main 702c3642 and later) still works.
 --
 -- One transaction. Does not change rows. Refuses unless lab is REPLICA IDENTITY
--- FULL (r1), and while any seq > 0 row or duplicate (person_id, kind) exists.
+-- FULL (r1), and while any seq <> 0 row or duplicate (person_id, kind) exists.
 --
 -- Rollback order (docs/MIGRATION.md): freeze; r1 lab REPLICA IDENTITY FULL; r2 lab
 -- backup + delete of seq > 0 rows (needs the Admiral's words at that moment);
@@ -13,6 +13,9 @@
 -- 2026-10-26-multi-event-down-render-a.sql on Render.
 
 BEGIN;
+-- Fail fast instead of queueing behind (and in front of) the apply worker or the app.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 
 DO $$
 BEGIN
@@ -23,8 +26,8 @@ BEGIN
           WHERE oid = 'public.person_events'::regclass) <> 'f' THEN
     RAISE EXCEPTION 'multi-event down on a publisher needs REPLICA IDENTITY FULL first (r1)';
   END IF;
-  IF EXISTS (SELECT 1 FROM public.person_events WHERE seq > 0) THEN
-    RAISE EXCEPTION 'multi-event down guard: person_events still has seq > 0 rows (run r2 first)';
+  IF EXISTS (SELECT 1 FROM public.person_events WHERE seq <> 0) THEN
+    RAISE EXCEPTION 'multi-event down guard: person_events still has seq > 0 (or negative) rows (run r2 first)';
   END IF;
   IF EXISTS (
     SELECT 1 FROM public.person_events GROUP BY person_id, kind HAVING count(*) > 1
@@ -33,7 +36,6 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE public.person_events DROP CONSTRAINT IF EXISTS person_events_seq_nonneg;
 ALTER TABLE public.person_events DROP CONSTRAINT IF EXISTS person_events_seq_notable_only;
 
 DO $$

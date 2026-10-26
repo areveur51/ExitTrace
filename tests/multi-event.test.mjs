@@ -252,18 +252,63 @@ test("multi-event migrations: six files (render-a, lab, render-b; each with a do
   assert.equal(fs.existsSync(path.join(ROOT, "scripts/migrations/2026-10-26-multi-event-up.sql")), false, "the single up file is split");
 });
 
-test("multi-event F2 render-a is additive only: column, CHECK and phase A index; the primary key is untouched", () => {
+test("multi-event F2 render-a is additive only: column and phase A index, no CHECK; the primary key is untouched", () => {
   const code = sqlCode(MIG("up-render-a"));
   assert.match(code, /ADD COLUMN IF NOT EXISTS seq INTEGER NOT NULL DEFAULT 0/);
-  assert.match(code, /person_events_seq_nonneg CHECK \(seq >= 0\)/);
-  assert.match(code, /CREATE UNIQUE INDEX IF NOT EXISTS person_events_person_kind_seq_key\s+ON public\.person_events \(person_id, kind, seq\)/);
-  assert.doesNotMatch(code, /PRIMARY KEY|DROP CONSTRAINT person_events_pkey|REPLICA IDENTITY/);
+  assert.match(code, /CREATE UNIQUE INDEX person_events_person_kind_seq_key\s+ON public\.person_events \(person_id, kind, seq\)/);
+  assert.doesNotMatch(code, /PRIMARY KEY USING|DROP CONSTRAINT|ADD CONSTRAINT|CHECK \(|REPLICA IDENTITY/, "no key, CHECK or identity change on Render at F2");
   assert.match(code, /primary key already contains seq/);
+  assert.match(code, /unexpected primary key/);
   const down = sqlCode(MIG("down-render-a"));
-  assert.match(down, /DROP CONSTRAINT IF EXISTS person_events_seq_nonneg/);
-  assert.doesNotMatch(down, /DROP\s+COLUMN|DROP\s+INDEX/, "the seq column and index stay: lab keeps sending seq");
+  assert.doesNotMatch(down, /ALTER TABLE|DROP\s+COLUMN|DROP\s+INDEX|DROP CONSTRAINT/, "checks only: the seq column and index stay, there is no CHECK to drop");
   assert.match(down, /run down-render-b first/);
-  assert.match(down, /still has seq > 0 rows/);
+  assert.match(down, /still has seq > 0 \(or negative\) rows/);
+  assert.match(down, /WHERE seq <> 0/);
+});
+
+test("multi-event migrations add no seq CHECK anywhere, so the CHECK set stays identical on lab and Render", () => {
+  for (const step of ["up-render-a", "down-render-a", "up-lab", "down-lab", "up-render-b", "down-render-b"]) {
+    const code = sqlCode(MIG(step));
+    assert.doesNotMatch(code, /ADD CONSTRAINT person_events_seq|CHECK \(seq/, step);
+    assert.doesNotMatch(code, /person_events_seq_nonneg/, step);
+  }
+  assert.doesNotMatch(read("scripts/bootstrap-db.sql"), /person_events_seq_nonneg|CHECK \(seq/);
+});
+
+test("multi-event migrations set lock_timeout and statement_timeout before any DDL (Worf B-6)", () => {
+  for (const step of ["up-render-a", "down-render-a", "up-lab", "down-lab", "up-render-b", "down-render-b"]) {
+    const code = sqlCode(MIG(step));
+    const begin = code.indexOf("BEGIN;");
+    const lock = code.indexOf("SET LOCAL lock_timeout = '5s';");
+    const stmt = code.indexOf("SET LOCAL statement_timeout = '120s';");
+    const firstDdl = code.search(/\b(ALTER TABLE|CREATE UNIQUE INDEX|DO \$\$)/);
+    assert.ok(begin >= 0 && lock > begin && stmt > begin, step);
+    assert.ok(lock < firstDdl && stmt < firstDdl, `${step}: timeouts before the first statement`);
+  }
+});
+
+test("multi-event F3 up-lab and F5 up-render-b STOP unless REPLICA IDENTITY is DEFAULT before restating it (Worf B-3)", () => {
+  for (const step of ["up-lab", "up-render-b"]) {
+    const code = sqlCode(MIG(step));
+    const guard = code.search(/IF ri IS DISTINCT FROM 'd' THEN\s+RAISE EXCEPTION/);
+    const reset = code.indexOf("REPLICA IDENTITY DEFAULT;");
+    const firstAlter = code.indexOf("ALTER TABLE");
+    assert.ok(guard > 0, `${step}: relreplident guard`);
+    assert.match(code, /relreplident FROM pg_class WHERE oid = 'public\.person_events'::regclass/, step);
+    assert.ok(guard < firstAlter && firstAlter < reset, `${step}: the guard runs before any ALTER, the reset last`);
+  }
+});
+
+test("multi-event index checks are schema-qualified and exact: valid unique public index on (person_id, kind, seq) (Worf B-4)", () => {
+  for (const step of ["up-render-a", "up-lab", "up-render-b"]) {
+    const code = sqlCode(MIG(step));
+    assert.doesNotMatch(code, /pg_class WHERE relname = /, `${step}: no unqualified relname lookup`);
+    assert.match(code, /n\.nspname = 'public'/, step);
+    assert.match(code, /x\.indrelid = 'public\.person_events'::regclass/, step);
+    assert.match(code, /x\.indisunique AND x\.indisvalid AND x\.indisready/, step);
+    assert.match(code, /= ARRAY\['person_id', 'kind', 'seq'\]/, step);
+    assert.match(code, /is not a valid unique index on public\.person_events \(person_id, kind, seq\); STOP/, step);
+  }
 });
 
 test("multi-event F3 lab and F5 render-b swap the key by promoting the phase A index; downs guard their preconditions", () => {
@@ -273,14 +318,15 @@ test("multi-event F3 lab and F5 render-b swap the key by promoting the phase A i
   for (const up of [lab, sqlCode(MIG("up-render-b"))]) {
     assert.match(up, /PRIMARY KEY USING INDEX person_events_person_kind_seq_key/);
     assert.match(up, /DROP CONSTRAINT IF EXISTS person_events_seq_notable_only/);
-    assert.match(up, /person_events_seq_nonneg CHECK \(seq >= 0\)/);
     assert.match(up, /REPLICA IDENTITY DEFAULT/);
+    assert.match(up, /primary key is not \(person_id, kind, seq\) after the swap; STOP/);
   }
   assert.match(sqlCode(MIG("up-render-b")), /needs render-a first/);
   for (const step of ["down-lab", "down-render-b"]) {
     const down = sqlCode(MIG(step));
     assert.match(down, /PRIMARY KEY \(person_id, kind\)/, step);
-    assert.match(down, /still has seq > 0 rows/, step);
+    assert.match(down, /still has seq > 0 \(or negative\) rows/, step);
+    assert.match(down, /WHERE seq <> 0/, step);
     assert.match(down, /duplicate \(person_id, kind\)/, step);
     assert.match(down, /CREATE UNIQUE INDEX IF NOT EXISTS person_events_person_kind_seq_key/, step);
   }

@@ -15,7 +15,10 @@
  *    ON CONFLICT (person_id, kind, seq): the column list and conflict target
  *    syncPersonEvents sends, with seq 0) and its reads work; seq stays 0;
  *  - the write switch: ET_MULTI_EVENT_WRITES off refuses seq > 0 even after
- *    the key swap.
+ *    the key swap;
+ *  - the STOP guards: REPLICA IDENTITY other than DEFAULT, a look-alike
+ *    person_events_person_kind_seq_key index, render-b before render-a; and that
+ *    no migration changes the CHECK set.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -85,6 +88,12 @@ const pkCols = async (c) => (await c.query(
      FROM pg_constraint con JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey)
     WHERE con.conrelid = 'public.person_events'::regclass AND con.contype = 'p'`,
 )).rows[0].cols;
+const checks = async (c) => (await c.query(
+  "SELECT conname FROM pg_constraint WHERE conrelid = 'public.person_events'::regclass AND contype = 'c' ORDER BY 1",
+)).rows.map((r) => r.conname);
+const replident = async (c) => (await c.query(
+  "SELECT relreplident::text AS r FROM pg_class WHERE oid = 'public.person_events'::regclass",
+)).rows[0].r;
 const hasSeq = async (c) => (await c.query(
   "SELECT count(*)::int AS n FROM pg_attribute WHERE attrelid = 'public.person_events'::regclass AND attname = 'seq' AND NOT attisdropped",
 )).rows[0].n === 1;
@@ -114,6 +123,10 @@ test("multi-event on Postgres: render-a, lab, render-b and the rollback; public 
       await seed(render, false);
       const keys0 = await byKey(render);
       const read0 = await mainRead(render);
+      const checks0 = await checks(render);
+      assert.deepEqual(checks0, ["person_events_event_date_kind"]);
+      // F5 before F2 refuses: no seq column yet.
+      await rejectsMig(render, "up-render-b", /needs render-a first/);
       // Public code needs seq: before F2 its write fails on the missing column.
       await assert.rejects(mainWrite(render, "keith-self", "notable", "2025-04-01"), /column "seq" of relation "person_events" does not exist/);
       // F2 (twice: idempotent). Additive only.
@@ -130,14 +143,22 @@ test("multi-event on Postgres: render-a, lab, render-b and the rollback; public 
       // The PR's own syncPersonEvents (seq 0 only) works on the F2 shape too.
       const bob = projectPerson({ id: "bob", name: "bob", events: [{ kind: "corona_comms", event_date: "2020-10-01", sources: [] }] });
       await syncPersonEvents(render, bob);
-      await assert.rejects(render.query("INSERT INTO person_events (person_id, kind, seq, event_date) VALUES ('alice', 'x', -1, '2020-01-01')"), /person_events_seq_nonneg/);
-      // F5 before render-a would refuse; after it, the swap works and is idempotent.
+      assert.deepEqual(await checks(render), checks0, "F2 adds no CHECK: the CHECK set stays equal to lab's");
+      // B-3: F5 STOPs, with nothing changed, unless REPLICA IDENTITY is DEFAULT.
+      await render.query("ALTER TABLE person_events REPLICA IDENTITY FULL");
+      await rejectsMig(render, "up-render-b", /REPLICA IDENTITY is f \(expected d, DEFAULT\); STOP/);
+      assert.equal(await pkCols(render), "person_id,kind");
+      assert.equal(await replident(render), "f", "the guard did not reset it");
+      await render.query("ALTER TABLE person_events REPLICA IDENTITY DEFAULT");
+      // The swap works and is idempotent.
       await render.query(MIG("up-render-b"));
       await render.query(MIG("up-render-b"));
       assert.equal(await pkCols(render), "person_id,kind,seq");
+      assert.equal(await replident(render), "d");
+      assert.deepEqual(await checks(render), checks0, "F5 adds no CHECK");
       // Rollback on the render side: render-b down refuses with a seq > 0 row; render-a down keeps the column.
       await render.query("INSERT INTO person_events (person_id, kind, seq, event_date) VALUES ('bob', 'red_folder', 1, '2025-12-17')");
-      await rejectsMig(render, "down-render-b", /still has seq > 0 rows/);
+      await rejectsMig(render, "down-render-b", /still has seq > 0 \(or negative\) rows/);
       await render.query("DELETE FROM person_events WHERE seq > 0");
       await rejectsMig(render, "down-render-a", /run down-render-b first/);
       await render.query(MIG("down-render-b"));
@@ -145,16 +166,31 @@ test("multi-event on Postgres: render-a, lab, render-b and the rollback; public 
       assert.equal(await pkCols(render), "person_id,kind");
       await render.query(MIG("down-render-a"));
       assert.equal(await hasSeq(render), true, "down-render-a keeps seq: lab still sends it");
+      assert.deepEqual(await checks(render), checks0);
       await mainWrite(render, "carol", "endorsement", "2026-01-02");
     });
     await withDb(admin, `${tag}_lab`, async (lab) => {
       await seed(lab, true);
       const keys0 = await byKey(lab);
-      await rejectsMig(lab, "up-render-b", /needs render-a first/);
+      const checks0 = await checks(lab);
+      // B-3: F3 STOPs, with nothing changed, when FULL was left over (e.g. a rollback's r1).
+      await lab.query("ALTER TABLE person_events REPLICA IDENTITY FULL");
+      await rejectsMig(lab, "up-lab", /REPLICA IDENTITY is f \(expected d, DEFAULT\); STOP/);
+      assert.equal(await pkCols(lab), "person_id,kind");
+      assert.equal(await replident(lab), "f");
+      await lab.query("ALTER TABLE person_events REPLICA IDENTITY DEFAULT");
+      // B-4: a look-alike index under the phase A name (wrong columns) STOPs F3.
+      await lab.query("ALTER INDEX person_events_person_kind_seq_key RENAME TO person_events_person_kind_seq_key_real");
+      await lab.query("CREATE UNIQUE INDEX person_events_person_kind_seq_key ON person_events (person_id, seq, kind)");
+      await rejectsMig(lab, "up-lab", /is not a valid unique index on public\.person_events \(person_id, kind, seq\); STOP/);
+      await lab.query("DROP INDEX person_events_person_kind_seq_key");
+      await lab.query("ALTER INDEX person_events_person_kind_seq_key_real RENAME TO person_events_person_kind_seq_key");
       await lab.query(MIG("up-lab"));
       await lab.query(MIG("up-lab"));
       assert.equal(await pkCols(lab), "person_id,kind,seq");
       assert.deepEqual(await byKey(lab), keys0, "F3 is equal by key");
+      assert.deepEqual(await checks(lab), checks0, "F3 adds no CHECK");
+      assert.equal(await replident(lab), "d");
       // The switch: off refuses seq > 0 even on the migrated key; on allows it.
       const k = attachPersonEvent(attachPersonEvent(projectPerson({ id: "keith-self", name: "Keith Self", events: [] }),
         { kind: "notable", event_date: "2024-05-01", sources: [{ url: "https://example.org/a" }] }).person,
@@ -170,7 +206,7 @@ test("multi-event on Postgres: render-a, lab, render-b and the rollback; public 
       }
       assert.deepEqual((await lab.query("SELECT kind, seq FROM person_events WHERE person_id = 'keith-self' ORDER BY seq")).rows, [{ kind: "notable", seq: 0 }, { kind: "notable", seq: 1 }]);
       // Lab rollback: down-lab needs FULL only on a publisher (none here), and no seq > 0 rows.
-      await rejectsMig(lab, "down-lab", /still has seq > 0 rows/);
+      await rejectsMig(lab, "down-lab", /still has seq > 0 \(or negative\) rows/);
       await lab.query("DELETE FROM person_events WHERE person_id = 'keith-self'");
       await lab.query(MIG("down-lab"));
       await lab.query(MIG("down-lab"));

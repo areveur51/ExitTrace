@@ -63,8 +63,7 @@ CREATE TABLE IF NOT EXISTS person_events (
   seq INTEGER NOT NULL DEFAULT 0,
   event_date DATE,
   sources JSONB NOT NULL DEFAULT '[]'::jsonb,
-  PRIMARY KEY (person_id, kind, seq),
-  CONSTRAINT person_events_seq_nonneg CHECK (seq >= 0)
+  PRIMARY KEY (person_id, kind, seq)
 );
 
 -- Harvest / dashboard attrs live on the event. Empty stays empty.
