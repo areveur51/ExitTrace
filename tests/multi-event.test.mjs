@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { personDetail, kindEventsHtml } from "../app/lib/html.mjs";
+import { KIND_EVENT_SECTIONS, personDetail, kindEventsHtml } from "../app/lib/html.mjs";
 import {
   REPEATABLE_EVENT_KINDS,
   attachPersonEvent,
@@ -257,6 +257,17 @@ test("multi-event: the guard accepts only the exact key (person_id, kind, seq) o
     assert.doesNotMatch(t, /to_regclass\('person_events'\)/);
   }
   assert.match(catalog[0], /WITH ORDINALITY[\s\S]*ORDER BY k\.ord/, "the key is read in key order");
+});
+
+test("multi-event: every repeatable kind has exactly one person-page section, and every section is a repeatable kind (O'Brien)", () => {
+  const kinds = KIND_EVENT_SECTIONS.map((s) => s.kind);
+  assert.deepEqual([...kinds].sort(), [...REPEATABLE_EVENT_KINDS].sort());
+  assert.equal(new Set(kinds).size, kinds.length, "no kind twice");
+  for (const s of KIND_EVENT_SECTIONS) {
+    assert.equal(typeof s.title, "function", s.kind);
+    assert.match(s.className, /\bdetail-supporting\b/, s.kind);
+  }
+  assert.ok(Object.isFrozen(KIND_EVENT_SECTIONS));
 });
 
 test("multi-event: syncPersonEvents writes one companion row per (kind, seq)", async () => {

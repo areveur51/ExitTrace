@@ -2697,10 +2697,11 @@ function kindEventSection(ev, sourceNumbers, { title, kind, className }) {
 }
 
 /** Repeatable-kind blocks in page order: every Notable, then every Red Folder. */
-const KIND_EVENT_SECTIONS = [
-  { kind: "notable", title: (ev) => notableSectionTitle(ev), className: "detail-notable detail-supporting" },
-  { kind: "red_folder", title: () => RED_FOLDER_EVENT_LABEL, className: "detail-red-folder detail-supporting" },
-];
+/** One person-page block per repeatable kind; tests/multi-event.test.mjs pins it to REPEATABLE_EVENT_KINDS. */
+export const KIND_EVENT_SECTIONS = Object.freeze([
+  Object.freeze({ kind: "notable", title: (ev) => notableSectionTitle(ev), className: "detail-notable detail-supporting" }),
+  Object.freeze({ kind: "red_folder", title: () => RED_FOLDER_EVENT_LABEL, className: "detail-red-folder detail-supporting" }),
+]);
 
 /** [{ kind, html }] for one repeatable kind, newest first (eventsOfKind order). */
 function kindEventNodes(row, kind, sourceNumbers) {
