@@ -726,14 +726,15 @@ test("official-post and supporting strips size the box to the image", () => {
   assert.doesNotMatch(fit, /aspect-ratio:\s*192\s*\/\s*250/);
   const frame = css.match(/\.detail-support-frame\s*\{[^}]+\}/);
   assert.ok(frame);
-  assert.match(frame[0], /min-width:\s*min\(100%,\s*16rem\)/);
+  // v1.2.35 (O'Brien R1): the frame lives in the one supporting-media block, no 16rem floor.
+  assert.match(frame[0], /min-width:\s*0/);
   assert.match(frame[0], /height:\s*auto/);
   assert.match(frame[0], /aspect-ratio:\s*auto/);
   assert.match(frame[0], /overflow:\s*visible/);
   assert.doesNotMatch(frame[0], /aspect-ratio:\s*1\s*\/\s*1/);
   assert.doesNotMatch(frame[0], /overflow:\s*hidden/);
   const framePhoto = css.match(
-    /\.detail-supporting \.detail-support-frame \.detail-photo,[\s\S]*?\{[^}]+\}/,
+    /\.detail-support-frame \.detail-photo\s*\{[^}]+\}/,
   );
   assert.ok(framePhoto);
   assert.match(framePhoto[0], /height:\s*auto/);

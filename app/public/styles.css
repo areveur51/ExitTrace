@@ -950,8 +950,6 @@ body.tui-home .home-stage {
 .cite-list > li > .event-snippet {
   margin: 0 0 0.35rem;
 }
-.event-media { margin: 0.35rem 0 0; }
-.event-media img { display: block; width: min(100%, 320px); height: auto; }
 .detail-supporting,
 .detail-linked-people,
 .person-sources {
@@ -1004,37 +1002,6 @@ ol.cite-list .cite-outlet { overflow-wrap: anywhere; }
 @media (max-width: 720px) {
   ol.cite-list { --cite-gap: 0.45rem; }
 }
-/* Bottom supporting strip: one minimum width, height from the file. No square crop. */
-.detail-support-masonry .detail-tile--support {
-  break-inside: avoid;
-  margin: 0 0 0.65rem;
-  min-width: min(100%, 16rem);
-  overflow: visible;
-}
-.detail-support-frame {
-  display: block;
-  width: 100%;
-  min-width: min(100%, 16rem);
-  height: auto;
-  aspect-ratio: auto;
-  overflow: visible;
-  background: var(--bg-sel);
-}
-.detail-support-frame .detail-video {
-  width: 100%;
-  height: auto;
-}
-.detail-supporting .detail-support-frame .detail-photo,
-.detail-supporting .detail-support-frame video.detail-photo {
-  width: 100%;
-  height: auto;
-  max-width: 100%;
-  max-height: none;
-  min-height: 0;
-  aspect-ratio: auto;
-  object-fit: contain;
-  object-position: center;
-}
 /* One dog post: the screenshot is the tile. A video fills the picture inside it. */
 .post-shot {
   position: relative;
@@ -1077,14 +1044,6 @@ ol.cite-list .cite-outlet { overflow-wrap: anywhere; }
 .event-media-caption {
   margin: 0.35rem 0 0;
   overflow-wrap: anywhere;
-}
-.event-media video.detail-photo {
-  display: block;
-  width: min(100%, 32rem);
-  height: auto;
-  max-height: 70vh;
-  object-fit: contain;
-  background: var(--bg-sel);
 }
 .career-history {
   margin: 0.85rem 0 0;
@@ -2522,11 +2481,6 @@ html[data-theme="glass"] .dash-stats {
     column-count: 3;
   }
 }
-/* One clip stays a wide frame. A multi-tile strip still uses the columns above. */
-.person-detail .detail-support-masonry[data-tiles="1"] {
-  column-count: 1;
-  max-width: 40rem;
-}
 
 @media (max-width: 720px) {
   .supporting-group .detail-media--masonry {
@@ -3560,8 +3514,30 @@ html[data-theme="glass"] .results-controls .pager-pages a[aria-current="page"] {
   page-break-inside: avoid;
   overflow: visible;
 }
+/* The frame inside each supporting figure (.detail-tile--support): height from
+   the file, no square crop, no minimum width (folded from the old strip rules). */
 .detail-media--masonry.detail-support-masonry > .detail-tile .detail-support-frame {
+  display: block;
+  width: 100%;
   min-width: 0;
+  height: auto;
+  aspect-ratio: auto;
+  overflow: visible;
+  background: var(--bg-sel);
+}
+.detail-media--masonry.detail-support-masonry > .detail-tile .detail-support-frame .detail-video {
+  width: 100%;
+  height: auto;
+}
+.detail-media--masonry.detail-support-masonry > .detail-tile .detail-support-frame .detail-photo {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: none;
+  min-height: 0;
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center;
 }
 .detail-media--masonry.detail-support-masonry > .detail-tile img.detail-photo,
 .detail-media--masonry.detail-support-masonry > .detail-tile .lightbox-open {

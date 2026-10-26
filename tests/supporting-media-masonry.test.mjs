@@ -235,6 +235,26 @@ test("non-media hrefs never reach the masonry (no new URL schemes)", () => {
   assert.doesNotMatch(html, /javascript:|data:image|evil\.example/);
 });
 
+test("supporting-media selectors live only inside the one CSS block (O'Brien R1)", () => {
+  const at = CSS.indexOf("/* Supporting media masonry");
+  assert.ok(at > 0);
+  const before = CSS.slice(0, at);
+  const block = CSS.slice(at);
+  for (const token of ["detail-support-masonry", "detail-tile--support", "detail-support-frame"]) {
+    assert.equal(before.includes(token), false, `${token} outside the block`);
+  }
+  assert.match(block, /detail-support-masonry/);
+  assert.match(block, /detail-tile--support/);
+  assert.match(block, /\.detail-support-frame \{[^}]*min-width:\s*0/);
+  // Dead list figure rules are gone; the caption rule stays (supporting figures use it).
+  assert.doesNotMatch(CSS, /\.event-media[\s{.]/);
+  assert.match(CSS, /\.event-media-caption \{/);
+  // Central Casting mixed groups keep their own rules.
+  assert.match(CSS, /\.supporting-group \{/);
+  // The old one-tile override is folded into :has(> .detail-tile:only-child).
+  assert.doesNotMatch(CSS, /data-tiles="1"/);
+});
+
 test("one CSS block: CSS columns, 2 on a phone, 3 from 720, 4 from 1280, 1 for one tile", () => {
   const at = CSS.indexOf("/* Supporting media masonry");
   assert.ok(at >= 0);
