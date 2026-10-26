@@ -377,3 +377,15 @@ test("multi-event F3 lab and F5 render-b swap the key by promoting the phase A i
   for (const f of ["F0", "F1", "F2", "F3", "F4", "F5", "F6", "F7"]) assert.match(doc, new RegExp(`\\*\\*${f}\\.`), f);
   assert.match(doc, /ET_MULTI_EVENT_WRITES/);
 });
+
+test("MIGRATION.md (Worf r3 B-6, F0): baseline after the freeze, Render's switch stays off, lock_timeout, F0 STOP rules", () => {
+  const doc = read("docs/MIGRATION.md");
+  assert.match(doc, /\*\*F1 \(freeze\) → F0 \(baseline\) → F2 → F3 → F4 → F5 → F6 → F7\.\*\*/);
+  assert.match(doc, /\*\*F0\. Read-only baseline, after the freeze\*\*/);
+  assert.match(doc, /\*\*Render's `ET_MULTI_EVENT_WRITES` stays off\*\*/);
+  assert.match(doc, /SET LOCAL lock_timeout = '5s'/);
+  assert.match(doc, /Expected on Render, and on lab:\*\* `seq integer NOT NULL DEFAULT 0`, PRIMARY KEY `\(person_id, kind\)`, `relreplident` `d`, and UNIQUE `person_events_person_kind_seq_key \(person_id, kind, seq\)`/);
+  assert.match(doc, /a 3-column PK, any row with `seq <> 0` \(`seq > 0` or `seq < 0`\), no `seq` column, `relreplident` other than `d`, or a CHECK set different/);
+  assert.match(doc, /Render apply-worker logs\*\*, read through the Render API's logs endpoint, read-only/);
+  assert.match(doc, /last_msg_receipt_time/);
+});

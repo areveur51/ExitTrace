@@ -4,14 +4,14 @@ Status: code and migrations are in this PR (draft). **No DDL has run on lab or R
 
 ## What changes
 
-- **Schema.** `person_events` gets PRIMARY KEY `(person_id, kind, seq)` on both sides (today it is `(person_id, kind)`). The phase B CHECK `person_events_seq_notable_only` gives way to `person_events_seq_nonneg` (`seq >= 0`). The database lets any kind repeat; the app decides which kinds do.
-- **Migrations.** Three steps, each in one transaction, idempotent, with no row changes. Each has its own down. All live in `scripts/migrations/`.
+- **Schema.** `person_events` gets PRIMARY KEY `(person_id, kind, seq)` on both sides (today it is `(person_id, kind)`). **No migration adds or changes a CHECK**, so lab and Render keep one CHECK set (today only `person_events_event_date_kind`). The app writes only `seq >= 0` (`eventSeq`). The database lets any kind repeat; the app decides which kinds do. A database that still has the old phase B CHECK `person_events_seq_notable_only` loses it at F3 / F5 (F0 STOPs unless both sides match).
+- **Migrations.** Three steps, each in one transaction, idempotent, with no row changes. Each has its own down. All live in `scripts/migrations/`. Every file starts with `SET LOCAL lock_timeout = '5s'` and `SET LOCAL statement_timeout = '120s'` before any DDL, so a step that cannot get its lock (for example behind Render's apply worker) rolls back whole instead of queueing; check why, then re-run it. Every catalog check is schema-qualified (`public.person_events`; the phase A index is checked in `pg_index` as a valid, ready, unique `public` index on exactly `(person_id, kind, seq)`).
 
   | Step | Where | Up | Down |
   |---|---|---|---|
-  | F2 | Render (subscriber) | `2026-10-26-multi-event-up-render-a.sql`: **additive only**. Adds the `seq` column (`INTEGER NOT NULL DEFAULT 0`, a catalog-only change), the CHECK `seq >= 0` and the phase A unique index `person_events_person_kind_seq_key`, each only if missing. Drops the notable-only CHECK if present. **PK unchanged.** Refuses if the PK already has `seq`. | `…-down-render-a.sql`: drops the CHECK only. It keeps `seq` and the index, because lab keeps sending `seq` and public code needs the index. |
-  | F3 | lab (publisher) | `…-up-lab.sql`: adds the column and the index only if missing, then promotes the index to `PRIMARY KEY (person_id, kind, seq)`, replaces the CHECK, and sets `REPLICA IDENTITY DEFAULT`. | `…-down-lab.sql`: back to `(person_id, kind)` and re-creates the index. Refuses unless lab is `REPLICA IDENTITY FULL` (r1), and while any `seq > 0` row or duplicate `(person_id, kind)` exists. |
-  | F5 | Render | `…-up-render-b.sql`: the same PK swap. Refuses unless F2 ran. | `…-down-render-b.sql`: back to `(person_id, kind)` and re-creates the index. Keeps the column and CHECK (the render-a state). Refuses while any `seq > 0` row or duplicate exists. |
+  | F2 | Render (subscriber) | `2026-10-26-multi-event-up-render-a.sql`: **additive only**. Adds the `seq` column (`INTEGER NOT NULL DEFAULT 0`) and the phase A unique index `person_events_person_kind_seq_key`, each only if missing. F0 expects Render to have both already, so on Render it is normally a no-op that proves the shape. **No CHECK, PK or identity change.** STOPs on a PK other than `(person_id, kind)` or on a look-alike index. | `…-down-render-a.sql`: checks only (PK back at `(person_id, kind)`, no `seq <> 0` rows). It keeps `seq` and the index, because lab keeps sending `seq` and public code needs the index. |
+  | F3 | lab (publisher) | `…-up-lab.sql`: STOPs, with nothing changed, unless `relreplident` is `d`, the PK is `(person_id, kind)` or already `(person_id, kind, seq)`, and the index is the exact one. Then it adds the column and index only if missing, promotes the index to `PRIMARY KEY (person_id, kind, seq)`, re-checks the key, drops the notable-only CHECK if present, and restates `REPLICA IDENTITY DEFAULT`. | `…-down-lab.sql`: back to `(person_id, kind)` and re-creates the index. Refuses unless lab is `REPLICA IDENTITY FULL` (r1), and while any `seq <> 0` row or duplicate `(person_id, kind)` exists. |
+  | F5 | Render | `…-up-render-b.sql`: the same guards and PK swap. Refuses unless F2's shape is there (`seq INTEGER NOT NULL` and the exact index). | `…-down-render-b.sql`: back to `(person_id, kind)` and re-creates the index. Keeps the column (the render-a state). Refuses while any `seq <> 0` row or duplicate exists. |
 
 - **App.**
   - Repeatable kinds: `REPEATABLE_EVENT_KINDS = ["notable", "red_folder"]` (`app/lib/promote.mjs`). Every other kind stays one event per kind at `seq = 0`.
@@ -20,11 +20,11 @@ Status: code and migrations are in this PR (draft). **No DDL has run on lab or R
   - Person pages: one block per Notable and per Red Folder event (`kindEventSection`). Each shows the sentence, office line, media with captions and the label "Red Folder".
   - API: `/api/people` returns `seq` on repeatable events.
 - **Write switch `ET_MULTI_EVENT_WRITES`, off by default.** The write guard (`assertMultiNotableReady`) refuses any `seq > 0` event unless **both** of these hold:
-  - the switch is exactly `on` (otherwise it fails with `multi_event_writes_off`, before any catalog query);
-  - this database has PRIMARY KEY `(person_id, kind, seq)` (otherwise `multi_notable_needs_phase_b`) and no notable-only CHECK (otherwise `multi_event_needs_migration`).
+  - the switch is exactly `on`: no trim and no case folding, so `" on "`, `"on\n"` and `"ON"` are off (otherwise it fails with `multi_event_writes_off`, before any catalog query);
+  - this database's `public.person_events` has PRIMARY KEY exactly `(person_id, kind, seq)`, in that order (read with `to_regclass('public.person_events')`, never `search_path`; otherwise `multi_notable_needs_phase_b`), and no notable-only CHECK (otherwise `multi_event_needs_migration`).
 
-  The guard only sees its own database. So the switch is the operator's statement that F5 is done on Render, and it is set at F7, not before. The memory store (no database) is not gated.
-- **Fresh databases.** `scripts/bootstrap-db.sql` creates the table with `seq_nonneg`. Bootstrap only does `CREATE TABLE IF NOT EXISTS`, so it never changes an existing table's key or CHECKs.
+  The guard only sees its own database. So the switch is the operator's statement that F5 is done on Render, and it is set on **lab only**, at F7, not before. **Render's `ET_MULTI_EVENT_WRITES` stays off** (unset) during and after the window: Render receives `seq > 0` rows through replication, and nothing on Render should write them. The memory store (no database) is not gated.
+- **Fresh databases.** `scripts/bootstrap-db.sql` creates the table with PRIMARY KEY `(person_id, kind, seq)` and no seq CHECK, the migrated shape. Bootstrap only does `CREATE TABLE IF NOT EXISTS`, so it never changes an existing table's key or CHECKs.
 
 ## Replication: lab → Render (DDL is not replicated)
 
@@ -42,68 +42,71 @@ Lab publishes through `exittrace_lab_pub`, and Render subscribes as `exittrace_l
   - INSERTs still apply. That is why F5 comes after F3 and its catch-up.
 - **A `seq > 0` row before F5 stalls the subscription.**
   - On Render at `(person_id, kind)`, it fails as a duplicate key.
-  - On Render with the notable-only CHECK, it fails the CHECK.
+  - On a side that still has the notable-only CHECK, a `red_folder` row with `seq > 0` fails the CHECK.
   - Hence the switch, and F7 last.
 
-### What Render has today (read-only reasoning; confirm at F0)
+### What F0 expects on both sides (Worf r3)
 
-- The public API's `seq: 0` on keith-self's notable is app-derived: `normalizePersonEvent` gives notables a seq even from `people.events` JSON. It does not prove the schema.
-- Two facts point to Render **already having `seq`**:
-  - lab sends `seq` on every person_events change, and person_events changes have kept reaching public;
-  - public code (main 702c3642) writes `INSERT … seq … ON CONFLICT (person_id, kind, seq)`. The scratch run shows that write fails on a table without `seq`.
-- If F0 confirms this, Worf's F0 rule is **STOP and go back to Worf**. With `seq` present, F2 would only add the CHECK and confirm the index, and the order still holds. Whether to run it that way is Worf's call.
-- F2 is written to be safe in both cases: column and index only if missing.
+Lab, read at 13:44 ET on 2026-10-26 (read-only, catalog queries): `seq integer NOT NULL DEFAULT 0` (attnum 17, added by `ALTER … ADD COLUMN`), PRIMARY KEY `(person_id, kind)`, the unique index `person_events_person_kind_seq_key (person_id, kind, seq)`, `relreplident` `d`, CHECKs `person_events_event_date_kind` only, 0 rows with `seq <> 0`, `seq` in `exittrace_lab_pub`'s column list, slot active with 0 bytes of lag.
 
-## Batch window (Worf r2 order)
+Render is expected to match: phase A ran "Render first, then lab", lab has sent `seq` on every person_events change since, the public health shows apply healthy, and public code (main 702c3642) writes `ON CONFLICT (person_id, kind, seq)`, which fails without the column. The public API's `seq: 0` on keith-self's notable is app-derived and proves nothing about the schema. F0 confirms it, read-only, before anything runs.
 
-Any rise in `apply_error_count` (aec), any apply-worker ERROR in Render's logs, or `srsubstate` other than `r` is a **STOP**: do not run the next step. The aec baseline is not zero (216558 at 12:22 ET) and steps +1 on reconnects, so compare increases from F0.
+## Batch window (Worf r2 order, r3 conditions)
 
-- **F0. Read-only baseline on both sides:**
-  - `person_events` columns, PK, `relreplident`, CHECKs and indexes;
-  - `SHOW server_version` (lab 16.14; Render major 16 per the Render API);
-  - counts, `seq > 0` (must be 0), duplicate `(person_id, kind)` (must be 0), and md5 by key;
-  - lab `pg_current_wal_lsn()` and the slot's `confirmed_flush_lsn`;
-  - Render `latest_end_lsn`, aec and `srsubstate`.
+Run order: **F1 (freeze) → F0 (baseline) → F2 → F3 → F4 → F5 → F6 → F7.** The F0 baseline is read after the F1 freeze is confirmed, so its LSNs, counts and md5 are the frozen state every later step is compared with. A shape-only F0 may also be read earlier, as a pre-check, but it does not replace the post-freeze baseline.
 
-  Use `2026-10-22-multi-notable-replication-checks.sql`. **STOP if Render already has `seq` or the 3-column PK.**
+Any rise in `apply_error_count` (aec), any apply-worker ERROR in Render's logs, or `srsubstate` other than `r` is a **STOP**: do not run the next step. The aec baseline is not zero (216558 at 12:22 ET and still 216558 at 13:49 ET) and steps +1 on reconnects, so compare increases from F0. `srsubstate` stays `r` while apply loops on an error, so it is not enough alone: read the logs and `last_msg_receipt_time` too.
+
 - **F1. Freeze every person_events writer.** Stop on lab and on Render:
 
   | Writer | Writes | How to freeze |
   |---|---|---|
-  | Lab app (`:5220`): add, annotate, promote, add-request processing, admin edits | people + person_events via `savePerson` / `syncPersonEvents` | Operator stops it (`exittracectl.sh stop`), or leaves it up with no editor active. The app has no read-only switch. |
-  | Daily ingest (`scripts/et-daily-ingest.sh` → `et-daily-apply.mjs`), host timer or cron | person_events via the store | Disable its host timer or cron entry for the window, and check that no `et-daily` lock is held. |
-  | keep_up / `stamp-keep-up.mjs`, media-delta, mention dig (`x-mention-*`, `ops/systemd/exittrace-mention-*.timer`) | people / request tables. The dig can promote into people. | `systemctl --user stop` the timers for the window. |
+  | Lab app (`:5220`): add, annotate, promote, add-request processing, admin edits | people + person_events via `savePerson` / `syncPersonEvents` | Operator stops it (`exittracectl.sh stop`), or leaves it up with no editor active. The app has no read-only switch. **Do not restart it inside the window:** boot runs `importSeed`, which rewrites person_events. |
+  | Daily ingest (`scripts/et-daily-ingest.sh` → `et-daily-apply.mjs`), host cron at 08:19 ET | people + person_events via the store | Hold the window outside its run, or disable its cron entry for the window, and check that no `et-daily` lock is held. |
+  | Mention poll and worker (`x-mention-*`, user timers about every 10 minutes; the worker writes the lab database) | request tables; the dig can promote into people | `systemctl --user stop` both timers for the window. |
+  | keep_up stamps and media-delta (host cron every 5 minutes) | `et_meta` only (no person_events), plus media rsync | May keep running; they move the LSN, so the F0 and F4 "LSN unchanged over a minute" check is read with them paused or accounted for. |
+  | Daily pack (09:05 ET) and the shared backup (03:15 ET) | read-only `pg_dump` | No freeze needed. |
   | One-off scripts (`gap-upsert-published.mjs`, `process-add-request.mjs`, `promote-source-post.mjs`, `annotate-unsealed-indictments.mjs`, `migrate-*`, `import-*`, `seed-*`, `scripts/ops/et-retire-tag.mjs`) | people / person_events, on lab or **directly on Render** (gap-upsert) | Do not run any during the window. |
-  | Boot (`ensureSchema` + bootstrap) on lab or Render | DDL `IF NOT EXISTS` only; never alters an existing key | No lab boot and no Render deploy during the window. |
+  | Render app: boot (`ensureSchema` + bootstrap) and any runtime write endpoint (admin edits, add requests) | DDL `IF NOT EXISTS` only at boot; rows through the store at runtime | No Render deploy or restart during the window, no admin edits on public. Render's `ET_MULTI_EVENT_WRITES` stays off. |
+  | Boot of the lab app | DDL `IF NOT EXISTS`, then `importSeed` | No lab boot during the window. |
 
   Confirm the freeze on lab with `pg_stat_activity` (no client backends besides the operator's psql) and an unchanged `pg_current_wal_lsn()` over a minute.
-- **F2. Render:** `up-render-a`, additive. The PK is unchanged.
+- **F0. Read-only baseline, after the freeze**, inside `BEGIN READ ONLY` on each side:
+  - **Both sides**, `public.person_events`: columns with attnum, type, NOT NULL and default; the PK with its ordered columns; every unique index with its columns and `indisvalid`; every CHECK by name and definition; `relreplident`; `SHOW server_version` (lab 16.14; Render major 16 per the Render API); row count; `count(*) FILTER (WHERE seq > 0)` and `count(*) FILTER (WHERE seq < 0)`; duplicate `(person_id, kind)` (must be 0); md5 by key.
+  - **Expected on Render, and on lab:** `seq integer NOT NULL DEFAULT 0`, PRIMARY KEY `(person_id, kind)`, `relreplident` `d`, and UNIQUE `person_events_person_kind_seq_key (person_id, kind, seq)`, valid.
+  - **STOP** (go back to Worf) if either side has: a 3-column PK, any row with `seq <> 0` (`seq > 0` or `seq < 0`), no `seq` column, `relreplident` other than `d`, or a CHECK set different from the other side's.
+  - **Lab:** `pg_current_wal_lsn()`; `exittrace_lab_pub` (`pubviaroot`, the person_events column list and row filter); the slot's `active`, `confirmed_flush_lsn` and `wal_status`, with the lag in bytes (`pg_wal_lsn_diff`). STOP if `seq` is in the column list and the slot lags or is inactive.
+  - **Render:** `pg_stat_subscription` (`latest_end_lsn`, `last_msg_receipt_time`), `pg_stat_subscription_stats.apply_error_count`, and `pg_subscription_rel.srsubstate` for person_events.
+  - **Render apply-worker logs**, read through the Render API's logs endpoint, read-only, for the window since the last deploy: count `logical replication` ERROR lines (`missing replicated column`, `duplicate key`, `replica identity`) and record the newest. The API key is sourced only inside a subshell from the operator's key file (never printed, never in a command line), and only log reads are made.
+
+  Use `2026-10-22-multi-notable-replication-checks.sql` for the replication reads.
+- **F2. Render:** `up-render-a`, additive. The PK is unchanged. Expected to be a no-op on Render (F0 shape).
 - **F3. Lab:** `up-lab`. It adds the column only if missing, then swaps to the 3-column PK.
 - **F4. Catch-up:** Render `latest_end_lsn` ≥ lab's LSN after F3. aec is flat, there are no apply errors, and md5 by key is equal.
 - **F5. Render:** `up-render-b`, the PK swap.
 - **F6. Catch-up again, then unfreeze**, writers back in reverse order. Seq-0 writes are safe now.
-- **F7. The first `seq > 0` write.** Set `ET_MULTI_EVENT_WRITES=on` on lab, then write (for example keith-self's second notable). Confirm it on Render, with aec flat.
+- **F7. The first `seq > 0` write.** Set `ET_MULTI_EVENT_WRITES=on` (exactly `on`) on **lab only**, then write (for example keith-self's second notable) through the lab app. Confirm it on Render, with aec flat and no new apply-worker ERROR. Render's `ET_MULTI_EVENT_WRITES` stays off.
 
 ## Rollback
 
 Reverse order, all under a freeze. **On the real databases, r2's delete of `seq > 0` rows needs the Admiral's words at that moment.** r2 backs up first, into lab-local `_bak` tables. Any files are moved, never deleted.
 
-1. Freeze (F1). Set `ET_MULTI_EVENT_WRITES` off.
+1. Freeze (F1). Set lab's `ET_MULTI_EVENT_WRITES` off (unset).
 2. **r1** lab `REPLICA IDENTITY FULL` (`2026-10-22-multi-notable-rollback-r1-…`).
 3. **r2 precheck:** `puballtables` is false, and no `_bak` table is published.
 4. **r2** lab: back up, then delete `seq > 0` (`…-r2-lab-bak-delete.sql`).
-5. **r3** catch-up: Render has applied the deletes (Render `seq > 0` = 0).
+5. **r3** catch-up: Render has applied the deletes (Render `seq <> 0` = 0).
 6. **Render:** `down-render-b`.
 7. **Lab:** `down-lab`.
 8. **r6** lab `REPLICA IDENTITY DEFAULT`, then catch-up.
-9. Optionally, **Render:** `down-render-a`. It keeps `seq`.
+9. Optionally, **Render:** `down-render-a`. Checks only; it keeps `seq` and the index.
 10. Unfreeze.
 
 While lab is FULL it sends the whole old row, which covers either subscriber key.
 
-## Proof: native publisher/subscriber pair (2026-10-26, 13:22–13:31 ET)
+## Proof: native publisher/subscriber pair
 
-Real logical replication, not PGlite.
+Real logical replication, not PGlite. The run below (13:22–13:31 ET) used an intermediate tree and the earlier render-a (with a seq CHECK). It is kept for its negative tests. **The proof for the exact tree of this PR is re-run and recorded outside the tree** (the PR description and the batch RESULTS, with the tree sha, the public-code sha and the subscriber log at each F step), because recording it here would change the tree it proves.
 
 **Setup**
 - Two scratch clusters on the lab host, `postgres:16-alpine` (image sha256:57c72fd2…, the same image lab runs, PostgreSQL 16.14).
@@ -121,7 +124,7 @@ Real logical replication, not PGlite.
 | Step | What happened | aec | Apply errors |
 |---|---|---|---|
 | F0 | pub `seq` present, PK `(person_id, kind)`, RI d; sub no `seq`, PK `(person_id, kind)`; md5 equal (f1c4fe68830c) | 0 | — |
-| F2 | sub gets `seq`, the CHECK and the index; PK unchanged; re-run is a no-op | 0 | none |
+| F2 | sub gets `seq`, the (since removed) CHECK and the index; PK unchanged; re-run is a no-op | 0 | none |
 | F3 | pub PK `(person_id, kind, seq)`; re-run is a no-op | 0 | none |
 | F4 | caught up at the same LSN (0/58AD2A0) | 0 | none |
 | F5 | sub PK `(person_id, kind, seq)` | 0 | none |
@@ -147,14 +150,14 @@ Real logical replication, not PGlite.
 | down-render-b | sub PK `(person_id, kind)` |
 | down-lab | pub PK `(person_id, kind)`, phase A index back |
 | r6 | pub RI d |
-| down-render-a | sub keeps `seq` and drops the CHECK |
+| down-render-a | sub keeps `seq` (that run also dropped the since-removed CHECK) |
 
 After unfreeze, seq-0 INSERT / UPDATE / DELETE replicate. md5 is equal, aec 0 throughout, and the publisher ends in exactly its F0 shape.
 
 **Public code (main 702c3642) on the scratch subscriber cluster**, database `exittrace_compat` (no `seq`):
 - `getPerson` and `listPeople("notable")` work both before and after F2.
 - `savePerson` fails before F2 (`column "seq" … does not exist`, 42703) and works after F2 and after F5, with seq staying 0. **Reads ignore the extra column, and writes need it.**
-- `tests/multi-event-pg.test.mjs` passed on that cluster.
+- An earlier version of `tests/multi-event-pg.test.mjs` passed on that cluster.
 
 ## Scratch review option (pending Worf's choice)
 
