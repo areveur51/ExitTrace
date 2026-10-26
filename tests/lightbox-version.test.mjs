@@ -184,7 +184,8 @@ test("an event still uses the same cache param on img src and data-lightbox", ()
       ],
     },
   );
-  const fig = html.match(/<figure class="event-media">[\s\S]*?<\/figure>/);
+  // v1.2.35: Central Casting clips use the shared supporting figure.
+  const fig = html.match(/<figure class="detail-tile detail-tile--support">[\s\S]*?<\/figure>/);
   assert.ok(fig);
   assertSameCache(fig[0], { lightboxPath: still });
   assert.doesNotMatch(html, /x\.com\/nytimes\/status\/1\?p=/);

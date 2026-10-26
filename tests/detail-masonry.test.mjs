@@ -696,7 +696,8 @@ test("official-post kinds render main post, then context, then supporting media"
     assert.match(context, /https:\/\/x\.com\/Desk\/status\/1/, id);
     assert.doesNotMatch(context, /lightbox-open|detail-tile--still|detail-tile--screenshot/, id);
     assert.match(support, /support\.jpg/, id);
-    assert.match(support, /class="supporting-group"/, id);
+    assert.match(support, /class="detail-media detail-media--masonry detail-support-masonry"/, id);
+    assert.match(support, /data-supporting-index="0"/, id);
     assert.doesNotMatch(support, /class="cite-block"/, id);
     if (spec.supportingGroups) {
       assert.match(context, /Context note/, id);
@@ -725,14 +726,15 @@ test("official-post and supporting strips size the box to the image", () => {
   assert.doesNotMatch(fit, /aspect-ratio:\s*192\s*\/\s*250/);
   const frame = css.match(/\.detail-support-frame\s*\{[^}]+\}/);
   assert.ok(frame);
-  assert.match(frame[0], /min-width:\s*min\(100%,\s*16rem\)/);
+  // v1.2.35 (O'Brien R1): the frame lives in the one supporting-media block, no 16rem floor.
+  assert.match(frame[0], /min-width:\s*0/);
   assert.match(frame[0], /height:\s*auto/);
   assert.match(frame[0], /aspect-ratio:\s*auto/);
   assert.match(frame[0], /overflow:\s*visible/);
   assert.doesNotMatch(frame[0], /aspect-ratio:\s*1\s*\/\s*1/);
   assert.doesNotMatch(frame[0], /overflow:\s*hidden/);
   const framePhoto = css.match(
-    /\.detail-supporting \.detail-support-frame \.detail-photo,[\s\S]*?\{[^}]+\}/,
+    /\.detail-support-frame \.detail-photo\s*\{[^}]+\}/,
   );
   assert.ok(framePhoto);
   assert.match(framePhoto[0], /height:\s*auto/);

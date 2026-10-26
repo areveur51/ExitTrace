@@ -496,12 +496,17 @@ test("unique person cards, one central casting section, no sense filter or gloss
     'class="cite-block"',
     'class="post-text"',
     "Source ·",
-    'class="supporting-group"',
     'class="detail-media detail-media--masonry"',
   ]) {
     assert.match(folder, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.match(clipHtml, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  // v1.2.35: official-post supporting media is one shared masonry (no per-entry group);
+  // Central Casting keeps its mixed cite + media group.
+  assert.match(folder, /class="detail-media detail-media--masonry detail-support-masonry"/);
+  assert.match(folder, /data-supporting-index="0"/);
+  assert.doesNotMatch(folder, /class="supporting-group"/);
+  assert.match(clipHtml, /class="supporting-group"/);
 
   const html = personDetail(comey, {
     centralCastingClips: [evidence({ screenshot: shot })],

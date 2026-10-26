@@ -991,8 +991,8 @@ export function kindEntryStills(kind, row, entry) {
   return out;
 }
 
-/** Screenshot + stills for one supporting entry. Meta stays out unless a caller passes it. */
-function supportingEntryStrip(kind, row, entry, seen, metaHtml = "") {
+/** Screenshot + stills options for one supporting entry (stored, normalized hrefs only). */
+function supportingEntryMedia(kind, row, entry) {
   const handle = entry?.handle || row?.handle || "";
   const shot = kind === "dog" ? normalizeScreenshotHref(entry?.screenshot, "dog-comms") : "";
   const primary = String(entry?.still || "").trim();
@@ -1004,18 +1004,26 @@ function supportingEntryStrip(kind, row, entry, seen, metaHtml = "") {
       alt: `Post media for ${handle}`,
       credit: entry?.still_credit || "",
     }));
-  return detailMediaStrip({
+  return {
     screenshot: shot || entry?.screenshot,
     screenshotAlt: `X-post screenshot of ${handle}`,
     screenshotCredit: entry?.screenshot_credit,
     extraMedia: extras,
-    seen,
-    metaHtml,
-  });
+  };
 }
 
-function supportingStripHasMedia(html) {
-  return /detail-tile--(?:portrait|screenshot|still|video|support)/.test(String(html || ""));
+/** Screenshot + stills for one supporting entry plus meta (Central Casting mixed group). */
+function supportingEntryStrip(kind, row, entry, seen, metaHtml = "") {
+  return detailMediaStrip({ ...supportingEntryMedia(kind, row, entry), seen, metaHtml });
+}
+
+/** Media tiles only for one supporting entry, tagged with its index for the shared masonry. */
+function supportingEntryTiles(kind, row, entry, seen) {
+  return detailMediaTiles({
+    ...supportingEntryMedia(kind, row, entry),
+    seen,
+    tileData: { "supporting-index": String(entry?.index ?? "") },
+  });
 }
 
 /** One frost group: cite-DRY + Source (this URL only) + screenshot/stills masonry.
@@ -1059,14 +1067,24 @@ function detailMediaTile({
   credit = "",
   mediaKind = "image",
   poster = "",
+  tileData = null,
 } = {}) {
   const href = String(src || "").trim();
   const body = lightboxButton(href, inner, { alt, credit, kind: mediaKind, poster });
   if (!body) return "";
-  return `<figure class="detail-tile detail-tile--${esc(kind)}">${body}</figure>`;
+  return `<figure class="detail-tile detail-tile--${esc(kind)}"${tileDataAttrs(tileData)}>${body}</figure>`;
 }
 
-function screenshotTile(src, { alt = "", credit = "" } = {}) {
+/** data-* attributes from fixed code keys; every value is escaped and double-quoted. */
+function tileDataAttrs(data) {
+  if (!data || typeof data !== "object") return "";
+  return Object.entries(data)
+    .filter(([key, value]) => /^[a-z][a-z-]*$/.test(key) && value != null && String(value) !== "")
+    .map(([key, value]) => ` data-${key}="${esc(String(value))}"`)
+    .join("");
+}
+
+function screenshotTile(src, { alt = "", credit = "", tileData = null } = {}) {
   const href = normalizeScreenshotHref(src);
   if (!href) return "";
   const img = `<img class="detail-photo screenshot" src="${esc(versionedMediaHref(href))}" alt="${esc(alt)}" decoding="async">`;
@@ -1076,6 +1094,7 @@ function screenshotTile(src, { alt = "", credit = "" } = {}) {
     inner: img,
     alt,
     credit: creditWithoutUrls(credit),
+    tileData,
   });
 }
 
@@ -1188,8 +1207,8 @@ function claimDetailMedia(seen, href) {
   return false;
 }
 
-/** Shared masonry: media + text/meta tiles in one dense column pack (dog / people / ops). */
-function detailMediaStrip({
+/** Media tiles (portrait, screenshot, stills) in draw order. Same bytes drawn once per page. */
+function detailMediaTiles({
   portraitHtml,
   portraitSrc = "",
   portraitAlt = "",
@@ -1198,13 +1217,12 @@ function detailMediaStrip({
   screenshotAlt = "",
   screenshotCredit = "",
   extraMedia = [],
-  metaHtml = "",
-  metaTiles = [],
   seen,
   portraitKind = "image",
   portraitPoster = "",
   portraitTile = "",
   claimHrefs = [],
+  tileData = null,
 } = {}) {
   const bag = seen || detailMediaSeen();
   const portraitPath = mediaHrefPath(portraitSrc);
@@ -1224,6 +1242,7 @@ function detailMediaStrip({
       credit: creditWithoutUrls(portraitCredit),
       mediaKind: videoTile ? "video" : "image",
       poster: portraitPoster,
+      tileData,
     });
     if (tile && !claimDetailMedia(bag, portraitSrc)) {
       if (videoTile && portraitPoster) claimDetailMedia(bag, portraitPoster);
@@ -1235,6 +1254,7 @@ function detailMediaStrip({
     const shot = screenshotTile(screenshot, {
       alt: screenshotAlt,
       credit: screenshotCredit,
+      tileData,
     });
     if (shot) media.push(shot);
   }
@@ -1251,9 +1271,16 @@ function detailMediaStrip({
         inner: img,
         alt,
         credit,
+        tileData,
       }),
     );
   }
+  return media;
+}
+
+/** Shared masonry: media + text/meta tiles in one dense column pack (dog / people / ops). */
+function detailMediaStrip({ metaHtml = "", metaTiles = [], ...mediaOpts } = {}) {
+  const media = detailMediaTiles(mediaOpts);
   const meta = (metaTiles || []).filter(Boolean);
   if (!meta.length && metaHtml) meta.push(...splitJoinedTiles(metaHtml));
   const tiles = interleaveDetailTiles(media, meta);
@@ -1924,6 +1951,34 @@ function supportingMediaFigure(item, source) {
   return `<figure class="detail-tile detail-tile--support">${button}<figcaption class="event-media-caption">${caption}</figcaption></figure>`;
 }
 
+/**
+ * THE shared supporting-media masonry. Every surface that draws supporting media
+ * (person card events, Notable, Shot, Central Casting, comms supporting) calls this.
+ * CSS columns only — styles.css "Supporting media masonry". No tiles, no markup.
+ */
+export function supportingMediaHtml(tiles) {
+  const list = (tiles || []).filter(Boolean);
+  if (!list.length) return "";
+  return `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${list.length}">${list.join("")}</div>`;
+}
+
+/** Titled bottom section around the shared masonry. Empty when no tiles remain. */
+export function supportingMediaSection(tiles) {
+  const masonry = supportingMediaHtml(tiles);
+  if (!masonry) return "";
+  return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3>${masonry}</section>`;
+}
+
+/** Normalized event media items to figures, each paired with its stored cite. */
+function supportingMediaFigures(items, sources) {
+  const list = Array.isArray(sources) ? sources : [];
+  return (items || []).map((item) => {
+    const want = canonicalPublicUrl(item.url);
+    const source = list.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
+    return supportingMediaFigure(item, source);
+  });
+}
+
 /** Supporting clips after every event section. Notable media stays on the Notable block. */
 function personSupportingMediaHtml(row, seen) {
   const figures = [];
@@ -1940,12 +1995,7 @@ function personSupportingMediaHtml(row, seen) {
       0,
       EVENT_MEDIA_DISPLAY_MAX,
     );
-    for (const item of items) {
-      const want = canonicalPublicUrl(item.url);
-      const source =
-        sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
-      figures.push(supportingMediaFigure(item, source));
-    }
+    figures.push(...supportingMediaFigures(items, sources));
   }
   const shot = normalizeScreenshotHref(row?.screenshot, "people");
   if (shot && !claimDetailMedia(seen, shot)) {
@@ -1960,15 +2010,7 @@ function personSupportingMediaHtml(row, seen) {
       ),
     );
   }
-  if (!figures.length) return "";
-  return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3><div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div></section>`;
-}
-
-function eventMediaFigure(src, alt) {
-  const href = String(src || "").trim();
-  if (!href) return "";
-  const img = `<img class="detail-photo still" src="${esc(versionedMediaHref(href))}" alt="${esc(alt)}" decoding="async">`;
-  return `<figure class="event-media">${lightboxButton(href, img, { alt })}</figure>`;
+  return supportingMediaSection(figures);
 }
 
 /** Allowlisted stills and screenshots only. A bad path is omitted. Same bytes as an earlier tile are omitted. */
@@ -1982,7 +2024,7 @@ function centralCastingMediaHtml(clips, seen) {
     const still = isCommsMediaHref(src, "central-casting-comms") ? src : "";
     const ok = shot || still;
     if (!ok || claimDetailMedia(bag, ok)) return;
-    parts.push(eventMediaFigure(ok, alt));
+    parts.push(supportingMediaFigure({ src: ok, alt }, null));
   };
   for (const clip of clips || []) {
     const alt = clip?.handle ? `Stored still for ${clip.handle}` : "Central Casting";
@@ -1993,7 +2035,7 @@ function centralCastingMediaHtml(clips, seen) {
       push(entry.screenshot, entry.handle ? `X-post screenshot of ${entry.handle}` : "X-post screenshot");
     }
   }
-  return parts.join("");
+  return supportingMediaHtml(parts);
 }
 
 function centralCastingClipsFor(row, clips) {
@@ -2507,12 +2549,7 @@ function notableMediaFigures(ev) {
       ),
     );
   }
-  const sources = Array.isArray(ev?.sources) ? ev.sources : [];
-  for (const item of displayEventMedia(ev?.media)) {
-    const want = canonicalPublicUrl(item.url);
-    const source = sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
-    figures.push(supportingMediaFigure(item, source));
-  }
+  figures.push(...supportingMediaFigures(displayEventMedia(ev?.media), ev?.sources));
   return figures;
 }
 
@@ -2521,10 +2558,7 @@ function notableMediaFigures(ev) {
  * Not the header portrait strip. Empty when the event has no prose, cite, shot, or clip.
  */
 function notableEventSection(ev, sourceNumbers) {
-  const figures = notableMediaFigures(ev);
-  const masonry = figures.length
-    ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
-    : "";
+  const masonry = supportingMediaHtml(notableMediaFigures(ev));
   const cites = eventCiteParts(ev, sourceNumbers);
   return personEventSection({
     headHtml: eventHeadHtml(esc(notableSectionTitle(ev)), ev.event_date),
@@ -2717,10 +2751,7 @@ export function shotEventHtml(row) {
   return personEvents(row)
     .filter((ev) => String(ev?.kind || "").trim() === "shot")
     .map((ev) => {
-      const figures = notableMediaFigures(ev);
-      const masonry = figures.length
-        ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
-        : "";
+      const masonry = supportingMediaHtml(notableMediaFigures(ev));
       return personEventSection({
         title: "Shot",
         kind: "shot",
@@ -2830,10 +2861,7 @@ export function eventTagRow(ev, { birthDate, sourceNumbers } = {}) {
   const facts = `${announced}${ageLine}${groupLine}${attrs}`;
   const factsHtml = facts ? `<div class="event-facts">${facts}</div>` : "";
   const refs = sourceRefHtml(ev?.sources, sourceNumbers);
-  const figures = kind === "shot" ? notableMediaFigures(ev) : [];
-  const mediaHtml = figures.length
-    ? `<div class="detail-media detail-media--masonry detail-support-masonry" data-tiles="${figures.length}">${figures.join("")}</div>`
-    : "";
+  const mediaHtml = kind === "shot" ? supportingMediaHtml(notableMediaFigures(ev)) : "";
   return personEventSection({
     headHtml: eventHeadHtml(`${esc(label)}${unsealedBadge}`, eventDate),
     kind,
@@ -3306,7 +3334,7 @@ function officialPostLinkedHtml(people) {
  * The comm itself as one supporting entry: X screenshot, local video, and poster.
  * Files already claimed by the main strip are omitted by the shared seen bag.
  */
-function officialPostOwnSupportHtml(spec, row, seen) {
+function officialPostOwnSupportTiles(spec, row, seen) {
   const videoHref = localCommVideoHref(row, spec.mediaDir);
   const stillHref = isCommsMediaHref(row.still, spec.mediaDir) ? row.still : "";
   const photo = videoHref
@@ -3315,7 +3343,7 @@ function officialPostOwnSupportHtml(spec, row, seen) {
   const extras = stillHref
     ? [{ src: stillHref, alt: `Post media for ${row.handle}`, credit: row.still_credit || "" }]
     : [];
-  const strip = detailMediaStrip({
+  return detailMediaTiles({
     portraitHtml: photo,
     portraitSrc: videoHref,
     portraitAlt: videoHref ? `Stored video for ${row.handle}` : "",
@@ -3327,27 +3355,17 @@ function officialPostOwnSupportHtml(spec, row, seen) {
     screenshotCredit: row.screenshot_credit,
     extraMedia: extras,
     seen,
+    tileData: { "supporting-own": "post" },
   });
-  if (!supportingStripHasMedia(strip)) return "";
-  return `<section class="supporting-group" data-supporting-own="post">${strip}</section>`;
 }
 
-/** Supporting stills and screenshots only. Omitted when nothing stored remains. */
+/** Supporting stills and screenshots in ONE shared masonry. Omitted when nothing stored remains. */
 function officialPostSupportHtml(spec, row, seen, { includeOwnPost = false } = {}) {
-  const groups = [];
-  if (includeOwnPost) {
-    const own = officialPostOwnSupportHtml(spec, row, seen);
-    if (own) groups.push(own);
-  }
+  const tiles = includeOwnPost ? officialPostOwnSupportTiles(spec, row, seen) : [];
   for (const entry of kindSupportingEntries(row)) {
-    const strip = supportingEntryStrip(spec.id, row, entry, seen);
-    if (!supportingStripHasMedia(strip)) continue;
-    groups.push(
-      `<section class="supporting-group" data-supporting-index="${esc(String(entry.index))}">${strip}</section>`,
-    );
+    tiles.push(...supportingEntryTiles(spec.id, row, entry, seen));
   }
-  if (!groups.length) return "";
-  return `<section class="detail-supporting" aria-label="Supporting media"><h3 class="event-h">Supporting media</h3>${groups.join("")}</section>`;
+  return supportingMediaSection(tiles);
 }
 
 /** dog / red_folder / eagle / ronald / shot: main post, context, linked people, supporting media. */
