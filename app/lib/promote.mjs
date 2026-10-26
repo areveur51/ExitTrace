@@ -170,6 +170,19 @@ function isNotableKind(kind) {
   return String(kind || "").trim() === "notable";
 }
 
+/**
+ * Kinds a person may hold more than once, keyed by seq (person_events PK
+ * (person_id, kind, seq)). Every other kind stays one event per kind at seq 0.
+ * Adding a kind here is app-only: the database CHECK only requires seq >= 0
+ * once the multi-event migration (2026-10-26-multi-event-up.sql) is applied.
+ */
+export const REPEATABLE_EVENT_KINDS = Object.freeze(["notable", "red_folder"]);
+const REPEATABLE_SET = new Set(REPEATABLE_EVENT_KINDS);
+
+export function isRepeatableKind(kind) {
+  return REPEATABLE_SET.has(String(kind || "").trim());
+}
+
 /** Integer seq ≥ 0, or null when missing / invalid. */
 export function parseEventSeq(raw) {
   if (raw == null || raw === "") return null;
@@ -190,6 +203,11 @@ export function hasExplicitSeq(ev) {
 export function notableSeq(ev) {
   const n = parseEventSeq(ev?.seq);
   return n == null ? 0 : n;
+}
+
+/** Stored seq for any event: the parsed seq for a repeatable kind, else 0. */
+export function eventSeq(ev) {
+  return isRepeatableKind(ev?.kind) ? notableSeq(ev) : 0;
 }
 
 function citeUrlSet(ev) {
@@ -218,6 +236,13 @@ function overlappingCiteUrls(a, b) {
  */
 export function sameNotable(a, b) {
   if (!isNotableKind(a?.kind) || !isNotableKind(b?.kind)) return false;
+  return sameRepeatableEvent(a, b);
+}
+
+/** Same rule as sameNotable for any repeatable kind (notable, red_folder). Kinds must match. */
+export function sameRepeatableEvent(a, b) {
+  const kind = String(a?.kind || "").trim();
+  if (!isRepeatableKind(kind) || kind !== String(b?.kind || "").trim()) return false;
   if (hasExplicitSeq(b)) return notableSeq(a) === parseEventSeq(b.seq);
   const da = asEventDate(a?.event_date) || null;
   const db = asEventDate(b?.event_date) || null;
@@ -228,20 +253,44 @@ export function sameNotable(a, b) {
   return false;
 }
 
-/** Dedup key after seq assignment. Notable is `notable:${seq}`; other kinds are the kind. */
+/** Dedup key after seq assignment. A repeatable kind is `${kind}:${seq}`; other kinds are the kind. */
 export function eventKey(ev) {
   const kind = String(ev?.kind || "").trim();
-  if (isNotableKind(kind)) return `notable:${notableSeq(ev)}`;
+  if (isRepeatableKind(kind)) return `${kind}:${notableSeq(ev)}`;
   return kind;
 }
 
-export function nextNotableSeq(events) {
+/** Next free seq for one repeatable kind on this person (0 when none). */
+export function nextEventSeq(events, kind = "notable") {
+  const key = String(kind || "").trim();
   let max = -1;
   for (const ev of events || []) {
-    if (!isNotableKind(ev?.kind)) continue;
+    if (String(ev?.kind || "").trim() !== key) continue;
     max = Math.max(max, notableSeq(ev));
   }
   return max + 1;
+}
+
+export function nextNotableSeq(events) {
+  return nextEventSeq(events, "notable");
+}
+
+/** Events of one kind, newest event_date first. Null dates last, then seq ascending. */
+export function eventsOfKind(events, kind) {
+  const key = String(kind || "").trim();
+  return (events || [])
+    .filter((ev) => String(ev?.kind || "").trim() === key)
+    .slice()
+    .sort((a, b) => {
+      const da = asEventDate(a?.event_date) || "";
+      const db = asEventDate(b?.event_date) || "";
+      if (da !== db) {
+        if (!da) return 1;
+        if (!db) return -1;
+        return db.localeCompare(da);
+      }
+      return notableSeq(a) - notableSeq(b);
+    });
 }
 
 /** Notable events, newest event_date first. Null dates last, then seq ascending. */
@@ -274,8 +323,8 @@ function sameVoteRoll(row, ev) {
 }
 
 function findMergeIndex(events, ev) {
-  if (isNotableKind(ev?.kind)) {
-    return (events || []).findIndex((row) => sameNotable(row, ev));
+  if (isRepeatableKind(ev?.kind)) {
+    return (events || []).findIndex((row) => sameRepeatableEvent(row, ev));
   }
   const kind = String(ev?.kind || "").trim();
   if (VOTE_NO_KINDS.has(kind)) {
@@ -327,7 +376,7 @@ export function normalizePersonEvent(raw, fallback = {}) {
     ...attrs,
     age_at_event,
   };
-  if (isNotableKind(kind)) {
+  if (isRepeatableKind(kind)) {
     const seq = parseEventSeq(raw.seq) ?? parseEventSeq(fallback.seq);
     if (seq != null) event.seq = seq;
   }
@@ -382,7 +431,7 @@ function mergePersonEvent(prior, ev) {
     age_at_event:
       parseStoredAge(prior.age_at_event) ?? parseStoredAge(ev.age_at_event),
   };
-  if (isNotableKind(prior.kind)) merged.seq = notableSeq(prior);
+  if (isRepeatableKind(prior.kind)) merged.seq = notableSeq(prior);
   const headcount = parseHeadcount(prior.headcount) ?? parseHeadcount(ev.headcount);
   if (headcount != null) merged.headcount = headcount;
   if (isIndictmentKeepKind(prior.kind)) {
@@ -405,7 +454,7 @@ function copyEventRow(ev) {
     ...mergeEventAttrs(ev, {}),
     age_at_event: parseStoredAge(ev.age_at_event),
   };
-  if (isNotableKind(ev.kind)) row.seq = notableSeq(ev);
+  if (isRepeatableKind(ev.kind)) row.seq = notableSeq(ev);
   if (parseHeadcount(ev.headcount) != null) row.headcount = parseHeadcount(ev.headcount);
   if (isIndictmentKeepKind(ev.kind)) {
     row.unsealed = mergedUnsealed(ev.kind, ev.unsealed);
@@ -420,7 +469,7 @@ function copyEventRow(ev) {
 }
 
 /**
- * One event per (person, kind) except notable, which may repeat keyed by seq.
+ * One event per (person, kind) except a repeatable kind (notable, red_folder), which may repeat keyed by seq.
  * Order: event_date desc, then kind, then seq asc.
  */
 export function uniqueEvents(events) {
@@ -433,8 +482,8 @@ export function uniqueEvents(events) {
       out[i] = mergePersonEvent(out[i], ev);
       continue;
     }
-    if (isNotableKind(ev.kind) && !hasExplicitSeq(ev)) {
-      ev.seq = nextNotableSeq(out);
+    if (isRepeatableKind(ev.kind) && !hasExplicitSeq(ev)) {
+      ev.seq = nextEventSeq(out, ev.kind);
     }
     out.push(ev);
   }
@@ -495,7 +544,7 @@ export function personEvents(row) {
 export function eventForKind(events, kind) {
   const key = String(kind || "").trim();
   if (!key) return null;
-  if (isNotableKind(key)) return notableEvents(events)[0] || null;
+  if (isRepeatableKind(key)) return eventsOfKind(events, key)[0] || null;
   return (events || []).find((ev) => ev.kind === key) || null;
 }
 
@@ -591,7 +640,7 @@ export function resolveEventKind(person, kind) {
   return existing ? existing.kind : key;
 }
 
-/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second notable with a different date (or seq) is a new row. */
+/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second notable or red_folder event with a different date (or seq) is a new row. */
 export function attachPersonEvent(person, incoming) {
   const ev = normalizePersonEvent(incoming);
   if (!ev) {
@@ -610,8 +659,8 @@ export function attachPersonEvent(person, incoming) {
       existed: true,
     };
   }
-  if (isNotableKind(ev.kind) && !hasExplicitSeq(ev)) {
-    ev.seq = nextNotableSeq(events);
+  if (isRepeatableKind(ev.kind) && !hasExplicitSeq(ev)) {
+    ev.seq = nextEventSeq(events, ev.kind);
   }
   return {
     person: projectPerson({
@@ -696,8 +745,8 @@ export function mergePersonAnnotate(gold, prior) {
   const extra = projectPerson(prior);
   const events = keep.events.map((ev) => copyEventRow(ev));
   for (const ev of extra.events) {
-    if (isNotableKind(ev.kind)) {
-      // Seq is per-person. Match extra notables by date/cites, then assign a new seq.
+    if (isRepeatableKind(ev.kind)) {
+      // Seq is per-person and per kind. Match extra notables / red folders by date/cites, then assign a new seq.
       const incoming = { ...copyEventRow(ev) };
       delete incoming.seq;
       const i = findMergeIndex(events, incoming);
@@ -706,7 +755,7 @@ export function mergePersonAnnotate(gold, prior) {
         continue;
       }
       const row = copyEventRow(ev);
-      row.seq = nextNotableSeq(events);
+      row.seq = nextEventSeq(events, row.kind);
       events.push(row);
       continue;
     }

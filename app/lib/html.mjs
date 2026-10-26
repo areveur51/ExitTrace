@@ -34,7 +34,7 @@ import {
   normalizeClearances,
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
-import { asEventDate, notableEvents, personEvents } from "./promote.mjs";
+import { asEventDate, eventsOfKind, notableEvents, personEvents } from "./promote.mjs";
 import { renderEventGraph } from "./event-graph.mjs";
 import { hostOf, isUnofficialOrCommentarySocial } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -2013,7 +2013,8 @@ function personSupportingMediaHtml(row, seen) {
     // Recorded-no media stays on people.events and is not rendered.
     // It is not orphaned and must not be cleaned up.
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
-    if (kind === "notable" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
+    // Red Folder media stays on its own Red Folder block, with its captions.
+    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     // Dedupe (normalize, then collapse dog post groups) before the display cap.
     const media = normalizeEventMedia(ev.media);
@@ -2689,6 +2690,36 @@ function notableEventSection(ev, sourceNumbers) {
   });
 }
 
+/** Human label for a stored red_folder person event (heading and source group). */
+export const RED_FOLDER_EVENT_LABEL = "Red Folder";
+
+/**
+ * Red Folder block on a person card: the event sentence, its office line, and its
+ * media with captions (same masonry as Notable). One block per stored red_folder
+ * event, newest first. It never sets the card headline (red_folder is not a catalog kind).
+ */
+function redFolderEventSection(ev, sourceNumbers) {
+  const masonry = supportingMediaHtml(notableMediaFigures(ev));
+  const cites = eventCiteParts(ev, sourceNumbers);
+  return personEventSection({
+    headHtml: eventHeadHtml(esc(RED_FOLDER_EVENT_LABEL), ev.event_date),
+    kind: "red_folder",
+    bodyHtml: `${commitProseHtml(ev.comments)}${eventOfficeHtml(ev)}`,
+    mediaHtml: masonry,
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    className: "detail-red-folder detail-supporting",
+    tag: "section",
+  });
+}
+
+export function redFolderEventHtml(row, sourceNumbers) {
+  return eventsOfKind(personEvents(row), "red_folder")
+    .map((ev) => redFolderEventSection(ev, sourceNumbers))
+    .filter(Boolean)
+    .join("");
+}
+
 export function notableMediaHtml(row, sourceNumbers) {
   return notableEvents(personEvents(row))
     .map((ev) => notableEventSection(ev, sourceNumbers))
@@ -2859,6 +2890,10 @@ function specialEventNodes(row, sourceNumbers) {
   for (const ev of notableEvents(personEvents(row))) {
     const html = notableEventSection(ev, sourceNumbers);
     if (html) nodes.push({ kind: "notable", html });
+  }
+  for (const ev of eventsOfKind(personEvents(row), "red_folder")) {
+    const html = redFolderEventSection(ev, sourceNumbers);
+    if (html) nodes.push({ kind: "red_folder", html });
   }
   return nodes;
 }
@@ -3130,6 +3165,7 @@ function eventSourceLabel(ev) {
   else if (kind === "ukraine_aid_flags") title = "H.R. 8035";
   else if (VOTE_NO_KINDS.has(kind)) title = recordedVoteTitle(ev);
   else if (kind === "endorsement") title = "Endorsement";
+  else if (kind === "red_folder") title = RED_FOLDER_EVENT_LABEL;
   else if (kind === "shot") title = "Shot";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
   const when = date ? formatDate(date) : "";
