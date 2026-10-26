@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { keymapFooter, tagDescriptionBlock, tagDescriptionHtml } from "../app/lib/html.mjs";
 import { handle } from "../app/server.mjs";
 import { setMemory } from "../app/lib/store.mjs";
-import { ATTRIBUTE_TAGS, TAG_DESCRIPTIONS, isTagCiteUrl, tagDescription, tagRollIds } from "../app/lib/tags.mjs";
+import { ATTRIBUTE_TAGS, MENU_ATTRIBUTE_TAGS, TAG_DESCRIPTIONS, isTagCiteUrl, tagDescription, tagRollIds } from "../app/lib/tags.mjs";
 import { ROLLS, VOTE_NO_KIND_IDS, VOTE_ROLLS, houseClerkVoteUrl, houseClerkXmlUrl, officialRollPageUrl, parseRollId, rollById, senateRollCallUrl } from "../app/lib/vote-rolls.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -43,9 +43,9 @@ function menuTagPaths() {
 test("every Tags-menu tag has exactly one description in the shared map", () => {
   const paths = menuTagPaths();
   assert.equal(paths.length, 17);
-  assert.deepEqual(paths, ATTRIBUTE_TAGS.map((t) => t.path));
-  assert.deepEqual(Object.keys(TAG_DESCRIPTIONS).sort(), ATTRIBUTE_TAGS.map((t) => t.id).sort());
-  for (const tag of ATTRIBUTE_TAGS) {
+  assert.deepEqual(paths, MENU_ATTRIBUTE_TAGS.map((t) => t.path));
+  assert.deepEqual(Object.keys(TAG_DESCRIPTIONS).sort(), MENU_ATTRIBUTE_TAGS.map((t) => t.id).sort());
+  for (const tag of MENU_ATTRIBUTE_TAGS) {
     const d = tagDescription(tag.id);
     assert.ok(d, `${tag.id} has a description`);
     assert.ok(d.text.trim().length >= 40, `${tag.id} text is not empty`);
@@ -57,7 +57,7 @@ test("every Tags-menu tag has exactly one description in the shared map", () => 
 });
 
 test("bill tags are bills; every other tag is a plain rule with no cites", () => {
-  for (const tag of ATTRIBUTE_TAGS) {
+  for (const tag of MENU_ATTRIBUTE_TAGS) {
     const d = tagDescription(tag.id);
     if (BILL_TAGS.includes(tag.id)) assert.equal(d.kind, "bill", tag.id);
     else {
@@ -189,7 +189,7 @@ test("the description renderer escapes text, labels, and URLs and drops a disall
 test("every tag page renders its description above the lede and the list", async () => {
   process.env.DATABASE_URL = "";
   setMemory({ people: [] });
-  for (const tag of ATTRIBUTE_TAGS) {
+  for (const tag of MENU_ATTRIBUTE_TAGS) {
     const page = await requestPage(tag.path);
     assert.equal(page.status, 200, tag.path);
     const block = tagDescriptionBlock(tag.id);

@@ -778,8 +778,7 @@ export function layout({
   <div class="hud-stage">
     <main class="${home ? "home-stage" : "tui-main"}">
       ${home ? "" : `<h1 class="vh">${esc(heading || title)}</h1>`}
-      ${!home && intro ? intro : ""}
-      ${!home && lede ? `<p class="lede">${lede}</p>` : ""}
+      ${!home && intro ? `${intro}\n      ` : ""}${!home && lede ? `<p class="lede">${lede}</p>` : ""}
       ${body}
     </main>
     ${keymapFooter(path)}
