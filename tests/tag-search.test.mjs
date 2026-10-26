@@ -14,7 +14,7 @@ import {
   setPoolForTests,
   tagMembership,
 } from "../app/lib/store.mjs";
-import { ATTRIBUTE_TAGS, ATTRIBUTE_TAG_IDS, tagShortLabel } from "../app/lib/tags.mjs";
+import { MENU_ATTRIBUTE_TAGS, MENU_ATTRIBUTE_TAG_IDS, tagShortLabel } from "../app/lib/tags.mjs";
 import {
   TAG_SEARCH_MAX_RAW,
   TAG_SEARCH_MAX_TAGS,
@@ -85,8 +85,8 @@ function tagSearchClientSource() {
   return APP_JS.slice(start, end);
 }
 
-test("tags param: only known ATTRIBUTE_TAGS ids, deduped, menu order, capped", () => {
-  assert.equal(TAG_SEARCH_MAX_TAGS, ATTRIBUTE_TAGS.length);
+test("tags param: only known MENU_ATTRIBUTE_TAGS ids, deduped, menu order, capped", () => {
+  assert.equal(TAG_SEARCH_MAX_TAGS, MENU_ATTRIBUTE_TAGS.length);
   let r = parseTagSearch("tags=save_america_act,SAVE-ACT,save_act,official,civilian,nope,%3Cscript%3E,../x&match=ANY");
   assert.deepEqual(r.tags, ["save_act", "save_america_act"]);
   assert.equal(r.match, "any");
@@ -104,7 +104,7 @@ test("tags param: only known ATTRIBUTE_TAGS ids, deduped, menu order, capped", (
   assert.deepEqual(r.tags, []);
   assert.equal(r.capped, true);
   // Every id selected once is the max.
-  assert.equal(parseTagSearch(`tags=${ATTRIBUTE_TAG_IDS.join(",")}`).tags.length, ATTRIBUTE_TAGS.length);
+  assert.equal(parseTagSearch(`tags=${MENU_ATTRIBUTE_TAG_IDS.join(",")}`).tags.length, MENU_ATTRIBUTE_TAGS.length);
   assert.equal(
     tagSearchHref("/search", { q: "a b", tags: ["save_act", "bogus"], match: "any" }),
     "/search?q=a+b&tags=save_act&match=any",
@@ -147,7 +147,7 @@ test("hostile tag, match and q values: no reflection, escaped in HTML and inline
     assert.match(body, /name="match" value="all" checked/, "a hostile match falls back to All");
     // Only known ids survive: fraud, plus save_act from "save_act\u2028" (trim strips U+2028 like any space).
     assert.deepEqual([...body.matchAll(/data-tf-chip="([^"]*)"/g)].map((m) => m[1]), ["save_act", "fraud"].sort(
-      (a, b) => ATTRIBUTE_TAG_IDS.indexOf(a) - ATTRIBUTE_TAG_IDS.indexOf(b),
+      (a, b) => MENU_ATTRIBUTE_TAG_IDS.indexOf(a) - MENU_ATTRIBUTE_TAG_IDS.indexOf(b),
     ));
     if (path.startsWith("/search")) assert.match(body, /Ignored 5 unknown tags\./);
     // Every data-tf-* attribute value is entity-safe (no raw quotes or angle brackets inside).
@@ -256,12 +256,12 @@ test("no-JS: a plain GET form with checkboxes, radios and a submit button", asyn
   assert.match(inner, /<input type="search" name="q"/);
   assert.match(inner, /<details class="tf-add-wrap" data-tf-add>\s*<summary class="tf-add">\+ Add tag/);
   const boxes = [...inner.matchAll(/<input type="checkbox" name="tags" value="([a-z0-9_]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(boxes, ATTRIBUTE_TAG_IDS, "all 17 tags, in menu order");
+  assert.deepEqual(boxes, MENU_ATTRIBUTE_TAG_IDS, "all 17 tags, in menu order");
   assert.match(inner, /<input type="radio" name="match" value="all" checked>/);
   assert.match(inner, /<input type="radio" name="match" value="any">/);
   assert.match(inner, /<button type="submit" class="tf-go">/);
   // Labels are the Tags menu's short labels.
-  for (const tag of ATTRIBUTE_TAGS) {
+  for (const tag of MENU_ATTRIBUTE_TAGS) {
     assert.equal(tagShortLabel(tag), tagMenuItem(tag).label);
     assert.ok(inner.includes(`<span class="tf-opt-t">${tagShortLabel(tag).replace(/&/g, "&amp;")}</span>`), tag.id);
   }
@@ -289,7 +289,7 @@ test("URL state: /search and home read tags and match back into the form", async
   assert.doesNotMatch(home.body, /href="\/people\/ed-cole"/, "home never lists results");
   // Client helpers parse and write the same canonical URL as the server, and count the same.
   const core = loadClientCore();
-  const parsed = core.parse("?tags=save_america_act,SAVE-ACT,nope&match=any&q=x", ATTRIBUTE_TAG_IDS);
+  const parsed = core.parse("?tags=save_america_act,SAVE-ACT,nope&match=any&q=x", MENU_ATTRIBUTE_TAG_IDS);
   assert.deepEqual([...parsed.tags], ["save_act", "save_america_act"]);
   assert.equal(parsed.match, "any");
   for (const st of [
@@ -298,7 +298,7 @@ test("URL state: /search and home read tags and match back into the form", async
     { q: "x", tags: [], match: "any" },
   ]) {
     const server = tagSearchHref("/search", { ...st, tags: parseTagSearch(`tags=${st.tags.join(",")}`).tags });
-    assert.equal(core.href("/search", { ...st, tags: core.parse(`?tags=${st.tags.join(",")}`, ATTRIBUTE_TAG_IDS).tags }, ATTRIBUTE_TAG_IDS), server);
+    assert.equal(core.href("/search", { ...st, tags: core.parse(`?tags=${st.tags.join(",")}`, MENU_ATTRIBUTE_TAG_IDS).tags }, MENU_ATTRIBUTE_TAG_IDS), server);
   }
   const m = await tagMembership();
   for (const [tags, match] of [[["save_act", "save_america_act"], "all"], [["save_act", "save_america_act"], "any"], [["fraud"], "all"]]) {
@@ -342,9 +342,9 @@ test("chip UI makes no limited requests: no network calls, counts are inline, on
 test("dropdown counts equal /tags/<slug> membership for all 17 tags", async () => {
   setMemory({ people: PEOPLE });
   const m = await tagMembership();
-  assert.deepEqual(m.ids, ATTRIBUTE_TAG_IDS);
+  assert.deepEqual(m.ids, MENU_ATTRIBUTE_TAG_IDS);
   const home = await requestPage("/");
-  for (const tag of ATTRIBUTE_TAGS) {
+  for (const tag of MENU_ATTRIBUTE_TAGS) {
     const page = await requestPage(tag.path);
     const listed = uniq(ids(page.body.slice(0, page.body.indexOf('<footer class="keymap"'))));
     assert.equal(m.counts[tag.id], listed.length, `${tag.id} count equals /tags list`);
@@ -362,8 +362,8 @@ test("dropdown counts equal /tags/<slug> membership for all 17 tags", async () =
   try {
     await tagMembership();
     const parts = seen[0].sql.split(" UNION ALL ");
-    assert.equal(parts.length, ATTRIBUTE_TAGS.length);
-    for (const [i, id] of ATTRIBUTE_TAG_IDS.entries()) {
+    assert.equal(parts.length, MENU_ATTRIBUTE_TAGS.length);
+    for (const [i, id] of MENU_ATTRIBUTE_TAG_IDS.entries()) {
       seen.length = 1;
       await countPeople({ tags: [id] });
       const where = seen[1].sql.replace(/^SELECT COUNT\(\*\)::int AS n FROM people/, "").replace(/\$1\b/g, `$${i + 1}`);
@@ -388,7 +388,7 @@ test("client ET_TAG_SEARCH parse/href/count agree with the server on the same fi
     "tags=save_act&tags=fraud&match=all",
     "tags=fraud&match=bogus",
     "q=Able&tags=fraud,save_america_act&match=any",
-    `tags=${ATTRIBUTE_TAG_IDS.join(",")}&match=any`,
+    `tags=${MENU_ATTRIBUTE_TAG_IDS.join(",")}&match=any`,
     `tags=${Array(40).fill("x").join(",")},fraud`,
     `tags=${"save_act,".repeat(Math.ceil(TAG_SEARCH_MAX_RAW / 9) + 1)}`,
     "match=any",
@@ -396,12 +396,12 @@ test("client ET_TAG_SEARCH parse/href/count agree with the server on the same fi
   ];
   for (const qs of cases) {
     const server = parseTagSearch(qs);
-    const client = core.parse(`?${qs}`, ATTRIBUTE_TAG_IDS);
+    const client = core.parse(`?${qs}`, MENU_ATTRIBUTE_TAG_IDS);
     assert.deepEqual([...client.tags], server.tags, `tags for ${qs.slice(0, 60)}`);
     assert.equal(client.match, server.match, `match for ${qs.slice(0, 60)}`);
     const q = new URLSearchParams(qs).get("q") || "";
     assert.equal(
-      core.href("/search", { q, tags: client.tags, match: client.match }, ATTRIBUTE_TAG_IDS),
+      core.href("/search", { q, tags: client.tags, match: client.match }, MENU_ATTRIBUTE_TAG_IDS),
       tagSearchHref("/search", { q, tags: server.tags, match: server.match }),
       `href for ${qs.slice(0, 60)}`,
     );

@@ -145,6 +145,9 @@ export function attributeTagHref(tag) {
 /** Fact tags listed in the Tags menu and on /tags. A `menu: false` tag is reached through its href. */
 export const MENU_ATTRIBUTE_TAGS = ATTRIBUTE_TAGS.filter((t) => t.menu !== false);
 
+/** Ids of the Tags-menu tags, in menu order (home tag search reads these). */
+export const MENU_ATTRIBUTE_TAG_IDS = MENU_ATTRIBUTE_TAGS.map((t) => t.id);
+
 /**
  * General description at the top of each `/tags/<slug>` page. One map for every Tags-menu tag.
  * Record-only text: what a bill does plus its recorded votes, or what qualifies a card for the tag.

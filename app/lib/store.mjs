@@ -34,7 +34,7 @@ import {
   matchesTags,
   normalizeTags,
 } from "./tags.mjs";
-import { ATTRIBUTE_TAG_IDS } from "./tags.mjs";
+import { MENU_ATTRIBUTE_TAG_IDS } from "./tags.mjs";
 import { membershipMasks } from "./tag-search.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
@@ -1756,13 +1756,13 @@ export async function tagMembership() {
 
 async function tagMembershipUncached(p) {
   const params = [];
-  const parts = ATTRIBUTE_TAG_IDS.map(
+  const parts = MENU_ATTRIBUTE_TAG_IDS.map(
     (id, i) => `SELECT ${i}::int AS i, id FROM people${peopleWhere([], params, {}, [id], false)}`,
   );
   const q = await p.query(parts.join(" UNION ALL "), params);
-  const members = Object.fromEntries(ATTRIBUTE_TAG_IDS.map((id) => [id, []]));
+  const members = Object.fromEntries(MENU_ATTRIBUTE_TAG_IDS.map((id) => [id, []]));
   for (const row of q.rows) {
-    const id = ATTRIBUTE_TAG_IDS[Number(row.i)];
+    const id = MENU_ATTRIBUTE_TAG_IDS[Number(row.i)];
     if (id) members[id].push(row.id);
   }
   return buildTagMembership(members);
@@ -1771,18 +1771,18 @@ async function tagMembershipUncached(p) {
 function memoryTagMembers() {
   const rows = getMemory().people.map((r) => projectPerson(r));
   return Object.fromEntries(
-    ATTRIBUTE_TAG_IDS.map((id) => [id, rows.filter((r) => matchesTags(r, [id])).map((r) => r.id)]),
+    MENU_ATTRIBUTE_TAG_IDS.map((id) => [id, rows.filter((r) => matchesTags(r, [id])).map((r) => r.id)]),
   );
 }
 
 function buildTagMembership(members) {
   const counts = {};
   const sets = {};
-  for (const id of ATTRIBUTE_TAG_IDS) {
+  for (const id of MENU_ATTRIBUTE_TAG_IDS) {
     sets[id] = new Set(members[id] || []);
     counts[id] = sets[id].size;
   }
-  return { ids: ATTRIBUTE_TAG_IDS.slice(), counts, masks: membershipMasks(members), members: sets };
+  return { ids: MENU_ATTRIBUTE_TAG_IDS.slice(), counts, masks: membershipMasks(members), members: sets };
 }
 
 export async function countKindComms(kind) {

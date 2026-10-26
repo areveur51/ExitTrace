@@ -2457,13 +2457,13 @@ export function homeBody({ version, tagFilter = "" }) {
  * basePath is where chip and Clear links point ("/" on home, "/search" on search).
  */
 export function tagFilterHtml({ state = {}, membership, basePath = "/search" } = {}) {
-  const selected = (state.tags || []).filter((id) => ATTRIBUTE_TAGS.some((t) => t.id === id));
+  const selected = (state.tags || []).filter((id) => MENU_ATTRIBUTE_TAGS.some((t) => t.id === id));
   const match = state.match === TAG_MATCH_ANY ? TAG_MATCH_ANY : TAG_MATCH_ALL;
   const q = String(state.q || "");
   const counts = membership?.counts || null;
   const masks = Array.isArray(membership?.masks) ? membership.masks : null;
   const on = new Set(selected);
-  const opts = ATTRIBUTE_TAGS.map((tag) => {
+  const opts = MENU_ATTRIBUTE_TAGS.map((tag) => {
     const label = tagShortLabel(tag);
     const isOn = on.has(tag.id);
     const n = counts && Number.isFinite(counts[tag.id]) ? `<span class="tf-opt-n">${counts[tag.id]}</span>` : "";
@@ -2472,7 +2472,7 @@ export function tagFilterHtml({ state = {}, membership, basePath = "/search" } =
   }).join("");
   const chips = selected
     .map((id) => {
-      const tag = ATTRIBUTE_TAGS.find((t) => t.id === id);
+      const tag = MENU_ATTRIBUTE_TAGS.find((t) => t.id === id);
       const label = tagShortLabel(tag);
       const href = tagSearchHref(basePath, { q, tags: selected.filter((x) => x !== id), match });
       return `<span class="tf-chip" data-tf-chip="${esc(id)}">${esc(label)}<a class="tf-chip-x" href="${esc(href)}" data-tf-remove="${esc(id)}" aria-label="Remove ${esc(label)}">✕</a></span>`;
@@ -2482,7 +2482,7 @@ export function tagFilterHtml({ state = {}, membership, basePath = "/search" } =
   const n = masks ? countTagMatches(masks, selected, match) : null;
   const radio = (value, text) =>
     `<label class="tf-radio${match === value ? " is-on" : ""}"><input type="radio" name="match" value="${value}"${match === value ? " checked" : ""}><span class="tf-dot" aria-hidden="true"></span>${text}</label>`;
-  const payload = inlineJson({ ids: ATTRIBUTE_TAGS.map((t) => t.id), masks });
+  const payload = inlineJson({ ids: MENU_ATTRIBUTE_TAGS.map((t) => t.id), masks });
   const ignored = Number(state.ignored) > 0
     ? `<p class="tf-note">Ignored ${Number(state.ignored)} unknown tag${Number(state.ignored) === 1 ? "" : "s"}.</p>`
     : "";

@@ -1,23 +1,23 @@
 /**
  * Home tag search: strict `tags` / `match` parsing, canonical URLs, and the
  * membership mask math shared by the server count line and the page payload.
- * Tag ids, labels and order come from ATTRIBUTE_TAGS (tags.mjs) only.
+ * Tag ids, labels and order come from MENU_ATTRIBUTE_TAGS (tags.mjs) only.
  */
 
-import { ATTRIBUTE_TAGS, ATTRIBUTE_TAG_IDS } from "./tags.mjs";
+import { MENU_ATTRIBUTE_TAGS, MENU_ATTRIBUTE_TAG_IDS } from "./tags.mjs";
 
 export const TAG_MATCH_ALL = "all";
 export const TAG_MATCH_ANY = "any";
 /** All is the default match. */
 export const TAG_MATCH_DEFAULT = TAG_MATCH_ALL;
 /** At most one of each fact tag can be selected. */
-export const TAG_SEARCH_MAX_TAGS = ATTRIBUTE_TAGS.length;
+export const TAG_SEARCH_MAX_TAGS = MENU_ATTRIBUTE_TAGS.length;
 /** Raw `tags` values / comma tokens read before the rest are dropped unread. */
 export const TAG_SEARCH_MAX_TOKENS = 32;
 /** A combined raw `tags` value longer than this is not parsed at all. */
 export const TAG_SEARCH_MAX_RAW = 1024;
 
-const ID_SET = new Set(ATTRIBUTE_TAG_IDS);
+const ID_SET = new Set(MENU_ATTRIBUTE_TAG_IDS);
 const TOKEN_RE = /^[a-z0-9_-]{1,64}$/;
 
 function paramsOf(searchParams) {
@@ -34,9 +34,9 @@ export function parseTagMatch(raw) {
 /**
  * Strict parse of the fact-tag search. `tags` may be one comma list (`tags=a,b`,
  * the canonical URL) or repeated checkbox values (`tags=a&tags=b`, the no-JS form).
- * A token must be a known ATTRIBUTE_TAGS id (hyphen slug form accepted); anything
+ * A token must be a known MENU_ATTRIBUTE_TAGS id (hyphen slug form accepted); anything
  * else is dropped and only counted. Duplicates collapse. Output is in menu
- * (ATTRIBUTE_TAGS) order, so one selection has one canonical URL.
+ * (MENU_ATTRIBUTE_TAGS) order, so one selection has one canonical URL.
  */
 export function parseTagSearch(searchParams) {
   const src = paramsOf(searchParams);
@@ -67,7 +67,7 @@ export function parseTagSearch(searchParams) {
     seen.add(id);
     out.tags.push(id);
   }
-  out.tags.sort((a, b) => ATTRIBUTE_TAG_IDS.indexOf(a) - ATTRIBUTE_TAG_IDS.indexOf(b));
+  out.tags.sort((a, b) => MENU_ATTRIBUTE_TAG_IDS.indexOf(a) - MENU_ATTRIBUTE_TAG_IDS.indexOf(b));
   return out;
 }
 
@@ -93,9 +93,9 @@ export function tagSearchHref(basePath, state) {
   return qs ? `${basePath}?${qs}` : basePath;
 }
 
-/** Bit for each ATTRIBUTE_TAGS id, in menu order. */
+/** Bit for each MENU_ATTRIBUTE_TAGS id, in menu order. */
 export function tagBit(id) {
-  const i = ATTRIBUTE_TAG_IDS.indexOf(id);
+  const i = MENU_ATTRIBUTE_TAG_IDS.indexOf(id);
   return i < 0 ? 0 : 2 ** i;
 }
 
@@ -111,7 +111,7 @@ export function tagsMask(tags) {
  */
 export function membershipMasks(membersByTag) {
   const byPerson = new Map();
-  for (const id of ATTRIBUTE_TAG_IDS) {
+  for (const id of MENU_ATTRIBUTE_TAG_IDS) {
     const bit = tagBit(id);
     for (const pid of new Set(membersByTag?.[id] || [])) {
       byPerson.set(pid, (byPerson.get(pid) || 0) + bit);
