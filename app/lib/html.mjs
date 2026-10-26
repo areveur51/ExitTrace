@@ -2161,56 +2161,30 @@ export function kindList(kind, rows) {
   )}</div>`;
 }
 
-/**
- * One card per person a post names. The post itself is not a card when those
- * people resolve. A post with no resolved person still lists the post.
- * Cards do not repeat the post media. `snapshot.named` drops anyone it does not list.
- * A person already shown on this page is skipped.
- */
-function personCatalogList(kind, posts, people) {
-  const spec = commsKind(kind);
-  const rows = Array.isArray(posts) ? posts : [];
-  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  const seen = new Set();
-  const items = [];
-  for (const post of rows) {
-    const linked = linkedPeopleForDetail(post, people);
-    if (!linked.length) {
-      items.push({ date: post.posted_at, type: "post", row: post });
-      continue;
-    }
-    for (const person of linked) {
-      if (seen.has(person.id)) continue;
-      seen.add(person.id);
-      items.push({
-        date: post.posted_at,
-        cardDate: asEventDate(post.posted_at) || "",
-        type: "person",
-        row: person,
-      });
-    }
+/** Newest first, undated last, then name (or handle). One comparator for every mixed comms list. */
+export function byDateDescThenName(a, b) {
+  const da = String(a?.date || "");
+  const db = String(b?.date || "");
+  if (da !== db) {
+    if (!da) return 1;
+    if (!db) return -1;
+    return db.localeCompare(da);
   }
-  if (!items.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="${spec.pageClass} tui-list">${groupByYearItems(items, (item, opts) =>
-    item.type === "person"
-      ? personRow(item.row, { ...opts, date: item.cardDate })
-      : kindListRow(kind, item.row, opts),
-  )}</div>`;
-}
-
-export function shotCatalogList(posts, people) {
-  return personCatalogList("shot", posts, people);
-}
-
-export function dogCatalogList(posts, people) {
-  return personCatalogList("dog", posts, people);
+  const na = String(a?.row?.name || a?.row?.handle || "");
+  const nb = String(b?.row?.name || b?.row?.handle || "");
+  return na.localeCompare(nb);
 }
 
 /**
- * Red folder list: a linked person stands in for that post, an unlinked post
- * stays a post, and a person stored with the red_folder tag is included once.
+ * One item builder for every comms list (dog, red folder, eagle, ronald, shot).
+ * A post that names resolved people becomes one card per person; the post itself
+ * is not a card then. A post with no resolved person stays a post row.
+ * `snapshot.named` drops anyone it does not list. A person already shown is skipped.
+ * People carrying the page's person tag are added once, after the linked cards.
+ * Cards do not repeat the post media. Items keep post order; a caller that mixes
+ * in tagged people sorts with byDateDescThenName.
  */
-export function redFolderCatalogItems(posts, people, tagged = []) {
+export function commsCatalogItems(posts, people, tagged = []) {
   const rows = Array.isArray(posts) ? posts : [];
   const seen = new Set();
   const items = [];
@@ -2231,35 +2205,29 @@ export function redFolderCatalogItems(posts, people, tagged = []) {
       });
     }
   }
-  for (const person of tagged || []) {
+  for (const person of Array.isArray(tagged) ? tagged : []) {
     if (!person?.id || seen.has(person.id)) continue;
     seen.add(person.id);
     const date = asEventDate(person.event_date) || "";
     items.push({ date, cardDate: date, type: "person", row: person });
   }
-  items.sort((a, b) => {
-    const da = String(a.date || "");
-    const db = String(b.date || "");
-    if (da !== db) {
-      if (!da) return 1;
-      if (!db) return -1;
-      return db.localeCompare(da);
-    }
-    const na = String(a.row?.name || a.row?.handle || "");
-    const nb = String(b.row?.name || b.row?.handle || "");
-    return na.localeCompare(nb);
-  });
   return items;
 }
 
-export function redFolderCatalogList(items) {
+/** One list renderer for every comms page: person cards and post rows, grouped by year. */
+export function commsCatalogList(kind, items) {
+  const spec = commsKind(kind);
   const rows = Array.isArray(items) ? items : [];
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="red-folder-page tui-list">${groupByYearItems(rows, (item, opts) =>
+  return `<div class="${esc(spec.pageClass)} tui-list">${groupByYearItems(rows, (item, opts) =>
     item.type === "person"
       ? personRow(item.row, { ...opts, date: item.cardDate })
-      : kindListRow("red_folder", item.row, opts),
+      : kindListRow(kind, item.row, opts),
   )}</div>`;
+}
+
+export function shotCatalogList(posts, people) {
+  return commsCatalogList("shot", commsCatalogItems(posts, people));
 }
 
 export function dogList(rows) {

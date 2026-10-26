@@ -37,6 +37,10 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - An event keeps every unique supporting media item it stores, up to a safety cap of 24 (`EVENT_MEDIA_STORE_MAX`). Boot, seed import, unique-people migration and promote/AMEND no longer drop items past the 8th. A card still shows the first 8 (`EVENT_MEDIA_DISPLAY_MAX`); the rest stay stored.
 
+### Changed
+
+- Red Folder, Eagle and Ronald comms use the same list as Dog comms. A post that names a person shows that person's card, other posts stay post rows, grouped by year. A comms page also lists people stored with its person tag once (today only Red folder is a person tag; Eagle and Ronald have none, so they show no tagged cards). `/tags/red-folder` shows the same list. Dog comms and every detail page are unchanged.
+
 ## [1.2.33] - 2026-10-26
 
 ### Added

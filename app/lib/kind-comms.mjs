@@ -44,6 +44,8 @@ export const KIND_COMMS = Object.freeze({
     navLabel: "Dog",
     countNoun: "dog comms",
     keymapKey: "c",
+    personTag: null,
+    showLinkedPeople: true,
     supportingGroups: false,
   }),
   red_folder: Object.freeze({
@@ -62,6 +64,8 @@ export const KIND_COMMS = Object.freeze({
     navLabel: "Red Folder",
     countNoun: "red-folder comms",
     keymapKey: "e",
+    personTag: "red_folder",
+    showLinkedPeople: true,
     supportingGroups: true,
   }),
   eagle: Object.freeze({
@@ -80,6 +84,8 @@ export const KIND_COMMS = Object.freeze({
     navLabel: "Eagle",
     countNoun: "eagle comms",
     keymapKey: "l",
+    personTag: "eagle",
+    showLinkedPeople: true,
     supportingGroups: false,
   }),
   ronald: Object.freeze({
@@ -98,6 +104,8 @@ export const KIND_COMMS = Object.freeze({
     navLabel: "Ronald",
     countNoun: "ronald comms",
     keymapKey: "n",
+    personTag: "ronald",
+    showLinkedPeople: true,
     supportingGroups: true,
   }),
   shot: Object.freeze({
@@ -116,6 +124,8 @@ export const KIND_COMMS = Object.freeze({
     navLabel: "Shot",
     countNoun: "shot comms",
     keymapKey: "s",
+    personTag: null,
+    showLinkedPeople: true,
     supportingGroups: false,
   }),
 });
@@ -240,6 +250,17 @@ export function linkedPersonIds(snapshotOrIds) {
 const TABLES = new Set(KIND_COMM_IDS.map((id) => KIND_COMMS[id].table));
 const PATHS = new Map(KIND_COMM_IDS.map((id) => [KIND_COMMS[id].path, KIND_COMMS[id]]));
 const CATEGORY_IDS = new Map(KIND_COMM_IDS.map((id) => [KIND_COMMS[id].categoryId, KIND_COMMS[id]]));
+
+/**
+ * Comms spec whose fixed `personTag` is this tag id, or null. The only tag-to-page
+ * map is the frozen KIND_COMMS spec (dog none, red_folder, eagle, ronald, shot none).
+ * No route or query param supplies a tag.
+ */
+export function commsKindByPersonTag(tag) {
+  const id = String(tag || "");
+  if (!id) return null;
+  return KIND_COMM_IDS.map((k) => KIND_COMMS[k]).find((spec) => spec.personTag === id) || null;
+}
 
 export function commsKind(kind) {
   const key = typeof kind === "string" ? kind : kind?.id;
