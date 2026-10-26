@@ -344,8 +344,22 @@ export function normalizePersonEvent(raw, fallback = {}) {
   if (media.length) event.media = media;
   const rollCall = keptRollCall(kind, raw, fallback);
   if (rollCall) event.roll_call = rollCall;
+  if (keptHeadlineExclude(raw, fallback)) event.headline_exclude = true;
   applyEventShot(event, raw, fallback);
   return event;
+}
+
+/**
+ * Opt-in pin: an event stored with `headline_exclude: true` stays on the card
+ * and in its kind's lists, but never drives the card headline (category and
+ * date). Only a literal true counts; anything else is dropped.
+ */
+export function isHeadlineExcluded(ev) {
+  return ev?.headline_exclude === true;
+}
+
+function keptHeadlineExclude(...events) {
+  return events.some((ev) => isHeadlineExcluded(ev));
 }
 
 function mergedUnsealed(kind, ...flags) {
@@ -378,6 +392,7 @@ function mergePersonEvent(prior, ev) {
   if (media.length) merged.media = media;
   const rollCall = keptRollCall(prior.kind, prior, ev);
   if (rollCall) merged.roll_call = rollCall;
+  if (keptHeadlineExclude(prior, ev)) merged.headline_exclude = true;
   applyEventShot(merged, prior, ev);
   return merged;
 }
@@ -399,6 +414,7 @@ function copyEventRow(ev) {
   if (media.length) row.media = media;
   const rollCall = keptRollCall(ev.kind, ev);
   if (rollCall) row.roll_call = rollCall;
+  if (isHeadlineExcluded(ev)) row.headline_exclude = true;
   applyEventShot(row, ev);
   return row;
 }
@@ -520,7 +536,8 @@ function catalogEventKind(kind, stored) {
 export function derivePersonFields(row, preferKinds) {
   const events = personEvents(row);
   const stored = String(row.category || "").trim();
-  const drivers = events.filter((ev) => catalogEventKind(ev.kind, stored));
+  // A headline_exclude event never drives the unfiltered card headline.
+  const drivers = events.filter((ev) => catalogEventKind(ev.kind, stored) && !isHeadlineExcluded(ev));
   const chosen = newestPersonEvent(preferKinds ? events : drivers, preferKinds);
   const death = deathPersonEvent(events);
   // Notable is a block on the card. It does not replace nickname or another stored category.
@@ -545,7 +562,10 @@ export function projectPerson(row, kinds) {
   const prefer = Array.isArray(kinds) ? kinds : kinds ? [kinds] : [];
   const derived = derivePersonFields(row, prefer.length ? prefer : undefined);
   const stamped = derived.events.map((ev) => stampEventAge(ev, row.birth_date));
-  const chosen = newestPersonEvent(stamped, prefer.length ? prefer : undefined);
+  const chosen = newestPersonEvent(
+    prefer.length ? stamped : stamped.filter((ev) => !isHeadlineExcluded(ev)),
+    prefer.length ? prefer : undefined,
+  );
   const projected = {
     ...row,
     ...derived,
