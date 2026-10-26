@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en" data-theme="glass">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>@ExampleK9 · ExitTrace</title>
+  <script>
+(function(){try{var key="exittrace-theme";var t=localStorage.getItem(key);if(t!=="glass"){localStorage.removeItem(key);localStorage.setItem(key,"glass");}document.documentElement.setAttribute("data-theme","glass");}catch(e){try{document.documentElement.setAttribute("data-theme","glass");}catch(e2){}}})();
+</script>
+  <script>
+(function(){try{var key="exittrace-page-size";var allowed=[17,34,51];var raw=localStorage.getItem(key);var n=Number(raw);var size=allowed.indexOf(n)!==-1?String(n):null;if(size)document.cookie=key+"="+size+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-page-size");var guard=key+"-sync";if(rendered&&size&&rendered!==size&&sessionStorage.getItem(guard)!==size){sessionStorage.setItem(guard,size);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+</script>
+  <script>
+(function(){try{var key="exittrace-dash-range";var path=location.pathname||"";if(path!=="/dashboard"&&path.indexOf("/dashboard/")!==0)return;var params=new URLSearchParams(location.search);var q=params.get("range");if(q){var token=q==="custom"?("custom:"+(params.get("from")||"")+":"+(params.get("to")||"")):q;localStorage.setItem(key,token);document.cookie=key+"="+encodeURIComponent(token)+"; Path=/; SameSite=Lax";return;}var raw=localStorage.getItem(key);if(!raw)return;document.cookie=key+"="+encodeURIComponent(raw)+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-dash-range");var guard=key+"-sync";if(rendered&&raw&&rendered!==raw&&sessionStorage.getItem(guard)!==raw){sessionStorage.setItem(guard,raw);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+</script>
+  <script>
+(function(){try{var viewKey="exittrace-results-view";var sizeKey="exittrace-card-size";var views=["list","cards"];var sizes=["s","m","l"];var view=localStorage.getItem(viewKey);var size=localStorage.getItem(sizeKey);if(views.indexOf(view)===-1)view="list";if(sizes.indexOf(size)===-1)size="m";document.documentElement.setAttribute("data-results-view",view);document.documentElement.setAttribute("data-card-size",size);}catch(e){try{document.documentElement.setAttribute("data-results-view","list");document.documentElement.setAttribute("data-card-size","m");}catch(e2){}}})();
+</script>
+  <link rel="stylesheet" href="/styles.css?v=1.2.34-fecf5192a5">
+</head>
+<body class="tui hud" data-toast="page loaded">
+  <header class="tui-top">
+    <nav class="tui-q crumbs" aria-label="Breadcrumb">
+    <span class="chev" aria-hidden="true">❯</span>
+    <ol>
+      <li><a href="/">Home</a></li><li><a href="/dog-comms">Dog comms</a></li><li><span class="crumb-current" aria-current="page">@ExampleK9</span></li>
+    </ol>
+  </nav>
+    <div class="tui-app"><a class="tui-app-link" href="/">exittrace.areveur.com</a></div>
+    <div class="tui-n">detail</div>
+  </header>
+  <div class="hud-stage">
+    <main class="tui-main">
+      <h1 class="vh">@ExampleK9</h1>
+      
+      <article class="detail dog-detail">
+    <div class="box-pane is-active meta-box">
+    <div class="box-h" aria-hidden="true"><span class="box-c">┌</span><span class="box-title">Metadata</span><span class="box-dash"></span><span class="box-c">┐</span></div>
+    <div class="box-mid"><span class="box-c box-side" aria-hidden="true">│</span><div class="box-inner"><div class="meta-pane meta-pane--stack"><section class="detail-official-post" aria-label="Main post"><div class="detail-media detail-media--masonry" data-tiles="2"><figure class="detail-tile detail-tile--portrait"><img class="detail-photo portrait empty-portrait" src="/empty-portrait.jpg?v=3c16c13f69" alt="Stored still for @ExampleK9" width="192" height="250" decoding="async" data-portrait-fallback="/empty-portrait.jpg?v=3c16c13f69"></figure><section class="detail-tile detail-tile--meta detail-tile--cite">
+    <div class="detail-copy"><div class="cite-block">
+    <header class="cite-head">
+      <span class="handle">@ExampleK9</span>
+      <span class="acct">Example K9 Unit</span>
+      <time datetime="2025-03-04">Mar 4, 2025</time>
+    </header>
+    <p class="post-text">Official K9 unit post naming Gale Handler.</p>
+  </div></div>
+  </section></div></section><section class="detail-context" aria-label="Context and citations"><section class="detail-tile detail-tile--meta detail-tile--source">
+    <div class="detail-copy"><p class="meta-line">Source · <a class="source-link" href="https://example.gov/k9/2025" title="https://example.gov/k9/2025" target="_blank" rel="noopener noreferrer">https://example.gov/k9/2025</a></p></div>
+  </section></section><section class="detail-linked-people" aria-label="Linked individuals"><h3 class="event-h">Linked individuals</h3><div class="people-list tui-list"><a class="tui-row person-card" href="/people/gale-handler">
+    <div class="row-media"><img class="portrait thumb empty-portrait" src="/empty-portrait.jpg?v=3c16c13f69" alt="Gale Handler" width="40" height="52" loading="lazy" decoding="async" data-portrait-fallback="/empty-portrait.jpg?v=3c16c13f69"></div>
+    <div class="tui-row-text">
+      <div class="tui-title">Gale Handler</div>
+      
+      <div class="tui-meta"><time datetime="2025-03-04">Mar 4, 2025</time> · Notable · —</div>
+    </div>
+  </a></div></section></div></div><span class="box-c box-side" aria-hidden="true">│</span></div>
+    <div class="box-f" aria-hidden="true"><span class="box-c">└</span><span class="box-dash"></span><span class="box-c">┘</span></div>
+  </div>
+  </article>
+    </main>
+    <footer class="keymap" aria-label="Catalog">
+    <div class="keymap-keys"><a class="keychip" href="/firings" data-key="f" style="--key-order:0"><span class="br">[</span>f<span class="br">]</span> Firings</a><a class="keychip" href="/resignations" data-key="r" style="--key-order:1"><span class="br">[</span>r<span class="br">]</span> Resignations</a><a class="keychip" href="/government" data-key="g" style="--key-order:2"><span class="br">[</span>g<span class="br">]</span> Officials</a><a class="keychip" href="/arrests" data-key="a" style="--key-order:3"><span class="br">[</span>a<span class="br">]</span> Arrests</a><a class="keychip" href="/indictments" data-key="i" style="--key-order:4"><span class="br">[</span>i<span class="br">]</span> Indictments</a><a class="keychip" href="/deaths" data-key="d" style="--key-order:5"><span class="br">[</span>d<span class="br">]</span> Deaths</a><a class="keychip" href="/group-operations" data-key="m" style="--key-order:6"><span class="br">[</span>m<span class="br">]</span> Operations</a><a class="keychip" href="/dashboard" data-key="b" style="--key-order:7"><span class="br">[</span>b<span class="br">]</span> Dashboard</a><a class="keychip" href="/unsorted" data-key="u" style="--key-order:8"><span class="br">[</span>u<span class="br">]</span> Unsorted</a><a class="keychip" href="/downloads" data-key="w" style="--key-order:9"><span class="br">[</span>w<span class="br">]</span> Downloads</a><a class="keychip" href="/" data-key="h" style="--key-order:10"><span class="br">[</span>h<span class="br">]</span> Home</a></div>
+    <nav class="keymap-group keymap-comms" aria-label="Comms"><p class="keymap-section">Comms</p><a class="keychip keymap-comm" href="/dog-comms" data-key="c"><span class="br">[</span>c<span class="br">]</span> Dog</a><a class="keychip keymap-comm" href="/red-folder-comms" data-key="e"><span class="br">[</span>e<span class="br">]</span> Red Folder</a><a class="keychip keymap-comm" href="/eagle-comms" data-key="l"><span class="br">[</span>l<span class="br">]</span> Eagle</a><a class="keychip keymap-comm" href="/ronald-comms" data-key="n"><span class="br">[</span>n<span class="br">]</span> Ronald</a><a class="keychip keymap-comm" href="/shot-comms" data-key="s"><span class="br">[</span>s<span class="br">]</span> Shot</a><a class="keychip keymap-comm" href="/boot-comms" data-key="k"><span class="br">[</span>k<span class="br">]</span> Boot</a><a class="keychip keymap-comm" href="/corona-comms" data-key="o"><span class="br">[</span>o<span class="br">]</span> Corona</a><a class="keychip keymap-comm" href="/central-casting" data-key="t"><span class="br">[</span>t<span class="br">]</span> Central Casting</a></nav>
+    <nav class="keymap-group keymap-tags" aria-label="Fact tags"><p class="keymap-section">Tags</p><a class="keychip keymap-tag" href="/tags/clearance-revoked">Revoked clearances</a><a class="keychip keymap-tag" href="/tags/trump-nicknames">Trump nicknames</a><a class="keychip keymap-tag" href="/tags/epstein-clients">Epstein Clients</a><a class="keychip keymap-tag" href="/tags/epstein-files">Epstein files</a><a class="keychip keymap-tag" href="/tags/masks">Masks</a><a class="keychip keymap-tag" href="/tags/transparency-act">Transparency Act</a><a class="keychip keymap-tag" href="/tags/endorsements">Endorsements</a><a class="keychip keymap-tag" href="/tags/harassment-records">Harassment records</a><a class="keychip keymap-tag" href="/tags/ukraine-aid">Ukraine aid</a><a class="keychip keymap-tag" href="/tags/one-big-beautiful-bill-act" title="One Big Beautiful Bill Act">Big Beautiful Bill</a><a class="keychip keymap-tag" href="/tags/save-act">SAVE Act</a><a class="keychip keymap-tag" href="/tags/secure-the-border-act" title="Secure the Border Act">Secure the Border</a><a class="keychip keymap-tag" href="/tags/laken-riley-act">Laken Riley Act</a><a class="keychip keymap-tag" href="/tags/save-america-act">SAVE America Act</a><a class="keychip keymap-tag" href="/tags/s-5271">S. 5271</a><a class="keychip keymap-tag" href="/tags/former-intel-agency-personnel">Former intel</a><a class="keychip keymap-tag" href="/tags/fraud">Fraud</a><a class="keychip keymap-tag" href="/tags/red-folder">Red folder</a></nav>
+    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm, red-folder-comm, and central-casting stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
+  </footer>
+  </div>
+  
+  <div id="tui-toast" class="tui-toast" hidden role="status" aria-live="polite">
+    <div class="box-pane toast-box">
+    <div class="box-h" aria-hidden="true"><span class="box-c">┌</span><span class="box-title">INFO</span><span class="box-dash"></span><span class="box-c">┐</span></div>
+    <div class="box-mid"><span class="box-c box-side" aria-hidden="true">│</span><div class="box-inner"><p class="toast-msg"></p></div><span class="box-c box-side" aria-hidden="true">│</span></div>
+    <div class="box-f" aria-hidden="true"><span class="box-c">└</span><span class="box-dash"></span><span class="box-c">┘</span></div>
+  </div>
+  </div>
+  <div id="tui-modal" class="tui-modal" hidden>
+    <div class="tui-modal-scrim" data-close-modal></div>
+    <div class="tui-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="box-pane is-active modal-box">
+    <div class="box-h" aria-hidden="true"><span class="box-c">┌</span><span class="box-title"><span id="modal-title">Preview</span></span><span class="box-dash"></span><span class="box-c">┐</span></div>
+    <div class="box-mid"><span class="box-c box-side" aria-hidden="true">│</span><div class="box-inner"><div id="modal-body"></div>
+        <hr class="hr">
+        <div class="modal-keys">
+          <button type="button" class="keychip" id="modal-ok"><span class="br">[</span>Enter<span class="br">]</span> Open</button>
+          <button type="button" class="keychip" id="modal-cancel" data-close-modal><span class="br">[</span>Esc<span class="br">]</span> Back</button>
+        </div></div><span class="box-c box-side" aria-hidden="true">│</span></div>
+    <div class="box-f" aria-hidden="true"><span class="box-c">└</span><span class="box-dash"></span><span class="box-c">┘</span></div>
+  </div>
+    </div>
+  </div>
+  <div id="tui-lightbox" class="tui-lightbox" hidden>
+    <div class="tui-lightbox-scrim" data-close-lightbox></div>
+    <figure class="tui-lightbox-frame" role="dialog" aria-modal="true" aria-labelledby="lightbox-title">
+      <img id="lightbox-img" alt="">
+      <video id="lightbox-video" controls playsinline hidden></video>
+      <figcaption id="lightbox-title" class="credit"></figcaption>
+      <button type="button" class="keychip" data-close-lightbox><span class="br">[</span>Esc<span class="br">]</span> Back</button>
+    </figure>
+  </div>
+  <script src="/app.js?v=1.2.34-fecf5192a5" defer></script>
+</body>
+</html>
