@@ -69,6 +69,11 @@ function walk(dir) {
 test("no-unlink: exittracectl failed start retires the pid file into var/retired/", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "et-ctl-retire-"));
   fs.copyFileSync(path.join(ROOT, "exittracectl.sh"), path.join(dir, "exittracectl.sh"));
+  // exittracectl sources scripts/lib/retire.sh and scripts/lib/proc.sh (main's retire_path).
+  fs.mkdirSync(path.join(dir, "scripts", "lib"), { recursive: true });
+  for (const lib of ["retire.sh", "proc.sh"]) {
+    fs.copyFileSync(path.join(ROOT, "scripts", "lib", lib), path.join(dir, "scripts", "lib", lib));
+  }
   fs.mkdirSync(path.join(dir, "app"));
   fs.writeFileSync(path.join(dir, "app", "server.mjs"), CTL_FAIL_STUB);
   const bin = stubBin(dir);
@@ -89,7 +94,7 @@ test("no-unlink: exittracectl failed start retires the pid file into var/retired
   assert.ok(!fs.existsSync(path.join(dir, "exittrace.pid")), "pid file no longer at its live path");
   const retired = path.join(dir, "var", "retired");
   assert.equal(fs.statSync(retired).mode & 0o777, 0o700);
-  const moved = fs.readdirSync(retired).filter((n) => /^exittrace\.pid\.\d{8}-\d{6}\.\d+$/.test(n));
+  const moved = fs.readdirSync(retired).filter((n) => /^exittrace\.pid\.\d{8}-\d{6}\.start-fail(\.\d+)?$/.test(n));
   assert.equal(moved.length, 1, `one retired pid file: ${fs.readdirSync(retired)}`);
   assert.match(fs.readFileSync(path.join(retired, moved[0]), "utf8"), /^\d+\n$/);
   assert.deepEqual(deleteCalls(dir), []);
