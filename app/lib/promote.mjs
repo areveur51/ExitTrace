@@ -294,21 +294,7 @@ export function eventsOfKind(events, kind) {
 }
 
 /** Notable events, newest event_date first. Null dates last, then seq ascending. */
-export function notableEvents(events) {
-  return (events || [])
-    .filter((ev) => isNotableKind(ev?.kind))
-    .slice()
-    .sort((a, b) => {
-      const da = asEventDate(a?.event_date) || "";
-      const db = asEventDate(b?.event_date) || "";
-      if (da !== db) {
-        if (!da) return 1;
-        if (!db) return -1;
-        return db.localeCompare(da);
-      }
-      return notableSeq(a) - notableSeq(b);
-    });
-}
+export const notableEvents = (events) => eventsOfKind(events, "notable");
 
 function compareUniqueEvents(a, b) {
   const d = String(b.event_date || "").localeCompare(String(a.event_date || ""));

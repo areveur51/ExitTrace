@@ -34,7 +34,7 @@ import {
   normalizeClearances,
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
-import { asEventDate, eventsOfKind, notableEvents, personEvents } from "./promote.mjs";
+import { asEventDate, eventsOfKind, personEvents } from "./promote.mjs";
 import { renderEventGraph } from "./event-graph.mjs";
 import { hostOf, isUnofficialOrCommentarySocial } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -2671,60 +2671,54 @@ function notableMediaFigures(ev) {
   return figures;
 }
 
-/**
- * Bottom Notable block. Same masonry as supporting media, plus factual context and cites.
- * Not the header portrait strip. Empty when the event has no prose, cite, shot, or clip.
- */
-function notableEventSection(ev, sourceNumbers) {
-  const masonry = supportingMediaHtml(notableMediaFigures(ev));
-  const cites = eventCiteParts(ev, sourceNumbers);
-  return personEventSection({
-    headHtml: eventHeadHtml(esc(notableSectionTitle(ev)), ev.event_date),
-    kind: "notable",
-    bodyHtml: `${commitProseHtml(ev.comments)}${eventOfficeHtml(ev)}`,
-    mediaHtml: masonry,
-    cites: cites.cites,
-    footHtml: cites.footHtml,
-    className: "detail-notable detail-supporting",
-    tag: "section",
-  });
-}
-
 /** Human label for a stored red_folder person event (heading and source group). */
 export const RED_FOLDER_EVENT_LABEL = "Red Folder";
 
 /**
- * Red Folder block on a person card: the event sentence, its office line, and its
- * media with captions (same masonry as Notable). One block per stored red_folder
- * event, newest first. It never sets the card headline (red_folder is not a catalog kind).
+ * One block per stored event of a repeatable kind (Notable, Red Folder): the event
+ * sentence, its office line, and its media with captions in the supporting-media
+ * masonry, plus its cites. Not the header portrait strip. Empty when the event has
+ * no prose, cite, shot, or clip. Neither block sets the card headline here; that
+ * stays derivePersonFields' job (red_folder is not a catalog kind).
  */
-function redFolderEventSection(ev, sourceNumbers) {
+function kindEventSection(ev, sourceNumbers, { title, kind, className }) {
   const masonry = supportingMediaHtml(notableMediaFigures(ev));
   const cites = eventCiteParts(ev, sourceNumbers);
   return personEventSection({
-    headHtml: eventHeadHtml(esc(RED_FOLDER_EVENT_LABEL), ev.event_date),
-    kind: "red_folder",
+    headHtml: eventHeadHtml(esc(title), ev.event_date),
+    kind,
     bodyHtml: `${commitProseHtml(ev.comments)}${eventOfficeHtml(ev)}`,
     mediaHtml: masonry,
     cites: cites.cites,
     footHtml: cites.footHtml,
-    className: "detail-red-folder detail-supporting",
+    className,
     tag: "section",
   });
 }
 
-export function redFolderEventHtml(row, sourceNumbers) {
-  return eventsOfKind(personEvents(row), "red_folder")
-    .map((ev) => redFolderEventSection(ev, sourceNumbers))
+/** Repeatable-kind blocks in page order: every Notable, then every Red Folder. */
+const KIND_EVENT_SECTIONS = [
+  { kind: "notable", title: (ev) => notableSectionTitle(ev), className: "detail-notable detail-supporting" },
+  { kind: "red_folder", title: () => RED_FOLDER_EVENT_LABEL, className: "detail-red-folder detail-supporting" },
+];
+
+/** [{ kind, html }] for one repeatable kind, newest first (eventsOfKind order). */
+function kindEventNodes(row, kind, sourceNumbers) {
+  const spec = KIND_EVENT_SECTIONS.find((s) => s.kind === kind);
+  if (!spec) return [];
+  return eventsOfKind(personEvents(row), kind)
+    .map((ev) => kindEventSection(ev, sourceNumbers, { title: spec.title(ev), kind, className: spec.className }))
     .filter(Boolean)
-    .join("");
+    .map((html) => ({ kind, html }));
+}
+
+/** Every block of one repeatable kind ("notable" or "red_folder"), joined. */
+export function kindEventsHtml(row, kind, sourceNumbers) {
+  return kindEventNodes(row, kind, sourceNumbers).map((n) => n.html).join("");
 }
 
 export function notableMediaHtml(row, sourceNumbers) {
-  return notableEvents(personEvents(row))
-    .map((ev) => notableEventSection(ev, sourceNumbers))
-    .filter(Boolean)
-    .join("");
+  return kindEventsHtml(row, "notable", sourceNumbers);
 }
 
 /** Stored endorsement. It does not replace the card category or date. */
@@ -2887,14 +2881,7 @@ function specialEventNodes(row, sourceNumbers) {
       return html ? { kind, html } : null;
     })
     .filter(Boolean);
-  for (const ev of notableEvents(personEvents(row))) {
-    const html = notableEventSection(ev, sourceNumbers);
-    if (html) nodes.push({ kind: "notable", html });
-  }
-  for (const ev of eventsOfKind(personEvents(row), "red_folder")) {
-    const html = redFolderEventSection(ev, sourceNumbers);
-    if (html) nodes.push({ kind: "red_folder", html });
-  }
+  for (const { kind } of KIND_EVENT_SECTIONS) nodes.push(...kindEventNodes(row, kind, sourceNumbers));
   return nodes;
 }
 

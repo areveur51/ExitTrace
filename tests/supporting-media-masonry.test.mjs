@@ -73,7 +73,7 @@ test("every supporting-media surface calls the shared helper", () => {
     assert.match(fnBody(name), /supportingMediaSection\(/, name);
   }
   for (const name of [
-    "notableEventSection", // Notable
+    "kindEventSection", // Notable and Red Folder blocks
     "shotEventHtml", // Shot comm on a person card
     "eventTagRow", // shot event row
     "centralCastingMediaHtml", // Central Casting clips on a person card

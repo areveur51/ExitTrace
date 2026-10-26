@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { personDetail, redFolderEventHtml } from "../app/lib/html.mjs";
+import { personDetail, kindEventsHtml } from "../app/lib/html.mjs";
 import {
   REPEATABLE_EVENT_KINDS,
   attachPersonEvent,
@@ -104,7 +104,7 @@ test("multi-event: several red_folder events on one person; headline unchanged; 
   assert.doesNotMatch(html, /· red_folder/, "no raw kind in the source label");
   assert.match(html, /Jun 13, 2024 · Red Folder/);
   // The media sit in the Red Folder blocks, not in the generic supporting block.
-  const blocks = redFolderEventHtml(p);
+  const blocks = kindEventsHtml(p, "red_folder");
   for (const m of [...RF_A.media, ...RF_B.media]) {
     const n = (html.match(new RegExp(m.src.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"), "g")) || []).length;
     const inBlocks = (blocks.match(new RegExp(m.src.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"), "g")) || []).length;
