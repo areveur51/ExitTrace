@@ -192,3 +192,15 @@ Copy this into the hub runbook. This PR does not edit a live hub runbook and doe
 - Timers stay on a 10 minute band inside 5–15 minutes. Poll `OnBootSec=5min`, worker `OnBootSec=8min` (about 3 minutes later). Both `OnUnitActiveSec=10min`. No interval under 5 minutes. Install the templates on the host; do not tighten them for 402/429.
 - Mentions are leads, not cites. Fail closed. Do not invent cites. Do not publish `mention_queue`. Do not touch the parked database.
 - Final reply (Admiral CLEAR ~2026-09-23 7:28pm ET): `ExitTrace kept {name}.` plus a host screenshot of the public KEEP detail page, to the first mentioner only when the dig status is `kept` for a person, operation, dog comm, corona comm, red folder comm, or central casting comm. The text has no URL. The page is the public glass theme (dark chrome the world sees), not lab-auth, admin, localhost, or port 5220, and not an X post screenshot or a local HTML file. No reply on fail-closed, rejected, ambiguous, holiday, or dig failure. No second final for a later mention of that subject or another KEEP that shares the slug. Soft-ack stays off.
+
+## Capture profile
+
+Any manual or agent Chrome or Playwright run for a dig must put the browser profile outside this repo:
+
+```bash
+--user-data-dir="$(node scripts/capture-profile-dir.mjs <case>)"
+```
+
+Never pass a user-data directory under the repo, including `scratch/<case>/chrome-profile`. The case is a lowercase slug such as `guilfoyle-newsom`, not a path.
+
+The default base is `/opt/GrokBuild/exittrace/capture-profiles`. The profile directory is `<base>/<case>`. Set `ET_CAPTURE_PROFILE_DIR` to an absolute directory to override that base. The resolved directory is refused when any path component is a symlink, or when it lies inside any git work tree or git directory. That includes a normal checkout, a linked worktree, that worktree's main checkout, and a bare repository. A missing git binary fails closed, and so does any git failure other than "not a git repository". An existing directory above the base is refused when it is group or world writable without the sticky bit, or when its owner is neither root nor the current user. The base and every existing directory at or below it, including the leaf, are refused when they are group or world writable or have the wrong owner. The leaf is also refused when its owner lacks read, write, and search permission; otherwise only owner bits are kept. `scripts/capture-profile-dir.mjs` prints the absolute physical path, or an ALERT and exit 2 when it refuses. `scratch/x-capture/capture-live-x.mjs` and `scratch/x-capture/batch-capture.mjs` keep an ephemeral profile. A persistent profile still has to come from `scripts/capture-profile-dir.mjs`.

@@ -1,5 +1,7 @@
 /**
  * LIVE headed x.com capture — dark theme + grey-border crop.
+ * Ephemeral profile only (chromium.launch + newContext).
+ * For a persistent profile, use scripts/capture-profile-dir.mjs.
  */
 import { chromium } from "playwright";
 import fs from "fs";
