@@ -34,6 +34,8 @@ import {
   matchesTags,
   normalizeTags,
 } from "./tags.mjs";
+import { MENU_ATTRIBUTE_TAG_IDS } from "./tags.mjs";
+import { membershipMasks } from "./tag-search.mjs";
 import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
 import { mergeNicknames, nicknameCatalogDate, normalizeNicknames } from "./nicknames.mjs";
@@ -219,21 +221,60 @@ async function withSearchSlot(signal, fn) {
 /** Postgres catalog reads only. Memory tests stay live. Direct SQL shows up within this window. An expired snapshot is served once while it refreshes. */
 const CATALOG_CACHE_MS = 12_000;
 let catalogEpoch = 0;
-let countsCache = null;
-let countsInflight = null;
 let allPeopleCache = null;
 let allPeopleInflight = null;
+/** cachedCatalogRead slots by name: { cache: { at, value } | null, inflight: { epoch, promise } | null }. */
+const catalogSlots = new Map();
 
 function dropCatalogCache() {
   catalogEpoch += 1;
-  countsCache = null;
-  countsInflight = null;
   allPeopleCache = null;
   allPeopleInflight = null;
+  for (const slot of catalogSlots.values()) {
+    slot.cache = null;
+    slot.inflight = null;
+  }
 }
 
 function catalogCacheFresh(entry) {
   return Boolean(entry) && Date.now() - entry.at < CATALOG_CACHE_MS;
+}
+
+function refreshCatalogSlot(slot, loader) {
+  const epoch = catalogEpoch;
+  if (slot.inflight && slot.inflight.epoch === epoch) return slot.inflight.promise;
+  const promise = Promise.resolve()
+    .then(loader)
+    .then((value) => {
+      // A catalog write during the read bumps the epoch: the stale result is not cached.
+      if (epoch === catalogEpoch) slot.cache = { at: Date.now(), value };
+      return value;
+    })
+    .finally(() => {
+      if (slot.inflight && slot.inflight.promise === promise) slot.inflight = null;
+    });
+  slot.inflight = { epoch, promise };
+  return promise;
+}
+
+/**
+ * Postgres catalog read behind the shared cache: a fresh value is returned as is,
+ * an expired one is served once while one refresh runs, and concurrent misses in
+ * the same epoch share one in-flight loader call. dropCatalogCache clears every slot.
+ * Used by counts() and tagMembership().
+ */
+export function cachedCatalogRead(name, loader) {
+  let slot = catalogSlots.get(name);
+  if (!slot) {
+    slot = { cache: null, inflight: null };
+    catalogSlots.set(name, slot);
+  }
+  if (catalogCacheFresh(slot.cache)) return Promise.resolve(slot.cache.value);
+  if (slot.cache) {
+    refreshCatalogSlot(slot, loader).catch(() => {});
+    return Promise.resolve(slot.cache.value);
+  }
+  return refreshCatalogSlot(slot, loader);
 }
 
 export function backendName() {
@@ -1237,6 +1278,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       minAge: maybeOpts?.minAge,
       maxAge: maybeOpts?.maxAge,
       tags: maybeOpts?.tags,
+      tagMatch: maybeOpts?.tagMatch,
       unsealed: maybeOpts?.unsealed === true,
       cardOrder: maybeOpts?.cardOrder === true,
     };
@@ -1249,6 +1291,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
       minAge: categoryOrOpts.minAge,
       maxAge: categoryOrOpts.maxAge,
       tags: categoryOrOpts.tags,
+      tagMatch: categoryOrOpts.tagMatch,
       unsealed: categoryOrOpts.unsealed === true,
       cardOrder: categoryOrOpts.cardOrder === true,
     };
@@ -1260,6 +1303,7 @@ function parseListArgs(categoryOrOpts, maybeOpts) {
     minAge: maybeOpts?.minAge,
     maxAge: maybeOpts?.maxAge,
     tags: maybeOpts?.tags,
+    tagMatch: maybeOpts?.tagMatch,
     unsealed: maybeOpts?.unsealed === true,
     cardOrder: maybeOpts?.cardOrder === true,
   };
@@ -1428,9 +1472,17 @@ function peopleAgeWhere(params, { minAge, maxAge } = {}, categories = []) {
   return ` AND ${clauses.join(" AND ")}`;
 }
 
-function peopleTagWhere(params, tags) {
+/**
+ * Fact/identity tag filter. Default is OR (any selected tag). `match === "all"`
+ * ANDs one single-tag clause per tag, so each tag keeps the exact membership
+ * test the /tags/<slug> list uses.
+ */
+function peopleTagWhere(params, tags, match = "any") {
   const selected = normalizeTags(tags);
   if (!selected.length) return "";
+  if (match === "all" && selected.length > 1) {
+    return selected.map((id) => peopleTagWhere(params, [id])).join("");
+  }
   params.push(selected);
   const tagN = params.length;
   const implied = kindsImplyingTags(selected);
@@ -1485,9 +1537,9 @@ export function peopleUnsealedWhere(params, unsealed, categories) {
   )`;
 }
 
-function peopleWhere(categories, params, ageFilter, tags, unsealed) {
+function peopleWhere(categories, params, ageFilter, tags, unsealed, tagMatch = "any") {
   const kindSql = peopleKindWhere(categories, params);
-  const tagSql = peopleTagWhere(params, tags);
+  const tagSql = peopleTagWhere(params, tags, tagMatch);
   const ageSql = peopleAgeWhere(params, ageFilter, categories);
   const unsealedSql = peopleUnsealedWhere(params, unsealed, categories);
   const extra = `${tagSql}${ageSql}${unsealedSql}`;
@@ -1569,6 +1621,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const categories = asCategories(args.category);
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const tags = normalizeTags(args.tags);
+  const tagMatch = args.tagMatch === "all" ? "all" : "any";
   const unsealed = args.unsealed === true;
   const cardOrder = args.cardOrder === true;
   const p = await getPool();
@@ -1580,7 +1633,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
       rows = rows.filter((r) => personHasKind(r, categories));
     }
     if (tags.length) {
-      rows = rows.filter((r) => matchesTags(r, tags));
+      rows = rows.filter((r) => matchesTags(r, tags, { match: tagMatch }));
     }
     if (unsealed) {
       rows = rows.filter((r) => personIndictmentUnsealed(r, categories));
@@ -1595,7 +1648,7 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
     return rows.slice();
   }
   const params = [];
-  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed)}`;
+  let sql = `SELECT * FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed, tagMatch)}`;
   sql += peopleKindOrder(categories, params, { cardDate: cardOrder });
   if (limit != null) {
     params.push(limit);
@@ -1655,6 +1708,7 @@ export async function countPeople(categoryOrOpts) {
   const categories = asCategories(args.category);
   const ageFilter = { minAge: args.minAge, maxAge: args.maxAge };
   const tags = normalizeTags(args.tags);
+  const tagMatch = args.tagMatch === "all" ? "all" : "any";
   const unsealed = args.unsealed === true;
   const p = await getPool();
   if (!p) {
@@ -1663,7 +1717,7 @@ export async function countPeople(categoryOrOpts) {
       rows = rows.filter((r) => personHasKind(r, categories));
     }
     if (tags.length) {
-      rows = rows.filter((r) => matchesTags(r, tags));
+      rows = rows.filter((r) => matchesTags(r, tags, { match: tagMatch }));
     }
     if (unsealed) {
       rows = rows.filter((r) => personIndictmentUnsealed(r, categories));
@@ -1681,10 +1735,54 @@ export async function countPeople(categoryOrOpts) {
   }
   const params = [];
   const q = await p.query(
-    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed)}`,
+    `SELECT COUNT(*)::int AS n FROM people${peopleWhere(categories, params, ageFilter, tags, unsealed, tagMatch)}`,
     params,
   );
   return q.rows[0].n;
+}
+
+/**
+ * Fact-tag membership for the home tag search. Each tag's members come from the
+ * same filter listPeople({ tags: [id] }) uses for /tags/<slug> (peopleWhere in
+ * Postgres, matchesTags in memory), in one read. Returns per-tag counts and a
+ * mask histogram (tag-search.mjs) for client-side All/Any counts. `members` holds
+ * per-tag id Sets for server-side use only; the page payload gets counts and masks.
+ */
+export async function tagMembership() {
+  const p = await getPool();
+  if (!p) return buildTagMembership(memoryTagMembers());
+  return cachedCatalogRead("tagMembership", () => tagMembershipUncached(p));
+}
+
+async function tagMembershipUncached(p) {
+  const params = [];
+  const parts = MENU_ATTRIBUTE_TAG_IDS.map(
+    (id, i) => `SELECT ${i}::int AS i, id FROM people${peopleWhere([], params, {}, [id], false)}`,
+  );
+  const q = await p.query(parts.join(" UNION ALL "), params);
+  const members = Object.fromEntries(MENU_ATTRIBUTE_TAG_IDS.map((id) => [id, []]));
+  for (const row of q.rows) {
+    const id = MENU_ATTRIBUTE_TAG_IDS[Number(row.i)];
+    if (id) members[id].push(row.id);
+  }
+  return buildTagMembership(members);
+}
+
+function memoryTagMembers() {
+  const rows = getMemory().people.map((r) => projectPerson(r));
+  return Object.fromEntries(
+    MENU_ATTRIBUTE_TAG_IDS.map((id) => [id, rows.filter((r) => matchesTags(r, [id])).map((r) => r.id)]),
+  );
+}
+
+function buildTagMembership(members) {
+  const counts = {};
+  const sets = {};
+  for (const id of MENU_ATTRIBUTE_TAG_IDS) {
+    sets[id] = new Set(members[id] || []);
+    counts[id] = sets[id].size;
+  }
+  return { ids: MENU_ATTRIBUTE_TAG_IDS.slice(), counts, masks: membershipMasks(members), members: sets };
 }
 
 export async function countKindComms(kind) {
@@ -2916,28 +3014,10 @@ export async function insertCentralCastingClip(row) {
   return clip;
 }
 
-function refreshCounts() {
-  const epoch = catalogEpoch;
-  if (countsInflight && countsInflight.epoch === epoch) return countsInflight.promise;
-  const promise = countsUncached().then((value) => {
-    if (epoch === catalogEpoch) countsCache = { at: Date.now(), value };
-    return value;
-  }).finally(() => {
-    if (countsInflight && countsInflight.promise === promise) countsInflight = null;
-  });
-  countsInflight = { epoch, promise };
-  return promise;
-}
-
 export async function counts() {
   const p = await getPool();
   if (!p) return countsUncached();
-  if (catalogCacheFresh(countsCache)) return countsCache.value;
-  if (countsCache) {
-    refreshCounts().catch(() => {});
-    return countsCache.value;
-  }
-  return refreshCounts();
+  return cachedCatalogRead("counts", countsUncached);
 }
 
 /** Per person, per kind: largest eventHeadcount (default 1). Matches the census MAX. */

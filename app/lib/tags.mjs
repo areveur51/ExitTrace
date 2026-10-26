@@ -145,6 +145,9 @@ export function attributeTagHref(tag) {
 /** Fact tags listed in the Tags menu and on /tags. A `menu: false` tag is reached through its href. */
 export const MENU_ATTRIBUTE_TAGS = ATTRIBUTE_TAGS.filter((t) => t.menu !== false);
 
+/** Ids of the Tags-menu tags, in menu order (home tag search reads these). */
+export const MENU_ATTRIBUTE_TAG_IDS = MENU_ATTRIBUTE_TAGS.map((t) => t.id);
+
 /**
  * General description at the top of each `/tags/<slug>` page. One map for every Tags-menu tag.
  * Record-only text: what a bill does plus its recorded votes, or what qualifies a card for the tag.
@@ -450,12 +453,15 @@ export function kindsImplyingTags(tags) {
   return kinds;
 }
 
-/** OR: a person matches if they have any of the selected tags. */
-export function matchesTags(row, tags) {
+/**
+ * Default OR: a person matches if they have any of the selected tags.
+ * `{ match: "all" }` is AND: the person must have every selected tag.
+ */
+export function matchesTags(row, tags, { match = "any" } = {}) {
   const want = normalizeTags(tags);
   if (!want.length) return true;
   const have = new Set(personTags(row));
-  return want.some((id) => have.has(id));
+  return match === "all" ? want.every((id) => have.has(id)) : want.some((id) => have.has(id));
 }
 
 /** True when the tags query includes the indictment event token `unsealed`. */
@@ -567,4 +573,21 @@ export function attributeTagById(id) {
 export function attributeTagByPath(pathname) {
   const p = String(pathname || "").split("?")[0];
   return ATTRIBUTE_TAGS.find((t) => t.path === p) || null;
+}
+
+/**
+ * Display-only short labels for fact tags whose full `nav` name is too long for one
+ * line in the Tags menu. Tag ids, slugs, `nav`, and the tag pages' own titles are
+ * unchanged. The Tags menu and the home tag search both read this one map.
+ */
+const TAG_SHORT_LABELS = Object.freeze({
+  big_beautiful_bill_act: "Big Beautiful Bill",
+  secure_the_border_act: "Secure the Border",
+});
+
+/** Short label for a fact tag (object or id): the menu label, else its `nav`. Empty for an unknown id. */
+export function tagShortLabel(tag) {
+  const t = typeof tag === "string" ? attributeTagById(tag) : tag;
+  if (!t || !t.id) return "";
+  return TAG_SHORT_LABELS[t.id] || t.nav;
 }

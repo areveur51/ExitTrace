@@ -478,3 +478,185 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+/**
+ * Tag search (home and /search). Pure helpers first, then the binder.
+ * Chip picks, Match, Clear and back/forward run here with NO network request:
+ * counts come from the inline [data-tf-data] mask payload the page shipped with.
+ * Only the form submit navigates (one /search request, the limited one).
+ */
+const ET_TAG_SEARCH = {
+  parse(search, ids) {
+    const params = new URLSearchParams(search || "");
+    const known = new Set(ids || []);
+    const tags = [];
+    const raw = params.getAll("tags").slice(0, 32).join(",");
+    if (raw.length <= 1024) {
+      for (const tok of raw.split(",").slice(0, 32)) {
+        const id = tok.trim().toLowerCase().replace(/-/g, "_");
+        if (known.has(id) && !tags.includes(id)) tags.push(id);
+      }
+    }
+    tags.sort((a, b) => ids.indexOf(a) - ids.indexOf(b));
+    const match = String(params.get("match") || "").trim().toLowerCase() === "any" ? "any" : "all";
+    return { q: (params.get("q") || "").trim(), tags, match };
+  },
+  href(base, state, ids) {
+    const params = new URLSearchParams();
+    if (state.q) params.set("q", state.q);
+    const known = new Set(ids || []);
+    const tags = (state.tags || []).filter((id) => known.has(id));
+    if (tags.length) {
+      params.set("tags", tags.join(","));
+      params.set("match", state.match === "any" ? "any" : "all");
+    }
+    const qs = params.toString().replace(/%2C/g, ",");
+    return qs ? `${base}?${qs}` : base;
+  },
+  count(data, tags, match) {
+    let want = 0;
+    for (const id of new Set(tags || [])) {
+      const i = (data.ids || []).indexOf(id);
+      if (i >= 0) want += 2 ** i;
+    }
+    if (!want) return 0;
+    let n = 0;
+    for (const [m, people] of data.masks || []) {
+      const hit = m & want;
+      if (match === "any" ? hit !== 0 : hit === want) n += people;
+    }
+    return n;
+  },
+};
+
+function bindTagSearch() {
+  const root = document.querySelector("[data-tag-filter]");
+  const form = root && root.closest("form");
+  const dataEl = root && root.querySelector("[data-tf-data]");
+  if (!root || !form || !dataEl) return;
+  let data;
+  try {
+    data = JSON.parse(dataEl.textContent || "{}");
+  } catch {
+    return;
+  }
+  const ids = Array.isArray(data.ids) ? data.ids : [];
+  const base = root.getAttribute("data-tf-base") === "/" ? "/" : "/search";
+  const applied = root.getAttribute("data-tf-applied") || "";
+  const details = root.querySelector("[data-tf-add]");
+  const findWrap = root.querySelector("[data-tf-find-wrap]");
+  const find = root.querySelector("[data-tf-find]");
+  const opts = [...root.querySelectorAll("[data-tf-opt]")];
+  const boxes = opts.map((o) => o.querySelector('input[name="tags"]'));
+  const radios = [...root.querySelectorAll('input[name="match"]')];
+  const chipsRow = root.querySelector("[data-tf-chips]");
+  const clear = root.querySelector("[data-tf-clear]");
+  const countEl = root.querySelector("[data-tf-count]");
+  const nEl = root.querySelector("[data-tf-n]");
+  const nounEl = root.querySelector("[data-tf-noun]");
+  const qInput = form.querySelector('input[name="q"]');
+  const labelOf = (id) => {
+    const box = boxes.find((b) => b && b.value === id);
+    const t = box && box.closest("[data-tf-opt]").querySelector(".tf-opt-t");
+    return t ? t.textContent : id;
+  };
+  // URL keyword: the q the page was loaded with (typed text only goes out on submit).
+  const urlQ = () => ET_TAG_SEARCH.parse(location.search, ids).q;
+  const state = () => ({
+    q: base === "/search" ? urlQ() : "",
+    tags: boxes.filter((b) => b && b.checked).map((b) => b.value),
+    match: (radios.find((r) => r.checked) || {}).value === "any" ? "any" : "all",
+  });
+  if (findWrap) findWrap.hidden = false;
+  // The submit (or Enter) builds the canonical /search URL: one /search request.
+  // Chips and Match update the live count and the URL locally.
+  function render() {
+    const s = state();
+    for (const o of opts) {
+      const box = o.querySelector("input");
+      o.classList.toggle("is-on", Boolean(box && box.checked));
+    }
+    for (const r of radios) r.closest(".tf-radio")?.classList.toggle("is-on", r.checked);
+    for (const chip of [...chipsRow.querySelectorAll("[data-tf-chip]")]) chip.remove();
+    for (const id of s.tags) {
+      const chip = document.createElement("span");
+      chip.className = "tf-chip";
+      chip.setAttribute("data-tf-chip", id);
+      chip.textContent = labelOf(id);
+      const x = document.createElement("a");
+      x.className = "tf-chip-x";
+      x.setAttribute("data-tf-remove", id);
+      x.setAttribute("aria-label", `Remove ${labelOf(id)}`);
+      x.href = ET_TAG_SEARCH.href(base, { ...s, tags: s.tags.filter((t) => t !== id) }, ids);
+      x.textContent = "✕";
+      chip.appendChild(x);
+      chipsRow.insertBefore(chip, clear);
+    }
+    if (clear) clear.href = ET_TAG_SEARCH.href(base, { q: s.q, tags: [] }, ids);
+    chipsRow.hidden = !s.tags.length;
+    const n = ET_TAG_SEARCH.count(data, s.tags, s.match);
+    if (nEl) nEl.textContent = String(n);
+    if (nounEl) nounEl.textContent = n === 1 ? "person matches" : "people match";
+    if (countEl) countEl.hidden = !s.tags.length || !Array.isArray(data.masks);
+    const pending = base === "/search" && ET_TAG_SEARCH.href("/search", s, ids) !== applied;
+    document.documentElement.toggleAttribute("data-tf-pending", pending);
+  }
+  function pushUrl() {
+    const url = ET_TAG_SEARCH.href(base, state(), ids);
+    if (url !== `${location.pathname}${location.search}`) history.pushState({ tf: 1 }, "", url);
+  }
+  function setFrom(search) {
+    const s = ET_TAG_SEARCH.parse(search, ids);
+    for (const b of boxes) if (b) b.checked = s.tags.includes(b.value);
+    for (const r of radios) r.checked = r.value === s.match;
+    render();
+  }
+  for (const b of boxes) b?.addEventListener("change", () => { render(); pushUrl(); });
+  for (const r of radios) r.addEventListener("change", () => { render(); pushUrl(); });
+  root.addEventListener("click", (e) => {
+    const x = e.target.closest("[data-tf-remove]");
+    if (x) {
+      e.preventDefault();
+      const box = boxes.find((b) => b && b.value === x.getAttribute("data-tf-remove"));
+      if (box) box.checked = false;
+      render();
+      pushUrl();
+      return;
+    }
+    if (e.target.closest("[data-tf-clear]")) {
+      e.preventDefault();
+      for (const b of boxes) if (b) b.checked = false;
+      render();
+      pushUrl();
+    }
+  });
+  find?.addEventListener("input", () => {
+    const needle = find.value.trim().toLowerCase();
+    for (const o of opts) o.hidden = Boolean(needle) && !(o.getAttribute("data-tf-find-text") || "").includes(needle);
+  });
+  find?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") e.preventDefault();
+  });
+  details?.addEventListener("toggle", () => {
+    if (details.open && find && window.matchMedia("(hover: hover)").matches) find.focus();
+  });
+  document.addEventListener("click", (e) => {
+    if (details?.open && !details.contains(e.target)) details.open = false;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && details?.open) {
+      details.open = false;
+      details.querySelector("summary")?.focus();
+    }
+  });
+  window.addEventListener("popstate", () => setFrom(location.search));
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const s = state();
+    s.q = qInput ? qInput.value.trim() : "";
+    window.location.assign(ET_TAG_SEARCH.href("/search", s, ids));
+  });
+  render();
+}
+
+document.addEventListener("DOMContentLoaded", bindTagSearch);
