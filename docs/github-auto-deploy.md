@@ -88,7 +88,7 @@ Scheduled dump reads `vars.SYNC_MODE` (default `dump`). Dispatch input wins, so 
 
 **Intentional:** if lab (the publisher) ever gains a subscription of its own, lab's boot writers skip too. That is the same fail-closed rule, not a bug. Rows on any subscriber come from the stream or a signed one-off, never from boot.
 
-`tests/bootstrap-stripped-pg.test.mjs` applies the stripped bootstrap SQL to an EMPTY throwaway Postgres named by `ET_SCRATCH_PG_URL` (localhost only; never lab or Render) and skips when it is unset. CI needs a `postgres:16` service on the `test` job (trust auth, database `et_scratch`) with `ET_SCRATCH_PG_URL=postgresql://postgres@localhost:5432/et_scratch` on the `npm test` step. No `@boot-data-write` marker may sit inside a `DO $$ ... $$` block (unit-tested).
+`tests/bootstrap-stripped-pg.test.mjs` applies the stripped bootstrap SQL to an EMPTY throwaway Postgres named by `ET_SCRATCH_PG_URL` (never lab or Render) and skips when it is unset. The shared guard `tests/scratch-pg.mjs` makes the test fail unless the URL is exactly `postgres[ql]://<localhost|127.0.0.1|[::1]>[:port]/<database>` (no query string, fragment, user or password; the database is not exittrace), no routing `PG*` variable is set (only `PGPASSWORD` / `PGPASSFILE` are allowed), and, after connect, `inet_server_addr()` is loopback or NULL, the server port is the URL's port and `current_database()` is the one asked for. The role is `ET_SCRATCH_PG_USER` (default `postgres`). CI needs a `postgres:16` service on the `test` job (trust auth, database `et_scratch`) with `ET_SCRATCH_PG_URL=postgresql://localhost:5432/et_scratch` on the `npm test` step. No `@boot-data-write` marker may sit inside a `DO $$ ... $$` block (unit-tested).
 
 ## Logical apply heal
 

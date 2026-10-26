@@ -1,6 +1,8 @@
 /**
  * Multi-event migrations on a real Postgres (the CI postgres:16 service; locally a
- * throwaway localhost cluster). Skips unless ET_SCRATCH_PG_URL is set and local.
+ * throwaway localhost cluster). Skips unless ET_SCRATCH_PG_URL is set; when set,
+ * tests/scratch-pg.mjs refuses (the test fails) anything but a plain loopback URL
+ * and checks the server's address, port and database after every connect.
  * Never lab, never Render.
  *
  * Each run creates two fresh databases (lab-shaped and render-shaped) named
@@ -25,16 +27,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import pg from "pg";
 import { attachPersonEvent, projectPerson } from "../app/lib/promote.mjs";
 import { syncPersonEvents } from "../app/lib/store.mjs";
+import { connectScratch, scratchPgTarget } from "./scratch-pg.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MIG = (step) => fs.readFileSync(path.join(ROOT, "scripts/migrations", `2026-10-26-multi-event-${step}.sql`), "utf8");
 const URL_ENV = process.env.ET_SCRATCH_PG_URL || "";
-const LOCAL = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-const local = (() => { try { return LOCAL.has(new URL(URL_ENV).hostname); } catch { return false; } })();
-const skip = !URL_ENV ? "ET_SCRATCH_PG_URL unset" : !local ? "ET_SCRATCH_PG_URL is not localhost" : false;
+// Set but unsafe is a failure, not a skip: scratchPgTarget throws inside the test.
+const skip = URL_ENV ? false : "ET_SCRATCH_PG_URL unset";
 
 const PEOPLE_SQL = "CREATE TABLE people (id TEXT PRIMARY KEY, name TEXT)";
 // Lab's person_events at 2026-10-26 12:14 ET (read-only dump): phase A.
@@ -54,12 +55,9 @@ CREATE UNIQUE INDEX person_events_person_kind_seq_key ON person_events (person_i
 // Worf's model of an unmigrated subscriber: the same table without seq or the phase A index.
 const PE_NO_SEQ = PE_LAB.replace("  seq INTEGER NOT NULL DEFAULT 0,\n", "").replace(/CREATE UNIQUE INDEX[^;]+;/, "");
 
-async function withDb(admin, name, fn) {
+async function withDb(admin, target, name, fn) {
   await admin.query(`CREATE DATABASE ${name}`);
-  const u = new URL(URL_ENV);
-  u.pathname = `/${name}`;
-  const c = new pg.Client({ connectionString: u.toString() });
-  await c.connect();
+  const c = await connectScratch(target, name);
   try { return await fn(c); } finally { await c.end(); }
 }
 
@@ -115,11 +113,11 @@ const mainRead = async (c) => (await c.query(
 )).rows.map((r) => `${r.id}:${r.d}`);
 
 test("multi-event on Postgres: render-a, lab, render-b and the rollback; public code ignores the extra seq column", { skip }, async () => {
-  const admin = new pg.Client({ connectionString: URL_ENV });
-  await admin.connect();
+  const target = scratchPgTarget(URL_ENV);
+  const admin = await connectScratch(target);
   const tag = `et_multi_event_${process.pid}_${Date.now()}`;
   try {
-    await withDb(admin, `${tag}_render`, async (render) => {
+    await withDb(admin, target, `${tag}_render`, async (render) => {
       await seed(render, false);
       const keys0 = await byKey(render);
       const read0 = await mainRead(render);
@@ -169,7 +167,7 @@ test("multi-event on Postgres: render-a, lab, render-b and the rollback; public 
       assert.deepEqual(await checks(render), checks0);
       await mainWrite(render, "carol", "endorsement", "2026-01-02");
     });
-    await withDb(admin, `${tag}_lab`, async (lab) => {
+    await withDb(admin, target, `${tag}_lab`, async (lab) => {
       await seed(lab, true);
       const keys0 = await byKey(lab);
       const checks0 = await checks(lab);
