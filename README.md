@@ -148,7 +148,7 @@ Releases:
 | `/eagle-comms` | Official government X posts that include an eagle, stored locally |
 | `/ronald-comms` | Official and news-org X posts about Ronald McDonald, stored locally |
 | `/boot-comms` | Official and news-org posts of a public figure in a medical walking boot, stored locally |
-| `/red-folder-comms` | Stored official and news-org posts about a red folder (catalog, not a person) |
+| `/red-folder-comms` | People stored with a red folder, and stored red-folder posts |
 | `/central-casting` | Central Casting unique-person cards. `/central-casting-comms` redirects here |
 | `/dashboard` | Live unique-person ranks, Counts by Age, and event-date trends |
 | `/dashboard/age` | Counts by Age — unique people in fixed bands (missing birth date is not guessed) |

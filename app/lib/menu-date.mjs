@@ -125,7 +125,14 @@ export function personMenuDate(row, menu = {}) {
   if (VOTE_NO_KINDS.has(tag)) {
     return newest(eventsOf(row, [tag]).map((ev) => ev.event_date));
   }
-  if (tag === "masks" || tag === "former_intel_agency_personnel" || tag === "fraud") return "";
+  if (
+    tag === "masks" ||
+    tag === "former_intel_agency_personnel" ||
+    tag === "fraud" ||
+    tag === "red_folder"
+  ) {
+    return "";
+  }
   if (menu.centralCasting) {
     return newest(eventsOf(row, ["central_casting"]).map((ev) => ev.event_date));
   }

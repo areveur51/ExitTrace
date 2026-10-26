@@ -230,7 +230,7 @@ export const CATEGORIES = [
     title: "Red Folder comms",
     nav: "Red Folder comms",
     path: "/red-folder-comms",
-    blurb: "Stored official and news-org posts about a red folder. Catalog page of posts, not a person row. Stored locally; the source URL is a citation only.",
+    blurb: "People stored with a red folder, and stored red-folder posts.",
   },
   {
     id: "central_casting",

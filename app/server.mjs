@@ -75,6 +75,8 @@ import {
   kindDetail,
   kindList,
   dogCatalogList,
+  redFolderCatalogItems,
+  redFolderCatalogList,
   shotCatalogList,
   downloadsBody,
   healthBody,
@@ -404,6 +406,44 @@ function countText(title, meta, pageCount) {
     total: meta.total,
     index: 1,
     of: pageCount || meta.limit,
+  });
+}
+
+/** Tag page and catalog page share one list of tagged people and stored posts. */
+async function redFolderMixedHtml(req, url, { path: listPath, title, lede }) {
+  const pageSize = parseCookiePageSize(req.headers.cookie);
+  const posts = await listKindComms("red_folder");
+  const tagged = await listPeople({ tags: ["red_folder"] });
+  const ids = posts.flatMap((row) =>
+    Array.isArray(row?.snapshot?.person_ids) ? row.snapshot.person_ids : [],
+  );
+  const linked = await getPeopleByIds([...ids, ...tagged.map((row) => row.id)]);
+  const items = redFolderCatalogItems(posts, linked, tagged);
+  const meta = paginate({
+    total: items.length,
+    page: parsePage(url.searchParams),
+    pageSize,
+  });
+  const pageItems = items.slice(meta.offset, meta.offset + meta.limit);
+  return layout({
+    title,
+    path: listPath,
+    heading: title,
+    query: title,
+    pageSize,
+    crumbLabel: title,
+    countLabel: countText(title, meta, pageItems.length),
+    lede,
+    body: listSection(
+      redFolderCatalogList(pageItems),
+      pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+      listHead({
+        title,
+        total: meta.total,
+        index: 1,
+        of: pageItems.length,
+      }),
+    ),
   });
 }
 
@@ -1007,6 +1047,13 @@ async function handle(req, res) {
   }
 
   const factTag = attributeTagByPath(p);
+  if (factTag?.id === "red_folder") {
+    return sendHtml(res, await redFolderMixedHtml(req, url, {
+      path: factTag.path,
+      title: factTag.nav,
+      lede: factTag.lede,
+    }));
+  }
   if (factTag) {
     const tags = [factTag.id];
     const pageSize = parseCookiePageSize(req.headers.cookie);
@@ -1388,6 +1435,13 @@ async function handle(req, res) {
   }
   if (cat && isCommsKind(cat.kind)) {
     const spec = commsKind(cat.kind);
+    if (spec.id === "red_folder") {
+      return sendHtml(res, await redFolderMixedHtml(req, url, {
+        path: cat.path,
+        title: cat.title,
+        lede: cat.blurb,
+      }));
+    }
     const pageSize = parseCookiePageSize(req.headers.cookie);
     const total = await countKindComms(spec.id);
     const meta = paginate({

@@ -99,6 +99,12 @@ export const ATTRIBUTE_TAGS = [
     lede:
       "People with a stored record of a fraud charge, plea, conviction, indictment or official fraud finding.",
   },
+  {
+    id: "red_folder",
+    nav: "Red folder",
+    path: "/tags/red-folder",
+    lede: "People stored with a red folder, and stored red-folder posts.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);

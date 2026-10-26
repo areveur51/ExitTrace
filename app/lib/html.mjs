@@ -2206,6 +2206,62 @@ export function dogCatalogList(posts, people) {
   return personCatalogList("dog", posts, people);
 }
 
+/**
+ * Red folder list: a linked person stands in for that post, an unlinked post
+ * stays a post, and a person stored with the red_folder tag is included once.
+ */
+export function redFolderCatalogItems(posts, people, tagged = []) {
+  const rows = Array.isArray(posts) ? posts : [];
+  const seen = new Set();
+  const items = [];
+  for (const post of rows) {
+    const linked = linkedPeopleForDetail(post, people);
+    if (!linked.length) {
+      items.push({ date: post.posted_at || "", type: "post", row: post });
+      continue;
+    }
+    for (const person of linked) {
+      if (!person?.id || seen.has(person.id)) continue;
+      seen.add(person.id);
+      items.push({
+        date: post.posted_at || "",
+        cardDate: asEventDate(post.posted_at) || "",
+        type: "person",
+        row: person,
+      });
+    }
+  }
+  for (const person of tagged || []) {
+    if (!person?.id || seen.has(person.id)) continue;
+    seen.add(person.id);
+    const date = asEventDate(person.event_date) || "";
+    items.push({ date, cardDate: date, type: "person", row: person });
+  }
+  items.sort((a, b) => {
+    const da = String(a.date || "");
+    const db = String(b.date || "");
+    if (da !== db) {
+      if (!da) return 1;
+      if (!db) return -1;
+      return db.localeCompare(da);
+    }
+    const na = String(a.row?.name || a.row?.handle || "");
+    const nb = String(b.row?.name || b.row?.handle || "");
+    return na.localeCompare(nb);
+  });
+  return items;
+}
+
+export function redFolderCatalogList(items) {
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
+  return `<div class="red-folder-page tui-list">${groupByYearItems(rows, (item, opts) =>
+    item.type === "person"
+      ? personRow(item.row, { ...opts, date: item.cardDate })
+      : kindListRow("red_folder", item.row, opts),
+  )}</div>`;
+}
+
 export function dogList(rows) {
   return kindList("dog", rows);
 }
