@@ -22,36 +22,13 @@ var/
 # In-progress thumb writes
 media/thumbs/**/*.tmp
 
-# Local portrait review downloads and helper packages. Not catalog source.
-scratch/portrait-review/
-scratch/pydeps/
-
-# One-shot lab export for the gap upsert, and the local helpers that copy it. Not source.
-scratch/published-gap.json
-scratch/pg-date-preload.mjs
-scratch/render-check.py
-scratch/render-ids.mjs
-scratch/remove-fixture.mjs
-scratch/stream-diag.mjs
-scratch/stream-ctl.mjs
-scratch/stream-reach.txt
-scratch/postgres-5432.yml
-scratch/stream-reset.mjs
-
-# One-shot roll-call working files for the harassment-records tag. Not source.
-scratch/harassment-records/
-
-# One-shot article dumps for the Nicki Minaj request. Not source.
-scratch/nicki-minaj/
-
-# One-shot insert for the Eric Bauza request. Not source.
-scratch/eric-bauza/
-
-# One-shot insert for the Peggy King request. Not source.
-scratch/peggy-king/
-
-# One-shot insert for the Nick Mangold request. Not source.
-scratch/nick-mangold/
+# scratch/ holds per-case working files and must never hold browser profiles
+# or credentials. Tracked files already under scratch/ stay tracked (git keeps
+# tracking them). New files there need `git add -f`. One /scratch/ rule
+# replaces the old per-request scratch/... lines (#228).
+# /.worktrees/ is local linked worktrees only, not source.
+/scratch/
+/.worktrees/
 
 # Packaged release zip — published via GitHub Releases, not git
 dist/
