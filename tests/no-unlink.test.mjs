@@ -256,7 +256,22 @@ test("no-unlink: et-retired-report lists retired/ by age, flags over-keep, and c
   assert.equal(run([path.join(dir, "missing")]).status, 2);
   fs.symlinkSync(rdir, path.join(dir, "retired-link"));
   assert.equal(run([path.join(dir, "retired-link")]).status, 2);
-  assert.equal(run([rdir], { ET_RETIRED_KEEP_DAYS: "2w" }).status, 2);
+  // A keep window that is not a decimal whole number fails closed with 3 and prints no rows.
+  // 08 and 09 would be read as octal by bash ("value too great for base") and fail open (Worf NIT-6).
+  for (const keep of ["2w", "08", "09", "010", " 14", "14 ", "-1", "1e3", "0x10"]) {
+    const bad = run([rdir], { ET_RETIRED_KEEP_DAYS: keep });
+    assert.equal(bad.status, 3, `ET_RETIRED_KEEP_DAYS=${JSON.stringify(keep)}: ${bad.stderr}`);
+    assert.equal(bad.stdout, "", `ET_RETIRED_KEEP_DAYS=${JSON.stringify(keep)} prints no rows`);
+    assert.match(bad.stderr, /FAIL ET_RETIRED_KEEP_DAYS/);
+    assert.doesNotMatch(bad.stderr, /value too great for base/);
+  }
+  // 0 and 8 are plain decimals: 0 flags every entry older than a day, 8 flags the 40- and 20-day entries.
+  const r0 = run([rdir], { ET_RETIRED_KEEP_DAYS: "0" });
+  assert.equal(r0.status, 0, r0.stderr);
+  assert.match(r0.stdout, /over_keep:3 .*keep_days:0 /);
+  const r8 = run([rdir], { ET_RETIRED_KEEP_DAYS: "8" });
+  assert.equal(r8.status, 0, r8.stderr);
+  assert.match(r8.stdout, /over_keep:2 .*keep_days:8 /);
   // Report only: every path is still in place with its type, mode, mtime and content,
   // and no delete command ran.
   assert.deepEqual(snapshot(rdir), before);
@@ -298,6 +313,32 @@ test("no-unlink: et-retired-report never evaluates an entry name (Worf MED-1, NI
   assert.equal(r3.status, 3, r3.stderr);
   assert.match(r3.stderr, /FAIL mtime is not a whole number/);
   assert.equal(fs.existsSync(path.join(dir, "PWNED2")), false, "stat output was not evaluated");
+  // The files and bytes checks (Worf NIT-7): a loose entry's size comes from stat -c %s, a run
+  // dir's file count from wc -c. Each returns arithmetic text here; each check must exit 3
+  // before $(( )) sees it. Deleting either whole-files or whole-bytes line fails this test.
+  const realStat = spawnSync("bash", ["-c", "command -v stat"], { encoding: "utf8" }).stdout.trim();
+  assert.match(realStat, /^\/\S+$/, "a real stat on PATH");
+  const badSize = path.join(dir, "bad-size-bin");
+  fs.mkdirSync(badSize);
+  fs.writeFileSync(path.join(badSize, "stat"),
+    `#!/bin/bash
+if [[ "$2" == "%s" ]]; then echo 'NOW[$(touch ${dir}/PWNED3)]'; exit 0; fi
+exec ${realStat} "$@"
+`,
+    { mode: 0o755 });
+  const rb = run({}, `${badSize}:${bin}`);
+  assert.equal(rb.status, 3, rb.stdout + rb.stderr);
+  assert.match(rb.stderr, /FAIL bytes is not a whole number/);
+  assert.equal(fs.existsSync(path.join(dir, "PWNED3")), false, "the size was not evaluated");
+  const badCount = path.join(dir, "bad-count-bin");
+  fs.mkdirSync(badCount);
+  fs.writeFileSync(path.join(badCount, "wc"), `#!/bin/bash
+echo 'NOW[$(touch ${dir}/PWNED4)]'
+`, { mode: 0o755 });
+  const rc = run({}, `${badCount}:${bin}`);
+  assert.equal(rc.status, 3, rc.stdout + rc.stderr);
+  assert.match(rc.stderr, /FAIL files is not a whole number/);
+  assert.equal(fs.existsSync(path.join(dir, "PWNED4")), false, "the file count was not evaluated");
   assert.deepEqual(snapshot(rdir), before);
   assert.deepEqual(deleteCalls(dir), []);
 });

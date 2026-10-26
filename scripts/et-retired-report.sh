@@ -23,17 +23,19 @@
 #   total of the regular files' sizes (find -printf '%s\n', one number per line
 #   and never a name, summed by awk). Exit 0 when the report printed; 2 on a bad argument
 #   (empty, starting with '-', missing, symlinked or not a directory); 3 when a
-#   size, count or mtime is not a plain whole number (fail closed, nothing is
-#   evaluated).
+#   size, count or mtime is not a plain whole number, or ET_RETIRED_KEEP_DAYS is
+#   not a decimal whole number without a leading zero (08 is refused, never read
+#   as octal) (fail closed, nothing is evaluated).
 set -u
 DIR="${1:-}"
 if [[ -z "$DIR" && -n "${ET_DAILY_TMP:-}" ]]; then
   DIR="$ET_DAILY_TMP/retired"
 fi
 KEEP="${ET_RETIRED_KEEP_DAYS:-14}"
-if [[ ! "$KEEP" =~ ^[0-9]+$ ]]; then
-  echo "et-retired-report: ET_RETIRED_KEEP_DAYS must be a whole number of days" >&2
-  exit 2
+# Decimal only: no leading zero, so bash never reads 08 or 09 as octal at (( age > KEEP )).
+if [[ ! "$KEEP" =~ ^(0|[1-9][0-9]*)$ ]]; then
+  echo "et-retired-report: FAIL ET_RETIRED_KEEP_DAYS must be a whole number of days in decimal, without a leading zero; nothing evaluated" >&2
+  exit 3
 fi
 if [[ -z "$DIR" ]]; then
   echo "usage: et-retired-report.sh <retired-dir> (or set ET_DAILY_TMP)" >&2
