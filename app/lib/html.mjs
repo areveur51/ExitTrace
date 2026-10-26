@@ -16,7 +16,15 @@ import {
 } from "./categories.mjs";
 import { normalizeOperationTags, operationPortraitFrom, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
-import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, displayEventMedia, eventHeadcount, originText } from "./event-attrs.mjs";
+import {
+  EVENT_ATTR_FIELDS,
+  EVENT_ATTR_LABELS,
+  EVENT_MEDIA_DISPLAY_MAX,
+  displayEventMedia,
+  eventHeadcount,
+  normalizeEventMedia,
+  originText,
+} from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
 import { standardizePosition } from "./position-format.mjs";
@@ -1925,8 +1933,12 @@ function personSupportingMediaHtml(row, seen) {
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
     if (kind === "notable" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
-    const media = displayEventMedia(ev.media);
-    const items = kind === "dog_comms" ? collapseDogPostMedia(media) : media;
+    // Dedupe (normalize, then collapse dog post groups) before the display cap.
+    const media = normalizeEventMedia(ev.media);
+    const items = (kind === "dog_comms" ? collapseDogPostMedia(media) : media).slice(
+      0,
+      EVENT_MEDIA_DISPLAY_MAX,
+    );
     for (const item of items) {
       const want = canonicalPublicUrl(item.url);
       const source =

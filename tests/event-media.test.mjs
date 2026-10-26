@@ -10,7 +10,7 @@ import {
   displayEventMedia,
   normalizeEventMedia,
 } from "../app/lib/event-attrs.mjs";
-import { projectPerson } from "../app/lib/promote.mjs";
+import { attachPersonEvent, incomingPersonEvent, projectPerson } from "../app/lib/promote.mjs";
 
 const CLIP = "/media/people/joe-biden/support/2105403923754316173.mp4";
 const POSTER = "/media/people/joe-biden/support/2105403923754316173.jpg";
@@ -363,4 +363,55 @@ test("a 9-item event card renders 8 tiles and a 25-item one also renders 8", () 
     assert.ok(html.includes("item-8.png"));
     assert.ok(!html.includes("item-9.png"));
   }
+});
+
+test("AMEND merge: attachPersonEvent with 20 stored + 20 new items keeps exactly 24", () => {
+  const stored = supportItems(20);
+  const fresh = Array.from({ length: 20 }, (_, i) => ({
+    src: `/media/people/ian-brinksman/support/new-${i + 1}.png`,
+    alt: `New ${i + 1}`,
+  }));
+  const person = projectPerson(arrestPerson(stored));
+  assert.equal(person.events[0].media.length, 20);
+  const { person: next, existed } = attachPersonEvent(person, {
+    kind: "arrests",
+    event_date: "2026-01-26",
+    sources: [{ url: "https://www.justice.gov/usao-edva/pr/example" }],
+    media: fresh,
+  });
+  assert.equal(existed, true);
+  assert.equal(next.events.length, 1);
+  const media = next.events[0].media;
+  assert.equal(media.length, 24);
+  assert.deepEqual(
+    media.map((m) => m.src),
+    [...stored, ...fresh.slice(0, 4)].map((m) => m.src),
+  );
+});
+
+test("intake normalizes event media: remote, portrait and duplicate items stay out", () => {
+  const ev = incomingPersonEvent(
+    {
+      category: "arrests",
+      event_date: "2026-01-26",
+      media: [
+        { src: "/media/people/ian-brinksman/support/a.png", alt: "A" },
+        { src: "/media/people/ian-brinksman/support/a.png", alt: "Dup" },
+        { src: "https://example.com/x.png" },
+        { src: "/media/people/ian-brinksman.jpg" },
+      ],
+    },
+    [],
+  );
+  assert.deepEqual(ev.media, [{ src: "/media/people/ian-brinksman/support/a.png", alt: "A" }]);
+  const none = incomingPersonEvent({ category: "arrests", event_date: "2026-01-26", media: [] }, []);
+  assert.equal(none.media, undefined);
+});
+
+test("display dedupes before the cap: a duplicated item does not cost a tile", () => {
+  const nine = supportItems(9);
+  const html = personDetail(arrestPerson([nine[0], nine[0], ...nine.slice(1)]));
+  assert.equal((html.match(/detail-tile--support/g) || []).length, 8);
+  assert.ok(html.includes("item-8.png"));
+  assert.ok(!html.includes("item-9.png"));
 });

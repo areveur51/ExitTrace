@@ -950,7 +950,9 @@ export function incomingPersonEvent(input, sources) {
       input.category,
     );
   }
-  if (Array.isArray(input.media)) event.media = input.media;
+  // Second guard at intake: allowlisted local paths, deduped, store cap.
+  const media = normalizeEventMedia(input.media);
+  if (media.length) event.media = media;
   if (input.screenshot) event.screenshot = input.screenshot;
   if (input.screenshot_credit) event.screenshot_credit = input.screenshot_credit;
   return event;
