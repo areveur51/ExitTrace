@@ -174,7 +174,7 @@ function isNotableKind(kind) {
  * Kinds a person may hold more than once, keyed by seq (person_events PK
  * (person_id, kind, seq)). Every other kind stays one event per kind at seq 0.
  * Adding a kind here is app-only: the database CHECK only requires seq >= 0
- * once the multi-event migration (2026-10-26-multi-event-up.sql) is applied.
+ * once the multi-event migration (2026-10-26-multi-event-up-{render-a,lab,render-b}.sql) is applied on both sides and ET_MULTI_EVENT_WRITES=on.
  */
 export const REPEATABLE_EVENT_KINDS = Object.freeze(["notable", "red_folder"]);
 const REPEATABLE_SET = new Set(REPEATABLE_EVENT_KINDS);

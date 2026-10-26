@@ -1,16 +1,16 @@
--- Multi-event DOWN: back to phase A, PRIMARY KEY (person_id, kind). Keeps the
--- seq column and the unique index person_events_person_kind_seq_key (phase A),
--- so the code that writes ON CONFLICT (person_id, kind, seq) still works.
+-- Multi-event DOWN for LAB (undoes 2026-10-26-multi-event-up-lab.sql): back to
+-- phase A, PRIMARY KEY (person_id, kind). Keeps the seq column and re-creates the
+-- unique index person_events_person_kind_seq_key, so code that writes
+-- ON CONFLICT (person_id, kind, seq) (main 702c3642 and later) still works.
 --
--- One transaction. Does not change rows. It refuses while any seq > 0 row or
--- any duplicate (person_id, kind) exists: move those rows first with the
--- multi-notable r1/r2 steps (r2 copies EVERY seq > 0 row, of any kind, into
--- the lab-local person_events_multi_notable_bak, then deletes them).
+-- One transaction. Does not change rows. Refuses unless lab is REPLICA IDENTITY
+-- FULL (r1), and while any seq > 0 row or duplicate (person_id, kind) exists.
 --
--- Order (docs/MIGRATION.md, Rollback): freeze; r1 lab REPLICA
--- IDENTITY FULL; r2 lab bak + delete; r3 catch-up; THIS FILE on Render; THIS
--- FILE on lab; r6 lab REPLICA IDENTITY DEFAULT. On lab this file needs FULL
--- (r1) so the subscriber can still find rows while its key differs.
+-- Rollback order (docs/MIGRATION.md): freeze; r1 lab REPLICA IDENTITY FULL; r2 lab
+-- backup + delete of seq > 0 rows (needs the Admiral's words at that moment);
+-- r3 catch-up; 2026-10-26-multi-event-down-render-b.sql on Render; THIS FILE on
+-- lab; r6 lab REPLICA IDENTITY DEFAULT; catch-up; optionally
+-- 2026-10-26-multi-event-down-render-a.sql on Render.
 
 BEGIN;
 

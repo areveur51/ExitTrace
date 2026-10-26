@@ -239,26 +239,56 @@ test("multi-event: syncPersonEvents writes one companion row per (kind, seq)", a
   assert.deepEqual(inserts.sort(), ["corona_comms:0", "red_folder:0", "red_folder:1"]);
 });
 
-test("multi-event migrations: UP and DOWN are one transaction each, change no rows, and guard their preconditions", () => {
-  const up = read("scripts/migrations/2026-10-26-multi-event-up.sql");
-  const down = read("scripts/migrations/2026-10-26-multi-event-down.sql");
-  const code = (sql) => sql.replace(/--.*$/gm, "");
-  for (const sql of [up, down]) {
-    assert.equal((code(sql).match(/^BEGIN;$/gm) || []).length, 1);
-    assert.equal((code(sql).match(/^COMMIT;$/gm) || []).length, 1);
-    assert.doesNotMatch(code(sql), /\b(UPDATE\s+public\.person_events|DELETE\s+FROM|TRUNCATE|DROP\s+TABLE|DROP\s+COLUMN|INSERT\s+INTO)\b/i);
+const MIG = (step) => read(`scripts/migrations/2026-10-26-multi-event-${step}.sql`);
+const sqlCode = (sql) => sql.replace(/--.*$/gm, "");
+
+test("multi-event migrations: six files (render-a, lab, render-b; each with a down), one transaction each, no row changes", () => {
+  for (const step of ["up-render-a", "down-render-a", "up-lab", "down-lab", "up-render-b", "down-render-b"]) {
+    const code = sqlCode(MIG(step));
+    assert.equal((code.match(/^BEGIN;$/gm) || []).length, 1, step);
+    assert.equal((code.match(/^COMMIT;$/gm) || []).length, 1, step);
+    assert.doesNotMatch(code, /\b(UPDATE\s+public\.person_events|DELETE\s+FROM|TRUNCATE|DROP\s+TABLE|DROP\s+COLUMN|INSERT\s+INTO)\b/i, step);
   }
-  assert.match(code(up), /PRIMARY KEY USING INDEX person_events_person_kind_seq_key/);
-  assert.match(code(up), /DROP CONSTRAINT IF EXISTS person_events_seq_notable_only/);
-  assert.match(code(up), /person_events_seq_nonneg CHECK \(seq >= 0\)/);
-  assert.match(code(up), /REPLICA IDENTITY DEFAULT/);
-  assert.match(code(up), /needs phase A first/);
-  assert.match(code(down), /PRIMARY KEY \(person_id, kind\)/);
-  assert.match(code(down), /still has seq > 0 rows/);
-  assert.match(code(down), /duplicate \(person_id, kind\)/);
-  assert.match(code(down), /needs REPLICA IDENTITY FULL first/);
-  assert.match(code(down), /CREATE UNIQUE INDEX IF NOT EXISTS person_events_person_kind_seq_key/);
+  assert.equal(fs.existsSync(path.join(ROOT, "scripts/migrations/2026-10-26-multi-event-up.sql")), false, "the single up file is split");
+});
+
+test("multi-event F2 render-a is additive only: column, CHECK and phase A index; the primary key is untouched", () => {
+  const code = sqlCode(MIG("up-render-a"));
+  assert.match(code, /ADD COLUMN IF NOT EXISTS seq INTEGER NOT NULL DEFAULT 0/);
+  assert.match(code, /person_events_seq_nonneg CHECK \(seq >= 0\)/);
+  assert.match(code, /CREATE UNIQUE INDEX IF NOT EXISTS person_events_person_kind_seq_key\s+ON public\.person_events \(person_id, kind, seq\)/);
+  assert.doesNotMatch(code, /PRIMARY KEY|DROP CONSTRAINT person_events_pkey|REPLICA IDENTITY/);
+  assert.match(code, /primary key already contains seq/);
+  const down = sqlCode(MIG("down-render-a"));
+  assert.match(down, /DROP CONSTRAINT IF EXISTS person_events_seq_nonneg/);
+  assert.doesNotMatch(down, /DROP\s+COLUMN|DROP\s+INDEX/, "the seq column and index stay: lab keeps sending seq");
+  assert.match(down, /run down-render-b first/);
+  assert.match(down, /still has seq > 0 rows/);
+});
+
+test("multi-event F3 lab and F5 render-b swap the key by promoting the phase A index; downs guard their preconditions", () => {
+  const lab = sqlCode(MIG("up-lab"));
+  assert.match(lab, /ADD COLUMN IF NOT EXISTS seq/);
+  assert.match(lab, /CREATE UNIQUE INDEX person_events_person_kind_seq_key/);
+  for (const up of [lab, sqlCode(MIG("up-render-b"))]) {
+    assert.match(up, /PRIMARY KEY USING INDEX person_events_person_kind_seq_key/);
+    assert.match(up, /DROP CONSTRAINT IF EXISTS person_events_seq_notable_only/);
+    assert.match(up, /person_events_seq_nonneg CHECK \(seq >= 0\)/);
+    assert.match(up, /REPLICA IDENTITY DEFAULT/);
+  }
+  assert.match(sqlCode(MIG("up-render-b")), /needs render-a first/);
+  for (const step of ["down-lab", "down-render-b"]) {
+    const down = sqlCode(MIG(step));
+    assert.match(down, /PRIMARY KEY \(person_id, kind\)/, step);
+    assert.match(down, /still has seq > 0 rows/, step);
+    assert.match(down, /duplicate \(person_id, kind\)/, step);
+    assert.match(down, /CREATE UNIQUE INDEX IF NOT EXISTS person_events_person_kind_seq_key/, step);
+  }
+  assert.match(sqlCode(MIG("down-lab")), /needs REPLICA IDENTITY FULL first/);
+  assert.doesNotMatch(sqlCode(MIG("down-render-b")), /REPLICA IDENTITY FULL first|DROP CONSTRAINT IF EXISTS person_events_seq_nonneg/);
   const doc = read("docs/MIGRATION.md");
   assert.match(doc, /exittrace_lab_pub/);
   assert.match(doc, /DDL is not replicated/);
+  for (const f of ["F0", "F1", "F2", "F3", "F4", "F5", "F6", "F7"]) assert.match(doc, new RegExp(`\\*\\*${f}\\.`), f);
+  assert.match(doc, /ET_MULTI_EVENT_WRITES/);
 });

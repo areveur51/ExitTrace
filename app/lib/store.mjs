@@ -2159,7 +2159,7 @@ export async function assertMultiNotableReady(client, person, env = process.env)
   const nonNotable = multi.find((ev) => String(ev.kind || "").trim() !== "notable");
   if (nonNotable && (await personEventsSeqNotableOnly(client))) {
     throw new PromoteError(
-      `Second ${String(nonNotable.kind).trim()} event not saved: person_events still has CHECK person_events_seq_notable_only. The multi-event migration (scripts/migrations/2026-10-26-multi-event-up.sql) must be applied on this database first.`,
+      `Second ${String(nonNotable.kind).trim()} event not saved: person_events still has CHECK person_events_seq_notable_only. The multi-event migration (scripts/migrations/2026-10-26-multi-event-up-render-a.sql on Render, -up-lab.sql on lab) must be applied on this database first.`,
       "multi_event_needs_migration",
     );
   }
