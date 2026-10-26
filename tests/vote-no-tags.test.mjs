@@ -538,7 +538,7 @@ test("the companion row is the newest H.R. 1 roll in every input order", async (
     assert.equal(companions[0].params[3], "2025-07-03");
     assert.equal(companions[0].params[3], personMenuDate(row, { tag: "big_beautiful_bill_act" }));
     assert.match(companions[0].sql, /ON CONFLICT \(person_id, kind, seq\)/);
-    assert.equal(queries.some((q) => /to_regclass\('person_events'\)/.test(q.sql)), false);
+    assert.equal(queries.some((q) => /to_regclass\('(public\.)?person_events'\)/.test(q.sql)), false);
   }
 });
 

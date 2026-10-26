@@ -4,8 +4,10 @@
  * fail at boot on Render. This applies the stripped SQL to an EMPTY throwaway
  * Postgres: the CI service container in .github/workflows/test.yml.
  *
- * ET_SCRATCH_PG_URL must point at localhost (the CI service). Never lab, never
- * Render. The test skips unless that variable is set; the test job's postgres
+ * ET_SCRATCH_PG_URL must be a plain loopback URL (tests/scratch-pg.mjs: no query,
+ * fragment or user, no routing PG* env, and the server's address, port and
+ * database are checked after connect). Never lab, never Render. The test skips
+ * unless that variable is set; the test job's postgres
  * service sets it (see docs/github-auto-deploy.md, "Boot on a subscriber").
  */
 import assert from "node:assert/strict";
@@ -13,22 +15,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import pg from "pg";
 import { stripBootDataWrites } from "../app/lib/boot-guard.mjs";
 import { ensureSchema } from "../app/lib/store.mjs";
+import { connectScratch, scratchPgTarget } from "./scratch-pg.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BOOTSTRAP = fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sql"), "utf8");
 const URL_ENV = process.env.ET_SCRATCH_PG_URL || "";
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-
-function scratchUrlIsLocal(raw) {
-  try {
-    return LOCAL_HOSTS.has(new URL(raw).hostname);
-  } catch {
-    return false;
-  }
-}
 
 async function userTableCount(client) {
   const r = await client.query(
@@ -41,9 +34,7 @@ test(
   "stripped bootstrap SQL applies to an empty Postgres (subscriber boot path), and re-runs",
   { skip: URL_ENV ? false : "ET_SCRATCH_PG_URL not set (needs the test job's postgres service)", timeout: 60_000 },
   async () => {
-    assert.ok(scratchUrlIsLocal(URL_ENV), "scratch Postgres must be the local CI service, never lab or Render");
-    const client = new pg.Client({ connectionString: URL_ENV });
-    await client.connect();
+    const client = await connectScratch(scratchPgTarget(URL_ENV));
     try {
       assert.equal(await userTableCount(client), 0, "scratch database must start EMPTY");
       const stripped = stripBootDataWrites(BOOTSTRAP);

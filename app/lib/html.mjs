@@ -34,7 +34,7 @@ import {
   normalizeClearances,
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
-import { asEventDate, notableEvents, personEvents } from "./promote.mjs";
+import { asEventDate, eventsOfKind, personEvents } from "./promote.mjs";
 import { renderEventGraph } from "./event-graph.mjs";
 import { hostOf, isUnofficialOrCommentarySocial } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -2013,7 +2013,8 @@ function personSupportingMediaHtml(row, seen) {
     // Recorded-no media stays on people.events and is not rendered.
     // It is not orphaned and must not be cleaned up.
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
-    if (kind === "notable" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
+    // Red Folder media stays on its own Red Folder block, with its captions.
+    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     // Dedupe (normalize, then collapse dog post groups) before the display cap.
     const media = normalizeEventMedia(ev.media);
@@ -2670,30 +2671,55 @@ function notableMediaFigures(ev) {
   return figures;
 }
 
+/** Human label for a stored red_folder person event (heading and source group). */
+export const RED_FOLDER_EVENT_LABEL = "Red Folder";
+
 /**
- * Bottom Notable block. Same masonry as supporting media, plus factual context and cites.
- * Not the header portrait strip. Empty when the event has no prose, cite, shot, or clip.
+ * One block per stored event of a repeatable kind (Notable, Red Folder): the event
+ * sentence, its office line, and its media with captions in the supporting-media
+ * masonry, plus its cites. Not the header portrait strip. Empty when the event has
+ * no prose, cite, shot, or clip. Neither block sets the card headline here; that
+ * stays derivePersonFields' job (red_folder is not a catalog kind).
  */
-function notableEventSection(ev, sourceNumbers) {
+function kindEventSection(ev, sourceNumbers, { title, kind, className }) {
   const masonry = supportingMediaHtml(notableMediaFigures(ev));
   const cites = eventCiteParts(ev, sourceNumbers);
   return personEventSection({
-    headHtml: eventHeadHtml(esc(notableSectionTitle(ev)), ev.event_date),
-    kind: "notable",
+    headHtml: eventHeadHtml(esc(title), ev.event_date),
+    kind,
     bodyHtml: `${commitProseHtml(ev.comments)}${eventOfficeHtml(ev)}`,
     mediaHtml: masonry,
     cites: cites.cites,
     footHtml: cites.footHtml,
-    className: "detail-notable detail-supporting",
+    className,
     tag: "section",
   });
 }
 
-export function notableMediaHtml(row, sourceNumbers) {
-  return notableEvents(personEvents(row))
-    .map((ev) => notableEventSection(ev, sourceNumbers))
+/** Repeatable-kind blocks in page order: every Notable, then every Red Folder. */
+/** One person-page block per repeatable kind; tests/multi-event.test.mjs pins it to REPEATABLE_EVENT_KINDS. */
+export const KIND_EVENT_SECTIONS = Object.freeze([
+  Object.freeze({ kind: "notable", title: (ev) => notableSectionTitle(ev), className: "detail-notable detail-supporting" }),
+  Object.freeze({ kind: "red_folder", title: () => RED_FOLDER_EVENT_LABEL, className: "detail-red-folder detail-supporting" }),
+]);
+
+/** [{ kind, html }] for one repeatable kind, newest first (eventsOfKind order). */
+function kindEventNodes(row, kind, sourceNumbers) {
+  const spec = KIND_EVENT_SECTIONS.find((s) => s.kind === kind);
+  if (!spec) return [];
+  return eventsOfKind(personEvents(row), kind)
+    .map((ev) => kindEventSection(ev, sourceNumbers, { title: spec.title(ev), kind, className: spec.className }))
     .filter(Boolean)
-    .join("");
+    .map((html) => ({ kind, html }));
+}
+
+/** Every block of one repeatable kind ("notable" or "red_folder"), joined. */
+export function kindEventsHtml(row, kind, sourceNumbers) {
+  return kindEventNodes(row, kind, sourceNumbers).map((n) => n.html).join("");
+}
+
+export function notableMediaHtml(row, sourceNumbers) {
+  return kindEventsHtml(row, "notable", sourceNumbers);
 }
 
 /** Stored endorsement. It does not replace the card category or date. */
@@ -2856,10 +2882,7 @@ function specialEventNodes(row, sourceNumbers) {
       return html ? { kind, html } : null;
     })
     .filter(Boolean);
-  for (const ev of notableEvents(personEvents(row))) {
-    const html = notableEventSection(ev, sourceNumbers);
-    if (html) nodes.push({ kind: "notable", html });
-  }
+  for (const { kind } of KIND_EVENT_SECTIONS) nodes.push(...kindEventNodes(row, kind, sourceNumbers));
   return nodes;
 }
 
@@ -3130,6 +3153,7 @@ function eventSourceLabel(ev) {
   else if (kind === "ukraine_aid_flags") title = "H.R. 8035";
   else if (VOTE_NO_KINDS.has(kind)) title = recordedVoteTitle(ev);
   else if (kind === "endorsement") title = "Endorsement";
+  else if (kind === "red_folder") title = RED_FOLDER_EVENT_LABEL;
   else if (kind === "shot") title = "Shot";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
   const when = date ? formatDate(date) : "";

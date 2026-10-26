@@ -15,7 +15,7 @@ import {
   personSlug,
   mergeCites,
   mergePersonAnnotate,
-  notableSeq,
+  eventSeq,
   personEvents,
   personHasKind,
   projectPerson,
@@ -2102,30 +2102,85 @@ function personValues(row) {
   ];
 }
 
+// public.person_events, never search_path: the primary key's columns in key order.
 const PERSON_EVENTS_PK_ATTS_SQL =
-  "SELECT a.attname FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey) WHERE c.conrelid = to_regclass('person_events') AND c.contype = 'p'";
+  "SELECT a.attname FROM pg_constraint c CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum WHERE c.conrelid = to_regclass('public.person_events') AND c.contype = 'p' ORDER BY k.ord";
+const MULTI_EVENT_KEY = Object.freeze(["person_id", "kind", "seq"]);
 
-/** Read the live primary key. Not cached: rollback can restore (person_id, kind). */
+/**
+ * True only when public.person_events' primary key is exactly (person_id, kind, seq),
+ * in that order. Not cached: rollback can restore (person_id, kind).
+ */
 export async function personEventsKeyHasSeq(client) {
   const q = await client.query(PERSON_EVENTS_PK_ATTS_SQL);
-  return (q.rows || []).some((row) => row.attname === "seq");
+  const cols = (q.rows || []).map((row) => row.attname);
+  return cols.length === MULTI_EVENT_KEY.length && cols.every((c, i) => c === MULTI_EVENT_KEY[i]);
+}
+
+const PERSON_EVENTS_NOTABLE_ONLY_CHECK_SQL =
+  "SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.person_events') AND conname = 'person_events_seq_notable_only'";
+
+/** True while the phase B CHECK (only notable may have seq > 0) is still on this database. */
+async function personEventsSeqNotableOnly(client) {
+  const q = await client.query(PERSON_EVENTS_NOTABLE_ONLY_CHECK_SQL);
+  return (q.rows || []).length > 0;
 }
 
 /**
- * A seq > 0 notable needs PRIMARY KEY (person_id, kind, seq) on this database.
- * No catalog query when every notable is seq 0.
+ * ET_MULTI_EVENT_WRITES=on is the operator switch for seq > 0 person_events rows
+ * (a second notable, a second red_folder). Off by default; set it only after F7 of
+ * docs/MIGRATION.md, when lab AND Render both have PRIMARY KEY (person_id, kind, seq).
+ * The schema check below still runs, so both must hold. The value must be exactly
+ * "on": no trim, no case folding, so " on ", "ON" and "on\n" count as off.
  */
-export async function assertMultiNotableReady(client, person) {
+export function multiEventWritesEnabled(env = process.env) {
+  return env.ET_MULTI_EVENT_WRITES === "on";
+}
+
+// person_events.seq is INTEGER (int4).
+const EVENT_SEQ_MAX = 2147483647;
+
+/**
+ * A seq > 0 event needs PRIMARY KEY (person_id, kind, seq) on this database.
+ * A seq > 0 event of a kind other than notable (red_folder) also needs the
+ * multi-event migration (F3 up-lab / F5 up-render-b), which drops
+ * person_events_seq_notable_only. A seq above int4 is refused here, before any
+ * query. No catalog query when every event is seq 0.
+ */
+export async function assertMultiNotableReady(client, person, env = process.env) {
   const normalized = normalizePerson(person);
-  const needsPhaseB = (normalized.events || []).some(
-    (ev) => String(ev.kind || "").trim() === "notable" && notableSeq(ev) > 0,
-  );
-  if (!needsPhaseB) return;
-  if (await personEventsKeyHasSeq(client)) return;
-  throw new PromoteError(
-    "Second notable not saved: person_events primary key is still (person_id, kind). Multi-notable phase B (PRIMARY KEY (person_id, kind, seq)) must be applied on this database first.",
-    "multi_notable_needs_phase_b",
-  );
+  const multi = (normalized.events || []).filter((ev) => eventSeq(ev) > 0);
+  if (!multi.length) return;
+  const tooBig = multi.find((ev) => eventSeq(ev) > EVENT_SEQ_MAX);
+  if (tooBig) {
+    throw new PromoteError(
+      `${String(tooBig.kind || "").trim()} event not saved: seq ${eventSeq(tooBig)} is above ${EVENT_SEQ_MAX} (person_events.seq is INTEGER).`,
+      "event_seq_out_of_range",
+    );
+  }
+  if (!multiEventWritesEnabled(env)) {
+    const kind = String(multi[0].kind || "").trim();
+    throw new PromoteError(
+      `Second ${kind} event not saved: seq > 0 person_events writes are off (set ET_MULTI_EVENT_WRITES=on only after both lab and Render are migrated; docs/MIGRATION.md F7).`,
+      "multi_event_writes_off",
+    );
+  }
+  if (!(await personEventsKeyHasSeq(client))) {
+    const kind = String(multi[0].kind || "").trim();
+    throw new PromoteError(
+      kind === "notable"
+        ? "Second notable not saved: person_events primary key is still (person_id, kind). Multi-notable phase B (PRIMARY KEY (person_id, kind, seq)) must be applied on this database first."
+        : `Second ${kind} event not saved: person_events primary key is still (person_id, kind). The multi-event migration (PRIMARY KEY (person_id, kind, seq)) must be applied on this database first.`,
+      "multi_notable_needs_phase_b",
+    );
+  }
+  const nonNotable = multi.find((ev) => String(ev.kind || "").trim() !== "notable");
+  if (nonNotable && (await personEventsSeqNotableOnly(client))) {
+    throw new PromoteError(
+      `Second ${String(nonNotable.kind).trim()} event not saved: person_events still has CHECK person_events_seq_notable_only. The multi-event migration (scripts/migrations/2026-10-26-multi-event-up-lab.sql on lab, -up-render-b.sql on Render; docs/MIGRATION.md F3 / F5) must be applied on this database first.`,
+      "multi_event_needs_migration",
+    );
+  }
 }
 
 function companionDay(ev) {
@@ -2156,7 +2211,7 @@ export async function syncPersonEvents(client, row) {
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
   const bySlot = new Map();
   for (const ev of person.events) {
-    const seq = String(ev.kind || "").trim() === "notable" ? notableSeq(ev) : 0;
+    const seq = eventSeq(ev);
     // One companion row per (kind, seq). Notable seq values stay distinct.
     // A recorded-no kind keeps the newest-dated roll. The card still has every roll.
     const slot = `${ev.kind}\0${seq}`;
@@ -2171,7 +2226,7 @@ export async function syncPersonEvents(client, row) {
     }
   }
   for (const ev of bySlot.values()) {
-    const seq = String(ev.kind || "").trim() === "notable" ? notableSeq(ev) : 0;
+    const seq = eventSeq(ev);
     await client.query(
       `INSERT INTO person_events (
          person_id, kind, seq, event_date, sources, announced_date,

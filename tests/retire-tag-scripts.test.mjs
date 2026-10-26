@@ -10,13 +10,18 @@ import {
   CONFIRM_ENV,
   buildManifest,
   defaultManifestPath,
+  LAB_IDENTITY,
+  LAB_IDENTITY_SQL,
+  labConnectionConfig,
   labGuard,
+  labIdentityCheck,
   planStrip,
   planUndo,
   retiredTagCheck,
   stripTag,
   tagSpellings,
   tagsEqual,
+  withClient,
   writePrivateJson,
 } from "../scripts/ops/retire-tag-lib.mjs";
 
@@ -347,7 +352,7 @@ test("lab guard is an allowlist: loopback on the lab port only", () => {
   for (const url of [
     "postgres://lab-user@127.0.0.1:5433/exittrace",
     "postgres://lab-user@localhost:5433/exittrace",
-    "postgresql://lab-user:x@LOCALHOST:5433/exittrace?sslmode=disable",
+    "postgresql://lab-user:x@LOCALHOST:5433/exittrace",
   ]) {
     assert.equal(labGuard({ DATABASE_URL: url }).ok, true, "allowed");
     assert.equal(labGuard({ DATABASE_URL: url }).label, "lab");
@@ -362,6 +367,17 @@ test("lab guard is an allowlist: loopback on the lab port only", () => {
     ["postgres://u@127.0.0.1/exittrace", /not the lab/],
     ["postgres://u@10.1.2.3:5433/exittrace", /not the lab/],
     ["postgres://u@db.example.com:5433/exittrace", /not the lab/],
+    // Worf r5 MED-3: node-postgres honours these over the URL host.
+    ["postgres://u@127.0.0.1:5433/exittrace?host=db.example.invalid", /query string or fragment/],
+    ["postgres://u@127.0.0.1:5433/exittrace?hostaddr=203.0.113.9&port=5432", /query string or fragment/],
+    ["postgres://u@127.0.0.1:5433/exittrace?host=dpg-abc123xyz-a.oregon-postgres.render.com", /query string or fragment/],
+    ["postgresql://u:x@LOCALHOST:5433/exittrace?sslmode=disable", /query string or fragment/],
+    ["postgres://u@127.0.0.1:5433/exittrace?", /query string or fragment/],
+    ["postgres://u@127.0.0.1:5433/exittrace#x", /query string or fragment/],
+    ["postgres://u@127.0.0.1:5433/postgres", /not the lab database/],
+    ["postgres://u@127.0.0.1:5433/exittrace/x", /not the lab database/],
+    ["postgres://u@127.0.0.1:5433/", /not the lab database/],
+    ["postgres://u:%E0%A4%A@127.0.0.1:5433/exittrace", /not a usable/],
   ];
   for (const [url, pattern] of refused) {
     const guard = labGuard({ DATABASE_URL: url });
@@ -398,4 +414,78 @@ test("CLI guards refuse a missing URL, a hosted database, and an unconfirmed app
     for (const secretish of ["lab-user", "render.com", "dpg-", LAB_URL]) assert.equal(out.includes(secretish), false);
     assert.equal(client.queries.length, 0);
   }
+});
+
+test("lab connect uses explicit fields and checks the lab identity tuple before any query (Worf r5 MED-3)", async () => {
+  assert.deepEqual(labConnectionConfig("postgres://lab-user:p%40ss@127.0.0.1:5433/exittrace"), {
+    host: "127.0.0.1", port: 5433, database: "exittrace", user: "lab-user", password: "p@ss",
+  });
+  assert.deepEqual(labConnectionConfig("postgres://localhost:5433/exittrace"), { host: "localhost", port: 5433, database: "exittrace" });
+  for (const bad of ["postgres://u@127.0.0.1:5433/exittrace?host=db.example.invalid", "postgres://u@127.0.0.1:5433/exittrace#h", "postgres://u@db.example.invalid:5433/exittrace", "postgres://u@127.0.0.1:5432/exittrace", "postgres://u@127.0.0.1:5433/postgres", "nope"]) {
+    assert.equal(labConnectionConfig(bad), null, bad);
+  }
+  assert.deepEqual({ ...LAB_IDENTITY }, { addr: "172.19.0.2", port: 5432, database: "exittrace", publication: "exittrace_lab_pub", slot: "exittrace_lab_sub" });
+
+  const good = { addr: "172.19.0.2", port: 5432, db: "exittrace", publication: true, slot: true };
+  const idClient = (row, opts = {}) => ({
+    calls: [],
+    ended: 0,
+    async connect() {},
+    async end() { this.ended += 1; },
+    async query(text, params) {
+      this.calls.push({ text, params });
+      if (opts.throws) throw new Error("permission denied");
+      return { rows: [row] };
+    },
+  });
+  const c = idClient(good);
+  assert.deepEqual(await labIdentityCheck(c), { ok: true });
+  assert.equal(c.calls[0].text, LAB_IDENTITY_SQL);
+  assert.deepEqual(c.calls[0].params, ["exittrace_lab_pub", "exittrace_lab_sub"]);
+  for (const [extra, re] of [
+    [{ addr: "127.0.0.1" }, /server address is not the lab/],
+    [{ addr: null }, /server address is not the lab/],
+    [{ addr: "" }, /server address is not the lab/],
+    [{ addr: "203.0.113.9" }, /server address is not the lab/],
+    [{ port: 5433 }, /server port is not the lab/],
+    [{ db: "postgres" }, /database is not the lab database/],
+    [{ publication: false }, /no lab publication/],
+    [{ slot: false }, /no lab replication slot/],
+    [{ slot: "t" }, /no lab replication slot/],
+  ]) {
+    const r = await labIdentityCheck(idClient({ ...good, ...extra }));
+    assert.equal(r.ok, false, JSON.stringify(extra));
+    assert.match(r.message, re);
+    assert.equal(r.message.includes("203.0.113.9") || r.message.includes("172.19"), false);
+  }
+  assert.deepEqual(await labIdentityCheck(idClient(good, { throws: true })), { ok: false, message: "refused: lab identity check failed" });
+
+  // withClient's own connection: explicit config, identity checked before fn; refused -> fn never runs, client ended.
+  const fakePg = (row) => {
+    const made = [];
+    return { made, Client: class { constructor(cfg) { this.cfg = cfg; this.inner = idClient(row); made.push(this); } connect() { return this.inner.connect(); } end() { return this.inner.end(); } query(t, p) { return this.inner.query(t, p); } } };
+  };
+  let ran = 0;
+  const fn = async () => { ran += 1; return { code: 0, lines: ["ran"], manifestPath: null }; };
+  const okPg = fakePg(good);
+  assert.deepEqual(await withClient(null, "postgres://lab-user:x@127.0.0.1:5433/exittrace", fn, { pg: okPg }), { code: 0, lines: ["ran"], manifestPath: null });
+  assert.equal(ran, 1);
+  assert.deepEqual(okPg.made[0].cfg, { host: "127.0.0.1", port: 5433, database: "exittrace", user: "lab-user", password: "x" });
+  assert.equal(Object.hasOwn(okPg.made[0].cfg, "connectionString"), false);
+  assert.equal(okPg.made[0].inner.ended, 1);
+  const elsewhere = fakePg({ ...good, addr: "203.0.113.9", publication: false, slot: false });
+  const refusedRun = await withClient(null, "postgres://lab-user:x@127.0.0.1:5433/exittrace", fn, { pg: elsewhere });
+  assert.equal(refusedRun.code, 1);
+  assert.match(refusedRun.lines.join("\n"), /server address is not the lab/);
+  assert.equal(ran, 1, "fn did not run");
+  assert.equal(elsewhere.made[0].inner.ended, 1);
+  assert.equal(elsewhere.made[0].inner.calls.length, 1, "only the identity query ran");
+  const neverPg = fakePg(good);
+  const q = await withClient(null, "postgres://u@127.0.0.1:5433/exittrace?host=db.example.invalid", fn, { pg: neverPg });
+  assert.equal(q.code, 1);
+  assert.equal(neverPg.made.length, 0, "no client is built for a URL with a query string");
+  assert.equal(ran, 1);
+  const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "scripts/ops/retire-tag-lib.mjs"), "utf8");
+  assert.doesNotMatch(src, /connectionString\s*:/);
+  assert.doesNotMatch(src, /new pg\.Client\(\s*\{/);
 });
