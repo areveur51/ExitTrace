@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.35] - 2026-10-26
+
+### Changed
+
+- Supporting media renders in one masonry everywhere: person-card event media, Notable, Shot, Central Casting clips on a card, and the comms Supporting media section (Dog, Red Folder, Eagle, Ronald, Shot). One helper, `supportingMediaHtml()` in `app/lib/html.mjs`, draws it and one CSS block ("Supporting media masonry") lays it out with CSS columns only, no JavaScript: 2 columns on a phone, 3 from 720px, 4 from 1280px, 1 column for a single image and 2 for two. Each image keeps its own height. Comms supporting entries now share that one masonry instead of one strip per entry; each tile keeps `data-supporting-index` (or `data-supporting-own="post"`). Central Casting clips on a person card use the shared supporting figure with a caption. Alt text, credits, links, lazy loading, the 24 stored / 8 shown caps, and list thumbnails are unchanged.
+
 ## [1.2.34] - 2026-10-26
 
 ### Fixed

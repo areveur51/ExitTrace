@@ -3515,3 +3515,60 @@ html[data-theme="glass"] .results-controls .pager-pages a[aria-current="page"] {
   object-fit: contain;
   object-position: center;
 }
+
+/* Supporting media masonry — ONE block for every surface that draws supporting
+   media (person card events, Notable, Shot, Central Casting, comms supporting).
+   Markup comes from supportingMediaHtml() in app/lib/html.mjs. CSS columns only,
+   no JS. Phone (390): 2 columns. >=720: 3. >=1280: 4. One tile: 1 column.
+   Two tiles: 2 columns. Each tile keeps its natural height (no crop). */
+.detail-media.detail-media--masonry.detail-support-masonry {
+  display: block;
+  column-count: 2;
+  column-gap: 0.65rem;
+  column-fill: balance;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+@media (min-width: 720px) {
+  .detail-media.detail-media--masonry.detail-support-masonry {
+    column-count: 3;
+  }
+}
+@media (min-width: 1280px) {
+  .detail-media.detail-media--masonry.detail-support-masonry {
+    column-count: 4;
+  }
+}
+.detail-media.detail-media--masonry.detail-support-masonry:has(> .detail-tile:nth-child(2):last-child) {
+  column-count: 2;
+}
+.detail-media.detail-media--masonry.detail-support-masonry:has(> .detail-tile:only-child) {
+  column-count: 1;
+  max-width: 40rem;
+}
+.detail-media--masonry.detail-support-masonry > .detail-tile {
+  display: inline-block;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 0 0.65rem;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+  overflow: visible;
+}
+.detail-media--masonry.detail-support-masonry > .detail-tile .detail-support-frame {
+  min-width: 0;
+}
+.detail-media--masonry.detail-support-masonry > .detail-tile img.detail-photo,
+.detail-media--masonry.detail-support-masonry > .detail-tile .lightbox-open {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center top;
+}

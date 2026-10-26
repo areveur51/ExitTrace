@@ -212,7 +212,9 @@ test("red folder supporting group renders cite+source+optional screenshot+stills
   assert.doesNotMatch(mainSource, /Supporting ·|MarijkeANON|Areveur51/);
 
   const html = kindDetail("red_folder", row);
-  assert.equal((html.match(/class="supporting-group"/g) || []).length, 2);
+  // v1.2.35: both supporting entries share ONE masonry; each tile keeps its entry index.
+  assert.equal((html.match(/detail-support-masonry/g) || []).length, 1);
+  assert.doesNotMatch(html, /class="supporting-group"/);
   assert.match(html, /data-supporting-index="0"/);
   assert.match(html, /data-supporting-index="1"/);
   const mainAt = html.indexOf('class="detail-official-post"');
@@ -262,7 +264,7 @@ test("red folder supporting group renders cite+source+optional screenshot+stills
 
   assert.match(html, /marijkeanon-2026-09-18\.jpg/);
   assert.match(html, /areveur51-2026-09-18-4\.png/);
-  assert.match(html, /class="supporting-group"/);
+  assert.match(html, /detail-support-masonry/);
   // X URLs stay under Source tiles only (main + each group).
   const withoutSource = html.replace(
     /<section class="detail-tile detail-tile--meta detail-tile--source">[\s\S]*?<\/section>/g,
@@ -353,7 +355,7 @@ test("store accepts supporting screenshot fields and live detail paints groups",
   assert.equal(stored.snapshot.supporting[0].screenshot_credit, "X");
   const page = await requestPage(`/red-folder-comms/${row.id}`);
   assert.equal(page.status, 200);
-  assert.match(page.body, /class="supporting-group"/);
+  assert.match(page.body, /detail-support-masonry/);
   assert.match(page.body, /class="cite-block"/);
   assert.match(page.body, /Support cite/);
   assert.match(page.body, /https:\/\/x\.com\/Ally\/status\/9/);

@@ -696,7 +696,8 @@ test("official-post kinds render main post, then context, then supporting media"
     assert.match(context, /https:\/\/x\.com\/Desk\/status\/1/, id);
     assert.doesNotMatch(context, /lightbox-open|detail-tile--still|detail-tile--screenshot/, id);
     assert.match(support, /support\.jpg/, id);
-    assert.match(support, /class="supporting-group"/, id);
+    assert.match(support, /class="detail-media detail-media--masonry detail-support-masonry"/, id);
+    assert.match(support, /data-supporting-index="0"/, id);
     assert.doesNotMatch(support, /class="cite-block"/, id);
     if (spec.supportingGroups) {
       assert.match(context, /Context note/, id);
