@@ -188,7 +188,7 @@ test("daily: grok picked 0 -> prove=PASS_EMPTY", async () => {
   assert.equal(calls(sb, "helper-calls").length, 0);
 });
 
-test("daily: no apply.json (stale one removed) -> prove=FAIL missing-apply-json", async () => {
+test("daily: no apply.json (stale one retired) -> prove=FAIL missing-apply-json", async () => {
   const sb = sandbox();
   const day = spawnSync("date", ["+%Y%m%d"], { env: { ...process.env, TZ: "America/New_York" }, encoding: "utf8" }).stdout.trim();
   fs.writeFileSync(path.join(sb.dir, `et-daily-${day}-apply.json`), JSON.stringify({ rows: [ROW] }));
