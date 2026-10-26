@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-theme="glass" data-page-size="17">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dog comms · ExitTrace</title>
+  <script>
+(function(){try{var key="exittrace-theme";var t=localStorage.getItem(key);if(t!=="glass"){localStorage.removeItem(key);localStorage.setItem(key,"glass");}document.documentElement.setAttribute("data-theme","glass");}catch(e){try{document.documentElement.setAttribute("data-theme","glass");}catch(e2){}}})();
+</script>
+  <script>
+(function(){try{var key="exittrace-page-size";var allowed=[17,34,51];var raw=localStorage.getItem(key);var n=Number(raw);var size=allowed.indexOf(n)!==-1?String(n):null;if(size)document.cookie=key+"="+size+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-page-size");var guard=key+"-sync";if(rendered&&size&&rendered!==size&&sessionStorage.getItem(guard)!==size){sessionStorage.setItem(guard,size);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+</script>
+  <script>
+(function(){try{var key="exittrace-dash-range";var path=location.pathname||"";if(path!=="/dashboard"&&path.indexOf("/dashboard/")!==0)return;var params=new URLSearchParams(location.search);var q=params.get("range");if(q){var token=q==="custom"?("custom:"+(params.get("from")||"")+":"+(params.get("to")||"")):q;localStorage.setItem(key,token);document.cookie=key+"="+encodeURIComponent(token)+"; Path=/; SameSite=Lax";return;}var raw=localStorage.getItem(key);if(!raw)return;document.cookie=key+"="+encodeURIComponent(raw)+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-dash-range");var guard=key+"-sync";if(rendered&&raw&&rendered!==raw&&sessionStorage.getItem(guard)!==raw){sessionStorage.setItem(guard,raw);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+</script>
+  <script>
+(function(){try{var viewKey="exittrace-results-view";var sizeKey="exittrace-card-size";var views=["list","cards"];var sizes=["s","m","l"];var view=localStorage.getItem(viewKey);var size=localStorage.getItem(sizeKey);if(views.indexOf(view)===-1)view="list";if(sizes.indexOf(size)===-1)size="m";document.documentElement.setAttribute("data-results-view",view);document.documentElement.setAttribute("data-card-size",size);}catch(e){try{document.documentElement.setAttribute("data-results-view","list");document.documentElement.setAttribute("data-card-size","m");}catch(e2){}}})();
+</script>
+  <link rel="stylesheet" href="/styles.css?v=1.2.34-fecf5192a5">
+</head>
+<body class="tui hud" data-toast="page loaded">
+  <header class="tui-top">
+    <nav class="tui-q crumbs" aria-label="Breadcrumb">
+    <span class="chev" aria-hidden="true">❯</span>
+    <ol>
+      <li><a href="/">Home</a></li><li><span class="crumb-current" aria-current="page">Dog comms</span></li>
+    </ol>
+  </nav>
+    <div class="tui-app"><a class="tui-app-link" href="/">exittrace.areveur.com</a></div>
+    <div class="tui-n">• Dog comms • 3 available • 1/3</div>
+  </header>
+  <div class="hud-stage">
+    <main class="tui-main">
+      <h1 class="vh">Dog comms</h1>
+      <p class="lede">Official government posts about dogs, or that include a dog in the image. Stored locally; the source URL is a citation only.</p>
+      <p class="list-head"><span class="dot">•</span> Dog comms <span class="sep">•</span> 3 available <span class="sep">•</span> <span data-list-pos>1/3</span></p><div class="results-controls results-view" data-results-toolbar>
+    <div class="results-controls-row results-controls-row--view">
+      <div class="results-view-mode">
+        <span class="results-view-label" id="results-view-label">View</span>
+        <div class="results-view-btns" role="group" aria-labelledby="results-view-label"><button type="button" class="results-view-btn keychip" data-results-view-set="list" aria-pressed="true"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><span>List</span></button><button type="button" class="results-view-btn keychip" data-results-view-set="cards" aria-pressed="false"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg><span>Cards</span></button></div>
+      </div>
+      <div class="card-size">
+        <span class="card-size-label" id="card-size-label">Card size</span>
+        <div class="card-size-btns" role="group" aria-labelledby="card-size-label"><button type="button" class="card-size-btn keychip" data-card-size-set="s" aria-pressed="false" aria-label="Small"><svg class="ui-icon ui-icon-solid" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><rect x="8.5" y="10" width="7" height="10" rx="1"/></svg></button><button type="button" class="card-size-btn keychip" data-card-size-set="m" aria-pressed="true" aria-label="Medium"><svg class="ui-icon ui-icon-solid" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><rect x="6" y="6.5" width="12" height="13.5" rx="1"/></svg></button><button type="button" class="card-size-btn keychip" data-card-size-set="l" aria-pressed="false" aria-label="Large"><svg class="ui-icon ui-icon-solid" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><rect x="3.5" y="3" width="17" height="17" rx="1.25"/></svg></button></div>
+      </div>
+    </div>
+    <div class="results-controls-row results-controls-row--page"><nav class="pager" aria-label="Pagination">
+    <div class="pager-main">
+      <p class="pager-results-label">Results</p>
+      <p class="pager-status"><span class="pager-status-page">Page 1 of 1</span><span class="pager-count"> · 3 posts</span></p>
+      <div class="pager-controls">
+        <span class="pager-btn keychip is-disabled" aria-disabled="true" aria-label="Previous page"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span>
+        <ol class="pager-pages"><li><a href="/dog-comms" aria-current="page">1</a></li></ol>
+        <span class="pager-btn keychip is-disabled" aria-disabled="true" aria-label="Next page"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg></span>
+      </div>
+    </div>
+    <nav class="page-size" aria-label="Rows per page">
+    <span class="page-size-label" id="page-size-label"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="page-size-label-short">Rows</span><span class="page-size-label-full">Rows per page</span><span class="vh">Rows</span></span>
+    <label class="page-size-select-wrap">
+      <span class="vh">Rows per page</span>
+      <select class="page-size-select" data-page-size-select aria-label="17 rows per page"><option value="17" selected>17</option><option value="34">34</option><option value="51">51</option></select>
+    </label>
+    <div class="page-size-btns" role="group" aria-labelledby="page-size-label">
+      <button type="button" class="page-size-btn keychip" data-page-size-set="17" aria-pressed="true" aria-label="17 per page">17</button><button type="button" class="page-size-btn keychip" data-page-size-set="34" aria-pressed="false" aria-label="34 per page">34</button><button type="button" class="page-size-btn keychip" data-page-size-set="51" aria-pressed="false" aria-label="51 per page">51</button>
+    </div>
+  </nav>
+  </nav></div>
+  </div><div class="dog-page tui-list"><section class="tui-group">
+      <h2 class="tui-group-h">2025</h2>
+      <a class="tui-row person-card is-selected" href="/people/gale-handler">
+    <div class="row-media"><img class="portrait thumb empty-portrait" src="/empty-portrait.jpg?v=3c16c13f69" alt="Gale Handler" width="40" height="52" loading="lazy" decoding="async" data-portrait-fallback="/empty-portrait.jpg?v=3c16c13f69"></div>
+    <div class="tui-row-text">
+      <div class="tui-title">Gale Handler</div>
+      
+      <div class="tui-meta"><time datetime="2025-03-04">Mar 4, 2025</time> · Notable · —</div>
+    </div>
+  </a>
+    </section><section class="tui-group">
+      <h2 class="tui-group-h">2024</h2>
+      <a class="tui-row dog-card" href="/dog-comms/example-k9-2024">
+    <div class="row-media"><img class="still thumb empty-portrait" src="/empty-portrait.jpg?v=3c16c13f69" alt="@ExampleK9" width="40" height="52" loading="lazy" decoding="async" data-portrait-fallback="/empty-portrait.jpg?v=3c16c13f69"></div>
+    <div class="tui-row-text">
+      <div class="tui-title">@ExampleK9</div>
+      <div class="tui-meta"><time datetime="2024-11-20">Nov 20, 2024</time> · Dog comms</div>
+    </div>
+  </a><a class="tui-row person-card" href="/people/hal-ranger">
+    <div class="row-media"><img class="portrait thumb empty-portrait" src="/empty-portrait.jpg?v=3c16c13f69" alt="Hal Ranger" width="40" height="52" loading="lazy" decoding="async" data-portrait-fallback="/empty-portrait.jpg?v=3c16c13f69"></div>
+    <div class="tui-row-text">
+      <div class="tui-title">Hal Ranger</div>
+      
+      <div class="tui-meta"><time datetime="2024-06-01">Jun 1, 2024</time> · Notable · —</div>
+    </div>
+  </a>
+    </section></div>
+    </main>
+    <footer class="keymap" aria-label="Catalog">
+    <div class="keymap-keys"><a class="keychip" href="/firings" data-key="f" style="--key-order:0"><span class="br">[</span>f<span class="br">]</span> Firings</a><a class="keychip" href="/resignations" data-key="r" style="--key-order:1"><span class="br">[</span>r<span class="br">]</span> Resignations</a><a class="keychip" href="/government" data-key="g" style="--key-order:2"><span class="br">[</span>g<span class="br">]</span> Officials</a><a class="keychip" href="/arrests" data-key="a" style="--key-order:3"><span class="br">[</span>a<span class="br">]</span> Arrests</a><a class="keychip" href="/indictments" data-key="i" style="--key-order:4"><span class="br">[</span>i<span class="br">]</span> Indictments</a><a class="keychip" href="/deaths" data-key="d" style="--key-order:5"><span class="br">[</span>d<span class="br">]</span> Deaths</a><a class="keychip" href="/group-operations" data-key="m" style="--key-order:6"><span class="br">[</span>m<span class="br">]</span> Operations</a><a class="keychip" href="/dashboard" data-key="b" style="--key-order:7"><span class="br">[</span>b<span class="br">]</span> Dashboard</a><a class="keychip" href="/unsorted" data-key="u" style="--key-order:8"><span class="br">[</span>u<span class="br">]</span> Unsorted</a><a class="keychip" href="/downloads" data-key="w" style="--key-order:9"><span class="br">[</span>w<span class="br">]</span> Downloads</a><a class="keychip" href="/" data-key="h" style="--key-order:10"><span class="br">[</span>h<span class="br">]</span> Home</a></div>
+    <nav class="keymap-group keymap-comms" aria-label="Comms"><p class="keymap-section">Comms</p><a class="keychip keymap-comm" href="/dog-comms" data-key="c" aria-current="page"><span class="br">[</span>c<span class="br">]</span> Dog</a><a class="keychip keymap-comm" href="/red-folder-comms" data-key="e"><span class="br">[</span>e<span class="br">]</span> Red Folder</a><a class="keychip keymap-comm" href="/eagle-comms" data-key="l"><span class="br">[</span>l<span class="br">]</span> Eagle</a><a class="keychip keymap-comm" href="/ronald-comms" data-key="n"><span class="br">[</span>n<span class="br">]</span> Ronald</a><a class="keychip keymap-comm" href="/shot-comms" data-key="s"><span class="br">[</span>s<span class="br">]</span> Shot</a><a class="keychip keymap-comm" href="/boot-comms" data-key="k"><span class="br">[</span>k<span class="br">]</span> Boot</a><a class="keychip keymap-comm" href="/corona-comms" data-key="o"><span class="br">[</span>o<span class="br">]</span> Corona</a><a class="keychip keymap-comm" href="/central-casting" data-key="t"><span class="br">[</span>t<span class="br">]</span> Central Casting</a></nav>
+    <nav class="keymap-group keymap-tags" aria-label="Fact tags"><p class="keymap-section">Tags</p><a class="keychip keymap-tag" href="/tags/clearance-revoked">Revoked clearances</a><a class="keychip keymap-tag" href="/tags/trump-nicknames">Trump nicknames</a><a class="keychip keymap-tag" href="/tags/epstein-clients">Epstein Clients</a><a class="keychip keymap-tag" href="/tags/epstein-files">Epstein files</a><a class="keychip keymap-tag" href="/tags/masks">Masks</a><a class="keychip keymap-tag" href="/tags/transparency-act">Transparency Act</a><a class="keychip keymap-tag" href="/tags/endorsements">Endorsements</a><a class="keychip keymap-tag" href="/tags/harassment-records">Harassment records</a><a class="keychip keymap-tag" href="/tags/ukraine-aid">Ukraine aid</a><a class="keychip keymap-tag" href="/tags/one-big-beautiful-bill-act" title="One Big Beautiful Bill Act">Big Beautiful Bill</a><a class="keychip keymap-tag" href="/tags/save-act">SAVE Act</a><a class="keychip keymap-tag" href="/tags/secure-the-border-act" title="Secure the Border Act">Secure the Border</a><a class="keychip keymap-tag" href="/tags/laken-riley-act">Laken Riley Act</a><a class="keychip keymap-tag" href="/tags/save-america-act">SAVE America Act</a><a class="keychip keymap-tag" href="/tags/s-5271">S. 5271</a><a class="keychip keymap-tag" href="/tags/former-intel-agency-personnel">Former intel</a><a class="keychip keymap-tag" href="/tags/fraud">Fraud</a><a class="keychip keymap-tag" href="/tags/red-folder">Red folder</a></nav>
+    <p class="fineprint">Neutral record. One card per person. Two published news citations on every tagged event. Official news and official government social count; unofficial or commentary social is extra only, not a cite. Wikipedia is not a cite. Grokipedia may appear as an extra encyclopedia cite; it does not replace official news cites. Net-worth figures are published estimates or left blank. Dog-comm, red-folder-comm, and central-casting stills and post text are stored locally. No live X, Wikimedia, or news fetches.</p>
+  </footer>
+  </div>
+  
+  <div id="tui-toast" class="tui-toast" hidden role="status" aria-live="polite">
+    <div class="box-pane toast-box">
+    <div class="box-h" aria-hidden="true"><span class="box-c">┌</span><span class="box-title">INFO</span><span class="box-dash"></span><span class="box-c">┐</span></div>
+    <div class="box-mid"><span class="box-c box-side" aria-hidden="true">│</span><div class="box-inner"><p class="toast-msg"></p></div><span class="box-c box-side" aria-hidden="true">│</span></div>
+    <div class="box-f" aria-hidden="true"><span class="box-c">└</span><span class="box-dash"></span><span class="box-c">┘</span></div>
+  </div>
+  </div>
+  <div id="tui-modal" class="tui-modal" hidden>
+    <div class="tui-modal-scrim" data-close-modal></div>
+    <div class="tui-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="box-pane is-active modal-box">
+    <div class="box-h" aria-hidden="true"><span class="box-c">┌</span><span class="box-title"><span id="modal-title">Preview</span></span><span class="box-dash"></span><span class="box-c">┐</span></div>
+    <div class="box-mid"><span class="box-c box-side" aria-hidden="true">│</span><div class="box-inner"><div id="modal-body"></div>
+        <hr class="hr">
+        <div class="modal-keys">
+          <button type="button" class="keychip" id="modal-ok"><span class="br">[</span>Enter<span class="br">]</span> Open</button>
+          <button type="button" class="keychip" id="modal-cancel" data-close-modal><span class="br">[</span>Esc<span class="br">]</span> Back</button>
+        </div></div><span class="box-c box-side" aria-hidden="true">│</span></div>
+    <div class="box-f" aria-hidden="true"><span class="box-c">└</span><span class="box-dash"></span><span class="box-c">┘</span></div>
+  </div>
+    </div>
+  </div>
+  <div id="tui-lightbox" class="tui-lightbox" hidden>
+    <div class="tui-lightbox-scrim" data-close-lightbox></div>
+    <figure class="tui-lightbox-frame" role="dialog" aria-modal="true" aria-labelledby="lightbox-title">
+      <img id="lightbox-img" alt="">
+      <video id="lightbox-video" controls playsinline hidden></video>
+      <figcaption id="lightbox-title" class="credit"></figcaption>
+      <button type="button" class="keychip" data-close-lightbox><span class="br">[</span>Esc<span class="br">]</span> Back</button>
+    </figure>
+  </div>
+  <script src="/app.js?v=1.2.34-fecf5192a5" defer></script>
+</body>
+</html>

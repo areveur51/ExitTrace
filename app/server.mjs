@@ -74,8 +74,9 @@ import {
   dashboardRankBody,
   kindDetail,
   kindList,
-  dogCatalogList,
-  shotCatalogList,
+  byDateDescThenName,
+  commsCatalogItems,
+  commsCatalogList,
   downloadsBody,
   healthBody,
   homeBody,
@@ -103,7 +104,7 @@ import {
   parsePage,
 } from "./lib/paginate.mjs";
 import { parseAgeBand } from "./lib/age.mjs";
-import { ATTRIBUTE_TAGS, attributeTagByPath, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
+import { MENU_ATTRIBUTE_TAGS, attributeTagById, attributeTagByPath, attributeTagHref, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
   fillEmptyFromGrokipedia,
@@ -404,6 +405,99 @@ function countText(title, meta, pageCount) {
     total: meta.total,
     index: 1,
     of: pageCount || meta.limit,
+  });
+}
+
+/** Upper bounds for a comms list that mixes in tagged people (read whole, paged in memory). */
+const COMMS_MIXED_POST_CAP = 1000;
+const COMMS_TAGGED_PEOPLE_CAP = 500;
+
+/** The spec's fixed person tag when it is a registered fact tag, else "". Never request input. */
+function commsPersonTag(spec) {
+  const tag = spec?.personTag ? attributeTagById(spec.personTag) : null;
+  return tag ? tag.id : "";
+}
+
+function postPersonIds(rows) {
+  return rows.flatMap((row) =>
+    Array.isArray(row?.snapshot?.person_ids) ? row.snapshot.person_ids : [],
+  );
+}
+
+/**
+ * One list path for every comms page (dog, red folder, eagle, ronald, shot) and a
+ * comms-backed fact tag page (/tags/red-folder). Without a registered person tag the
+ * posts page in SQL, as dog comms always has. With one, posts and tagged people are
+ * read in parallel (both bounded), merged once, sorted, and paged in memory.
+ */
+async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
+  const pageSize = parseCookiePageSize(req.headers.cookie);
+  const tag = commsPersonTag(spec);
+  if (!tag) {
+    const total = await countKindComms(spec.id);
+    const meta = paginate({
+      total,
+      page: parsePage(url.searchParams),
+      pageSize,
+    });
+    const rows = await listKindComms(spec.id, {
+      limit: meta.limit,
+      offset: meta.offset,
+    });
+    const listHtml = spec.showLinkedPeople
+      ? commsCatalogList(spec.id, commsCatalogItems(rows, await getPeopleByIds(postPersonIds(rows))))
+      : kindList(spec.id, rows);
+    return layout({
+      title,
+      path: listPath,
+      heading: title,
+      query: title,
+      pageSize,
+      countLabel: countText(title, meta, rows.length),
+      lede,
+      body: `${listSection(
+        listHtml,
+        pager(meta, { basePath: listPath, noun: "posts", pageSizes: PAGE_SIZES }),
+        listHead({
+          title,
+          total: meta.total,
+          index: 1,
+          of: rows.length,
+        }),
+      )}`,
+    });
+  }
+  const [posts, tagged] = await Promise.all([
+    listKindComms(spec.id, { limit: COMMS_MIXED_POST_CAP }),
+    listPeople({ tags: [tag], limit: COMMS_TAGGED_PEOPLE_CAP }),
+  ]);
+  const linked = spec.showLinkedPeople ? await getPeopleByIds(postPersonIds(posts)) : [];
+  const items = commsCatalogItems(posts, [...linked, ...tagged], tagged).sort(byDateDescThenName);
+  const meta = paginate({
+    total: items.length,
+    page: parsePage(url.searchParams),
+    pageSize,
+  });
+  const pageItems = items.slice(meta.offset, meta.offset + meta.limit);
+  return layout({
+    title,
+    path: listPath,
+    heading: title,
+    query: title,
+    pageSize,
+    crumbLabel: title,
+    countLabel: countText(title, meta, pageItems.length),
+    lede,
+    body: listSection(
+      commsCatalogList(spec.id, pageItems),
+      pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+      listHead({
+        title,
+        total: meta.total,
+        index: 1,
+        of: pageItems.length,
+      }),
+    ),
   });
 }
 
@@ -999,7 +1093,7 @@ async function handle(req, res) {
         heading: "Tags",
         query: "Tags",
         crumbLabel: "Tags",
-        countLabel: `${ATTRIBUTE_TAGS.length} tags`,
+        countLabel: `${MENU_ATTRIBUTE_TAGS.length} tags`,
         lede: "Fact tags. Each list is the people who already store that fact.",
         body: tagsIndexBody(),
       }),
@@ -1007,6 +1101,11 @@ async function handle(req, res) {
   }
 
   const factTag = attributeTagByPath(p);
+  // A fact tag owned by another page (red_folder -> /red-folder-comms) has no page of its own.
+  if (factTag && attributeTagHref(factTag) !== factTag.path) {
+    sendRedirect(res, attributeTagHref(factTag), 301);
+    return;
+  }
   if (factTag) {
     const tags = [factTag.id];
     const pageSize = parseCookiePageSize(req.headers.cookie);
@@ -1387,50 +1486,11 @@ async function handle(req, res) {
     );
   }
   if (cat && isCommsKind(cat.kind)) {
-    const spec = commsKind(cat.kind);
-    const pageSize = parseCookiePageSize(req.headers.cookie);
-    const total = await countKindComms(spec.id);
-    const meta = paginate({
-      total,
-      page: parsePage(url.searchParams),
-      pageSize,
-    });
-    const rows = await listKindComms(spec.id, {
-      limit: meta.limit,
-      offset: meta.offset,
-    });
-    const listPath = cat.path;
-    let listHtml = kindList(spec.id, rows);
-    if (spec.id === "shot" || spec.id === "dog") {
-      const ids = rows.flatMap((row) =>
-        Array.isArray(row?.snapshot?.person_ids) ? row.snapshot.person_ids : [],
-      );
-      const people = await getPeopleByIds(ids);
-      listHtml =
-        spec.id === "shot" ? shotCatalogList(rows, people) : dogCatalogList(rows, people);
-    }
-    return sendHtml(
-      res,
-      layout({
-        title: cat.title,
-        path: cat.path,
-        heading: cat.title,
-        query: cat.title,
-        pageSize,
-        countLabel: countText(cat.title, meta, rows.length),
-        lede: cat.blurb,
-        body: `${listSection(
-          listHtml,
-          pager(meta, { basePath: listPath, noun: "posts", pageSizes: PAGE_SIZES }),
-          listHead({
-            title: cat.title,
-            total: meta.total,
-            index: 1,
-            of: rows.length,
-          }),
-        )}`,
-      }),
-    );
+    return sendHtml(res, await commsListHtml(req, url, commsKind(cat.kind), {
+      path: cat.path,
+      title: cat.title,
+      lede: cat.blurb,
+    }));
   }
 
   send(res, 404, "Not found\n", { "Content-Type": "text/plain; charset=utf-8" });

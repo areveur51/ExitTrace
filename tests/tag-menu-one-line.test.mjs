@@ -4,7 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { TAG_MENU_MAX_LABEL, keymapFooter, tagMenuItem } from "../app/lib/html.mjs";
-import { ATTRIBUTE_TAGS } from "../app/lib/tags.mjs";
+import { ATTRIBUTE_TAGS, MENU_ATTRIBUTE_TAGS } from "../app/lib/tags.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -26,8 +26,8 @@ function renderedTagChips(activePath = "/") {
 test("every Tags-menu label is at most the max length, and a shortened label carries the full name as title", () => {
   assert.equal(TAG_MENU_MAX_LABEL, 18);
   const chips = renderedTagChips();
-  assert.equal(chips.length, ATTRIBUTE_TAGS.length);
-  for (const [i, tag] of ATTRIBUTE_TAGS.entries()) {
+  assert.equal(chips.length, MENU_ATTRIBUTE_TAGS.length);
+  for (const [i, tag] of MENU_ATTRIBUTE_TAGS.entries()) {
     const chip = chips[i];
     assert.equal(chip.href, tag.path, `${tag.id} keeps its slug`);
     assert.ok(chip.label.length <= TAG_MENU_MAX_LABEL, `${tag.id} label "${chip.label}" is ${chip.label.length} > ${TAG_MENU_MAX_LABEL}`);

@@ -23,7 +23,7 @@ import {
 import { PAGE_SIZES } from "../app/lib/paginate.mjs";
 import { handle } from "../app/server.mjs";
 import { loadSeedFile, setMemory } from "../app/lib/store.mjs";
-import { ATTRIBUTE_TAGS } from "../app/lib/tags.mjs";
+import { MENU_ATTRIBUTE_TAGS } from "../app/lib/tags.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -332,7 +332,7 @@ test("every catalog list route renders the combined bar; home and detail do not"
   setMemory(goldSeed());
   const listRoutes = [
     ...CATEGORIES.filter((c) => c.path).map((c) => c.path),
-    ...ATTRIBUTE_TAGS.map((t) => t.path),
+    ...MENU_ATTRIBUTE_TAGS.map((t) => t.path),
     "/search?q=comey",
     "/dashboard/missing",
     "/dashboard/age",
@@ -392,7 +392,7 @@ test("every catalog list route renders the combined bar; home and detail do not"
     "/search?q=comey",
     "/dashboard/missing",
     "/dashboard/age",
-    ...ATTRIBUTE_TAGS.map((t) => t.path),
+    ...MENU_ATTRIBUTE_TAGS.map((t) => t.path),
   ];
   for (const pathname of enumerated) {
     assert.ok(listRoutes.includes(pathname), `enumerated ${pathname}`);
@@ -457,7 +457,7 @@ function sliceNavAt(html, start) {
 function barListRoutes() {
   return [
     ...CATEGORIES.filter((c) => c.path).map((c) => c.path),
-    ...ATTRIBUTE_TAGS.map((t) => t.path),
+    ...MENU_ATTRIBUTE_TAGS.map((t) => t.path),
     "/search?q=comey",
     "/dashboard/missing",
     "/dashboard/age",

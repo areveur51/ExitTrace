@@ -4,8 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { eventTagRow, personDetail } from "../app/lib/html.mjs";
-import { normalizeEventMedia } from "../app/lib/event-attrs.mjs";
-import { projectPerson } from "../app/lib/promote.mjs";
+import {
+  EVENT_MEDIA_DISPLAY_MAX,
+  EVENT_MEDIA_STORE_MAX,
+  displayEventMedia,
+  normalizeEventMedia,
+} from "../app/lib/event-attrs.mjs";
+import { attachPersonEvent, incomingPersonEvent, projectPerson } from "../app/lib/promote.mjs";
 
 const CLIP = "/media/people/joe-biden/support/2105403923754316173.mp4";
 const POSTER = "/media/people/joe-biden/support/2105403923754316173.jpg";
@@ -294,3 +299,119 @@ test("supporting tile shows stored context and leaves unofficial snippets off th
   assert.doesNotMatch(support, /https:\/\/x\.com\/example/);
 });
 
+
+function supportItems(n, slug = "ian-brinksman") {
+  return Array.from({ length: n }, (_, i) => ({
+    src: `/media/people/${slug}/support/item-${i + 1}.png`,
+    alt: `Item ${i + 1}`,
+  }));
+}
+
+function arrestPerson(media) {
+  return {
+    id: "ian-brinksman",
+    name: "Ian Brinksman",
+    category: "arrests",
+    event_date: "2026-01-26",
+    events: [
+      {
+        kind: "arrests",
+        event_date: "2026-01-26",
+        comments: "Arrested on a federal complaint.",
+        sources: [{ url: "https://www.justice.gov/usao-edva" }],
+        media,
+      },
+    ],
+  };
+}
+
+test("event media storage keeps a 9th item and caps at 24, display shows 8", () => {
+  assert.equal(EVENT_MEDIA_STORE_MAX, 24);
+  assert.equal(EVENT_MEDIA_DISPLAY_MAX, 8);
+  const nine = supportItems(9);
+  assert.equal(normalizeEventMedia(nine).length, 9);
+  assert.equal(normalizeEventMedia(nine)[8].src, nine[8].src);
+  const twentyFive = supportItems(25);
+  const stored = normalizeEventMedia(twentyFive);
+  assert.equal(stored.length, 24);
+  assert.deepEqual(stored.map((m) => m.src), twentyFive.slice(0, 24).map((m) => m.src));
+  assert.equal(displayEventMedia(nine).length, 8);
+  assert.deepEqual(displayEventMedia(twentyFive).map((m) => m.src), twentyFive.slice(0, 8).map((m) => m.src));
+});
+
+test("event media dedup still works past 8 items", () => {
+  const nine = supportItems(9);
+  const dup = [...nine, nine[0], { ...nine[8], alt: "Dup" }, nine[3].src];
+  const stored = normalizeEventMedia(dup);
+  assert.equal(stored.length, 9);
+  assert.equal(new Set(stored.map((m) => m.src)).size, 9);
+  assert.equal(stored[8].alt, "Item 9");
+});
+
+test("projectPerson and the AMEND merge keep 9+ media items, capped at 24", () => {
+  const nine = projectPerson(arrestPerson(supportItems(9)));
+  assert.equal(nine.events[0].media.length, 9);
+  const big = projectPerson(arrestPerson(supportItems(25)));
+  assert.equal(big.events[0].media.length, 24);
+});
+
+test("a 9-item event card renders 8 tiles and a 25-item one also renders 8", () => {
+  for (const n of [9, 25]) {
+    const html = personDetail(arrestPerson(supportItems(n)));
+    const tiles = html.match(/detail-tile--support/g) || [];
+    assert.equal(tiles.length, 8, `n=${n}`);
+    assert.ok(html.includes("item-8.png"));
+    assert.ok(!html.includes("item-9.png"));
+  }
+});
+
+test("AMEND merge: attachPersonEvent with 20 stored + 20 new items keeps exactly 24", () => {
+  const stored = supportItems(20);
+  const fresh = Array.from({ length: 20 }, (_, i) => ({
+    src: `/media/people/ian-brinksman/support/new-${i + 1}.png`,
+    alt: `New ${i + 1}`,
+  }));
+  const person = projectPerson(arrestPerson(stored));
+  assert.equal(person.events[0].media.length, 20);
+  const { person: next, existed } = attachPersonEvent(person, {
+    kind: "arrests",
+    event_date: "2026-01-26",
+    sources: [{ url: "https://www.justice.gov/usao-edva/pr/example" }],
+    media: fresh,
+  });
+  assert.equal(existed, true);
+  assert.equal(next.events.length, 1);
+  const media = next.events[0].media;
+  assert.equal(media.length, 24);
+  assert.deepEqual(
+    media.map((m) => m.src),
+    [...stored, ...fresh.slice(0, 4)].map((m) => m.src),
+  );
+});
+
+test("intake normalizes event media: remote, portrait and duplicate items stay out", () => {
+  const ev = incomingPersonEvent(
+    {
+      category: "arrests",
+      event_date: "2026-01-26",
+      media: [
+        { src: "/media/people/ian-brinksman/support/a.png", alt: "A" },
+        { src: "/media/people/ian-brinksman/support/a.png", alt: "Dup" },
+        { src: "https://example.com/x.png" },
+        { src: "/media/people/ian-brinksman.jpg" },
+      ],
+    },
+    [],
+  );
+  assert.deepEqual(ev.media, [{ src: "/media/people/ian-brinksman/support/a.png", alt: "A" }]);
+  const none = incomingPersonEvent({ category: "arrests", event_date: "2026-01-26", media: [] }, []);
+  assert.equal(none.media, undefined);
+});
+
+test("display dedupes before the cap: a duplicated item does not cost a tile", () => {
+  const nine = supportItems(9);
+  const html = personDetail(arrestPerson([nine[0], nine[0], ...nine.slice(1)]));
+  assert.equal((html.match(/detail-tile--support/g) || []).length, 8);
+  assert.ok(html.includes("item-8.png"));
+  assert.ok(!html.includes("item-9.png"));
+});

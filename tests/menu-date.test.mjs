@@ -47,6 +47,7 @@ test("a menu date is the event that menu is about", () => {
   assert.equal(personMenuDate(rogers, { tag: "masks" }), "");
   assert.equal(personMenuDate(rogers, { tag: "former_intel_agency_personnel" }), "");
   assert.equal(personMenuDate(rogers, { tag: "fraud" }), "");
+  assert.equal(personMenuDate(rogers, { tag: "red_folder" }), "");
   assert.equal(personMenuDate(rogers, { tag: "not_a_fact_tag" }), "2021-01-03");
   const list = peopleList([rogers], {
     listDate: (row) => personMenuDate(row, { tag: "endorsements" }),
@@ -81,6 +82,7 @@ test("nickname, file, transparency, and flight menus ignore the other event year
   assert.equal(personMenuDate(biden, { tag: "masks" }), "");
   assert.equal(personMenuDate(biden, { tag: "former_intel_agency_personnel" }), "");
   assert.equal(personMenuDate(biden, { tag: "fraud" }), "");
+  assert.equal(personMenuDate(biden, { tag: "red_folder" }), "");
   assert.equal(personMenuDate(biden, { tag: "not_a_fact_tag" }), "2024-07-21");
 
   const withSupporting = {
@@ -138,6 +140,7 @@ test("nickname, file, transparency, and flight menus ignore the other event year
   assert.equal(personMenuDate(adams, { tag: "masks" }), "");
   assert.equal(personMenuDate(adams, { tag: "former_intel_agency_personnel" }), "");
   assert.equal(personMenuDate(adams, { tag: "fraud" }), "");
+  assert.equal(personMenuDate(adams, { tag: "red_folder" }), "");
   assert.equal(personMenuDate(adams, { tag: "not_a_fact_tag" }), "2019-01-03");
 
   const stanton = {

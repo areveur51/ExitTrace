@@ -31,6 +31,23 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.34] - 2026-10-26
+
+### Fixed
+
+- An event keeps every unique supporting media item it stores, up to a safety cap of 24 (`EVENT_MEDIA_STORE_MAX`). Boot, seed import, unique-people migration and promote/AMEND no longer drop items past the 8th. A card still shows the first 8 (`EVENT_MEDIA_DISPLAY_MAX`); the rest stay stored.
+
+### Changed
+
+- Red Folder, Eagle and Ronald comms use the same list as Dog comms. A post that names a person shows that person's card, other posts stay post rows, grouped by year. A comms page also lists people stored with its person tag once (today only Red folder is a person tag; Eagle and Ronald have none, so they show no tagged cards). `/tags/red-folder` shows the same list. Dog comms and every detail page are unchanged.
+- One Red Folder menu entry, under Comms (`/red-folder-comms`). The Tags menu and `/tags` no longer list Red folder, `/tags/red-folder` is a 301 to `/red-folder-comms`, and the Red folder chip on a card links there. The stored `red_folder` tag is unchanged.
+
+## [1.2.33] - 2026-10-26
+
+### Added
+
+- Red folder lists people stored with a red folder and stored red-folder posts. The tag page `/tags/red-folder` and the catalog `/red-folder-comms` show that same list. A post linked to a person shows that person. An unlinked post stays a post.
+
 ## [1.2.32] - 2026-10-25
 
 ### Fixed

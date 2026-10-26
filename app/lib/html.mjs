@@ -16,7 +16,15 @@ import {
 } from "./categories.mjs";
 import { normalizeOperationTags, operationPortraitFrom, operationTagLabel } from "./operation.mjs";
 import { storedAgeAtEvent } from "./age.mjs";
-import { EVENT_ATTR_FIELDS, EVENT_ATTR_LABELS, eventHeadcount, normalizeEventMedia, originText } from "./event-attrs.mjs";
+import {
+  EVENT_ATTR_FIELDS,
+  EVENT_ATTR_LABELS,
+  EVENT_MEDIA_DISPLAY_MAX,
+  displayEventMedia,
+  eventHeadcount,
+  normalizeEventMedia,
+  originText,
+} from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
 import { standardizePosition } from "./position-format.mjs";
@@ -76,7 +84,8 @@ import {
   THEME_STORAGE_KEY,
 } from "./themes.mjs";
 import {
-  ATTRIBUTE_TAGS,
+  MENU_ATTRIBUTE_TAGS,
+  attributeTagHref,
   EPSTEIN_CLIENTS_CATEGORY,
   IDENTITY_TAGS,
   attributeTagById,
@@ -451,7 +460,7 @@ const TAG_MENU_SHORT_LABELS = Object.freeze({
 /** One Tags-menu row: the short label when the full name is too long, plus the full name as title. */
 export function tagMenuItem(tag) {
   const label = TAG_MENU_SHORT_LABELS[tag.id] || tag.nav;
-  return { href: tag.path, label, ...(label === tag.nav ? {} : { title: tag.nav }) };
+  return { href: attributeTagHref(tag), label, ...(label === tag.nav ? {} : { title: tag.nav }) };
 }
 
 function keymapTagSection(activePath) {
@@ -461,7 +470,7 @@ function keymapTagSection(activePath) {
       title: "Tags",
       ariaLabel: "Fact tags",
       chipClass: "keymap-tag",
-      items: ATTRIBUTE_TAGS.map(tagMenuItem),
+      items: MENU_ATTRIBUTE_TAGS.map(tagMenuItem),
     },
     activePath,
   );
@@ -469,8 +478,8 @@ function keymapTagSection(activePath) {
 
 /** Fact-tag index. Same rows as the catalog Tags menu. */
 export function tagsIndexBody() {
-  const chips = ATTRIBUTE_TAGS.map(
-    (tag) => `<a class="keychip keymap-tag" href="${esc(tag.path)}">${esc(tag.nav)}</a>`,
+  const chips = MENU_ATTRIBUTE_TAGS.map(
+    (tag) => `<a class="keychip keymap-tag" href="${esc(attributeTagHref(tag))}">${esc(tag.nav)}</a>`,
   ).join("");
   return `<nav class="keymap-group tag-index" aria-label="Fact tags"><p class="keymap-section">Tags</p>${chips}</nav>`;
 }
@@ -1925,8 +1934,12 @@ function personSupportingMediaHtml(row, seen) {
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
     if (kind === "notable" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
+    // Dedupe (normalize, then collapse dog post groups) before the display cap.
     const media = normalizeEventMedia(ev.media);
-    const items = kind === "dog_comms" ? collapseDogPostMedia(media) : media;
+    const items = (kind === "dog_comms" ? collapseDogPostMedia(media) : media).slice(
+      0,
+      EVENT_MEDIA_DISPLAY_MAX,
+    );
     for (const item of items) {
       const want = canonicalPublicUrl(item.url);
       const source =
@@ -2161,37 +2174,65 @@ export function kindList(kind, rows) {
   )}</div>`;
 }
 
+/** Newest first, undated last, then name (or handle). One comparator for every mixed comms list. */
+export function byDateDescThenName(a, b) {
+  const da = String(a?.date || "");
+  const db = String(b?.date || "");
+  if (da !== db) {
+    if (!da) return 1;
+    if (!db) return -1;
+    return db.localeCompare(da);
+  }
+  const na = String(a?.row?.name || a?.row?.handle || "");
+  const nb = String(b?.row?.name || b?.row?.handle || "");
+  return na.localeCompare(nb);
+}
+
 /**
- * One card per person a post names. The post itself is not a card when those
- * people resolve. A post with no resolved person still lists the post.
- * Cards do not repeat the post media. `snapshot.named` drops anyone it does not list.
- * A person already shown on this page is skipped.
+ * One item builder for every comms list (dog, red folder, eagle, ronald, shot).
+ * A post that names resolved people becomes one card per person; the post itself
+ * is not a card then. A post with no resolved person stays a post row.
+ * `snapshot.named` drops anyone it does not list. A person already shown is skipped.
+ * People carrying the page's person tag are added once, after the linked cards.
+ * Cards do not repeat the post media. Items keep post order; a caller that mixes
+ * in tagged people sorts with byDateDescThenName.
  */
-function personCatalogList(kind, posts, people) {
-  const spec = commsKind(kind);
+export function commsCatalogItems(posts, people, tagged = []) {
   const rows = Array.isArray(posts) ? posts : [];
-  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
   const seen = new Set();
   const items = [];
   for (const post of rows) {
     const linked = linkedPeopleForDetail(post, people);
     if (!linked.length) {
-      items.push({ date: post.posted_at, type: "post", row: post });
+      items.push({ date: post.posted_at || "", type: "post", row: post });
       continue;
     }
     for (const person of linked) {
-      if (seen.has(person.id)) continue;
+      if (!person?.id || seen.has(person.id)) continue;
       seen.add(person.id);
       items.push({
-        date: post.posted_at,
+        date: post.posted_at || "",
         cardDate: asEventDate(post.posted_at) || "",
         type: "person",
         row: person,
       });
     }
   }
-  if (!items.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="${spec.pageClass} tui-list">${groupByYearItems(items, (item, opts) =>
+  for (const person of Array.isArray(tagged) ? tagged : []) {
+    if (!person?.id || seen.has(person.id)) continue;
+    seen.add(person.id);
+    const date = asEventDate(person.event_date) || "";
+    items.push({ date, cardDate: date, type: "person", row: person });
+  }
+  return items;
+}
+
+/** One list renderer for every comms page: person cards and post rows, grouped by year. */
+export function commsCatalogList(kind, items) {
+  const spec = commsKind(kind);
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
+  return `<div class="${esc(spec.pageClass)} tui-list">${groupByYearItems(rows, (item, opts) =>
     item.type === "person"
       ? personRow(item.row, { ...opts, date: item.cardDate })
       : kindListRow(kind, item.row, opts),
@@ -2199,11 +2240,7 @@ function personCatalogList(kind, posts, people) {
 }
 
 export function shotCatalogList(posts, people) {
-  return personCatalogList("shot", posts, people);
-}
-
-export function dogCatalogList(posts, people) {
-  return personCatalogList("dog", posts, people);
+  return commsCatalogList("shot", commsCatalogItems(posts, people));
 }
 
 export function dogList(rows) {
@@ -2471,7 +2508,7 @@ function notableMediaFigures(ev) {
     );
   }
   const sources = Array.isArray(ev?.sources) ? ev.sources : [];
-  for (const item of normalizeEventMedia(ev?.media)) {
+  for (const item of displayEventMedia(ev?.media)) {
     const want = canonicalPublicUrl(item.url);
     const source = sources.find((entry) => canonicalPublicUrl(entry?.url) === want) || null;
     figures.push(supportingMediaFigure(item, source));
@@ -3062,7 +3099,7 @@ function personTagChips(row) {
     .map((id) => {
       const fact = attributeTagById(id);
       if (fact) {
-        return `<a class="keychip" href="${esc(fact.path)}">${esc(fact.nav)}</a>`;
+        return `<a class="keychip" href="${esc(attributeTagHref(fact))}">${esc(fact.nav)}</a>`;
       }
       const tag = IDENTITY_TAGS.find((t) => t.id === id);
       if (!tag) return "";

@@ -9,6 +9,7 @@ import {
   ATTRIBUTE_TAG_IDS,
   attributeTagById,
   attributeTagByPath,
+  MENU_ATTRIBUTE_TAGS,
   normalizeTag,
   normalizeTags,
   personTags,
@@ -147,8 +148,7 @@ test("the retired tag page redirects and the tags index and fraud list stay up",
   assert.match(index.body, /href="\/tags\/fraud"/);
   assert.equal(index.body.includes("/tags/federal-investigation"), false);
   assert.equal(index.body.includes("federal_investigation"), false);
-  for (const id of ATTRIBUTE_TAG_IDS) {
-    const tag = attributeTagById(id);
+  for (const tag of MENU_ATTRIBUTE_TAGS) {
     assert.match(index.body, new RegExp(`href="${tag.path.replaceAll("/", "\\/")}"`));
   }
 

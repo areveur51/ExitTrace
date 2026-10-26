@@ -41,6 +41,18 @@ scratch/stream-reset.mjs
 # One-shot roll-call working files for the harassment-records tag. Not source.
 scratch/harassment-records/
 
+# One-shot article dumps for the Nicki Minaj request. Not source.
+scratch/nicki-minaj/
+
+# One-shot insert for the Eric Bauza request. Not source.
+scratch/eric-bauza/
+
+# One-shot insert for the Peggy King request. Not source.
+scratch/peggy-king/
+
+# One-shot insert for the Nick Mangold request. Not source.
+scratch/nick-mangold/
+
 # Packaged release zip — published via GitHub Releases, not git
 dist/
 *.zip
