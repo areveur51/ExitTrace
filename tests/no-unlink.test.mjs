@@ -13,7 +13,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FILES = ["scripts/et-daily-ingest.sh", "exittracectl.sh", "scripts/et-daily-apply.mjs"];
+const FILES = ["scripts/et-daily-ingest.sh", "exittracectl.sh", "scripts/et-daily-apply.mjs", "scripts/lib/retire.sh"];
 // Delete verbs as words (built from a list so this file stays plain data).
 const VERBS = ["rm", "rmdir", "unlink", "shred", "truncate"];
 const SHELL_DELETE = new RegExp(`(^|[\\s;&|(\`])(${VERBS.join("|")})(\\s|$)`);
@@ -147,11 +147,52 @@ test("no-unlink: a daily rerun retires the earlier run's files instead of deleti
   assert.equal(runs.length, 1, `one retired run dir: ${runs}`);
   assert.match(runs[0], /^\d{8}-\d{6}-\d+$/);
   assert.equal(fs.statSync(path.join(rdir, runs[0])).mode & 0o777, 0o700);
+  // main's retire_path names each file <base>.<YYYYmmdd-HHMMSS>.rerun[.N].
+  const moved = fs.readdirSync(path.join(rdir, runs[0]));
+  assert.equal(moved.length, Object.keys(stale).length, `one retired file per stale file: ${moved}`);
   for (const [n, body] of Object.entries(stale)) {
-    assert.equal(fs.readFileSync(path.join(rdir, runs[0], n), "utf8"), body, `${n} kept with its content`);
+    const re = new RegExp(`^${n.replace(/[.]/g, "\\.")}\\.\\d{8}-\\d{6}\\.rerun(\\.\\d+)?$`);
+    const hit = moved.filter((m) => re.test(m));
+    assert.equal(hit.length, 1, `${n} retired once as <base>.<stamp>.rerun: ${moved}`);
+    assert.equal(fs.readFileSync(path.join(rdir, runs[0], hit[0]), "utf8"), body, `${n} kept with its content`);
   }
   const prompt = fs.readFileSync(path.join(dir, `et-daily-${day}-prompt.md`), "utf8");
   assert.match(prompt, /^no rm\/shred\/unlink \(mv to retired\/\), no lab :5220, no desktop browser$/m);
   assert.deepEqual(deleteCalls(dir), [], "no delete command was called");
   assert.ok(walk(dir).length >= Object.keys(stale).length);
+});
+
+test("no-unlink: a daily rerun under a symlinked work dir fails closed and keeps the earlier files", () => {
+  const base = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "et-daily-symlink-"));
+  const real = path.join(base, "real");
+  fs.mkdirSync(real, { mode: 0o700 });
+  const link = path.join(base, "link");
+  fs.symlinkSync(real, link);
+  const bin = stubBin(base);
+  const day = spawnSync("date", ["+%Y%m%d"], { env: { ...process.env, TZ: "America/New_York" }, encoding: "utf8" }).stdout.trim();
+  const grok = path.join(base, "grok-stub.sh");
+  fs.writeFileSync(grok, "#!/bin/bash\nexit 0\n", { mode: 0o755 });
+  const apply = `et-daily-${day}-apply.json`;
+  fs.writeFileSync(path.join(real, apply), '{"rows":[{"subject":"Stale Row"}]}');
+  const r = spawnSync("bash", [path.join(ROOT, "scripts", "et-daily-ingest.sh")], {
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      DATABASE_URL: "",
+      ET_DAILY_DRY_RUN: "1",
+      ET_DAILY_ROOT: ROOT,
+      ET_DAILY_NODE: process.execPath,
+      ET_DAILY_GROK: grok,
+      ET_DAILY_HELPER: path.join(base, "no-helper.mjs"),
+      ET_DAILY_TMP: link,
+      ET_DAILY_LOCK: path.join(base, "et-daily-ingest.lock"),
+    },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /cannot retire earlier run files/);
+  assert.equal(fs.readFileSync(path.join(real, apply), "utf8"), '{"rows":[{"subject":"Stale Row"}]}', "stale apply.json left in place");
+  const rdir = path.join(real, "retired");
+  assert.deepEqual(fs.existsSync(rdir) ? fs.readdirSync(rdir) : [], [], "nothing moved through the symlink");
+  assert.deepEqual(deleteCalls(base), [], "no delete command was called");
 });

@@ -55,11 +55,15 @@
 #   driver only plans rows and writes nothing.
 #
 # Never unlinks: a file from an earlier run today (report, apply.json, summary,
-# digests, leads, prompt, grok and seed logs) is moved into a fresh
-# $TMPD/retired/<YYYYmmdd-HHMMSS>-<pid>/ dir (0700) before it is rewritten.
+# digests, leads, prompt, grok and seed logs) is moved by main's retire_path
+# (scripts/lib/retire.sh) to
+# $TMPD/retired/<YYYYmmdd-HHMMSS>-<pid>/<name>.<YYYYmmdd-HHMMSS>.rerun (dirs
+# 0700, symlinked ancestors refused) before it is rewritten.
 set -u
 export TZ=America/New_York
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib/retire.sh
+source "$HERE/lib/retire.sh" || { echo "et-daily FAIL: cannot source $HERE/lib/retire.sh" >&2; exit 1; }
 ROOT=${ET_DAILY_ROOT:-$(cd "$HERE/.." && pwd)}
 NODE=${ET_DAILY_NODE:-$(command -v node || echo node)}
 GROK=${ET_DAILY_GROK:-$(command -v grok || echo grok)}
@@ -133,20 +137,18 @@ if ! flock -n 9; then
   exit 0
 fi
 
-# Retire, never unlink: mv each existing path into one fresh timestamped
-# $TMPD/retired/<stamp>-<pid>/ dir (0700). Returns 1 if anything cannot be moved.
-RETIRED_DIR=""
+# Retire, never unlink: main's retire_path (scripts/lib/retire.sh) moves each
+# existing path to $RETIRED_DIR/<name>.<stamp>.rerun. RETIRED_DIR is computed
+# once per run. retired/ itself must pass private_dir; retire_path then creates
+# the run dir 0700 and refuses a symlinked ancestor. Returns 1 if anything
+# cannot be moved.
+RETIRED_DIR="$TMPD/retired/$(date +%Y%m%d-%H%M%S)-$$"
 retire() {
   local f
   for f in "$@"; do
     [[ -e "$f" || -L "$f" ]] || continue
-    if [[ -z "$RETIRED_DIR" ]]; then
-      private_dir "$TMPD/retired" || return 1
-      RETIRED_DIR="$TMPD/retired/$(date +%Y%m%d-%H%M%S)-$$"
-      mkdir -m 700 -- "$RETIRED_DIR" || { echo "et-daily FAIL: cannot create $RETIRED_DIR" >&2; RETIRED_DIR=""; return 1; }
-    fi
-    mv -n -- "$f" "$RETIRED_DIR/" || return 1
-    [[ -e "$f" || -L "$f" ]] && { echo "et-daily FAIL: $f was not retired" >&2; return 1; }
+    private_dir "$TMPD/retired" || return 1
+    retire_path "$f" "$RETIRED_DIR" rerun || return 1
   done
   return 0
 }
