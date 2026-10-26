@@ -1,3 +1,11 @@
+-- SUPERSEDED (Worf r4 LOW-1, 2026-10-26). DO NOT RUN.
+-- Replaced by the 2026-10-26-multi-event-* steps (docs/MIGRATION.md), which add
+-- no CHECK. This file would add person_events_seq_notable_only and leave lab's
+-- and Render's CHECK sets different. Its first statement inside the transaction
+-- raises 'superseded', so the whole file rolls back with nothing changed (with
+-- or without ON_ERROR_STOP: later statements fail in the aborted transaction
+-- and COMMIT becomes ROLLBACK). Kept only for docs/MULTI_NOTABLE_MIGRATION.md.
+--
 -- Multi-notable phase B (PK swap).
 -- One transaction so there is never a committed moment with no replica identity
 -- on this published table. Existing rows are seq = 0, so the CHECK is valid.
@@ -17,6 +25,11 @@
 -- Idempotent via pg_constraint / pg_index guards.
 
 BEGIN;
+
+DO $$
+BEGIN
+  RAISE EXCEPTION 'superseded: 2026-10-22-multi-notable-phase-b.sql must not run; use the 2026-10-26-multi-event-* steps (docs/MIGRATION.md)';
+END $$;
 
 DO $$
 BEGIN

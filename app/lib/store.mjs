@@ -2127,12 +2127,6 @@ async function personEventsSeqNotableOnly(client) {
 }
 
 /**
- * A seq > 0 event needs PRIMARY KEY (person_id, kind, seq) on this database.
- * A seq > 0 event of a kind other than notable (red_folder) also needs the
- * multi-event migration, which drops person_events_seq_notable_only. No catalog
- * query when every event is seq 0.
- */
-/**
  * ET_MULTI_EVENT_WRITES=on is the operator switch for seq > 0 person_events rows
  * (a second notable, a second red_folder). Off by default; set it only after F7 of
  * docs/MIGRATION.md, when lab AND Render both have PRIMARY KEY (person_id, kind, seq).
@@ -2143,10 +2137,27 @@ export function multiEventWritesEnabled(env = process.env) {
   return env.ET_MULTI_EVENT_WRITES === "on";
 }
 
+// person_events.seq is INTEGER (int4).
+const EVENT_SEQ_MAX = 2147483647;
+
+/**
+ * A seq > 0 event needs PRIMARY KEY (person_id, kind, seq) on this database.
+ * A seq > 0 event of a kind other than notable (red_folder) also needs the
+ * multi-event migration (F3 up-lab / F5 up-render-b), which drops
+ * person_events_seq_notable_only. A seq above int4 is refused here, before any
+ * query. No catalog query when every event is seq 0.
+ */
 export async function assertMultiNotableReady(client, person, env = process.env) {
   const normalized = normalizePerson(person);
   const multi = (normalized.events || []).filter((ev) => eventSeq(ev) > 0);
   if (!multi.length) return;
+  const tooBig = multi.find((ev) => eventSeq(ev) > EVENT_SEQ_MAX);
+  if (tooBig) {
+    throw new PromoteError(
+      `${String(tooBig.kind || "").trim()} event not saved: seq ${eventSeq(tooBig)} is above ${EVENT_SEQ_MAX} (person_events.seq is INTEGER).`,
+      "event_seq_out_of_range",
+    );
+  }
   if (!multiEventWritesEnabled(env)) {
     const kind = String(multi[0].kind || "").trim();
     throw new PromoteError(
@@ -2166,7 +2177,7 @@ export async function assertMultiNotableReady(client, person, env = process.env)
   const nonNotable = multi.find((ev) => String(ev.kind || "").trim() !== "notable");
   if (nonNotable && (await personEventsSeqNotableOnly(client))) {
     throw new PromoteError(
-      `Second ${String(nonNotable.kind).trim()} event not saved: person_events still has CHECK person_events_seq_notable_only. The multi-event migration (scripts/migrations/2026-10-26-multi-event-up-render-a.sql on Render, -up-lab.sql on lab) must be applied on this database first.`,
+      `Second ${String(nonNotable.kind).trim()} event not saved: person_events still has CHECK person_events_seq_notable_only. The multi-event migration (scripts/migrations/2026-10-26-multi-event-up-lab.sql on lab, -up-render-b.sql on Render; docs/MIGRATION.md F3 / F5) must be applied on this database first.`,
       "multi_event_needs_migration",
     );
   }

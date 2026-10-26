@@ -401,3 +401,15 @@ test("MIGRATION.md (Worf r4 MED-2 ruling): Render DB reads only inside the F2/F5
   assert.match(doc, /Render API key stays in the operator's key file and is used \*\*path-only\*\*: the client reads that file by path; the key is never `echo`ed, never on a command line or in argv/);
   assert.doesNotMatch(doc, /sourced only inside a subshell/);
 });
+
+test("multi-event: a seq above int4 is refused before any query (person_events.seq is INTEGER)", async () => {
+  const two = attachPersonEvent(attachPersonEvent(projectPerson(melania()), RF_A).person, RF_B).person;
+  const withSeq = (seq) => ({ ...two, events: two.events.map((ev) => (ev.kind === "red_folder" && eventSeq(ev) > 0 ? { ...ev, seq } : ev)) });
+  const on = { ET_MULTI_EVENT_WRITES: "on" };
+  for (const seq of [2147483648, "2147483648", 99999999999999]) {
+    const c = fakeClient({ pkHasSeq: true, notableOnly: false });
+    await assert.rejects(assertMultiNotableReady(c, withSeq(seq), on), { code: "event_seq_out_of_range" }, String(seq));
+    assert.equal(c.calls.length, 0);
+  }
+  await assertMultiNotableReady(fakeClient({ pkHasSeq: true, notableOnly: false }), withSeq(2147483647), on);
+});

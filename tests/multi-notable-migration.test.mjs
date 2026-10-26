@@ -107,6 +107,11 @@ test("phase B swaps PK in one transaction with USING INDEX and REPLICA IDENTITY 
   assert.match(sql, /PRIMARY KEY USING INDEX person_events_person_kind_seq_key/);
   assert.match(sql, /REPLICA IDENTITY DEFAULT/);
   assert.match(sql, /person_events_seq_notable_only/);
+  // Worf r4 LOW-1: superseded; the first statement inside the transaction raises.
+  assert.match(sql, /^-- SUPERSEDED \(Worf r4 LOW-1, 2026-10-26\)\. DO NOT RUN\./);
+  const afterBegin = body.slice(body.search(/^\s*BEGIN\s*;/m)).replace(/^\s*BEGIN\s*;\s*/, "");
+  assert.match(afterBegin, /^DO \$\$\nBEGIN\n  RAISE EXCEPTION 'superseded: /);
+  assert.equal(body.slice(0, body.search(/^\s*BEGIN\s*;/m)).trim(), "", "nothing runs before BEGIN");
   const beginAt = body.search(/^\s*BEGIN\s*;/m);
   const usingAt = body.indexOf("PRIMARY KEY USING INDEX");
   const replicaAt = body.search(/REPLICA IDENTITY DEFAULT/i);
@@ -274,8 +279,9 @@ test("bootstrap person_events seed insert is target-less ON CONFLICT and does no
   assert.match(seed[0], /ON CONFLICT DO NOTHING/);
 });
 
-test("bootstrap-db.sql has no person_events PK swap; fresh tables get the multi-event CHECK (seq >= 0)", () => {
+test("bootstrap-db.sql has no person_events PK swap; fresh tables get seq and PRIMARY KEY (person_id, kind, seq), with no seq CHECK", () => {
   const sql = read("scripts/bootstrap-db.sql");
+  assert.doesNotMatch(sql, /person_events_seq_notable_only|person_events_seq_nonneg|CHECK \(seq/);
   assert.doesNotMatch(sql, /PRIMARY KEY USING INDEX person_events/);
   assert.doesNotMatch(sql, /DROP CONSTRAINT(?: IF EXISTS)? person_events_pkey/);
   assert.match(
