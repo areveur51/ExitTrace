@@ -112,6 +112,24 @@ test("tags param: only known MENU_ATTRIBUTE_TAGS ids, deduped, menu order, cappe
   assert.equal(tagSearchHref("/search", { q: "a b" }), "/search?q=a+b", "no match param without tags");
 });
 
+test("red_folder (a menu:false fact tag) is not searchable: parse drops it and the form omits it", async () => {
+  assert.ok(!MENU_ATTRIBUTE_TAG_IDS.includes("red_folder"), "red_folder is not a Tags-menu tag");
+  for (const q of ["tags=red_folder", "tags=red-folder", "tags=RED_FOLDER&match=any", "tags=red_folder&tags=red_folder"]) {
+    const r = parseTagSearch(q);
+    assert.deepEqual(r.tags, [], q);
+    assert.ok(r.ignored >= 1, `${q} counted as ignored`);
+  }
+  assert.deepEqual(parseTagSearch("tags=red_folder,save_act").tags, ["save_act"]);
+  assert.equal(tagSearchHref("/search", { tags: ["red_folder"] }), "/search", "no tags param for red_folder");
+  setMemory({ people: [...PEOPLE, person("fe-red", "Fe Red", ["red_folder", "save_act"], "2025-04-05")] });
+  const home = await requestPage("/");
+  assert.doesNotMatch(home.body, /name="tags" value="red_folder"/, "no red_folder checkbox in the dropdown");
+  const page = await requestPage("/search?tags=red_folder");
+  assert.equal(page.status, 200);
+  assert.doesNotMatch(page.body, /value="red_folder" checked/);
+  assert.doesNotMatch(page.body, /data-tf-remove="red_folder"/, "no red_folder chip");
+});
+
 test("tags param is escaped and never echoed raw", async () => {
   setMemory({ people: PEOPLE });
   const page = await requestPage(
