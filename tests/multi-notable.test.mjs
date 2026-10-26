@@ -205,7 +205,7 @@ const OLD_PK = [{ attname: "person_id" }, { attname: "kind" }];
 const NEW_PK = [{ attname: "person_id" }, { attname: "kind" }, { attname: "seq" }];
 
 function isCatalog(sql) {
-  return /to_regclass\('person_events'\)/.test(sql) && /pg_constraint/.test(sql);
+  return /to_regclass\('public\.person_events'\)/.test(sql) && /pg_constraint/.test(sql);
 }
 
 function recordingClient(pkRows, { throwOn } = {}) {

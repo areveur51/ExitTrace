@@ -14,7 +14,7 @@ import {
   projectPerson,
 } from "../app/lib/promote.mjs";
 import { handle } from "../app/server.mjs";
-import { assertMultiNotableReady, getPerson, listPeople, savePerson, setMemory, syncPersonEvents } from "../app/lib/store.mjs";
+import { assertMultiNotableReady, getPerson, listPeople, multiEventWritesEnabled, savePerson, setMemory, syncPersonEvents } from "../app/lib/store.mjs";
 
 // These tests model a database after F7 (both sides migrated): the operator switch is on.
 // The off-by-default case is its own test in tests/multi-event.test.mjs.
@@ -173,13 +173,14 @@ test("multi-event: memory store keeps every seq across save and read; API and th
   }
 });
 
-function fakeClient({ pkHasSeq, notableOnly }) {
+function fakeClient({ pkHasSeq, notableOnly, pk }) {
   const calls = [];
+  const keyCols = pk || (pkHasSeq ? ["person_id", "kind", "seq"] : ["person_id", "kind"]);
   return {
     calls,
     async query(text, params) {
       calls.push({ text, params });
-      if (/pg_constraint c JOIN pg_attribute/.test(text)) return { rows: pkHasSeq ? [{ attname: "person_id" }, { attname: "kind" }, { attname: "seq" }] : [{ attname: "person_id" }, { attname: "kind" }] };
+      if (/FROM pg_constraint c .*JOIN pg_attribute/.test(text)) return { rows: keyCols.map((attname) => ({ attname })) };
       if (/person_events_seq_notable_only/.test(text)) return { rows: notableOnly ? [{ "?column?": 1 }] : [] };
       return { rows: [] };
     },
@@ -205,7 +206,9 @@ test("multi-event: ET_MULTI_EVENT_WRITES is off by default and seq > 0 needs bot
   const two = attachPersonEvent(attachPersonEvent(projectPerson(melania()), RF_A).person, RF_B).person;
   const k = attachPersonEvent(projectPerson(keith()), { kind: "notable", event_date: "2026-10-05", sources: [AP("plot", "2026-10-22")] }).person;
   const migrated = () => fakeClient({ pkHasSeq: true, notableOnly: false });
-  for (const env of [{}, { ET_MULTI_EVENT_WRITES: "" }, { ET_MULTI_EVENT_WRITES: "1" }, { ET_MULTI_EVENT_WRITES: "true" }, { ET_MULTI_EVENT_WRITES: "off" }]) {
+  for (const env of [{}, { ET_MULTI_EVENT_WRITES: "" }, { ET_MULTI_EVENT_WRITES: "1" }, { ET_MULTI_EVENT_WRITES: "true" }, { ET_MULTI_EVENT_WRITES: "off" },
+    { ET_MULTI_EVENT_WRITES: " on " }, { ET_MULTI_EVENT_WRITES: "on " }, { ET_MULTI_EVENT_WRITES: " on" }, { ET_MULTI_EVENT_WRITES: "on\n" },
+    { ET_MULTI_EVENT_WRITES: "\ton" }, { ET_MULTI_EVENT_WRITES: "ON" }, { ET_MULTI_EVENT_WRITES: "On" }, { ET_MULTI_EVENT_WRITES: "yes" }]) {
     for (const p of [two, k]) {
       const c = migrated();
       await assert.rejects(assertMultiNotableReady(c, p, env), { code: "multi_event_writes_off" }, JSON.stringify(env));
@@ -229,6 +232,31 @@ test("multi-event: ET_MULTI_EVENT_WRITES is off by default and seq > 0 needs bot
   } finally {
     process.env.ET_MULTI_EVENT_WRITES = saved;
   }
+});
+
+test("multi-event: ET_MULTI_EVENT_WRITES must be exactly 'on' (no trim, no case folding) (Worf B-7)", () => {
+  assert.equal(multiEventWritesEnabled({ ET_MULTI_EVENT_WRITES: "on" }), true);
+  for (const v of [undefined, "", " on ", "on ", " on", "on\n", "\ton", "ON", "On", "oN", "on\u00a0", "1", "true"]) {
+    assert.equal(multiEventWritesEnabled({ ET_MULTI_EVENT_WRITES: v }), false, JSON.stringify(v));
+  }
+});
+
+test("multi-event: the guard accepts only the exact key (person_id, kind, seq) of public.person_events (Worf B-5)", async () => {
+  const k = attachPersonEvent(projectPerson(keith()), { kind: "notable", event_date: "2026-10-05", sources: [AP("plot", "2026-10-22")] }).person;
+  const on = { ET_MULTI_EVENT_WRITES: "on" };
+  for (const pk of [["person_id", "kind"], ["person_id", "seq"], ["seq", "person_id", "kind"], ["kind", "person_id", "seq"],
+    ["person_id", "kind", "seq", "event_date"], ["person_id", "kind", "seq", "seq"], ["seq"], []]) {
+    await assert.rejects(assertMultiNotableReady(fakeClient({ pk, notableOnly: false }), k, on), { code: "multi_notable_needs_phase_b" }, JSON.stringify(pk));
+  }
+  const c = fakeClient({ pk: ["person_id", "kind", "seq"], notableOnly: false });
+  await assertMultiNotableReady(c, k, on);
+  const catalog = c.calls.map((x) => x.text).filter((t) => /pg_constraint/.test(t));
+  assert.ok(catalog.length >= 1);
+  for (const t of catalog) {
+    assert.match(t, /to_regclass\('public\.person_events'\)/, "schema-qualified, not search_path");
+    assert.doesNotMatch(t, /to_regclass\('person_events'\)/);
+  }
+  assert.match(catalog[0], /WITH ORDINALITY[\s\S]*ORDER BY k\.ord/, "the key is read in key order");
 });
 
 test("multi-event: syncPersonEvents writes one companion row per (kind, seq)", async () => {

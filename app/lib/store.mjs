@@ -2102,17 +2102,23 @@ function personValues(row) {
   ];
 }
 
+// public.person_events, never search_path: the primary key's columns in key order.
 const PERSON_EVENTS_PK_ATTS_SQL =
-  "SELECT a.attname FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey) WHERE c.conrelid = to_regclass('person_events') AND c.contype = 'p'";
+  "SELECT a.attname FROM pg_constraint c CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum WHERE c.conrelid = to_regclass('public.person_events') AND c.contype = 'p' ORDER BY k.ord";
+const MULTI_EVENT_KEY = Object.freeze(["person_id", "kind", "seq"]);
 
-/** Read the live primary key. Not cached: rollback can restore (person_id, kind). */
+/**
+ * True only when public.person_events' primary key is exactly (person_id, kind, seq),
+ * in that order. Not cached: rollback can restore (person_id, kind).
+ */
 export async function personEventsKeyHasSeq(client) {
   const q = await client.query(PERSON_EVENTS_PK_ATTS_SQL);
-  return (q.rows || []).some((row) => row.attname === "seq");
+  const cols = (q.rows || []).map((row) => row.attname);
+  return cols.length === MULTI_EVENT_KEY.length && cols.every((c, i) => c === MULTI_EVENT_KEY[i]);
 }
 
 const PERSON_EVENTS_NOTABLE_ONLY_CHECK_SQL =
-  "SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('person_events') AND conname = 'person_events_seq_notable_only'";
+  "SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.person_events') AND conname = 'person_events_seq_notable_only'";
 
 /** True while the phase B CHECK (only notable may have seq > 0) is still on this database. */
 async function personEventsSeqNotableOnly(client) {
@@ -2123,17 +2129,18 @@ async function personEventsSeqNotableOnly(client) {
 /**
  * A seq > 0 event needs PRIMARY KEY (person_id, kind, seq) on this database.
  * A seq > 0 event of a kind other than notable (red_folder) also needs the
- * multi-event migration, which replaces person_events_seq_notable_only with
- * seq >= 0. No catalog query when every event is seq 0.
+ * multi-event migration, which drops person_events_seq_notable_only. No catalog
+ * query when every event is seq 0.
  */
 /**
  * ET_MULTI_EVENT_WRITES=on is the operator switch for seq > 0 person_events rows
  * (a second notable, a second red_folder). Off by default; set it only after F7 of
  * docs/MIGRATION.md, when lab AND Render both have PRIMARY KEY (person_id, kind, seq).
- * The schema check below still runs, so both must hold.
+ * The schema check below still runs, so both must hold. The value must be exactly
+ * "on": no trim, no case folding, so " on ", "ON" and "on\n" count as off.
  */
 export function multiEventWritesEnabled(env = process.env) {
-  return String(env.ET_MULTI_EVENT_WRITES || "").trim() === "on";
+  return env.ET_MULTI_EVENT_WRITES === "on";
 }
 
 export async function assertMultiNotableReady(client, person, env = process.env) {
@@ -2152,7 +2159,7 @@ export async function assertMultiNotableReady(client, person, env = process.env)
     throw new PromoteError(
       kind === "notable"
         ? "Second notable not saved: person_events primary key is still (person_id, kind). Multi-notable phase B (PRIMARY KEY (person_id, kind, seq)) must be applied on this database first."
-        : `Second ${kind} event not saved: person_events primary key is still (person_id, kind). The multi-event migration (PRIMARY KEY (person_id, kind, seq), seq >= 0) must be applied on this database first.`,
+        : `Second ${kind} event not saved: person_events primary key is still (person_id, kind). The multi-event migration (PRIMARY KEY (person_id, kind, seq)) must be applied on this database first.`,
       "multi_notable_needs_phase_b",
     );
   }
