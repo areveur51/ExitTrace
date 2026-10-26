@@ -389,3 +389,15 @@ test("MIGRATION.md (Worf r3 B-6, F0): baseline after the freeze, Render's switch
   assert.match(doc, /Render apply-worker logs\*\*, read through the Render API's logs endpoint, read-only/);
   assert.match(doc, /last_msg_receipt_time/);
 });
+
+test("MIGRATION.md (Worf r4 MED-2 ruling): Render DB reads only inside the F2/F5 window with the DDL's credential, path-only; Render logs key path-only", () => {
+  const doc = read("docs/MIGRATION.md");
+  assert.match(doc, /Render catalog reads and the subscription-stats reads below are allowed \*\*only inside the Admiral-approved F2\/F5 window\*\*/);
+  assert.match(doc, /\*\*the same Render DB credential the approved F2\/F5 DDL uses\*\*\. Q plants that credential/);
+  assert.match(doc, /held \*\*path-only\*\*/);
+  assert.match(doc, /\*\*never pulled, minted or revealed through the Render API\.\*\*/);
+  assert.match(doc, /Outside the window nothing reads Render's database/);
+  assert.match(doc, /\*\*Render\*\* \(inside the window, with the F2\/F5 credential above\): `pg_stat_subscription`/);
+  assert.match(doc, /Render API key stays in the operator's key file and is used \*\*path-only\*\*: the client reads that file by path; the key is never `echo`ed, never on a command line or in argv/);
+  assert.doesNotMatch(doc, /sourced only inside a subshell/);
+});

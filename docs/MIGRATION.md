@@ -53,7 +53,7 @@ Render is expected to match: phase A ran "Render first, then lab", lab has sent 
 
 ## Batch window (Worf r2 order, r3 conditions)
 
-Run order: **F1 (freeze) → F0 (baseline) → F2 → F3 → F4 → F5 → F6 → F7.** The F0 baseline is read after the F1 freeze is confirmed, so its LSNs, counts and md5 are the frozen state every later step is compared with. A shape-only F0 may also be read earlier, as a pre-check, but it does not replace the post-freeze baseline.
+Run order: **F1 (freeze) → F0 (baseline) → F2 → F3 → F4 → F5 → F6 → F7.** The F0 baseline is read after the F1 freeze is confirmed, so its LSNs, counts and md5 are the frozen state every later step is compared with. A shape-only F0 of lab may also be read earlier, as a pre-check, but it does not replace the post-freeze baseline; Render's database is read only inside the window (F0, below).
 
 Any rise in `apply_error_count` (aec), any apply-worker ERROR in Render's logs, or `srsubstate` other than `r` is a **STOP**: do not run the next step. The aec baseline is not zero (216558 at 12:22 ET and still 216558 at 13:49 ET) and steps +1 on reconnects, so compare increases from F0. `srsubstate` stays `r` while apply loops on an error, so it is not enough alone: read the logs and `last_msg_receipt_time` too.
 
@@ -72,12 +72,13 @@ Any rise in `apply_error_count` (aec), any apply-worker ERROR in Render's logs, 
 
   Confirm the freeze on lab with `pg_stat_activity` (no client backends besides the operator's psql) and an unchanged `pg_current_wal_lsn()` over a minute.
 - **F0. Read-only baseline, after the freeze**, inside `BEGIN READ ONLY` on each side:
+  - **Render database reads (Worf r4 MED-2 ruling).** The Render catalog reads and the subscription-stats reads below are allowed **only inside the Admiral-approved F2/F5 window**, and only with **the same Render DB credential the approved F2/F5 DDL uses**. Q plants that credential on the operator host as a file; it is held **path-only** (psql or the client reads the file by path, for example through `PGPASSFILE`), so its value never appears in a command line, argv, output or log. It is **never pulled, minted or revealed through the Render API.** Outside the window nothing reads Render's database.
   - **Both sides**, `public.person_events`: columns with attnum, type, NOT NULL and default; the PK with its ordered columns; every unique index with its columns and `indisvalid`; every CHECK by name and definition; `relreplident`; `SHOW server_version` (lab 16.14; Render major 16 per the Render API); row count; `count(*) FILTER (WHERE seq > 0)` and `count(*) FILTER (WHERE seq < 0)`; duplicate `(person_id, kind)` (must be 0); md5 by key.
   - **Expected on Render, and on lab:** `seq integer NOT NULL DEFAULT 0`, PRIMARY KEY `(person_id, kind)`, `relreplident` `d`, and UNIQUE `person_events_person_kind_seq_key (person_id, kind, seq)`, valid.
   - **STOP** (go back to Worf) if either side has: a 3-column PK, any row with `seq <> 0` (`seq > 0` or `seq < 0`), no `seq` column, `relreplident` other than `d`, or a CHECK set different from the other side's.
   - **Lab:** `pg_current_wal_lsn()`; `exittrace_lab_pub` (`pubviaroot`, the person_events column list and row filter); the slot's `active`, `confirmed_flush_lsn` and `wal_status`, with the lag in bytes (`pg_wal_lsn_diff`). STOP if `seq` is in the column list and the slot lags or is inactive.
-  - **Render:** `pg_stat_subscription` (`latest_end_lsn`, `last_msg_receipt_time`), `pg_stat_subscription_stats.apply_error_count`, and `pg_subscription_rel.srsubstate` for person_events.
-  - **Render apply-worker logs**, read through the Render API's logs endpoint, read-only, for the window since the last deploy: count `logical replication` ERROR lines (`missing replicated column`, `duplicate key`, `replica identity`) and record the newest. The API key is sourced only inside a subshell from the operator's key file (never printed, never in a command line), and only log reads are made.
+  - **Render** (inside the window, with the F2/F5 credential above): `pg_stat_subscription` (`latest_end_lsn`, `last_msg_receipt_time`), `pg_stat_subscription_stats.apply_error_count`, and `pg_subscription_rel.srsubstate` for person_events.
+  - **Render apply-worker logs**, read through the Render API's logs endpoint, read-only, for the window since the last deploy: count `logical replication` ERROR lines (`missing replicated column`, `duplicate key`, `replica identity`) and record the newest. The Render API key stays in the operator's key file and is used **path-only**: the client reads that file by path; the key is never `echo`ed, never on a command line or in argv, never printed or logged. Only log reads are made with it; it is never used to read, pull or mint a database credential.
 
   Use `2026-10-22-multi-notable-replication-checks.sql` for the replication reads.
 - **F2. Render:** `up-render-a`, additive. The PK is unchanged. Expected to be a no-op on Render (F0 shape).
