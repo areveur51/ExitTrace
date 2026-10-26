@@ -92,8 +92,8 @@ test("fact tags stay on the person and are not identity filters", () => {
   assert.doesNotMatch(facts, />Federal investigation</);
   assert.match(facts, /class="keychip keymap-tag" href="\/tags\/fraud"/);
   assert.match(facts, />Fraud</);
-  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/red-folder"/);
-  assert.match(facts, />Red folder</);
+  // Red folder is in the Comms menu only (one Red Folder entry).
+  assert.doesNotMatch(facts, /class="keychip keymap-tag" href="\/tags\/red-folder"/);
   assert.doesNotMatch(facts, /keymap-tag[^>]*data-key=/);
   assert.doesNotMatch(facts, /Civilians/);
   assert.deepEqual(
@@ -440,7 +440,7 @@ test("fact-tag lists include only people who already have that tag", async () =>
   assert.match(firings.body, /href="\/tags\/s-5271"/);
   assert.match(firings.body, /href="\/tags\/former-intel-agency-personnel"/);
   assert.match(firings.body, /href="\/tags\/fraud"/);
-  assert.match(firings.body, /href="\/tags\/red-folder"/);
+  assert.doesNotMatch(firings.body, /href="\/tags\/red-folder"/);
 
   const clients = await requestPage("/tags/epstein-clients");
   assert.equal(clients.status, 200);

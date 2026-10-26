@@ -91,7 +91,7 @@ for (const [path, table] of [["/red-folder-comms", "red_folder_comms"], ["/eagle
 
 test("red folder: a tagged person already linked by a post shows once", async () => {
   setMemory({ people: [ada, cy], red_folder_comms: [post("rf-ada", "2026-03-01", { snapshot: { person_ids: ["ada-folder"] } })] });
-  for (const path of ["/red-folder-comms", "/tags/red-folder"]) {
+  for (const path of ["/red-folder-comms"]) {
     const page = await requestPage(path);
     assert.equal(page.status, 200);
     assert.equal(page.body.match(/href="\/people\/ada-folder"/g).length, 1, path);

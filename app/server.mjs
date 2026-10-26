@@ -104,7 +104,7 @@ import {
   parsePage,
 } from "./lib/paginate.mjs";
 import { parseAgeBand } from "./lib/age.mjs";
-import { ATTRIBUTE_TAGS, attributeTagById, attributeTagByPath, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
+import { MENU_ATTRIBUTE_TAGS, attributeTagById, attributeTagByPath, attributeTagHref, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
   fillEmptyFromGrokipedia,
@@ -139,7 +139,6 @@ import {
   commsKind,
   commsKindByApiPath,
   commsKindByPath,
-  commsKindByPersonTag,
   isCommsKind,
   BOOT_COMMS_PATH,
 } from "./lib/kind-comms.mjs";
@@ -1094,7 +1093,7 @@ async function handle(req, res) {
         heading: "Tags",
         query: "Tags",
         crumbLabel: "Tags",
-        countLabel: `${ATTRIBUTE_TAGS.length} tags`,
+        countLabel: `${MENU_ATTRIBUTE_TAGS.length} tags`,
         lede: "Fact tags. Each list is the people who already store that fact.",
         body: tagsIndexBody(),
       }),
@@ -1102,13 +1101,10 @@ async function handle(req, res) {
   }
 
   const factTag = attributeTagByPath(p);
-  const factTagComms = factTag ? commsKindByPersonTag(factTag.id) : null;
-  if (factTagComms) {
-    return sendHtml(res, await commsListHtml(req, url, factTagComms, {
-      path: factTag.path,
-      title: factTag.nav,
-      lede: factTag.lede,
-    }));
+  // A fact tag owned by another page (red_folder -> /red-folder-comms) has no page of its own.
+  if (factTag && attributeTagHref(factTag) !== factTag.path) {
+    sendRedirect(res, attributeTagHref(factTag), 301);
+    return;
   }
   if (factTag) {
     const tags = [factTag.id];

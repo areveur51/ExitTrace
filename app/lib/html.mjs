@@ -84,7 +84,8 @@ import {
   THEME_STORAGE_KEY,
 } from "./themes.mjs";
 import {
-  ATTRIBUTE_TAGS,
+  MENU_ATTRIBUTE_TAGS,
+  attributeTagHref,
   EPSTEIN_CLIENTS_CATEGORY,
   IDENTITY_TAGS,
   attributeTagById,
@@ -459,7 +460,7 @@ const TAG_MENU_SHORT_LABELS = Object.freeze({
 /** One Tags-menu row: the short label when the full name is too long, plus the full name as title. */
 export function tagMenuItem(tag) {
   const label = TAG_MENU_SHORT_LABELS[tag.id] || tag.nav;
-  return { href: tag.path, label, ...(label === tag.nav ? {} : { title: tag.nav }) };
+  return { href: attributeTagHref(tag), label, ...(label === tag.nav ? {} : { title: tag.nav }) };
 }
 
 function keymapTagSection(activePath) {
@@ -469,7 +470,7 @@ function keymapTagSection(activePath) {
       title: "Tags",
       ariaLabel: "Fact tags",
       chipClass: "keymap-tag",
-      items: ATTRIBUTE_TAGS.map(tagMenuItem),
+      items: MENU_ATTRIBUTE_TAGS.map(tagMenuItem),
     },
     activePath,
   );
@@ -477,8 +478,8 @@ function keymapTagSection(activePath) {
 
 /** Fact-tag index. Same rows as the catalog Tags menu. */
 export function tagsIndexBody() {
-  const chips = ATTRIBUTE_TAGS.map(
-    (tag) => `<a class="keychip keymap-tag" href="${esc(tag.path)}">${esc(tag.nav)}</a>`,
+  const chips = MENU_ATTRIBUTE_TAGS.map(
+    (tag) => `<a class="keychip keymap-tag" href="${esc(attributeTagHref(tag))}">${esc(tag.nav)}</a>`,
   ).join("");
   return `<nav class="keymap-group tag-index" aria-label="Fact tags"><p class="keymap-section">Tags</p>${chips}</nav>`;
 }
@@ -3098,7 +3099,7 @@ function personTagChips(row) {
     .map((id) => {
       const fact = attributeTagById(id);
       if (fact) {
-        return `<a class="keychip" href="${esc(fact.path)}">${esc(fact.nav)}</a>`;
+        return `<a class="keychip" href="${esc(attributeTagHref(fact))}">${esc(fact.nav)}</a>`;
       }
       const tag = IDENTITY_TAGS.find((t) => t.id === id);
       if (!tag) return "";

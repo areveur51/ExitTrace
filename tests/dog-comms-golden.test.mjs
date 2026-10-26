@@ -7,6 +7,10 @@ import { DOG_PATHS, DOG_PEOPLE, DOG_POSTS } from "./fixtures/dog-comms-golden/fi
 
 // Golden HTML was captured from de614842 (#238 + the media cap, before the shared
 // comms list refactor). Dog comms must render byte-identical after the refactor.
+// The one approved delta since then is the shared menu: the Tags-menu Red folder chip
+// was removed (Admiral 2026-10-26, one Red Folder menu entry, under Comms). The golden
+// files stay as captured; the test removes exactly that chip, once, and compares bytes.
+const APPROVED_MENU_DELTA = '<a class="keychip keymap-tag" href="/tags/red-folder">Red folder</a>';
 const GOLDEN = {
   "/dog-comms": new URL("./fixtures/dog-comms-golden/list.html", import.meta.url),
   "/dog-comms/example-k9-2025": new URL("./fixtures/dog-comms-golden/detail.html", import.meta.url),
@@ -41,6 +45,8 @@ for (const path of DOG_PATHS) {
     setMemory({ people: DOG_PEOPLE, dog_comms: DOG_POSTS });
     const page = await requestPage(path);
     assert.equal(page.status, 200);
-    assert.equal(page.body, readFileSync(GOLDEN[path], "utf8"));
+    const golden = readFileSync(GOLDEN[path], "utf8");
+    assert.equal(golden.split(APPROVED_MENU_DELTA).length - 1, 1);
+    assert.equal(page.body, golden.replace(APPROVED_MENU_DELTA, ""));
   });
 }

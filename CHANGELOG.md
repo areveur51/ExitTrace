@@ -40,6 +40,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 ### Changed
 
 - Red Folder, Eagle and Ronald comms use the same list as Dog comms. A post that names a person shows that person's card, other posts stay post rows, grouped by year. A comms page also lists people stored with its person tag once (today only Red folder is a person tag; Eagle and Ronald have none, so they show no tagged cards). `/tags/red-folder` shows the same list. Dog comms and every detail page are unchanged.
+- One Red Folder menu entry, under Comms (`/red-folder-comms`). The Tags menu and `/tags` no longer list Red folder, `/tags/red-folder` is a 301 to `/red-folder-comms`, and the Red folder chip on a card links there. The stored `red_folder` tag is unchanged.
 
 ## [1.2.33] - 2026-10-26
 

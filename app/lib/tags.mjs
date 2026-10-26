@@ -104,10 +104,22 @@ export const ATTRIBUTE_TAGS = [
     nav: "Red folder",
     path: "/tags/red-folder",
     lede: "People stored with a red folder, and stored red-folder posts.",
+    // One Red Folder menu entry (Admiral 2026-10-26): Comms owns the page. The tag page
+    // 301s there, chips link there, and the Tags menu and /tags index leave it out.
+    href: "/red-folder-comms",
+    menu: false,
   },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
+
+/** Where a fact tag links: its canonical `href` when another page owns it, else its tag page. */
+export function attributeTagHref(tag) {
+  return tag?.href || tag?.path || "";
+}
+
+/** Fact tags listed in the Tags menu and on /tags. A `menu: false` tag is reached through its href. */
+export const MENU_ATTRIBUTE_TAGS = ATTRIBUTE_TAGS.filter((t) => t.menu !== false);
 
 /** Event kinds that imply an identity tag. Gold rows often have only the kind. */
 export const KIND_TAGS = {

@@ -19,12 +19,15 @@ function requestPage(pathname) {
     const res = {
       headersSent: false,
       statusCode: 0,
-      writeHead(status) {
+      location: "",
+      writeHead(status, headers = {}) {
         this.statusCode = status;
+        this.location = headers.Location || headers.location || "";
       },
       end(body) {
         if (body) chunks.push(body);
         resolve({
+          location: this.location,
           status: this.statusCode || 200,
           body: Buffer.concat(
             chunks.map((c) => (Buffer.isBuffer(c) ? c : Buffer.from(c || ""))),
@@ -73,32 +76,33 @@ test("normalizeTags accepts red_folder as a fact tag", () => {
   assert.doesNotMatch(def.lede, /not a|identity filter|allegation/i);
 });
 
-test("the tag menu links to /tags/red-folder", () => {
-  const facts = keymapFooter("/tags/red-folder");
-  assert.match(facts, /class="keychip keymap-tag" href="\/tags\/red-folder" aria-current="page"/);
-  assert.match(facts, />Red folder</);
+test("the menu has exactly one Red Folder link, under Comms, to /red-folder-comms", () => {
+  const menu = keymapFooter("/");
+  const links = menu.match(/<a[^>]*>(?:(?!<\/a>)[\s\S])*?Red folder(?:(?!<\/a>)[\s\S])*?<\/a>/gi) || [];
+  assert.equal(links.length, 1, links.join("\n"));
+  assert.match(links[0], /class="keychip keymap-comm" href="\/red-folder-comms"/);
+  assert.doesNotMatch(menu, /href="\/tags\/red-folder"/);
+  assert.doesNotMatch(menu, /class="keychip keymap-tag"[^>]*>Red folder</);
 });
 
-test("a stored red_folder tag is a chip on the person card", () => {
+test("a stored red_folder tag is a chip on the person card that links to /red-folder-comms", () => {
   const html = personDetail(tagged);
-  assert.match(html, /href="\/tags\/red-folder"/);
-  assert.match(html, />Red folder</);
+  assert.match(html, /<a class="keychip" href="\/red-folder-comms">Red folder<\/a>/);
+  assert.doesNotMatch(html, /href="\/tags\/red-folder"/);
 });
 
-test("/tags/red-folder renders and lists only tagged people", async () => {
+test("/tags/red-folder is a 301 to /red-folder-comms, which lists only tagged people and posts", async () => {
   setMemory({ people: [tagged, untagged] });
   const page = await requestPage("/tags/red-folder");
-  assert.equal(page.status, 200);
-  assert.match(page.body, /Red folder/);
-  assert.match(page.body, /People stored with a red folder, and stored red-folder posts\./);
-  assert.match(page.body, /href="\/people\/ada-folder"/);
-  assert.doesNotMatch(page.body, /href="\/people\/bev-plain"/);
-  assert.match(page.body, /href="\/tags\/red-folder" aria-current="page"/);
-
-  setMemory({ people: [untagged] });
-  const empty = await requestPage("/tags/red-folder");
-  assert.equal(empty.status, 200);
-  assert.doesNotMatch(empty.body, /href="\/people\/bev-plain"/);
+  assert.equal(page.status, 301);
+  assert.equal(page.location, "/red-folder-comms");
+  const comms = await requestPage("/red-folder-comms");
+  assert.equal(comms.status, 200);
+  assert.match(comms.body, /href="\/people\/ada-folder"/);
+  assert.doesNotMatch(comms.body, /href="\/people\/bev-plain"/);
+  const index = await requestPage("/tags");
+  assert.equal(index.status, 200);
+  assert.doesNotMatch(index.body, /href="\/tags\/red-folder"/);
 });
 
 test("red_folder round-trips on insert and save", async () => {
@@ -137,7 +141,7 @@ test("red folder menus list tagged people and stored posts", async () => {
   };
   setMemory({ people: [tagged, untagged], red_folder_comms: [post] });
 
-  for (const path of ["/tags/red-folder", "/red-folder-comms"]) {
+  for (const path of ["/red-folder-comms"]) {
     const page = await requestPage(path);
     assert.equal(page.status, 200);
     assert.match(page.body, /href="\/people\/ada-folder"/);
@@ -145,4 +149,13 @@ test("red folder menus list tagged people and stored posts", async () => {
     assert.doesNotMatch(page.body, /href="\/people\/bev-plain"/);
     assert.match(page.body, /People stored with a red folder, and stored red-folder posts\./);
   }
+});
+
+test("every other fact tag keeps its Tags-menu entry and tag-page href, in order", () => {
+  const menu = keymapFooter("/");
+  const tagsNav = menu.slice(menu.indexOf('aria-label="Fact tags"'));
+  const hrefs = [...tagsNav.matchAll(/class="keychip keymap-tag" href="([^"]+)"/g)].map((m) => m[1]);
+  const want = ATTRIBUTE_TAG_IDS.filter((id) => id !== "red_folder").map((id) => attributeTagById(id).path);
+  assert.deepEqual(hrefs, want);
+  assert.equal(attributeTagByPath("/tags/red-folder").id, "red_folder");
 });
