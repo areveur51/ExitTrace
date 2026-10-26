@@ -271,3 +271,26 @@ test("the description wraps at any width and keeps cite links in a wrapping row"
   assert.ok(cites, ".tag-desc-cites rule");
   assert.match(cites[1], /flex-wrap: wrap;/);
 });
+
+test("LOW-1 (Worf R1): the cite filter refuses the gate's literal loose cases", () => {
+  for (const bad of [
+    "https://gov/",
+    "https://www.gov/",
+    "https://GOV/",
+    "https://parliament.gov.uk/",
+    "https://www.gov.uk/",
+    "https://www.canada.gc.ca/",
+    "https://parl.gc.ca/",
+    "https://congress.gov:8443",
+    "https://congress.gov:8443/",
+    "https://congress.gov:80/",
+    "https://c\u043engress.gov/",
+    "https://xn--cngress-0nf.gov/",
+    "https://xn--80ak6aa92e.gov/",
+    "https://clerk.xn--hous-loa.gov/",
+  ]) {
+    assert.equal(isTagCiteUrl(bad), false, bad);
+  }
+  assert.equal(isTagCiteUrl("https://congress.gov/"), true, "exact .gov on the default port");
+  assert.equal(isTagCiteUrl("https://congress.gov:443/"), true, "explicit 443 is the default port");
+});

@@ -255,3 +255,18 @@ test("GET /dashboard serves the roll-call party panel", async () => {
   assert.match(page.body, /https:\/\/www\.senate\.gov\/legislative\/LIS\/roll_call_votes\/vote1192\/vote_119_2_00231\.htm/);
   assert.match(page.body, /https:\/\/clerk\.house\.gov\/Votes\/2025145/);
 });
+
+test("the roll panel escapes the roll question (Worf R1 NIT-4)", () => {
+  const roll = rollById("H-119-1-102");
+  const question = `On Passage<img src=x onerror="alert(1)"></p><script>alert('q')</script>&x`;
+  const model = buildDashboard([], { id: "all" }, []);
+  const votes = [{ tag: "save_act", label: "SAVE Act", href: "/tags/save-act", perRoll: true, rolls: [{ roll: { ...roll, question }, cards: 0 }] }];
+  const html = dashboardBody({ ...model, votes }, { path: "/dashboard" });
+  assert.ok(
+    html.includes(`<p class="dash-vote-q">On Passage&lt;img src=x onerror=&quot;alert(1)&quot;&gt;&lt;/p&gt;&lt;script&gt;alert('q')&lt;/script&gt;&amp;x</p>`),
+    "roll.question is rendered escaped",
+  );
+  assert.doesNotMatch(html, /<img src=x/);
+  assert.doesNotMatch(html, /<script>alert/);
+  assert.equal(html.split('<p class="dash-vote-q">').length - 1, 1);
+});
