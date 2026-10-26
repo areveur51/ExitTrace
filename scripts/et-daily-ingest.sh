@@ -59,6 +59,8 @@
 # (scripts/lib/retire.sh) to
 # $TMPD/retired/<YYYYmmdd-HHMMSS>-<pid>/<name>.<YYYYmmdd-HHMMSS>.rerun (dirs
 # 0700, symlinked ancestors refused) before it is rewritten.
+# retired/ is never pruned automatically: scripts/et-retired-report.sh lists
+# its run dirs by age (report only), and the operator moves old ones aside.
 set -u
 export TZ=America/New_York
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

@@ -13,7 +13,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FILES = ["scripts/et-daily-ingest.sh", "exittracectl.sh", "scripts/et-daily-apply.mjs", "scripts/lib/retire.sh"];
+const FILES = ["scripts/et-daily-ingest.sh", "exittracectl.sh", "scripts/et-daily-apply.mjs", "scripts/lib/retire.sh", "scripts/et-retired-report.sh"];
 // Delete verbs as words (built from a list so this file stays plain data).
 const VERBS = ["rm", "rmdir", "unlink", "shred", "truncate"];
 const SHELL_DELETE = new RegExp(`(^|[\\s;&|(\`])(${VERBS.join("|")})(\\s|$)`);
@@ -195,4 +195,51 @@ test("no-unlink: a daily rerun under a symlinked work dir fails closed and keeps
   const rdir = path.join(real, "retired");
   assert.deepEqual(fs.existsSync(rdir) ? fs.readdirSync(rdir) : [], [], "nothing moved through the symlink");
   assert.deepEqual(deleteCalls(base), [], "no delete command was called");
+});
+
+test("no-unlink: et-retired-report lists retired/ by age, flags over-keep, and changes nothing", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "et-retired-report-"));
+  const bin = stubBin(dir);
+  const rdir = path.join(dir, "retired");
+  fs.mkdirSync(rdir, { mode: 0o700 });
+  const day = 86400;
+  const now = Date.now() / 1000;
+  const mk = (name, ageDays, files) => {
+    const d = path.join(rdir, name);
+    fs.mkdirSync(d, { mode: 0o700 });
+    for (const [n, body] of Object.entries(files)) fs.writeFileSync(path.join(d, n), body);
+    const t = now - ageDays * day;
+    fs.utimesSync(d, t, t);
+  };
+  mk("20260901-080000-111", 40, { "a.json.20260901-080000.rerun": "old-a", "b.md.20260901-080000.rerun": "old-b" });
+  mk("20261020-080000-222", 3, { "c.json.20261020-080000.rerun": "new-c" });
+  const loose = path.join(rdir, "loose.log");
+  fs.writeFileSync(loose, "x");
+  fs.utimesSync(loose, now - 20 * day, now - 20 * day);
+  const before = walk(rdir).sort().map((p) => [p, fs.readFileSync(p, "utf8")]);
+  const run = (args, extra = {}) => spawnSync("bash", [path.join(ROOT, "scripts", "et-retired-report.sh"), ...args], {
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, ...extra }, encoding: "utf8",
+  });
+  const r = run([rdir]);
+  assert.equal(r.status, 0, r.stderr);
+  const rows = r.stdout.trim().split("\n");
+  assert.equal(rows[0], "age_days\tfiles\tbytes\tstatus\tentry");
+  const body = rows.slice(1, -1).map((l) => l.split("\t"));
+  assert.deepEqual(body.map((c) => c[4]), ["20260901-080000-111", "loose.log", "20261020-080000-222"], "oldest first");
+  assert.deepEqual(body.map((c) => c[3]), ["over-keep", "over-keep", "keep"]);
+  assert.deepEqual(body.map((c) => c[1]), ["2", "1", "1"]);
+  assert.ok(Number(body[0][0]) >= 39 && Number(body[2][0]) <= 3, `ages: ${body.map((c) => c[0])}`);
+  assert.match(rows.at(-1), /^summary=entries:3 bytes:\d+ over_keep:2 over_keep_bytes:\d+ keep_days:14 dir:/);
+  // A longer keep window flags only the 40-day run dir; the env default dir is $ET_DAILY_TMP/retired.
+  const r30 = run([], { ET_DAILY_TMP: dir, ET_RETIRED_KEEP_DAYS: "30" });
+  assert.equal(r30.status, 0, r30.stderr);
+  assert.match(r30.stdout, /over_keep:1 .*keep_days:30 /);
+  // Bad input fails with 2 and prints no rows.
+  assert.equal(run([path.join(dir, "missing")]).status, 2);
+  fs.symlinkSync(rdir, path.join(dir, "retired-link"));
+  assert.equal(run([path.join(dir, "retired-link")]).status, 2);
+  assert.equal(run([rdir], { ET_RETIRED_KEEP_DAYS: "2w" }).status, 2);
+  // Report only: every file is still in place with its content, and no delete command ran.
+  assert.deepEqual(walk(rdir).sort().map((p) => [p, fs.readFileSync(p, "utf8")]), before);
+  assert.deepEqual(deleteCalls(dir), []);
 });
