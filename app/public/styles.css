@@ -3547,8 +3547,10 @@ html[data-theme="glass"] .results-controls .pager-pages a[aria-current="page"] {
   column-count: 1;
   max-width: 40rem;
 }
+/* Block tiles, not inline-block: two inline-block tiles are two line boxes, and
+   the default orphans/widows (2) keep them in one column. */
 .detail-media--masonry.detail-support-masonry > .detail-tile {
-  display: inline-block;
+  display: block;
   width: 100%;
   min-width: 0;
   min-height: 0;

@@ -246,6 +246,8 @@ test("one CSS block: CSS columns, 2 on a phone, 3 from 720, 4 from 1280, 1 for o
   assert.match(block, /:has\(> \.detail-tile:only-child\) \{\s*column-count:\s*1/);
   assert.match(block, /:has\(> \.detail-tile:nth-child\(2\):last-child\) \{\s*column-count:\s*2/);
   assert.match(block, /break-inside:\s*avoid/);
+  // Block tiles so two tiles split across two columns (inline-block lines obey orphans/widows).
+  assert.match(block, /\.detail-media--masonry\.detail-support-masonry > \.detail-tile \{\s*display:\s*block/);
   // Plain CSS only: no imports, remote fonts or CDN urls; no grid spans.
   assert.doesNotMatch(CSS, /@import|url\(\s*["']?https?:|fonts\.googleapis|cdn\./i);
   assert.doesNotMatch(block, /grid-template|grid-column/);
