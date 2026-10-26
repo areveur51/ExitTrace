@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.34] - 2026-10-26
+
+### Fixed
+
+- An event keeps every unique supporting media item it stores, up to a safety cap of 24 (`EVENT_MEDIA_STORE_MAX`). Boot, seed import, unique-people migration and promote/AMEND no longer drop items past the 8th. A card still shows the first 8 (`EVENT_MEDIA_DISPLAY_MAX`); the rest stay stored.
+
 ## [1.2.32] - 2026-10-25
 
 ### Fixed
