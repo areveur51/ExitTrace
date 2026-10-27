@@ -356,13 +356,18 @@ test("do not double-tag the same indictment as civilian and non-civilian", async
     cite_urls: MORE,
   });
   assert.equal(again.action, "annotated");
+  assert.equal(again.added_event, true);
   assert.equal(await countPeople(), 73);
   const person = await getPerson("casey-vale");
   const indictments = person.events.filter((ev) => ev.kind.startsWith("indictment_"));
-  assert.equal(indictments.length, 1);
-  assert.equal(indictments[0].kind, "indictment_civilian");
-  assert.equal(indictments[0].event_date, "2024-08-01");
-  assert.ok(indictments[0].sources.some((s) => s.url === MORE[0]));
+  assert.equal(indictments.length, 2);
+  assert.ok(indictments.every((ev) => ev.kind === "indictment_civilian"));
+  const first = indictments.find((ev) => ev.event_date === "2024-08-01");
+  const second = indictments.find((ev) => ev.event_date === "2024-10-01");
+  assert.equal(first.seq, 0);
+  assert.ok(first.sources.some((s) => s.url === CITES[0]));
+  assert.equal(first.sources.some((s) => s.url === MORE[0]), false);
+  assert.ok(second.sources.some((s) => s.url === MORE[0]));
 });
 
 test("corona_comms skip-as-dup: tag lands on the existing card, never a second card", async () => {
