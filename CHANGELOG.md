@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.37] - 2026-10-27
+
+### Added
+
+- A person can have more than one indictment on the timeline. `indictment_civilian` and `indictment_non_civilian` are repeatable kinds, keyed by `seq` on `person_events` (primary key `(person_id, kind, seq)`), the same way `notable` and `red_folder` already are. A second indictment with a different date is its own entry, in date order, with its own text and Unsealed badge. The same date still folds when a cite overlaps or the comments match. A person keeps one indictment classification: a later event filed as the other indictment kind is stored as the kind already on the person. The card headline stays the newest catalog event. Catalog lists still show the person once, dated by the newest indictment of that kind. One indictment still renders as one entry. Every other kind stays one event per kind. No schema change and no data migration; existing `seq` 0 rows are not rewritten. A `seq` above 0 still needs `ET_MULTI_EVENT_WRITES=on` and the migrated primary key. How to revert is in `docs/UNDO.md`.
+
 ## [1.2.36] - 2026-10-26
 
 ### Added

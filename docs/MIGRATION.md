@@ -14,7 +14,7 @@ Status: code and migrations are in this PR (draft). **No DDL has run on lab or R
   | F5 | Render | `…-up-render-b.sql`: the same guards and PK swap. Refuses unless F2's shape is there (`seq INTEGER NOT NULL` and the exact index). | `…-down-render-b.sql`: back to `(person_id, kind)` and re-creates the index. Keeps the column (the render-a state). Refuses while any `seq <> 0` row or duplicate exists. |
 
 - **App.**
-  - Repeatable kinds: `REPEATABLE_EVENT_KINDS = ["notable", "red_folder"]` (`app/lib/promote.mjs`). Every other kind stays one event per kind at `seq = 0`.
+  - Repeatable kinds live in `REPEATABLE_EVENT_KINDS` (`app/lib/promote.mjs`). This migration shipped `notable` and `red_folder`. Release 1.2.37 adds `indictment_civilian` and `indictment_non_civilian` in the app only (no DDL, no row rewrite). Every other kind stays one event per kind at `seq = 0`.
   - Writes and reads: `syncPersonEvents` writes one companion row per `(kind, seq)`. Merge matches on an explicit seq, or on the same date plus an overlapping cite or identical comments; anything else gets the next seq.
   - Headline: still the newest catalog event. `red_folder` never takes it.
   - Person pages: one block per Notable and per Red Folder event (`kindEventSection`). Each shows the sentence, office line, media with captions and the label "Red Folder".
