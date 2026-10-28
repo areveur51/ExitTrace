@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.37] - 2026-10-28
+
+### Added
+
+- Person cards show a Relationships section under the identity header and above the event rail. Family comes before Professional. One stored connection draws both cards. The section is not a timeline commit.
+
 ## [1.2.36] - 2026-10-26
 
 ### Added
