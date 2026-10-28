@@ -678,3 +678,52 @@ CREATE INDEX IF NOT EXISTS epstein_flight_legs_person_idx
 
 CREATE INDEX IF NOT EXISTS epstein_flight_legs_passenger_idx
   ON epstein_flight_legs (passenger_name_raw);
+
+-- person_relationships is excluded from exittrace_lab_pub.
+-- One edge draws both cards. Years and notes may be blank. Not an event.
+CREATE TABLE IF NOT EXISTS person_relationships (
+  id TEXT PRIMARY KEY,
+  person_a TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  person_b TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  a_calls_b TEXT NOT NULL,
+  b_calls_a TEXT NOT NULL,
+  start_year INTEGER,
+  end_year INTEGER,
+  a_note TEXT NOT NULL DEFAULT '',
+  b_note TEXT NOT NULL DEFAULT '',
+  sources JSONB NOT NULL DEFAULT '[]'::jsonb,
+  CONSTRAINT person_relationships_kind CHECK (kind IN ('former_spouse', 'parent_child', 'professional')),
+  CONSTRAINT person_relationships_a_label CHECK (a_calls_b IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef')),
+  CONSTRAINT person_relationships_b_label CHECK (b_calls_a IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef')),
+  CONSTRAINT person_relationships_start_year CHECK (start_year IS NULL OR (start_year >= 1000 AND start_year <= 2100)),
+  CONSTRAINT person_relationships_end_year CHECK (end_year IS NULL OR (end_year >= 1000 AND end_year <= 2100)),
+  CONSTRAINT person_relationships_year_order CHECK (end_year IS NULL OR start_year IS NULL OR end_year >= start_year),
+  CONSTRAINT person_relationships_a_note_len CHECK (char_length(a_note) <= 240),
+  CONSTRAINT person_relationships_b_note_len CHECK (char_length(b_note) <= 240),
+  CONSTRAINT person_relationships_pair_order CHECK (person_a < person_b),
+  CONSTRAINT person_relationships_pair_kind UNIQUE (person_a, person_b, kind)
+);
+
+ALTER TABLE person_relationships ADD COLUMN IF NOT EXISTS a_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE person_relationships ADD COLUMN IF NOT EXISTS b_note TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_kind;
+ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_kind
+  CHECK (kind IN ('former_spouse', 'parent_child', 'professional'));
+
+ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_a_label;
+ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_a_label
+  CHECK (a_calls_b IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef'));
+
+ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_b_label;
+ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_b_label
+  CHECK (b_calls_a IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef'));
+
+ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_a_note_len;
+ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_a_note_len
+  CHECK (char_length(a_note) <= 240);
+
+ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_b_note_len;
+ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_b_note_len
+  CHECK (char_length(b_note) <= 240);

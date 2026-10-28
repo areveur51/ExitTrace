@@ -27,6 +27,7 @@ import {
 } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
+import { relationshipSections } from "./relationships.mjs";
 import { standardizePosition } from "./position-format.mjs";
 import {
   clearanceMetaLabel,
@@ -3187,6 +3188,12 @@ function personSourceItems(row, { events = [], centralCastingClips = [], cite } 
     const label = eventSourceLabel(ev);
     for (const source of ev?.sources || []) push(eventSourceForList(source), label);
   }
+  for (const section of relationshipSections(row?.relationships, row?.id)) {
+    for (const line of section.lines) {
+      const label = `Relationship · ${line.otherName}`;
+      for (const source of line.sources || []) push(source, label);
+    }
+  }
   for (const url of row?.central_casting || []) push(url, "Central casting");
   for (const clip of centralCastingClipsFor(row, centralCastingClips)) {
     if (clip?.source_url) {
@@ -3283,6 +3290,48 @@ function personTagChips(row) {
   return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips.join("")}</p>`;
 }
 
+function relationshipRefLinks(sources, sourceNumbers) {
+  if (!sourceNumbers) return "";
+  const refs = [];
+  const seen = new Set();
+  for (const source of sources || []) {
+    const url = String(source?.url || "").trim();
+    if (!url) continue;
+    const key = canonicalPublicUrl(url) || url;
+    const n = sourceNumbers.get(key);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    refs.push(`<a class="source-ref" href="#source-${n}">[${n}]</a>`);
+  }
+  return refs.join(" ");
+}
+
+/** Frost panel under the header. One tight row per person. A note drops to the next line. No rail dot. */
+export function relationshipsHtml(row, sourceNumbers) {
+  const sections = relationshipSections(row?.relationships, row?.id);
+  if (!sections.length) return "";
+  const groups = sections
+    .map((section) => {
+      const lines = section.lines
+        .map((line) => {
+          const years = line.years ? `<span class="event-facts">${esc(line.years)}</span>` : "";
+          const note = line.note ? `<p class="event-oneline">${esc(line.note)}</p>` : "";
+          const refs = relationshipRefLinks(line.sources, sourceNumbers);
+          const refLine = refs ? `<p class="relationship-line">${refs}</p>` : "";
+          const headRefs = note ? "" : refLine;
+          const footRefs = note ? refLine : "";
+          return `<div class="relationship-row">
+            <header class="person-event-head"><span class="relationship-who"><a href="/people/${esc(line.otherId)}">${esc(line.otherName)}</a>${years}${headRefs}</span><h3 class="event-h">${esc(line.label)}</h3></header>
+            ${note}${footRefs}
+          </div>`;
+        })
+        .join("");
+      return `<div class="relationship-group"><p class="identity-label">${esc(section.label)}</p>${lines}</div>`;
+    })
+    .join("");
+  return `<section class="person-relationships" aria-label="Relationships"><h3 class="career-h">Relationships</h3>${groups}</section>`;
+}
+
 export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   const seen = detailMediaSeen();
@@ -3294,7 +3343,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, timeline, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${personSourcesHtml(sourceBundle.groups)}${personSupportingMediaHtml(filled, seen)}`,
+      afterHtml: `${relationshipsHtml(filled, sourceNumbers)}${careerHistory(filled)}${eventTimeline(filled, timeline, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${personSourcesHtml(sourceBundle.groups)}${personSupportingMediaHtml(filled, seen)}`,
       active: true,
       extraClass: "person-pane",
     })}

@@ -3227,7 +3227,21 @@ export async function getPerson(id) {
   const p = await getPool();
   if (!p) return getMemory().people.find((r) => r.id === id) || null;
   const q = await p.query("SELECT * FROM people WHERE id = $1", [id]);
-  return q.rows[0] ? normalizePerson(q.rows[0]) : null;
+  if (!q.rows[0]) return null;
+  const person = normalizePerson(q.rows[0]);
+  const rel = await p.query(
+    `SELECT r.id, r.person_a, r.person_b, r.kind, r.a_calls_b, r.b_calls_a,
+            r.start_year, r.end_year, r.sources,
+            COALESCE(r.a_note, '') AS a_note, COALESCE(r.b_note, '') AS b_note,
+            pa.name AS person_a_name, pb.name AS person_b_name
+       FROM person_relationships r
+       JOIN people pa ON pa.id = r.person_a
+       JOIN people pb ON pb.id = r.person_b
+      WHERE r.person_a = $1 OR r.person_b = $1`,
+    [id],
+  );
+  person.relationships = rel.rows;
+  return person;
 }
 
 /** People for snapshot.person_ids, in that order. Unknown ids are omitted. */
