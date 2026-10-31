@@ -31,6 +31,16 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.38] - 2026-10-31
+
+### Added
+
+- Fact tag The Left Eye (`/tags/black-eye`, stored id `black_eye`). The chip sits in the Comms menu, with no shortcut key, and is not repeated under Tags. The tag index still lists it. It records a stored report of a black eye.
+
+### Fixed
+
+- The relationship label check kept on boot includes Half-sister, Half-brother, Judge, Litigant, Cousin, Daughter, Mother, and Sister, matching the labels already stored.
+
 ## [1.2.37] - 2026-10-28
 
 ### Added

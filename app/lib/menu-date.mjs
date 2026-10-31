@@ -122,6 +122,9 @@ export function personMenuDate(row, menu = {}) {
   if (tag === "epstein_transparency_act") return transparencyDate(row);
   if (tag === "harassment_records") return harassmentRecordsDate(row);
   if (tag === "ukraine_aid_flags") return ukraineAidFlagsDate(row);
+  if (tag === "black_eye") {
+    return newest(eventsOf(row, ["black_eye"]).map((ev) => ev.event_date));
+  }
   if (VOTE_NO_KINDS.has(tag)) {
     return newest(eventsOf(row, [tag]).map((ev) => ev.event_date));
   }
