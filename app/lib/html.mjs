@@ -86,6 +86,7 @@ import {
 } from "./themes.mjs";
 import {
   MENU_ATTRIBUTE_TAGS,
+  PAGE_ATTRIBUTE_TAGS,
   attributeTagHref,
   EPSTEIN_CLIENTS_CATEGORY,
   IDENTITY_TAGS,
@@ -254,9 +255,10 @@ function keymapItems(activePath) {
  * Comms section of the keymap menu (same section pattern as Tags).
  * Order: KIND_COMMS clip catalogs (Dog, Red Folder, Eagle, Ronald, Shot), then
  * Boot (person), Corona, then Central Casting. Shortcut keys are unchanged.
+ * A fact tag with menu "comms" follows those keyed chips and has no shortcut.
  */
 export function keymapCommsItems() {
-  return [
+  const keyed = [
     ...KIND_COMM_IDS.map((id) => {
       const spec = KIND_COMMS[id];
       return { key: spec.keymapKey, href: spec.path, label: spec.navLabel };
@@ -265,6 +267,11 @@ export function keymapCommsItems() {
     { key: "o", href: "/corona-comms", label: categoryByPath("/corona-comms")?.nav || "Corona" },
     { key: CENTRAL_CASTING_KEYMAP, href: CENTRAL_CASTING_PATH, label: "Central Casting" },
   ];
+  const facts = PAGE_ATTRIBUTE_TAGS.filter((tag) => tag.menu === "comms").map((tag) => ({
+    href: tag.path,
+    label: tag.nav,
+  }));
+  return [...keyed, ...facts];
 }
 
 export function themeSwitcher() {
@@ -497,9 +504,9 @@ export function tagDescriptionBlock(id) {
   return tagDescriptionHtml(tagDescription(id));
 }
 
-/** Fact-tag index. Same rows as the catalog Tags menu. */
+/** Fact-tag index. Tags-menu rows, plus a fact tag whose chip sits under Comms. */
 export function tagsIndexBody() {
-  const chips = MENU_ATTRIBUTE_TAGS.map(
+  const chips = PAGE_ATTRIBUTE_TAGS.map(
     (tag) => `<a class="keychip keymap-tag" href="${esc(attributeTagHref(tag))}">${esc(tag.nav)}</a>`,
   ).join("");
   return `<nav class="keymap-group tag-index" aria-label="Fact tags"><p class="keymap-section">Tags</p>${chips}</nav>`;
@@ -2015,7 +2022,7 @@ function personSupportingMediaHtml(row, seen) {
     // It is not orphaned and must not be cleaned up.
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
     // Red Folder media stays on its own Red Folder block, with its captions.
-    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
+    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || kind === "black_eye" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     // Dedupe (normalize, then collapse dog post groups) before the display cap.
     const media = normalizeEventMedia(ev.media);
@@ -2866,12 +2873,27 @@ function voteNoEventSection(ev) {
   });
 }
 
+/** Stored report of a black eye. It does not replace the card category or date. */
+function blackEyeEventSection(ev, sourceNumbers) {
+  const cites = eventCiteParts(ev, sourceNumbers);
+  return personEventSection({
+    headHtml: eventHeadHtml("The Left Eye", ev?.event_date),
+    kind: "black_eye",
+    bodyHtml: commitProseHtml(ev?.comments),
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    className: "detail-black-eye detail-supporting",
+    tag: "section",
+  });
+}
+
 /** Vote and endorsement cards oldest first; notables newest date first at the bottom. */
 function specialEventNodes(row, sourceNumbers) {
   const render = {
     endorsement: endorsementEventSection,
     harassment_records: harassmentEventSection,
     ukraine_aid_flags: ukraineEventSection,
+    black_eye: blackEyeEventSection,
   };
   for (const kind of VOTE_NO_KINDS) render[kind] = voteNoEventSection;
   const nodes = personEvents(row)
@@ -3156,6 +3178,7 @@ function eventSourceLabel(ev) {
   else if (kind === "endorsement") title = "Endorsement";
   else if (kind === "red_folder") title = RED_FOLDER_EVENT_LABEL;
   else if (kind === "shot") title = "Shot";
+  else if (kind === "black_eye") title = "The Left Eye";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
   const when = date ? formatDate(date) : "";
   return when ? `${when} · ${title}` : title;

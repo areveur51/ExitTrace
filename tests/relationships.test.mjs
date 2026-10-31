@@ -4,6 +4,7 @@ import fs from "node:fs";
 import test from "node:test";
 import { personDetail, personRow } from "../app/lib/html.mjs";
 import {
+  RELATIONSHIP_LABELS,
   RelationshipError,
   prepareRelationship,
   relationshipView,
@@ -480,6 +481,10 @@ test("person_relationships stays out of the lab publication SQL", () => {
   assert.match(tail, /'Son'/);
   assert.match(tail, /'Father'/);
   assert.match(tail, /'Personal chef'/);
+  for (const label of ["Half-sister", "Half-brother", "Judge", "Litigant", "Cousin", "Daughter", "Mother", "Sister"]) {
+    assert.ok(RELATIONSHIP_LABELS.includes(label), label);
+    assert.match(tail, new RegExp(`'${label}'`));
+  }
   assert.doesNotMatch(tail, /ALTER PUBLICATION/i);
   assert.doesNotMatch(sql, /ADD TABLE person_relationships/i);
 });

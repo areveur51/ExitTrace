@@ -18,6 +18,8 @@ const COMMS = [
   { key: "t", href: "/central-casting", label: "Central Casting" },
 ];
 
+const BLACK_EYE = { href: "/tags/black-eye", label: "The Left Eye" };
+
 function parts(html) {
   const top = html.match(/<div class="keymap-keys">([\s\S]*?)<\/div>/)?.[1] ?? "";
   const comms = html.match(/<nav class="keymap-group keymap-comms"[^>]*>([\s\S]*?)<\/nav>/)?.[1] ?? "";
@@ -26,7 +28,7 @@ function parts(html) {
 }
 
 test("keymap Comms section uses the shared section pattern with the comms links in order", () => {
-  assert.deepEqual(keymapCommsItems(), COMMS);
+  assert.deepEqual(keymapCommsItems(), [...COMMS, BLACK_EYE]);
   for (const active of ["/", "/firings", "/dog-comms", "/central-casting", "/tags/masks"]) {
     const html = keymapFooter(active);
     const { top, comms, tags } = parts(html);
@@ -45,6 +47,9 @@ test("keymap Comms section uses the shared section pattern with the comms links 
       assert.doesNotMatch(top, new RegExp(`data-key="${c.key}"`), `${c.key} is not at the top level`);
       assert.equal(html.split(`href="${c.href}"`).length - 1, 1, `${c.href} renders exactly once`);
     }
+    assert.match(comms, /class="keychip keymap-comm" href="\/tags\/black-eye"(?: aria-current="page")?>The Left Eye</);
+    assert.doesNotMatch(tags, /href="\/tags\/black-eye"/);
+    assert.equal(html.split('href="/tags/black-eye"').length - 1, 1, "The Left Eye renders once, under Comms");
   }
 });
 

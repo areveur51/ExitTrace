@@ -109,7 +109,7 @@ import {
   parsePage,
 } from "./lib/paginate.mjs";
 import { parseAgeBand } from "./lib/age.mjs";
-import { MENU_ATTRIBUTE_TAGS, attributeTagById, attributeTagByPath, attributeTagHref, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
+import { PAGE_ATTRIBUTE_TAGS, attributeTagById, attributeTagByPath, attributeTagHref, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
 import {
   findGrokipediaEntry,
   fillEmptyFromGrokipedia,
@@ -1169,7 +1169,7 @@ async function handle(req, res) {
         heading: "Tags",
         query: "Tags",
         crumbLabel: "Tags",
-        countLabel: `${MENU_ATTRIBUTE_TAGS.length} tags`,
+        countLabel: `${PAGE_ATTRIBUTE_TAGS.length} tags`,
         lede: "Fact tags. Each list is the people who already store that fact.",
         body: tagsIndexBody(),
       }),

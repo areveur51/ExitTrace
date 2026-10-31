@@ -444,6 +444,8 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.doesNotMatch(res.body, /keymap-tag[^>]*data-key=/);
   assert.doesNotMatch(res.body, /home-tag-pill/);
   assert.match(res.body, /class="keychip keymap-comm" href="\/shot-comms" data-key="s"/);
+  assert.match(res.body, /class="keychip keymap-comm" href="\/tags\/black-eye">The Left Eye</);
+  assert.doesNotMatch(res.body, /class="keychip keymap-tag" href="\/tags\/black-eye"/);
   assert.doesNotMatch(res.body, /\]<\/span> Add</);
   assert.doesNotMatch(res.body, /\]<\/span> Search</);
   assert.doesNotMatch(res.body, /widgets\.js/);

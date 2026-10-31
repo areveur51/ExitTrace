@@ -155,7 +155,10 @@ test("every other fact tag keeps its Tags-menu entry and tag-page href, in order
   const menu = keymapFooter("/");
   const tagsNav = menu.slice(menu.indexOf('aria-label="Fact tags"'));
   const hrefs = [...tagsNav.matchAll(/class="keychip keymap-tag" href="([^"]+)"/g)].map((m) => m[1]);
-  const want = ATTRIBUTE_TAG_IDS.filter((id) => id !== "red_folder").map((id) => attributeTagById(id).path);
+  const want = ATTRIBUTE_TAG_IDS.filter((id) => {
+    const tag = attributeTagById(id);
+    return tag.menu !== false && tag.menu !== "comms";
+  }).map((id) => attributeTagById(id).path);
   assert.deepEqual(hrefs, want);
   assert.equal(attributeTagByPath("/tags/red-folder").id, "red_folder");
 });

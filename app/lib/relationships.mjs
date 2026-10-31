@@ -16,6 +16,14 @@ export const RELATIONSHIP_LABELS = [
   "Speechwriter",
   "Principal",
   "Personal chef",
+  "Half-sister",
+  "Half-brother",
+  "Judge",
+  "Litigant",
+  "Cousin",
+  "Daughter",
+  "Mother",
+  "Sister",
 ];
 
 export const CITE_FLOOR = 2;
