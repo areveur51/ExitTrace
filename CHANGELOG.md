@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.40] - 2026-11-01
+
+### Added
+
+- Fact tag No One Is Above The Law (`/tags/no-one-is-above-the-law`, stored id `no_one_above_the_law`). The chip sits under Tags. The menu label is Above the Law because the full name does not fit the rail. A person card shows the full name in its Tags row. It records a person named on a stored graphic under that line. The event does not replace the card category or date.
+
 ## [1.2.39] - 2026-11-01
 
 ### Changed

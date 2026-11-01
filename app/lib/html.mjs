@@ -2023,7 +2023,7 @@ function personSupportingMediaHtml(row, seen) {
     // It is not orphaned and must not be cleaned up.
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
     // Red Folder media stays on its own Red Folder block, with its captions.
-    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || kind === "black_eye" || VOTE_FACT_KINDS.has(kind)) continue;
+    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || kind === "black_eye" || kind === "no_one_above_the_law" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     // Dedupe (normalize, then collapse dog post groups) before the display cap.
     const media = normalizeEventMedia(ev.media);
@@ -2888,6 +2888,22 @@ function blackEyeEventSection(ev, sourceNumbers) {
   });
 }
 
+/** Named on a stored graphic. It does not replace the card category or date. */
+function noOneAboveTheLawEventSection(ev, sourceNumbers) {
+  const cites = eventCiteParts(ev, sourceNumbers);
+  const position = String(ev?.position || "").trim();
+  const positionHtml = position ? metaLine("Position", position) : "";
+  return personEventSection({
+    headHtml: eventHeadHtml("No One Is Above The Law", ev?.event_date),
+    kind: "no_one_above_the_law",
+    bodyHtml: `${positionHtml}${commitProseHtml(ev?.comments)}`,
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    className: "detail-no-one-above-the-law detail-supporting",
+    tag: "section",
+  });
+}
+
 /** Vote and endorsement cards oldest first; notables newest date first at the bottom. */
 function specialEventNodes(row, sourceNumbers) {
   const render = {
@@ -2895,6 +2911,7 @@ function specialEventNodes(row, sourceNumbers) {
     harassment_records: harassmentEventSection,
     ukraine_aid_flags: ukraineEventSection,
     black_eye: blackEyeEventSection,
+    no_one_above_the_law: noOneAboveTheLawEventSection,
   };
   for (const kind of VOTE_NO_KINDS) render[kind] = voteNoEventSection;
   const nodes = personEvents(row)
@@ -3180,6 +3197,7 @@ function eventSourceLabel(ev) {
   else if (kind === "red_folder") title = RED_FOLDER_EVENT_LABEL;
   else if (kind === "shot") title = "Shot";
   else if (kind === "black_eye") title = "Left Eye";
+  else if (kind === "no_one_above_the_law") title = "No One Is Above The Law";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
   const when = date ? formatDate(date) : "";
   return when ? `${when} · ${title}` : title;

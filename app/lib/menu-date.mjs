@@ -125,6 +125,9 @@ export function personMenuDate(row, menu = {}) {
   if (tag === "black_eye") {
     return newest(eventsOf(row, ["black_eye"]).map((ev) => ev.event_date));
   }
+  if (tag === "no_one_above_the_law") {
+    return newest(eventsOf(row, ["no_one_above_the_law"]).map((ev) => ev.event_date));
+  }
   if (VOTE_NO_KINDS.has(tag)) {
     return newest(eventsOf(row, [tag]).map((ev) => ev.event_date));
   }

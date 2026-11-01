@@ -141,6 +141,12 @@ export const ATTRIBUTE_TAGS = [
     keymapKey: "y",
     lede: "People with a stored report of a black eye.",
   },
+  {
+    id: "no_one_above_the_law",
+    nav: "No One Is Above The Law",
+    path: "/tags/no-one-is-above-the-law",
+    lede: "People named on a stored graphic under the line that no one is above the law.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
@@ -286,6 +292,10 @@ export const TAG_DESCRIPTIONS = Object.freeze({
   fraud: {
     kind: "rule",
     text: "A card gets this tag when it stores a fraud charge, plea, conviction, indictment, or official fraud finding for the person.",
+  },
+  no_one_above_the_law: {
+    kind: "rule",
+    text: "A card gets this tag when the person is named on a stored graphic under the line that no one is above the law.",
   },
 });
 
@@ -594,6 +604,7 @@ export function attributeTagByPath(pathname) {
 const TAG_SHORT_LABELS = Object.freeze({
   big_beautiful_bill_act: "Big Beautiful Bill",
   secure_the_border_act: "Secure the Border",
+  no_one_above_the_law: "Above the Law",
 });
 
 /** Short label for a fact tag (object or id): the menu label, else its `nav`. Empty for an unknown id. */
