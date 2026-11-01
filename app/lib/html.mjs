@@ -254,8 +254,8 @@ function keymapItems(activePath) {
 /**
  * Comms section of the keymap menu (same section pattern as Tags).
  * Order: KIND_COMMS clip catalogs (Dog, Red Folder, Eagle, Ronald, Shot), then
- * Boot (person), Corona, then Central Casting. Shortcut keys are unchanged.
- * A fact tag with menu "comms" follows those keyed chips and has no shortcut.
+ * Boot (person), Corona, then Central Casting. Left Eye follows, shortcut y.
+ * A fact tag with menu "comms" uses its keymapKey when it has one.
  */
 export function keymapCommsItems() {
   const keyed = [
@@ -270,6 +270,7 @@ export function keymapCommsItems() {
   const facts = PAGE_ATTRIBUTE_TAGS.filter((tag) => tag.menu === "comms").map((tag) => ({
     href: tag.path,
     label: tag.nav,
+    ...(tag.keymapKey ? { key: tag.keymapKey } : {}),
   }));
   return [...keyed, ...facts];
 }
@@ -2877,7 +2878,7 @@ function voteNoEventSection(ev) {
 function blackEyeEventSection(ev, sourceNumbers) {
   const cites = eventCiteParts(ev, sourceNumbers);
   return personEventSection({
-    headHtml: eventHeadHtml("The Left Eye", ev?.event_date),
+    headHtml: eventHeadHtml("Left Eye", ev?.event_date),
     kind: "black_eye",
     bodyHtml: commitProseHtml(ev?.comments),
     cites: cites.cites,
@@ -3178,7 +3179,7 @@ function eventSourceLabel(ev) {
   else if (kind === "endorsement") title = "Endorsement";
   else if (kind === "red_folder") title = RED_FOLDER_EVENT_LABEL;
   else if (kind === "shot") title = "Shot";
-  else if (kind === "black_eye") title = "The Left Eye";
+  else if (kind === "black_eye") title = "Left Eye";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
   const when = date ? formatDate(date) : "";
   return when ? `${when} · ${title}` : title;
