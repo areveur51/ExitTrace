@@ -77,15 +77,15 @@ test("normalizeTags accepts black_eye and the chip is a Comms fact tag", () => {
   assert.deepEqual(normalizeTags("Black-eye"), ["black_eye"]);
   assert.deepEqual(personTags({ id: "ada-example", tags: ["official", "black_eye"] }), ["official", "black_eye"]);
   const def = attributeTagById("black_eye");
-  assert.equal(def.nav, "The Left Eye");
+  assert.equal(def.nav, "Left Eye");
   assert.equal(def.path, "/tags/black-eye");
   assert.equal(def.menu, "comms");
+  assert.equal(def.keymapKey, "y");
   assert.equal(def.lede, "People with a stored report of a black eye.");
   assert.equal(attributeTagByPath("/tags/black-eye")?.id, "black_eye");
   const html = keymapFooter("/tags/black-eye");
-  assert.match(html, /class="keychip keymap-comm" href="\/tags\/black-eye" aria-current="page">The Left Eye</);
+  assert.match(html, /class="keychip keymap-comm" href="\/tags\/black-eye" data-key="y" aria-current="page"><span class="br">\[<\/span>y<span class="br">\]<\/span> Left Eye</);
   assert.doesNotMatch(html, /class="keychip keymap-tag" href="\/tags\/black-eye"/);
-  assert.doesNotMatch(html, /href="\/tags\/black-eye"[^>]*data-key=/);
 });
 
 test("a black eye event keeps the stored category and uses its own menu date", () => {
@@ -117,12 +117,13 @@ test("/tags/black-eye lists only people who store the tag", async () => {
   assert.match(page.body, /People with a stored report of a black eye\./);
   assert.match(page.body, /href="\/people\/ada-example"/);
   assert.doesNotMatch(page.body, /href="\/people\/sam-sample"/);
-  assert.match(page.body, /class="keychip keymap-comm" href="\/tags\/black-eye" aria-current="page">The Left Eye</);
+  assert.match(page.body, /class="keychip keymap-comm" href="\/tags\/black-eye" data-key="y" aria-current="page"><span class="br">\[<\/span>y<span class="br">\]<\/span> Left Eye</);
   const detail = await requestPage("/people/ada-example");
   assert.equal(detail.status, 200);
   assert.match(detail.body, /data-kind="black_eye"/);
-  assert.match(detail.body, /The Left Eye/);
+  assert.match(detail.body, /<h3 class="event-h">Left Eye<\/h3>/);
+  assert.match(detail.body, /class="person-tags"[\s\S]*?<a class="keychip" href="\/tags\/black-eye">Left Eye<\/a>/);
+  assert.doesNotMatch(detail.body, /The Left Eye/);
   assert.match(detail.body, /datetime="2025-04-21"/);
   assert.match(detail.body, /datetime="2017-09-10"/);
-  assert.match(detail.body, /href="\/tags\/black-eye"/);
 });

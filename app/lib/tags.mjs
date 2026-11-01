@@ -135,9 +135,10 @@ export const ATTRIBUTE_TAGS = [
   },
   {
     id: "black_eye",
-    nav: "The Left Eye",
+    nav: "Left Eye",
     path: "/tags/black-eye",
     menu: "comms",
+    keymapKey: "y",
     lede: "People with a stored report of a black eye.",
   },
 ];

@@ -434,7 +434,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(keys, ["f", "r", "g", "a", "i", "d", "m", "b", "u", "w"]);
   const commKeys = [...res.body.matchAll(/class="keychip keymap-comm"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(commKeys, ["c", "e", "l", "n", "s", "k", "o", "t"]);
+  assert.deepEqual(commKeys, ["c", "e", "l", "n", "s", "k", "o", "t", "y"]);
   assert.match(res.body, /class="keymap-group keymap-comms" aria-label="Comms"><p class="keymap-section">Comms</);
   assert.match(res.body, /class="keymap-group keymap-tags" aria-label="Fact tags"/);
   assert.match(res.body, /class="keymap-section">Tags</);
@@ -444,7 +444,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.doesNotMatch(res.body, /keymap-tag[^>]*data-key=/);
   assert.doesNotMatch(res.body, /home-tag-pill/);
   assert.match(res.body, /class="keychip keymap-comm" href="\/shot-comms" data-key="s"/);
-  assert.match(res.body, /class="keychip keymap-comm" href="\/tags\/black-eye">The Left Eye</);
+  assert.match(res.body, /class="keychip keymap-comm" href="\/tags\/black-eye" data-key="y"><span class="br">\[<\/span>y<span class="br">\]<\/span> Left Eye</);
   assert.doesNotMatch(res.body, /class="keychip keymap-tag" href="\/tags\/black-eye"/);
   assert.doesNotMatch(res.body, /\]<\/span> Add</);
   assert.doesNotMatch(res.body, /\]<\/span> Search</);
