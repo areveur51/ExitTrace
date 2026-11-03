@@ -201,10 +201,10 @@ export const NON_SECTION_REPEATABLE_KINDS = Object.freeze([
 ]);
 
 /**
- * Repeatable kinds that fold to one seq 0 row when ET_MULTI_EVENT_WRITES is off.
- * foldKindsToSeq0 / mergePersonEvent is the only flag-off fold. notable and
- * red_folder stay out: a seq above 0 of those kinds is still refused while
- * the switch is off.
+ * Flag-off kinds. The survivor is the lowest seq. Its date and comments stay.
+ * Cites merge. The switch is multiEventWritesEnabled in multi-event-writes.mjs.
+ * notable and red_folder stay out: a seq above 0 of those kinds is still
+ * refused while the switch is off.
  */
 export const FOLD_WHEN_OFF_KINDS = Object.freeze([
   "endorsement",

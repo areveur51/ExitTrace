@@ -20,6 +20,7 @@ import { handle } from "../app/server.mjs";
 import { personHeadcount } from "../app/lib/event-attrs.mjs";
 import {
   appendPersonSources,
+  applyWriteFold,
   counts,
   countPeople,
   getPerson,
@@ -29,6 +30,7 @@ import {
   loadFileStore,
   maxEventHeadcountByKind,
   mergeGoldPeople,
+  multiEventWritesEnabled,
   savePerson,
   setMemory,
   syncPersonEvents,
@@ -725,6 +727,69 @@ test("a save after the switch turns off keeps the stored seq 0 endorsement", asy
       assert.equal(fileEvents[0].position, "Senator");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+test("flag off keeps seq 0 date and comments in either array order", async () => {
+  const pairs = [
+    [
+      {
+        kind: "indictment_civilian",
+        seq: 0,
+        event_date: "2026-04-28",
+        comments: "EDNC date",
+        sources: [AP("ednc", "2026-04-28")],
+      },
+      {
+        kind: "indictment_civilian",
+        seq: 1,
+        event_date: "2026-09-25",
+        comments: "DC date",
+        sources: [AP("dc", "2026-09-25")],
+      },
+    ],
+    [
+      {
+        kind: "indictment_non_civilian",
+        seq: 0,
+        event_date: "2025-01-02",
+        comments: "stored comments",
+        sources: [AP("stored", "2025-01-02")],
+      },
+      {
+        kind: "indictment_non_civilian",
+        seq: 1,
+        event_date: "2025-06-01",
+        comments: "later comments",
+        sources: [AP("later", "2025-06-01")],
+      },
+    ],
+  ];
+  await withWrites(undefined, async () => {
+    assert.equal(multiEventWritesEnabled(), false);
+    for (const [low, high] of pairs) {
+      for (const rows of [[high, low], [low, high]]) {
+        const folded = foldKindsToSeq0(rows).find((ev) => ev.kind === low.kind);
+        assert.equal(folded.seq, 0);
+        assert.equal(folded.event_date, low.event_date);
+        assert.equal(folded.comments, low.comments);
+        assert.notEqual(folded.comments, high.comments);
+        assert.ok(folded.sources.some((source) => source.url.includes("/" + low.sources[0].url.split("/").pop())));
+        assert.ok(folded.sources.some((source) => source.url.includes("/" + high.sources[0].url.split("/").pop())));
+        const saved = applyWriteFold({
+          id: `order-${low.kind}`,
+          name: "Order",
+          category: low.kind,
+          event_date: high.event_date,
+          events: rows,
+        });
+        const kept = saved.events.filter((ev) => ev.kind === low.kind);
+        assert.equal(kept.length, 1);
+        assert.equal(kept[0].seq, 0);
+        assert.equal(kept[0].event_date, low.event_date);
+        assert.equal(kept[0].comments, low.comments);
+      }
     }
   });
 });
