@@ -178,7 +178,11 @@ function isNotableKind(kind) {
  * multi-event migration (2026-10-26-multi-event-up-{render-a,lab,render-b}.sql) is
  * applied on both sides and ET_MULTI_EVENT_WRITES=on.
  */
-export const REPEATABLE_EVENT_KINDS = Object.freeze(["notable", "red_folder"]);
+export const REPEATABLE_EVENT_KINDS = Object.freeze([
+  "notable",
+  "red_folder",
+  "endorsement",
+]);
 const REPEATABLE_SET = new Set(REPEATABLE_EVENT_KINDS);
 
 export function isRepeatableKind(kind) {
@@ -241,7 +245,7 @@ export function sameNotable(a, b) {
   return sameRepeatableEvent(a, b);
 }
 
-/** Same rule as sameNotable for any repeatable kind (notable, red_folder). Kinds must match. */
+/** Same rule as sameNotable for any repeatable kind. Kinds must match. */
 export function sameRepeatableEvent(a, b) {
   const kind = String(a?.kind || "").trim();
   if (!isRepeatableKind(kind) || kind !== String(b?.kind || "").trim()) return false;
@@ -457,7 +461,7 @@ function copyEventRow(ev) {
 }
 
 /**
- * One event per (person, kind) except a repeatable kind (notable, red_folder), which may repeat keyed by seq.
+ * One event per (person, kind) except a repeatable kind, which may repeat keyed by seq.
  * Order: event_date desc, then kind, then seq asc.
  */
 export function uniqueEvents(events) {
@@ -492,7 +496,7 @@ export function markEventsReady(row) {
   return row;
 }
 
-/** Lift legacy category/event_date/sources into events; one event per kind except notable (seq). */
+/** Lift legacy category/event_date/sources into events; one event per kind except a repeatable kind (seq). */
 export function personEvents(row) {
   if (!row || typeof row !== "object") return [];
   if (row[EVENTS_READY] === true && Array.isArray(row.events)) return row.events;
@@ -628,7 +632,7 @@ export function resolveEventKind(person, kind) {
   return existing ? existing.kind : key;
 }
 
-/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second notable or red_folder event with a different date (or seq) is a new row. */
+/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second repeatable event with a different date (or seq) is a new row. */
 export function attachPersonEvent(person, incoming) {
   const ev = normalizePersonEvent(incoming);
   if (!ev) {
@@ -734,7 +738,7 @@ export function mergePersonAnnotate(gold, prior) {
   const events = keep.events.map((ev) => copyEventRow(ev));
   for (const ev of extra.events) {
     if (isRepeatableKind(ev.kind)) {
-      // Seq is per-person and per kind. Match extra notables / red folders by date/cites, then assign a new seq.
+      // Seq is per-person and per kind. Match an extra repeatable event by date/cites, then assign a new seq.
       const incoming = { ...copyEventRow(ev) };
       delete incoming.seq;
       const i = findMergeIndex(events, incoming);

@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.41] - 2026-11-03
+
+### Added
+
+- A person can have more than one endorsement. `endorsement` is a repeatable kind, keyed by `seq` on `person_events` (primary key `(person_id, kind, seq)`), the same way `notable` and `red_folder` already are. A second endorsement with a different date is its own Endorsement entry, oldest first, with its own date and cites. The same date still folds when a cite overlaps or the comments match. The card headline stays the stored catalog event; an endorsement does not replace the category or the date. `/tags/endorsements` still lists the person once, dated by the newest endorsement. One endorsement still renders as one entry. Every other kind stays one event per kind. No schema change and no data migration; existing `seq` 0 rows are not rewritten. A `seq` above 0 still needs `ET_MULTI_EVENT_WRITES=on` and the migrated primary key. How to revert is in `docs/UNDO.md`.
+
 ## [1.2.40] - 2026-11-01
 
 ### Added

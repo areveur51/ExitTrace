@@ -67,12 +67,16 @@ const RF_B = {
   media: [{ src: "/media/people/multi-melania/support/shot.jpg", alt: "Post on X", context: "Post by @MELANIATRUMP on X, December 17, 2025", url: "https://x.com/MELANIATRUMP/status/2001266577077837917" }],
 };
 
-test("multi-event: notable and red_folder repeat; every other kind stays one per kind", () => {
-  assert.deepEqual([...REPEATABLE_EVENT_KINDS], ["notable", "red_folder"]);
+test("multi-event: notable, red_folder, and endorsement repeat; every other kind stays one per kind", () => {
+  assert.deepEqual([...REPEATABLE_EVENT_KINDS], ["notable", "red_folder", "endorsement"]);
   assert.equal(isRepeatableKind("red_folder"), true);
+  assert.equal(isRepeatableKind("endorsement"), true);
   assert.equal(isRepeatableKind("firings"), false);
+  assert.equal(isRepeatableKind("indictment_civilian"), false);
   assert.equal(eventKey({ kind: "red_folder", seq: 2 }), "red_folder:2");
+  assert.equal(eventKey({ kind: "endorsement", seq: 1 }), "endorsement:1");
   assert.equal(eventKey({ kind: "firings", seq: 2 }), "firings");
+  assert.equal(eventSeq({ kind: "endorsement", seq: 1 }), 1);
   assert.equal(eventSeq({ kind: "firings", seq: 3 }), 0, "a non-repeatable kind never stores seq > 0");
 });
 
@@ -259,14 +263,18 @@ test("multi-event: the guard accepts only the exact key (person_id, kind, seq) o
   assert.match(catalog[0], /WITH ORDINALITY[\s\S]*ORDER BY k\.ord/, "the key is read in key order");
 });
 
-test("multi-event: every repeatable kind has exactly one person-page section, and every section is a repeatable kind (O'Brien)", () => {
+test("multi-event: dedicated sections are the repeatable kinds that are not the Endorsement section (O'Brien)", () => {
   const kinds = KIND_EVENT_SECTIONS.map((s) => s.kind);
-  assert.deepEqual([...kinds].sort(), [...REPEATABLE_EVENT_KINDS].sort());
+  assert.deepEqual(kinds, ["notable", "red_folder"]);
   assert.equal(new Set(kinds).size, kinds.length, "no kind twice");
   for (const s of KIND_EVENT_SECTIONS) {
+    assert.equal(isRepeatableKind(s.kind), true, s.kind);
     assert.equal(typeof s.title, "function", s.kind);
     assert.match(s.className, /\bdetail-supporting\b/, s.kind);
   }
+  // Endorsement repeats in specialEventNodes. A second block would draw it twice.
+  assert.equal(isRepeatableKind("endorsement"), true);
+  assert.equal(kinds.includes("endorsement"), false);
   assert.ok(Object.isFrozen(KIND_EVENT_SECTIONS));
 });
 
