@@ -183,23 +183,34 @@ export const REPEATABLE_EVENT_KINDS = Object.freeze([
   "notable",
   "red_folder",
   "endorsement",
+  "indictment_civilian",
+  "indictment_non_civilian",
 ]);
 const REPEATABLE_SET = new Set(REPEATABLE_EVENT_KINDS);
 
 /**
- * Repeatable kinds that are not a KIND_EVENT_SECTIONS block. They render in
- * specialEventNodes, so a single entry is still one section. Together with
+ * Repeatable kinds that are not a KIND_EVENT_SECTIONS block. endorsement
+ * renders in specialEventNodes. Indictment kinds stay on the event timeline
+ * (eventTagRow), so a single indictment still renders once. Together with
  * KIND_EVENT_SECTIONS this is every REPEATABLE_EVENT_KINDS entry, once.
  */
-export const NON_SECTION_REPEATABLE_KINDS = Object.freeze(["endorsement"]);
+export const NON_SECTION_REPEATABLE_KINDS = Object.freeze([
+  "endorsement",
+  "indictment_civilian",
+  "indictment_non_civilian",
+]);
 
 /**
- * Repeatable kinds that fold to one seq 0 row when ET_MULTI_EVENT_WRITES is off.
- * A later release can add a kind here (for example an indictment kind) without
- * a new fold. notable and red_folder stay out: a seq above 0 of those kinds
- * is still refused while the switch is off.
+ * Flag-off kinds. The survivor is the lowest seq. Its date and comments stay.
+ * Cites merge. The switch is multiEventWritesEnabled in multi-event-writes.mjs.
+ * notable and red_folder stay out: a seq above 0 of those kinds is still
+ * refused while the switch is off.
  */
-export const FOLD_WHEN_OFF_KINDS = Object.freeze(["endorsement"]);
+export const FOLD_WHEN_OFF_KINDS = Object.freeze([
+  "endorsement",
+  "indictment_civilian",
+  "indictment_non_civilian",
+]);
 
 export function isRepeatableKind(kind) {
   return REPEATABLE_SET.has(String(kind || "").trim());
@@ -670,8 +681,10 @@ export function projectPerson(row, kinds) {
 }
 
 /**
- * One event, one kind. Civilian and non-civilian indictment are the same
- * indictment classification — do not double-tag. Unclear stays un-tagged.
+ * One indictment classification per person. Civilian and non-civilian are not
+ * both stored. A later indictment keeps the kind already on the person; a
+ * different date is another event of that kind when the write switch is on.
+ * Unclear stays un-tagged.
  * `unsealed` is not a kind: true only when cites clearly state unsealed or
  * made public; otherwise null. A stored true is not cleared.
  */

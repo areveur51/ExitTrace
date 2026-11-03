@@ -214,7 +214,10 @@ test("parked source posts rematch onto indictment KEEP kinds; parent lists the u
   assert.doesNotMatch(other.body, /href="\/people\/casey-vale"/);
 });
 
-test("per-kind tags: arrest + indictment stay one person; never two of the same indictment kind", async () => {
+test("per-kind tags: arrest + indictment stay one person; a second indictment is its own event", async () => {
+  const prevWrites = process.env.ET_MULTI_EVENT_WRITES;
+  process.env.ET_MULTI_EVENT_WRITES = "on";
+  try {
   setMemory(goldSeed());
   await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
   const arrest = await applyIdentifiedPerson({
@@ -258,9 +261,14 @@ test("per-kind tags: arrest + indictment stay one person; never two of the same 
     cite_urls: ["https://www.example.com/news/casey-vale-held", "https://www.example.org/n/extra"],
   });
   assert.equal(again.action, "annotated");
+  assert.equal(again.added_event, true);
   assert.equal(again.person.category, "indictment_civilian");
-  assert.equal(again.person.event_date, "2024-08-01");
+  assert.equal(again.person.event_date, "2024-09-01");
   assert.equal(await countPeople(), 73);
+  const afterSecond = await getPerson("casey-vale");
+  const second = afterSecond.events.filter((ev) => ev.kind === "indictment_civilian");
+  assert.deepEqual(second.map((ev) => ev.event_date).sort(), ["2024-08-01", "2024-09-01"]);
+  assert.equal(second.find((ev) => ev.event_date === "2024-08-01").seq, 0);
 
   const otherKind = await applyIdentifiedPerson({
     subject: "Casey Vale",
@@ -274,6 +282,7 @@ test("per-kind tags: arrest + indictment stay one person; never two of the same 
   const afterBoth = await getPerson("casey-vale");
   assert.ok(afterBoth.events.some((ev) => ev.kind === "indictment_civilian"));
   assert.ok(!afterBoth.events.some((ev) => ev.kind === "indictment_non_civilian"));
+  assert.equal(afterBoth.events.filter((ev) => ev.kind === "indictment_civilian").length, 3);
 
   const shownArrest = await checkPersonDisplayed(arrest.person);
   assert.match(shownArrest.list, /^\/arrests/);
@@ -285,6 +294,10 @@ test("per-kind tags: arrest + indictment stay one person; never two of the same 
   assert.match(detail.body, /Casey Vale/);
   assert.match(detail.body, /Indictments — civilians/);
   assert.match(detail.body, /Arrests/);
+  } finally {
+    if (prevWrites === undefined) delete process.env.ET_MULTI_EVENT_WRITES;
+    else process.env.ET_MULTI_EVENT_WRITES = prevWrites;
+  }
 });
 
 test("indictment person cards keep 40×52 local thumbs", () => {

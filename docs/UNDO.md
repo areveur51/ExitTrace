@@ -2,6 +2,46 @@
 
 Each release is its own section. None of these sections run DDL. The `person_events` primary key `(person_id, kind, seq)` and the multi-event migration files are in [MIGRATION.md](MIGRATION.md).
 
+## 1.2.42 (repeatable indictments)
+
+This release is app code only. It adds `indictment_civilian` and `indictment_non_civilian` to `REPEATABLE_EVENT_KINDS` and to `FOLD_WHEN_OFF_KINDS` in `app/lib/promote.mjs`. There is no DDL and no migration file. The primary key and the multi-event migration are already described in [MIGRATION.md](MIGRATION.md). It does not migrate rows and it does not rewrite existing `person_events` rows. An indictment that was already stored is still `seq` 0 until someone saves that person with a second indictment while `ET_MULTI_EVENT_WRITES` is exactly `on`.
+
+With the switch off, `foldKindsToSeq0` keeps the lowest `seq` of each kind in `FOLD_WHEN_OFF_KINDS` (both indictment kinds, and `endorsement`). That row is seq 0 when one was already stored. Its date and comments stay. Cites from the higher-seq rows merge onto it. The higher-seq row does not replace the date or the comments. Array order does not matter: `[seq 1, seq 0]` and `[seq 0, seq 1]` keep seq 0. Postgres, the in-memory store, and the file store do this on save, including a save after the switch is turned off. `seq` above 0 is written only when the switch is on. `notable` and `red_folder` are not in that set.
+
+Render does not read the switch. An indictment already stored with `seq` > 0 in `people.events` is its own timeline entry on the next page render. Turning the switch on does not rewrite those rows: the split is already on screen, and the next save leaves the `seq` > 0 row in place. Turning the switch off does not hide that row until the next save of that person, which keeps the lowest seq and merges cites. See [MIGRATION.md](MIGRATION.md).
+
+`notable`, `red_folder`, and `endorsement` stay repeatable. Every other kind stays one event per kind at `seq` 0.
+
+### Revert the commit
+
+On the default branch, revert the 1.2.42 commit (the commit that sets `package.json` to `1.2.42` and adds the two indictment kinds to `REPEATABLE_EVENT_KINDS` and `FOLD_WHEN_OFF_KINDS`):
+
+```bash
+git log --oneline -20
+git revert <sha>
+```
+
+Deploy that revert the same way as any other app release. Do not run a schema rollback. The primary key stays `(person_id, kind, seq)`. `ET_MULTI_EVENT_WRITES` is unchanged by this release and unchanged by the revert. See [MIGRATION.md](MIGRATION.md).
+
+### If any indictment row has seq > 0
+
+Before reverting, on lab and on Render, read (do not write):
+
+```sql
+SELECT person_id, kind, seq, event_date, unsealed
+  FROM public.person_events
+ WHERE kind IN ('indictment_civilian', 'indictment_non_civilian')
+   AND seq > 0
+ ORDER BY person_id, kind, seq;
+```
+
+Also look at `people.events` for those people. A second indictment lives in that JSON as well as in `person_events`.
+
+- **No rows.** Revert. Nothing else to check. Existing `seq` 0 indictment rows were not modified by this release.
+- **Rows exist.** Copy those `person_events` rows and the matching `people.events` before any save after the revert. On this release, a save with the switch off keeps the lowest-seq row. Its date and comments stay, and cites from the higher seq merge onto it. The reverted app treats an indictment kind as one event and walks the list newest first, so the newer date and comments can overwrite the stored seq 0 row. A save deletes the `seq` > 0 companion row. Logical replication and gap-upsert carry that delete. The revert itself does not delete anything. Do not save those people until the copy is made and you have decided what to keep.
+
+`seq` 0 indictment rows are not part of that check. Leave them. Do not `DELETE` from `person_events` as part of this revert.
+
 ## 1.2.41 (repeatable endorsements)
 
 This release is app code only. It adds `endorsement` to `REPEATABLE_EVENT_KINDS` in `app/lib/promote.mjs`, and it adds the person category `endorsement` (label Endorsement, list `/endorsement`, keymap `j`). `people.category` is text. The death-date check allows any non-death category, so this release adds no DDL and no migration file. See [MIGRATION.md](MIGRATION.md). It does not migrate rows and it does not rewrite existing `person_events` rows. An endorsement that was already stored is still `seq` 0 until someone saves that person with a second endorsement while `ET_MULTI_EVENT_WRITES` is exactly `on`. Revert removes the category from the app. A row already stored with `category = endorsement` stays in the database; the reverted app has no list page for it.

@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.42] - 2026-11-03
+
+### Added
+
+- A person can have more than one indictment on the timeline when `ET_MULTI_EVENT_WRITES` is exactly `on`. `indictment_civilian` and `indictment_non_civilian` are repeatable kinds, keyed by `seq` on `person_events` (primary key `(person_id, kind, seq)`), the same way `notable`, `red_folder`, and `endorsement` already are. A second indictment with a different date is its own timeline entry, in date order, with its own text and Unsealed badge. The same date still folds when a cite overlaps or the comments match. A person keeps one indictment classification: a later event filed as the other indictment kind is stored as the kind already on the person. The card headline stays the newest catalog event. Catalog lists still show the person once, dated by the newest indictment of that kind. One indictment still renders as one entry. With the switch off, including when it is unset, `foldKindsToSeq0` keeps the lowest seq. Its date and comments stay. Cites merge. Array order does not matter. Render does not read the switch: an indictment already stored with `seq` > 0 is its own timeline entry on the next page render, and turning the switch on leaves that split in place. `notable` and `red_folder` are not folded. No schema change and no data migration; existing `seq` 0 rows are not rewritten. How to revert is in `docs/UNDO.md`. See `docs/MIGRATION.md`.
+
 ## [1.2.41] - 2026-11-03
 
 ### Added
