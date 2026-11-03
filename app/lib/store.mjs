@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { databaseUrl } from "./env.mjs";
+import { multiEventWritesEnabled } from "./multi-event-writes.mjs";
+export { multiEventWritesEnabled };
 import { positiveInt } from "./num.mjs";
 import {
   PromoteError,
@@ -16,6 +18,8 @@ import {
   mergeCites,
   mergePersonAnnotate,
   eventSeq,
+  FOLD_WHEN_OFF_KINDS,
+  foldKindsToSeq0,
   personEvents,
   personHasKind,
   projectPerson,
@@ -653,10 +657,18 @@ export function getMemory() {
   return memory;
 }
 
+function filePersonForWrite(row) {
+  if (multiEventWritesEnabled()) return row;
+  const events = Array.isArray(row?.events) ? row.events : [];
+  if (!events.some((ev) => FOLD_WHEN_OFF.has(String(ev?.kind || "").trim()))) return row;
+  return applyWriteFold(row);
+}
+
 export function writeFileStore(dataDir, seed) {
   fs.mkdirSync(dataDir, { recursive: true });
   const out = path.join(dataDir, "store.json");
-  fs.writeFileSync(out, JSON.stringify(seed, null, 2) + "\n");
+  const people = (seed?.people || []).map((row) => filePersonForWrite(row));
+  fs.writeFileSync(out, JSON.stringify({ ...seed, people }, null, 2) + "\n");
   return out;
 }
 
@@ -679,7 +691,7 @@ export function mergeGoldPeople(seedPeople, priorPeople) {
     const row = normalizePerson(prior);
     if (!seen.has(row.id)) out.push(row);
   }
-  return collapseDuplicatePeople(out);
+  return collapseDuplicatePeople(out).map((row) => applyWriteFold(row));
 }
 
 /** Seed operations win identity; extra store ops are kept. Gold counts/cites are not overwritten. */
@@ -788,7 +800,7 @@ export async function importSeed(p, seed) {
     const existingClips = getMemory().central_casting_comms || [];
     const incomingClips = seed.central_casting_comms || [];
     setMemory({
-      people: seed.people,
+      people: (seed.people || []).map((row) => applyWriteFold(row)),
       ...importKindMemory(seed),
       central_casting_comms: incomingClips.length ? incomingClips : existingClips,
       operations: seed.operations,
@@ -813,9 +825,11 @@ export async function importSeed(p, seed) {
     await client.query("BEGIN");
     for (const raw of seed.people) {
       const existing = await client.query("SELECT * FROM people WHERE id = $1", [raw.id]);
-      const row = existing.rows[0]
-        ? mergePersonAnnotate(normalizePerson(raw), normalizePerson(existing.rows[0]))
-        : normalizePerson(raw);
+      const row = applyWriteFold(
+        existing.rows[0]
+          ? mergePersonAnnotate(normalizePerson(raw), normalizePerson(existing.rows[0]))
+          : normalizePerson(raw),
+      );
       await client.query(
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, country_of_origin,
@@ -1363,9 +1377,18 @@ function applyWindow(rows, limit, offset) {
   return offset ? rows.slice(offset) : rows;
 }
 
+/** Card-category pages. An endorsement event on another card is not membership. */
+const CARD_CATEGORY_IDS = new Set(["endorsement"]);
+
 function peopleKindWhere(categories, params) {
   if (!categories.length) return "";
-  params.push(categories);
+  const card = categories.filter((id) => CARD_CATEGORY_IDS.has(id));
+  const events = categories.filter((id) => !CARD_CATEGORY_IDS.has(id));
+  if (card.length && !events.length) {
+    params.push(card);
+    return ` WHERE people.category = ANY($${params.length}::text[])`;
+  }
+  params.push(events.length ? events : categories);
   const n = params.length;
   return ` WHERE (
     EXISTS (
@@ -1626,11 +1649,19 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const cardOrder = args.cardOrder === true;
   const p = await getPool();
   if (!p) {
+    const cardCategories = categories.filter((id) => CARD_CATEGORY_IDS.has(id));
+    const eventCategories = categories.filter((id) => !CARD_CATEGORY_IDS.has(id));
     let rows = getMemory().people.map((r) =>
-      categories.length ? projectPerson(r, categories) : projectPerson(r),
+      eventCategories.length ? projectPerson(r, eventCategories) : projectPerson(r),
     );
     if (categories.length) {
-      rows = rows.filter((r) => personHasKind(r, categories));
+      rows = rows.filter((r) => {
+        const byCard = cardCategories.includes(String(r.category || ""));
+        const byEvent = eventCategories.length ? personHasKind(r, eventCategories) : false;
+        if (cardCategories.length && eventCategories.length) return byCard || byEvent;
+        if (cardCategories.length) return byCard;
+        return byEvent;
+      });
     }
     if (tags.length) {
       rows = rows.filter((r) => matchesTags(r, tags, { match: tagMatch }));
@@ -1714,7 +1745,15 @@ export async function countPeople(categoryOrOpts) {
   if (!p) {
     let rows = getMemory().people;
     if (categories.length) {
-      rows = rows.filter((r) => personHasKind(r, categories));
+      const cardCategories = categories.filter((id) => CARD_CATEGORY_IDS.has(id));
+      const eventCategories = categories.filter((id) => !CARD_CATEGORY_IDS.has(id));
+      rows = rows.filter((r) => {
+        const byCard = cardCategories.includes(String(r.category || ""));
+        const byEvent = eventCategories.length ? personHasKind(r, eventCategories) : false;
+        if (cardCategories.length && eventCategories.length) return byCard || byEvent;
+        if (cardCategories.length) return byCard;
+        return byEvent;
+      });
     }
     if (tags.length) {
       rows = rows.filter((r) => matchesTags(r, tags, { match: tagMatch }));
@@ -2128,13 +2167,31 @@ async function personEventsSeqNotableOnly(client) {
 
 /**
  * ET_MULTI_EVENT_WRITES=on is the operator switch for seq > 0 person_events rows
- * (a second notable, a second red_folder). Off by default; set it only after F7 of
+ * (a second notable, red_folder, or endorsement). Off by default; set it only after F7 of
  * docs/MIGRATION.md, when lab AND Render both have PRIMARY KEY (person_id, kind, seq).
  * The schema check below still runs, so both must hold. The value must be exactly
  * "on": no trim, no case folding, so " on ", "ON" and "on\n" count as off.
  */
-export function multiEventWritesEnabled(env = process.env) {
-  return env.ET_MULTI_EVENT_WRITES === "on";
+const FOLD_WHEN_OFF = new Set(FOLD_WHEN_OFF_KINDS);
+
+/**
+ * Shared write fold for Postgres, the in-memory store, and the file store.
+ * With the switch off, each FOLD_WHEN_OFF_KINDS kind keeps the stored seq 0
+ * row (date, comments, and every other field) and merges cites from later
+ * rows. seq > 0 is written only when the switch is on. Kinds outside that
+ * set are not folded.
+ */
+export function applyWriteFold(person, env = process.env) {
+  const normalized = normalizePerson(person);
+  if (multiEventWritesEnabled(env)) return normalized;
+  if (!(normalized.events || []).some((ev) => FOLD_WHEN_OFF.has(String(ev?.kind || "").trim()))) {
+    return normalized;
+  }
+  return normalizePerson({ ...normalized, events: foldKindsToSeq0(normalized.events) });
+}
+
+function personForEventWrite(person, env = process.env) {
+  return applyWriteFold(person, env);
 }
 
 // person_events.seq is INTEGER (int4).
@@ -2142,7 +2199,7 @@ const EVENT_SEQ_MAX = 2147483647;
 
 /**
  * A seq > 0 event needs PRIMARY KEY (person_id, kind, seq) on this database.
- * A seq > 0 event of a kind other than notable (red_folder) also needs the
+ * A seq > 0 event of a kind other than notable (red_folder, endorsement) also needs the
  * multi-event migration (F3 up-lab / F5 up-render-b), which drops
  * person_events_seq_notable_only. A seq above int4 is refused here, before any
  * query. No catalog query when every event is seq 0.
@@ -2206,7 +2263,7 @@ function laterVoteCompanion(incoming, kept) {
 }
 
 export async function syncPersonEvents(client, row) {
-  const person = normalizePerson(row);
+  const person = personForEventWrite(row);
   await assertMultiNotableReady(client, person);
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
   const bySlot = new Map();
@@ -2292,11 +2349,12 @@ const UPDATE_PERSON_SQL = `UPDATE people SET
      WHERE id = $1`;
 
 async function commitPersonWrite(client, person, sql) {
+  const writable = personForEventWrite(person);
   await client.query("BEGIN");
   try {
-    await assertMultiNotableReady(client, person);
-    await client.query(sql, personValues(person));
-    await syncPersonEvents(client, person);
+    await assertMultiNotableReady(client, writable);
+    await client.query(sql, personValues(writable));
+    await syncPersonEvents(client, writable);
     await client.query("COMMIT");
   } catch (err) {
     try {
@@ -2322,7 +2380,7 @@ export async function savePersonTx(client, row) {
 }
 
 export async function insertPerson(row) {
-  const person = normalizePerson(row);
+  const person = applyWriteFold(row);
   const p = await getPool();
   if (!p) {
     const mem = getMemory();
@@ -2344,7 +2402,7 @@ export async function insertPerson(row) {
 }
 
 export async function savePerson(row) {
-  const person = normalizePerson(row);
+  const person = applyWriteFold(row);
   const p = await getPool();
   if (!p) {
     const mem = getMemory();
@@ -2394,6 +2452,8 @@ export async function appendPersonSources(id, incoming, kind) {
     throw new PromoteError(`person not found: ${id}`, "person_not_found");
   }
   const targetKind = kind || person.category;
+  // Date-desc order, so this is the newest event of that kind. Pass its seq
+  // so a repeatable kind (a second endorsement) gets the cites on that row.
   const event = person.events.find((ev) => ev.kind === targetKind) || person.events[0];
   if (!event) {
     const merged = mergeCites(person.sources, incoming);
@@ -2404,6 +2464,7 @@ export async function appendPersonSources(id, incoming, kind) {
   }
   const attached = attachPersonEvent(person, {
     kind: event.kind,
+    seq: event.seq,
     event_date: event.event_date,
     sources: incoming,
   });
@@ -3102,7 +3163,11 @@ async function countsUncached() {
         continue;
       }
       for (const [kind, weight] of maxEventHeadcountByKind(events)) {
+        if (kind === "endorsement") continue;
         byCategory[kind] = (byCategory[kind] || 0) + weight;
+      }
+      if (String(row.category || "") === "endorsement") {
+        byCategory.endorsement = (byCategory.endorsement || 0) + 1;
       }
     }
     const operations = getMemory().operations || [];
@@ -3154,7 +3219,7 @@ async function countsUncached() {
     ), 0)::int AS n FROM people`),
     ...kindQueries,
   ]);
-  const [postCount, opCount, grouped, opTags, centralCount] = await Promise.all([
+  const [postCount, opCount, grouped, opTags, centralCount, endorsementCards] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
     p.query("SELECT COUNT(*)::int AS n FROM operations"),
     p.query(
@@ -3185,9 +3250,14 @@ async function countsUncached() {
         WHERE jsonb_typeof(central_casting) = 'array'
           AND jsonb_array_length(central_casting) > 0`,
     ),
+    p.query("SELECT COUNT(*)::int AS n FROM people WHERE category = 'endorsement'"),
   ]);
   const byCategory = {};
-  for (const row of grouped.rows) byCategory[row.category] = row.n;
+  for (const row of grouped.rows) {
+    if (row.category === "endorsement") continue;
+    byCategory[row.category] = row.n;
+  }
+  byCategory.endorsement = endorsementCards.rows[0].n;
   if (!grouped.rows.length) {
     const fallback = await p.query(
       "SELECT category, COUNT(*)::int AS n FROM people GROUP BY category",

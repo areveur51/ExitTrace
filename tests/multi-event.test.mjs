@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { KIND_EVENT_SECTIONS, personDetail, kindEventsHtml } from "../app/lib/html.mjs";
 import {
+  NON_SECTION_REPEATABLE_KINDS,
   REPEATABLE_EVENT_KINDS,
   attachPersonEvent,
   eventKey,
@@ -67,12 +68,19 @@ const RF_B = {
   media: [{ src: "/media/people/multi-melania/support/shot.jpg", alt: "Post on X", context: "Post by @MELANIATRUMP on X, December 17, 2025", url: "https://x.com/MELANIATRUMP/status/2001266577077837917" }],
 };
 
-test("multi-event: notable and red_folder repeat; every other kind stays one per kind", () => {
-  assert.deepEqual([...REPEATABLE_EVENT_KINDS], ["notable", "red_folder"]);
+test("multi-event: notable, red_folder, and endorsement repeat; every other kind stays one per kind", () => {
+  assert.deepEqual(
+    [...REPEATABLE_EVENT_KINDS].sort(),
+    [...KIND_EVENT_SECTIONS.map((s) => s.kind), ...NON_SECTION_REPEATABLE_KINDS].sort(),
+  );
   assert.equal(isRepeatableKind("red_folder"), true);
+  assert.equal(isRepeatableKind("endorsement"), true);
   assert.equal(isRepeatableKind("firings"), false);
+  assert.equal(isRepeatableKind("indictment_civilian"), false);
   assert.equal(eventKey({ kind: "red_folder", seq: 2 }), "red_folder:2");
+  assert.equal(eventKey({ kind: "endorsement", seq: 1 }), "endorsement:1");
   assert.equal(eventKey({ kind: "firings", seq: 2 }), "firings");
+  assert.equal(eventSeq({ kind: "endorsement", seq: 1 }), 1);
   assert.equal(eventSeq({ kind: "firings", seq: 3 }), 0, "a non-repeatable kind never stores seq > 0");
 });
 
@@ -259,15 +267,55 @@ test("multi-event: the guard accepts only the exact key (person_id, kind, seq) o
   assert.match(catalog[0], /WITH ORDINALITY[\s\S]*ORDER BY k\.ord/, "the key is read in key order");
 });
 
-test("multi-event: every repeatable kind has exactly one person-page section, and every section is a repeatable kind (O'Brien)", () => {
-  const kinds = KIND_EVENT_SECTIONS.map((s) => s.kind);
-  assert.deepEqual([...kinds].sort(), [...REPEATABLE_EVENT_KINDS].sort());
-  assert.equal(new Set(kinds).size, kinds.length, "no kind twice");
+test("multi-event: section kinds and non-section repeatable kinds cover REPEATABLE_EVENT_KINDS once (O'Brien)", () => {
+  const sectionKinds = KIND_EVENT_SECTIONS.map((s) => s.kind);
+  const outside = [...NON_SECTION_REPEATABLE_KINDS];
+  assert.equal(new Set(sectionKinds).size, sectionKinds.length, "no section kind twice");
+  assert.equal(new Set(outside).size, outside.length, "no outside kind twice");
+  for (const kind of sectionKinds) assert.equal(outside.includes(kind), false, kind);
+  assert.deepEqual([...sectionKinds, ...outside].sort(), [...REPEATABLE_EVENT_KINDS].sort());
   for (const s of KIND_EVENT_SECTIONS) {
+    assert.equal(isRepeatableKind(s.kind), true, s.kind);
     assert.equal(typeof s.title, "function", s.kind);
     assert.match(s.className, /\bdetail-supporting\b/, s.kind);
   }
+  for (const kind of outside) assert.equal(isRepeatableKind(kind), true, kind);
   assert.ok(Object.isFrozen(KIND_EVENT_SECTIONS));
+  assert.ok(Object.isFrozen(NON_SECTION_REPEATABLE_KINDS));
+});
+
+test("multi-event: two same-date notables number their source groups in seq order", () => {
+  const row = projectPerson({
+    id: "same-date-notable",
+    name: "Same Date",
+    category: "notable",
+    event_date: "2020-01-01",
+    events: [
+      {
+        kind: "notable",
+        seq: 0,
+        event_date: "2020-01-01",
+        comments: "First same day.",
+        sources: [AP("same-0", "2020-01-01")],
+      },
+      {
+        kind: "notable",
+        seq: 1,
+        event_date: "2020-01-01",
+        comments: "Second same day.",
+        sources: [AP("same-1", "2020-01-01")],
+      },
+    ],
+  });
+  const html = personDetail(row);
+  const headings = [...html.matchAll(/<h4 class="source-group-h">([^<]+)<\/h4>/g)].map((match) => match[1]);
+  assert.deepEqual(headings, ["Jan 1, 2020 · Notable event", "Jan 1, 2020 · Notable event (2)"]);
+  const groups = [...html.matchAll(/<section class="source-group">([\s\S]*?)<\/section>/g)].map((match) => match[1]);
+  assert.equal(groups.length, 2);
+  assert.match(groups[0], /same-0/);
+  assert.doesNotMatch(groups[0], /same-1/);
+  assert.match(groups[1], /same-1/);
+  assert.doesNotMatch(groups[1], /same-0/);
 });
 
 test("multi-event: syncPersonEvents writes one companion row per (kind, seq)", async () => {

@@ -35,7 +35,7 @@ import {
   normalizeClearances,
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
-import { asEventDate, eventsOfKind, personEvents } from "./promote.mjs";
+import { asEventDate, eventKey, eventSeq, eventsOfKind, personEvents } from "./promote.mjs";
 import { renderEventGraph } from "./event-graph.mjs";
 import { hostOf, isUnofficialOrCommentarySocial } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -237,6 +237,7 @@ function keymapItems(activePath) {
     { key: "r", href: "/resignations" },
     { key: "g", href: "/government" },
     { key: "a", href: "/arrests" },
+    { key: "j", href: "/endorsement" },
     { key: "i", href: "/indictments" },
     { key: "d", href: "/deaths" },
     { key: "m", href: "/group-operations" },
@@ -2705,8 +2706,12 @@ function kindEventSection(ev, sourceNumbers, { title, kind, className }) {
   });
 }
 
-/** Repeatable-kind blocks in page order: every Notable, then every Red Folder. */
-/** One person-page block per repeatable kind; tests/multi-event.test.mjs pins it to REPEATABLE_EVENT_KINDS. */
+/**
+ * Dedicated blocks for repeatable kinds that are not NON_SECTION_REPEATABLE_KINDS.
+ * notable and red_folder render here, one block per event. endorsement stays in
+ * specialEventNodes (endorsementEventSection) so a single endorsement still
+ * renders once. tests/multi-event.test.mjs pins the split.
+ */
 export const KIND_EVENT_SECTIONS = Object.freeze([
   Object.freeze({ kind: "notable", title: (ev) => notableSectionTitle(ev), className: "detail-notable detail-supporting" }),
   Object.freeze({ kind: "red_folder", title: () => RED_FOLDER_EVENT_LABEL, className: "detail-red-folder detail-supporting" }),
@@ -2743,14 +2748,6 @@ function endorsementEventSection(ev, sourceNumbers) {
     className: "detail-endorsement detail-supporting",
     tag: "section",
   });
-}
-
-export function endorsementEventHtml(row, sourceNumbers) {
-  return personEvents(row)
-    .filter((ev) => String(ev?.kind || "").trim() === "endorsement")
-    .map((ev) => endorsementEventSection(ev, sourceNumbers))
-    .filter(Boolean)
-    .join("");
 }
 
 /** Recorded yea on the motion to refer H. Res. 1100. It does not replace the card category or date. */
@@ -3110,10 +3107,12 @@ function compareTimelineEvents(a, b) {
     if (!db) return -1;
     return da.localeCompare(db);
   }
-  return String(a?.kind || "").localeCompare(String(b?.kind || ""));
+  const k = String(a?.kind || "").localeCompare(String(b?.kind || ""));
+  if (k !== 0) return k;
+  return eventSeq(a) - eventSeq(b);
 }
 
-/** Event date ascending. Undated events stay last. Kind is the tie-break. */
+/** Event date ascending. Undated events stay last. Kind, then seq, is the tie-break. */
 function datedPersonEvents(row) {
   return personEvents(row).slice().sort(compareTimelineEvents);
 }
@@ -3140,9 +3139,9 @@ function nicknameTimelineEvents(row) {
   }));
 }
 
-/** Rows on the person timeline. Notable stays at the bottom. dog_comms stays a tag, not a row. */
+/** Rows on the person timeline. Notable and Endorsement stay in their own sections. dog_comms stays a tag, not a row. */
 function isPersonTimelineKind(kind) {
-  if (!kind || kind === "notable" || kind === "dog_comms") return false;
+  if (!kind || kind === "notable" || kind === "endorsement" || kind === "dog_comms") return false;
   if (kind === "shot" || kind === "nickname") return true;
   return isDisplayedEventKind(kind);
 }
@@ -3208,13 +3207,18 @@ function personSourceItems(row, { events = [], centralCastingClips = [], cite } 
   const items = [];
   const groups = [];
   const seen = new Set();
-  const push = (source, label) => {
+  const labelCounts = new Map();
+  const push = (source, label, groupId = label) => {
     const before = items.length;
     pushPersonSource(items, seen, source);
     if (items.length === before) return;
     let group = groups[groups.length - 1];
-    if (!group || group.label !== label) {
-      group = { label, items: [] };
+    if (!group || group.id !== groupId) {
+      const n = (labelCounts.get(label) || 0) + 1;
+      labelCounts.set(label, n);
+      // A repeated same-date heading would be identical. Number the later ones.
+      const shown = n === 1 ? label : `${label} (${n})`;
+      group = { id: groupId, label: shown, items: [] };
       groups.push(group);
     }
     group.items.push(items[items.length - 1]);
@@ -3228,7 +3232,9 @@ function personSourceItems(row, { events = [], centralCastingClips = [], cite } 
   }
   for (const ev of events) {
     const label = eventSourceLabel(ev);
-    for (const source of ev?.sources || []) push(eventSourceForList(source), label);
+    // Two events of one kind can share a date, so the visible label is not an id.
+    const groupId = eventKey(ev);
+    for (const source of ev?.sources || []) push(eventSourceForList(source), label, groupId);
   }
   for (const section of relationshipSections(row?.relationships, row?.id)) {
     for (const line of section.lines) {
@@ -4299,6 +4305,7 @@ const ADD_CATEGORIES = [
   { id: "death_ceo", label: "Deaths — CEOs" },
   { id: "arrests", label: "Arrests" },
   { id: "notable", label: "Notable event" },
+  { id: "endorsement", label: "Endorsement" },
   { id: "corona_comms", label: "Corona Comms" },
   { id: "indictment_civilian", label: "Indictments — civilians" },
   { id: "indictment_non_civilian", label: "Indictments — non-civilians" },

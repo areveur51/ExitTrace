@@ -39,6 +39,14 @@ export const CATEGORIES = [
     blurb: "Notable events attached to an identified person. The event, cites, and media sit on that person card. There is no catalog list.",
   },
   {
+    id: "endorsement",
+    kind: "person",
+    title: "Endorsement",
+    nav: "Endorsement",
+    path: "/endorsement",
+    blurb: "People whose card is an endorsement. One card per person. Each dated Endorsement entry sits on that card.",
+  },
+  {
     id: "corona_comms",
     kind: "person",
     title: "Corona Comms",
@@ -263,6 +271,7 @@ export const PROMOTE_CATEGORY_IDS = [
   "death_ceo",
   "arrests",
   "notable",
+  "endorsement",
   "corona_comms",
   "boot_comms",
   "indictment_civilian",

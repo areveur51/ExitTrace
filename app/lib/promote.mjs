@@ -30,6 +30,7 @@ import { mergeClearances, normalizeClearances } from "./clearances.mjs";
 import { mergeNicknames, normalizeNicknames } from "./nicknames.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { normalizeScreenshotCredit, normalizeScreenshotHref } from "./screenshot.mjs";
+import { multiEventWritesEnabled } from "./multi-event-writes.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 export const CITE_FLOOR = 2;
@@ -178,8 +179,27 @@ function isNotableKind(kind) {
  * multi-event migration (2026-10-26-multi-event-up-{render-a,lab,render-b}.sql) is
  * applied on both sides and ET_MULTI_EVENT_WRITES=on.
  */
-export const REPEATABLE_EVENT_KINDS = Object.freeze(["notable", "red_folder"]);
+export const REPEATABLE_EVENT_KINDS = Object.freeze([
+  "notable",
+  "red_folder",
+  "endorsement",
+]);
 const REPEATABLE_SET = new Set(REPEATABLE_EVENT_KINDS);
+
+/**
+ * Repeatable kinds that are not a KIND_EVENT_SECTIONS block. They render in
+ * specialEventNodes, so a single entry is still one section. Together with
+ * KIND_EVENT_SECTIONS this is every REPEATABLE_EVENT_KINDS entry, once.
+ */
+export const NON_SECTION_REPEATABLE_KINDS = Object.freeze(["endorsement"]);
+
+/**
+ * Repeatable kinds that fold to one seq 0 row when ET_MULTI_EVENT_WRITES is off.
+ * A later release can add a kind here (for example an indictment kind) without
+ * a new fold. notable and red_folder stay out: a seq above 0 of those kinds
+ * is still refused while the switch is off.
+ */
+export const FOLD_WHEN_OFF_KINDS = Object.freeze(["endorsement"]);
 
 export function isRepeatableKind(kind) {
   return REPEATABLE_SET.has(String(kind || "").trim());
@@ -241,7 +261,7 @@ export function sameNotable(a, b) {
   return sameRepeatableEvent(a, b);
 }
 
-/** Same rule as sameNotable for any repeatable kind (notable, red_folder). Kinds must match. */
+/** Same rule as sameNotable for any repeatable kind. Kinds must match. */
 export function sameRepeatableEvent(a, b) {
   const kind = String(a?.kind || "").trim();
   if (!isRepeatableKind(kind) || kind !== String(b?.kind || "").trim()) return false;
@@ -410,7 +430,7 @@ function keptEventDate(prior, incoming) {
   return prior.event_date || incoming.event_date || null;
 }
 
-function mergePersonEvent(prior, ev) {
+export function mergePersonEvent(prior, ev) {
   const merged = {
     kind: prior.kind,
     event_date: keptEventDate(prior, ev),
@@ -432,6 +452,40 @@ function mergePersonEvent(prior, ev) {
   if (keptHeadlineExclude(prior, ev)) merged.headline_exclude = true;
   applyEventShot(merged, prior, ev);
   return merged;
+}
+
+/**
+ * Write-path fold when ET_MULTI_EVENT_WRITES is off.
+ * The stored row is the lowest seq of that kind (seq 0 when one was already
+ * stored). Later rows merge with mergePersonEvent, the same merge main uses:
+ * the stored date and non-empty fields stay, and blank fields, cites, media,
+ * headcount, age, and screenshot fill from the incoming row. Kinds outside
+ * `kinds` are unchanged.
+ */
+export function foldKindsToSeq0(events, kinds = FOLD_WHEN_OFF_KINDS) {
+  const fold = new Set(kinds);
+  const out = [];
+  const buckets = new Map();
+  for (const ev of events || []) {
+    const kind = String(ev?.kind || "").trim();
+    if (!fold.has(kind)) {
+      out.push(ev);
+      continue;
+    }
+    if (!buckets.has(kind)) buckets.set(kind, []);
+    buckets.get(kind).push(ev);
+  }
+  for (const rows of buckets.values()) {
+    const stored = rows.reduce((best, ev) => (notableSeq(ev) < notableSeq(best) ? ev : best));
+    const rest = rows
+      .filter((ev) => ev !== stored)
+      .slice()
+      .sort((a, b) => notableSeq(a) - notableSeq(b));
+    let row = stored;
+    for (const other of rest) row = mergePersonEvent(row, other);
+    out.push(row);
+  }
+  return out;
 }
 
 function copyEventRow(ev) {
@@ -457,7 +511,7 @@ function copyEventRow(ev) {
 }
 
 /**
- * One event per (person, kind) except a repeatable kind (notable, red_folder), which may repeat keyed by seq.
+ * One event per (person, kind) except a repeatable kind, which may repeat keyed by seq.
  * Order: event_date desc, then kind, then seq asc.
  */
 export function uniqueEvents(events) {
@@ -492,7 +546,7 @@ export function markEventsReady(row) {
   return row;
 }
 
-/** Lift legacy category/event_date/sources into events; one event per kind except notable (seq). */
+/** Lift legacy category/event_date/sources into events; one event per kind except a repeatable kind (seq). */
 export function personEvents(row) {
   if (!row || typeof row !== "object") return [];
   if (row[EVENTS_READY] === true && Array.isArray(row.events)) return row.events;
@@ -628,7 +682,17 @@ export function resolveEventKind(person, kind) {
   return existing ? existing.kind : key;
 }
 
-/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second notable or red_folder event with a different date (or seq) is a new row. */
+/** Lowest seq of this kind, the stored row. -1 when the person has none. */
+function storedKindIndex(events, kind) {
+  let at = -1;
+  for (let n = 0; n < events.length; n++) {
+    if (String(events[n]?.kind || "").trim() !== kind) continue;
+    if (at < 0 || notableSeq(events[n]) < notableSeq(events[at])) at = n;
+  }
+  return at;
+}
+
+/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second repeatable event with a different date (or seq) is a new row. While ET_MULTI_EVENT_WRITES is off, a FOLD_WHEN_OFF_KINDS event is folded with foldKindsToSeq0. */
 export function attachPersonEvent(person, incoming) {
   const ev = normalizePersonEvent(incoming);
   if (!ev) {
@@ -636,6 +700,17 @@ export function attachPersonEvent(person, incoming) {
   }
   ev.kind = resolveEventKind(person, ev.kind);
   const events = personEvents(person);
+  if (FOLD_WHEN_OFF_KINDS.includes(ev.kind) && !multiEventWritesEnabled()) {
+    const storedAt = storedKindIndex(events, ev.kind);
+    if (storedAt >= 0) {
+      const added = mergeCites(events[storedAt].sources, ev.sources).added;
+      return {
+        person: projectPerson({ ...person, events: foldKindsToSeq0(events.concat(ev)) }),
+        added,
+        existed: true,
+      };
+    }
+  }
   const i = findMergeIndex(events, ev);
   if (i >= 0) {
     const merged = mergeCites(events[i].sources, ev.sources);
@@ -734,7 +809,7 @@ export function mergePersonAnnotate(gold, prior) {
   const events = keep.events.map((ev) => copyEventRow(ev));
   for (const ev of extra.events) {
     if (isRepeatableKind(ev.kind)) {
-      // Seq is per-person and per kind. Match extra notables / red folders by date/cites, then assign a new seq.
+      // Seq is per-person and per kind. Match an extra repeatable event by date/cites, then assign a new seq.
       const incoming = { ...copyEventRow(ev) };
       delete incoming.seq;
       const i = findMergeIndex(events, incoming);
@@ -776,6 +851,7 @@ export function mergePersonAnnotate(gold, prior) {
     if (media.length) existing.media = media;
     applyEventShot(existing, ev);
   }
+  const folded = multiEventWritesEnabled() ? events : foldKindsToSeq0(events);
   return projectPerson({
     ...keep,
     photo: keep.photo || extra.photo || "",
@@ -789,7 +865,7 @@ export function mergePersonAnnotate(gold, prior) {
     summary: keep.summary || extra.summary || "",
     birth_date: keep.birth_date || extra.birth_date || null,
     country_of_origin: keep.country_of_origin || extra.country_of_origin || "",
-    events,
+    events: folded,
     career: mergeCareer(keep.career, extra.career),
     tags: [...(keep.tags || []), ...(extra.tags || [])],
     central_casting: mergeCentralCasting(keep.central_casting, extra.central_casting),

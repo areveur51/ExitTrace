@@ -31,6 +31,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.41] - 2026-11-03
+
+### Added
+
+- Card category Endorsement (`endorsement`, list `/endorsement`, keymap `j`). It is a person category alongside Notable. `people.category` is text; the death-date check does not list categories, so this adds no DDL. An Endorsement entry on a card of another category still does not replace that card's category or date.
+- A person can have more than one endorsement. `endorsement` is a repeatable kind, keyed by `seq` on `person_events` (primary key `(person_id, kind, seq)`), the same way `notable` and `red_folder` already are. A second endorsement with a different date is its own Endorsement entry, oldest first, with its own date and cites. The same date still folds when a cite overlaps or the comments match. The card headline stays the stored catalog event; an endorsement does not replace the category or the date. `/tags/endorsements` still lists the person once, dated by the newest endorsement. One endorsement still renders as one entry. Every other kind stays one event per kind. No schema change and no data migration; existing `seq` 0 rows are not rewritten. A `seq` above 0 is written only when `ET_MULTI_EVENT_WRITES` is exactly `on`. When that switch is off, the survivor is the stored seq 0 entry. Later rows merge with `mergePersonEvent`: non-empty stored fields stay, and blank fields, cites, media, headcount, age, and screenshot fill from the incoming row. Postgres, the in-memory store, and the file store all do this on save. `notable` and `red_folder` are not folded. `/endorsement` lists people whose card category is endorsement, and the dashboard endorsement count is that same card count, not every person who has an endorsement event. How to revert is in `docs/UNDO.md`.
+
 ## [1.2.40] - 2026-11-01
 
 ### Added

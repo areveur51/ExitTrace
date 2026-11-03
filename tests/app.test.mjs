@@ -156,6 +156,7 @@ test("html pages render", async () => {
     "/resignations",
     "/government",
     "/arrests",
+    "/endorsement",
     "/corona-comms",
     "/dashboard",
     "/dashboard/reason",
@@ -288,6 +289,7 @@ test("every category list page ships a pager", async () => {
     "/resignations",
     "/government",
     "/arrests",
+    "/endorsement",
     "/corona-comms",
     "/dashboard/reason",
     "/dashboard/age",
@@ -424,6 +426,8 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /class="keychip"/);
   assert.match(res.body, /href="\/firings"/);
   assert.match(res.body, /href="\/arrests"/);
+  assert.match(res.body, /href="\/endorsement"/);
+  assert.match(res.body, /data-key="j"/);
   assert.match(res.body, /href="\/corona-comms"/);
   assert.match(res.body, /href="\/dashboard"/);
   assert.match(res.body, /href="\/indictments"/);
@@ -432,7 +436,7 @@ test("home is TUI chrome with local search and tap-friendly catalog keys", async
   assert.match(res.body, /data-key="u"/);
   assert.match(res.body, /class="keymap-keys"/);
   const keys = [...res.body.matchAll(/class="keychip"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ["f", "r", "g", "a", "i", "d", "m", "b", "u", "w"]);
+  assert.deepEqual(keys, ["f", "r", "g", "a", "j", "i", "d", "m", "b", "u", "w"]);
   const commKeys = [...res.body.matchAll(/class="keychip keymap-comm"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(commKeys, ["c", "e", "l", "n", "s", "k", "o", "t", "y"]);
   assert.match(res.body, /class="keymap-group keymap-comms" aria-label="Comms"><p class="keymap-section">Comms</);
