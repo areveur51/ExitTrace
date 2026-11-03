@@ -679,7 +679,21 @@ export function resolveEventKind(person, kind) {
   return existing ? existing.kind : key;
 }
 
-/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second repeatable event with a different date (or seq) is a new row. */
+function multiEventWritesOn(env = process.env) {
+  return env.ET_MULTI_EVENT_WRITES === "on";
+}
+
+/** Lowest seq of this kind, the stored row. -1 when the person has none. */
+function storedKindIndex(events, kind) {
+  let at = -1;
+  for (let n = 0; n < events.length; n++) {
+    if (String(events[n]?.kind || "").trim() !== kind) continue;
+    if (at < 0 || notableSeq(events[n]) < notableSeq(events[at])) at = n;
+  }
+  return at;
+}
+
+/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second repeatable event with a different date (or seq) is a new row. While ET_MULTI_EVENT_WRITES is off, a FOLD_WHEN_OFF_KINDS event merges cites into the stored seq 0 row instead of taking a new seq. */
 export function attachPersonEvent(person, incoming) {
   const ev = normalizePersonEvent(incoming);
   if (!ev) {
@@ -687,6 +701,19 @@ export function attachPersonEvent(person, incoming) {
   }
   ev.kind = resolveEventKind(person, ev.kind);
   const events = personEvents(person);
+  if (FOLD_WHEN_OFF_KINDS.includes(ev.kind) && !multiEventWritesOn()) {
+    const storedAt = storedKindIndex(events, ev.kind);
+    if (storedAt >= 0) {
+      const merged = mergeCites(events[storedAt].sources, ev.sources);
+      const next = events.slice();
+      next[storedAt] = { ...events[storedAt], sources: merged.sources };
+      return {
+        person: projectPerson({ ...person, events: next }),
+        added: merged.added,
+        existed: true,
+      };
+    }
+  }
   const i = findMergeIndex(events, ev);
   if (i >= 0) {
     const merged = mergeCites(events[i].sources, ev.sources);

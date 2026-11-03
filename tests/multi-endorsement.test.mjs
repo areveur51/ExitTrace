@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { categoryById, categoryByPath, PROMOTE_CATEGORY_IDS } from "../app/lib/categories.mjs";
+import { rankDimension } from "../app/lib/dashboard.mjs";
 import { listPathForPerson } from "../app/lib/display-check.mjs";
 import { peopleList, personDetail } from "../app/lib/html.mjs";
+import { mergeCites } from "../app/lib/promote.mjs";
 import { personMenuDate } from "../app/lib/menu-date.mjs";
 import {
   attachPersonEvent,
@@ -15,14 +20,17 @@ import { handle } from "../app/server.mjs";
 import { personHeadcount } from "../app/lib/event-attrs.mjs";
 import {
   appendPersonSources,
+  counts,
   countPeople,
   getPerson,
   listPeople,
+  loadFileStore,
   maxEventHeadcountByKind,
   savePerson,
   setMemory,
   syncPersonEvents,
   tagMembership,
+  writeFileStore,
 } from "../app/lib/store.mjs";
 
 const AP = (slug, date) => ({
@@ -94,10 +102,17 @@ function withEndorsements(person, rows) {
 }
 
 function severalEndorsements() {
-  return withEndorsements(firingOnly(), [
-    { kind: "endorsement", event_date: "2026-02-12", comments: FEB, sources: [TRUTH] },
-    { kind: "endorsement", event_date: "2026-11-02", comments: NOV, sources: [XPOST] },
-  ]);
+  const prev = process.env.ET_MULTI_EVENT_WRITES;
+  process.env.ET_MULTI_EVENT_WRITES = "on";
+  try {
+    return withEndorsements(firingOnly(), [
+      { kind: "endorsement", event_date: "2026-02-12", comments: FEB, sources: [TRUTH] },
+      { kind: "endorsement", event_date: "2026-11-02", comments: NOV, sources: [XPOST] },
+    ]);
+  } finally {
+    if (prev === undefined) delete process.env.ET_MULTI_EVENT_WRITES;
+    else process.env.ET_MULTI_EVENT_WRITES = prev;
+  }
 }
 
 function endorsementSections(html) {
@@ -218,6 +233,9 @@ test("one endorsement still renders as one entry and matches a seq 0 row", () =>
 });
 
 test("several endorsements are separate dated entries, oldest first, each with its own cites", async () => {
+  const prevWrites = process.env.ET_MULTI_EVENT_WRITES;
+  process.env.ET_MULTI_EVENT_WRITES = "on";
+  try {
   const person = { ...severalEndorsements(), id: "multi-endorse", name: "Multi Endorse", tags: ["endorsements"] };
   const endorsements = eventsOfKind(person.events, "endorsement");
   assert.deepEqual(endorsements.map((ev) => [ev.event_date, ev.seq]), [
@@ -288,7 +306,9 @@ test("several endorsements are separate dated entries, oldest first, each with i
   );
 
   setMemory({ people: [person] });
-  await savePerson(person);
+  await withWrites("on", async () => {
+    await savePerson(person);
+  });
   const loaded = await getPerson("multi-endorse");
   assert.deepEqual(eventsOfKind(loaded.events, "endorsement").map((ev) => ev.seq), [1, 0]);
   assert.equal(loaded.events.filter((ev) => ev.kind === "firings").length, 1);
@@ -316,6 +336,10 @@ test("several endorsements are separate dated entries, oldest first, each with i
   assert.equal(after.length, 2);
   assert.ok(after.find((ev) => ev.seq === 1).sources.some((source) => source.url === extra.url));
   assert.equal(after.find((ev) => ev.seq === 0).sources.some((source) => source.url === extra.url), false);
+  } finally {
+    if (prevWrites === undefined) delete process.env.ET_MULTI_EVENT_WRITES;
+    else process.env.ET_MULTI_EVENT_WRITES = prevWrites;
+  }
 });
 
 test("the endorsements tag and its list count people, not endorsement rows", async () => {
@@ -533,6 +557,151 @@ test("a person with category endorsement renders and lists on /endorsement", asy
   });
   assert.equal(kept.category, "firings");
   assert.equal(kept.event_date, "2017-05-09");
+});
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+test("flag-off attach keeps the stored endorsement byte for byte except merged cites", () => {
+  const first = {
+    kind: "endorsement",
+    event_date: "2024-03-01",
+    comments: "first",
+    position: "Senator",
+    organization: "Senate",
+    sources: [AP("first", "2024-03-01")],
+  };
+  const base = projectPerson({
+    id: "byte-fold",
+    name: "Byte Fold",
+    category: "firings",
+    event_date: "2017-05-09",
+    events: [
+      { kind: "firings", event_date: "2017-05-09", comments: "Removed.", sources: [AP("fired", "2017-05-09")] },
+      first,
+    ],
+  });
+  const incoming = AP("second", "2026-11-02");
+  const expected = projectPerson({
+    ...base,
+    events: base.events.map((ev) =>
+      ev.kind === "endorsement" ? { ...ev, sources: mergeCites(ev.sources, [incoming]).sources } : ev,
+    ),
+  });
+  const actual = attachPersonEvent(base, {
+    kind: "endorsement",
+    event_date: "2026-11-02",
+    comments: "second",
+    position: "Other",
+    organization: "Other",
+    sources: [incoming],
+  });
+  assert.equal(actual.existed, true);
+  assert.equal(stableJson(actual.person.events), stableJson(expected.events));
+  const ev = actual.person.events.find((row) => row.kind === "endorsement");
+  assert.equal(ev.event_date, "2024-03-01");
+  assert.equal(ev.comments, "first");
+  assert.equal(ev.position, "Senator");
+  assert.equal(ev.organization, "Senate");
+});
+
+test("a save after the switch turns off keeps the stored seq 0 endorsement", async () => {
+  let built;
+  await withWrites("on", async () => {
+    built = attachPersonEvent(
+      attachPersonEvent(firingOnly(), {
+        kind: "endorsement",
+        event_date: "2024-03-01",
+        comments: "first",
+        position: "Senator",
+        sources: [AP("first", "2024-03-01")],
+      }).person,
+      {
+        kind: "endorsement",
+        event_date: "2026-11-02",
+        comments: "second",
+        sources: [AP("second", "2026-11-02")],
+      },
+    ).person;
+    setMemory({ people: [built] });
+    await savePerson(built);
+    const on = await getPerson(built.id);
+    assert.equal(on.events.filter((ev) => ev.kind === "endorsement").length, 2);
+  });
+  await withWrites(undefined, async () => {
+    const current = await getPerson(built.id);
+    await savePerson({ ...current, role: "Senator" });
+    const off = await getPerson(built.id);
+    const kept = off.events.filter((ev) => ev.kind === "endorsement");
+    assert.equal(kept.length, 1);
+    assert.equal(kept[0].event_date, "2024-03-01");
+    assert.equal(kept[0].comments, "first");
+    assert.equal(kept[0].position, "Senator");
+    assert.equal(off.role, "Senator");
+    assert.ok(kept[0].sources.some((source) => String(source.url).includes("/first")));
+    assert.ok(kept[0].sources.some((source) => String(source.url).includes("/second")));
+
+    const client = fakeClient();
+    await syncPersonEvents(client, built);
+    const row = client.calls.find((call) => /INSERT INTO person_events/.test(call.text) && call.params[1] === "endorsement");
+    assert.equal(row.params[2], 0);
+    assert.equal(row.params[3], "2024-03-01");
+    assert.equal(row.params[10], "first");
+    assert.match(row.params[4], /\/first/);
+    assert.match(row.params[4], /\/second/);
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "et-fold-"));
+    try {
+      writeFileStore(dir, { people: [built] });
+      const loaded = loadFileStore(dir);
+      const fileEvents = loaded.people[0].events.filter((ev) => ev.kind === "endorsement");
+      assert.equal(fileEvents.length, 1);
+      assert.equal(fileEvents[0].event_date, "2024-03-01");
+      assert.equal(fileEvents[0].comments, "first");
+      assert.equal(fileEvents[0].position, "Senator");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+test("/endorsement and the dashboard count the card category, not every endorsement event", async () => {
+  const card = projectPerson({
+    id: "card-endorse",
+    name: "Card Endorse",
+    category: "endorsement",
+    event_date: "2026-02-12",
+    events: [{ kind: "endorsement", event_date: "2026-02-12", comments: FEB, sources: [TRUTH] }],
+  });
+  const extra = projectPerson({
+    id: "extra-endorse",
+    name: "Extra Endorse",
+    category: "firings",
+    event_date: "2017-05-09",
+    events: [
+      { kind: "firings", event_date: "2017-05-09", comments: "Removed.", sources: [AP("fired", "2017-05-09")] },
+      { kind: "endorsement", event_date: "2026-11-02", comments: NOV, sources: [XPOST] },
+    ],
+  });
+  setMemory({ people: [card, extra] });
+  const listed = await listPeople("endorsement");
+  assert.deepEqual(listed.map((row) => row.id), ["card-endorse"]);
+  const page = await requestPage("/endorsement");
+  assert.equal(page.status, 200);
+  assert.match(page.body, /Card Endorse/);
+  assert.doesNotMatch(page.body, /Extra Endorse/);
+  const census = await counts();
+  assert.equal(census.byCategory.endorsement, 1);
+  const reason = rankDimension([card, extra], "reason");
+  assert.equal(reason.find((row) => row.key === "endorsement")?.count, 1);
 });
 
 test("an endorsement escapes script text and does not link a javascript cite", () => {

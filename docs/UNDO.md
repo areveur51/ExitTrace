@@ -8,7 +8,7 @@ This release is app code only. It adds `endorsement` to `REPEATABLE_EVENT_KINDS`
 
 There is no migration file for this release. The database already allows any kind to repeat. See [MIGRATION.md](MIGRATION.md). Revert does not need a schema rollback.
 
-With the switch off, a Postgres save folds every kind in `FOLD_WHEN_OFF_KINDS` (today `endorsement`) to the stored seq 0 row. That row keeps its date, comments, and every other field. Later rows of that kind merge cites only. The save succeeds. `seq` above 0 is written only when the switch is on. `notable` and `red_folder` are not in that set; a `seq` above 0 row of those kinds is still refused while the switch is off.
+With the switch off, the survivor is the stored seq 0 entry of each kind in `FOLD_WHEN_OFF_KINDS` (today `endorsement`). That entry keeps its date, comments, and every other field. Later rows merge cites only. Postgres, the in-memory store, and the file store do this on save, including a save after the switch is turned off. `seq` above 0 is written only when the switch is on. `notable` and `red_folder` are not in that set; a `seq` above 0 row of those kinds is still refused while the switch is off. `/endorsement` lists people whose card category is endorsement. The dashboard endorsement count is that card count.
 
 `notable` and `red_folder` stay repeatable. Every other kind stays one event per kind at `seq` 0.
 
@@ -38,7 +38,7 @@ SELECT person_id, kind, seq, event_date
 Also look at `people.events` for those people. A second endorsement lives in that JSON as well as in `person_events`.
 
 - **No rows.** Revert. Nothing else to check. Existing `seq` 0 endorsement rows were not modified by this release.
-- **Rows exist and you still want those second endorsements.** Do not revert yet. The reverted app treats `endorsement` as one event at `seq` 0. The next save of that person folds the extra endorsement into the `seq` 0 event (`uniqueEvents` / `syncPersonEvents`). `syncPersonEvents` deletes that person's `person_events` rows and inserts the folded set, so the `seq` > 0 companion row goes away on that save. Logical replication and gap-upsert then carry that delete. The revert itself does not delete anything. The same fold already happens on a Postgres save while `ET_MULTI_EVENT_WRITES` is off, without reverting.
+- **Rows exist and you still want those second endorsements.** Do not revert yet. The reverted app treats `endorsement` as one event at `seq` 0. The next save of that person keeps the stored seq 0 entry and merges later cites into it (`uniqueEvents` / `syncPersonEvents`). `syncPersonEvents` deletes that person's `person_events` rows and inserts the folded set, so the `seq` > 0 companion row goes away on that save. Logical replication and gap-upsert then carry that delete. The revert itself does not delete anything. A save while `ET_MULTI_EVENT_WRITES` is off already does that fold, on Postgres, in memory, and in the file store, without reverting.
 - **Rows exist and you are reverting on purpose.** Copy the `seq` > 0 rows and the matching `people.events` first (a `SELECT` into a lab-local table, or a file outside the repo). After the revert, do not save those people until you have decided what to keep. A save on the reverted app drops the extra endorsement down to one event.
 
 `seq` 0 endorsement rows are not part of that check. Leave them. Do not `DELETE` from `person_events` as part of this revert.

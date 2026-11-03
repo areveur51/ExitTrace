@@ -146,9 +146,11 @@ export function dashRankEvents(row) {
     const hit = rankEventCache.get(row);
     if (hit && hit.source === events) return hit.filtered;
   }
-  const filtered = events.filter((ev) =>
-    PROMOTE_CATEGORY_IDS.includes(String(ev.kind || "").trim()),
-  );
+  const filtered = events.filter((ev) => {
+    const kind = String(ev.kind || "").trim();
+    if (kind === "endorsement") return String(row?.category || "") === "endorsement";
+    return PROMOTE_CATEGORY_IDS.includes(kind);
+  });
   if (row && typeof row === "object") rankEventCache.set(row, { source: events, filtered });
   return filtered;
 }

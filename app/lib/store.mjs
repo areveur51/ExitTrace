@@ -655,10 +655,18 @@ export function getMemory() {
   return memory;
 }
 
+function filePersonForWrite(row) {
+  if (multiEventWritesEnabled()) return row;
+  const events = Array.isArray(row?.events) ? row.events : [];
+  if (!events.some((ev) => FOLD_WHEN_OFF.has(String(ev?.kind || "").trim()))) return row;
+  return applyWriteFold(row);
+}
+
 export function writeFileStore(dataDir, seed) {
   fs.mkdirSync(dataDir, { recursive: true });
   const out = path.join(dataDir, "store.json");
-  fs.writeFileSync(out, JSON.stringify(seed, null, 2) + "\n");
+  const people = (seed?.people || []).map((row) => filePersonForWrite(row));
+  fs.writeFileSync(out, JSON.stringify({ ...seed, people }, null, 2) + "\n");
   return out;
 }
 
@@ -1365,9 +1373,18 @@ function applyWindow(rows, limit, offset) {
   return offset ? rows.slice(offset) : rows;
 }
 
+/** Card-category pages. An endorsement event on another card is not membership. */
+const CARD_CATEGORY_IDS = new Set(["endorsement"]);
+
 function peopleKindWhere(categories, params) {
   if (!categories.length) return "";
-  params.push(categories);
+  const card = categories.filter((id) => CARD_CATEGORY_IDS.has(id));
+  const events = categories.filter((id) => !CARD_CATEGORY_IDS.has(id));
+  if (card.length && !events.length) {
+    params.push(card);
+    return ` WHERE people.category = ANY($${params.length}::text[])`;
+  }
+  params.push(events.length ? events : categories);
   const n = params.length;
   return ` WHERE (
     EXISTS (
@@ -1628,11 +1645,19 @@ export async function listPeople(categoryOrOpts, maybeOpts) {
   const cardOrder = args.cardOrder === true;
   const p = await getPool();
   if (!p) {
+    const cardCategories = categories.filter((id) => CARD_CATEGORY_IDS.has(id));
+    const eventCategories = categories.filter((id) => !CARD_CATEGORY_IDS.has(id));
     let rows = getMemory().people.map((r) =>
-      categories.length ? projectPerson(r, categories) : projectPerson(r),
+      eventCategories.length ? projectPerson(r, eventCategories) : projectPerson(r),
     );
     if (categories.length) {
-      rows = rows.filter((r) => personHasKind(r, categories));
+      rows = rows.filter((r) => {
+        const byCard = cardCategories.includes(String(r.category || ""));
+        const byEvent = eventCategories.length ? personHasKind(r, eventCategories) : false;
+        if (cardCategories.length && eventCategories.length) return byCard || byEvent;
+        if (cardCategories.length) return byCard;
+        return byEvent;
+      });
     }
     if (tags.length) {
       rows = rows.filter((r) => matchesTags(r, tags, { match: tagMatch }));
@@ -2142,19 +2167,23 @@ export function multiEventWritesEnabled(env = process.env) {
 const FOLD_WHEN_OFF = new Set(FOLD_WHEN_OFF_KINDS);
 
 /**
- * Postgres write shape. With the switch off, each FOLD_WHEN_OFF_KINDS kind
- * folds to the stored seq 0 row (its date, comments, and other fields stay;
- * later rows merge cites only) so a save that succeeds on main still succeeds.
- * seq > 0 is written only when the switch is on. Kinds outside that set are
- * not folded; a seq > 0 notable or red_folder still hits the guard.
+ * Shared write fold for Postgres, the in-memory store, and the file store.
+ * With the switch off, each FOLD_WHEN_OFF_KINDS kind keeps the stored seq 0
+ * row (date, comments, and every other field) and merges cites from later
+ * rows. seq > 0 is written only when the switch is on. Kinds outside that
+ * set are not folded.
  */
-function personForEventWrite(person, env = process.env) {
+export function applyWriteFold(person, env = process.env) {
   const normalized = normalizePerson(person);
   if (multiEventWritesEnabled(env)) return normalized;
   if (!(normalized.events || []).some((ev) => FOLD_WHEN_OFF.has(String(ev?.kind || "").trim()))) {
     return normalized;
   }
   return normalizePerson({ ...normalized, events: foldKindsToSeq0(normalized.events) });
+}
+
+function personForEventWrite(person, env = process.env) {
+  return applyWriteFold(person, env);
 }
 
 // person_events.seq is INTEGER (int4).
@@ -2343,7 +2372,7 @@ export async function savePersonTx(client, row) {
 }
 
 export async function insertPerson(row) {
-  const person = normalizePerson(row);
+  const person = applyWriteFold(row);
   const p = await getPool();
   if (!p) {
     const mem = getMemory();
@@ -2365,7 +2394,7 @@ export async function insertPerson(row) {
 }
 
 export async function savePerson(row) {
-  const person = normalizePerson(row);
+  const person = applyWriteFold(row);
   const p = await getPool();
   if (!p) {
     const mem = getMemory();
@@ -3126,7 +3155,11 @@ async function countsUncached() {
         continue;
       }
       for (const [kind, weight] of maxEventHeadcountByKind(events)) {
+        if (kind === "endorsement") continue;
         byCategory[kind] = (byCategory[kind] || 0) + weight;
+      }
+      if (String(row.category || "") === "endorsement") {
+        byCategory.endorsement = (byCategory.endorsement || 0) + 1;
       }
     }
     const operations = getMemory().operations || [];
@@ -3211,7 +3244,14 @@ async function countsUncached() {
     ),
   ]);
   const byCategory = {};
-  for (const row of grouped.rows) byCategory[row.category] = row.n;
+  for (const row of grouped.rows) {
+    if (row.category === "endorsement") continue;
+    byCategory[row.category] = row.n;
+  }
+  const endorsementCards = await p.query(
+    "SELECT COUNT(*)::int AS n FROM people WHERE category = 'endorsement'",
+  );
+  byCategory.endorsement = endorsementCards.rows[0].n;
   if (!grouped.rows.length) {
     const fallback = await p.query(
       "SELECT category, COUNT(*)::int AS n FROM people GROUP BY category",
