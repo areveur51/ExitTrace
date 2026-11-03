@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { databaseUrl } from "./env.mjs";
+import { multiEventWritesEnabled } from "./multi-event-writes.mjs";
+export { multiEventWritesEnabled };
 import { positiveInt } from "./num.mjs";
 import {
   PromoteError,
@@ -689,7 +691,7 @@ export function mergeGoldPeople(seedPeople, priorPeople) {
     const row = normalizePerson(prior);
     if (!seen.has(row.id)) out.push(row);
   }
-  return collapseDuplicatePeople(out);
+  return collapseDuplicatePeople(out).map((row) => applyWriteFold(row));
 }
 
 /** Seed operations win identity; extra store ops are kept. Gold counts/cites are not overwritten. */
@@ -798,7 +800,7 @@ export async function importSeed(p, seed) {
     const existingClips = getMemory().central_casting_comms || [];
     const incomingClips = seed.central_casting_comms || [];
     setMemory({
-      people: seed.people,
+      people: (seed.people || []).map((row) => applyWriteFold(row)),
       ...importKindMemory(seed),
       central_casting_comms: incomingClips.length ? incomingClips : existingClips,
       operations: seed.operations,
@@ -823,9 +825,11 @@ export async function importSeed(p, seed) {
     await client.query("BEGIN");
     for (const raw of seed.people) {
       const existing = await client.query("SELECT * FROM people WHERE id = $1", [raw.id]);
-      const row = existing.rows[0]
-        ? mergePersonAnnotate(normalizePerson(raw), normalizePerson(existing.rows[0]))
-        : normalizePerson(raw);
+      const row = applyWriteFold(
+        existing.rows[0]
+          ? mergePersonAnnotate(normalizePerson(raw), normalizePerson(existing.rows[0]))
+          : normalizePerson(raw),
+      );
       await client.query(
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, country_of_origin,
@@ -1741,7 +1745,15 @@ export async function countPeople(categoryOrOpts) {
   if (!p) {
     let rows = getMemory().people;
     if (categories.length) {
-      rows = rows.filter((r) => personHasKind(r, categories));
+      const cardCategories = categories.filter((id) => CARD_CATEGORY_IDS.has(id));
+      const eventCategories = categories.filter((id) => !CARD_CATEGORY_IDS.has(id));
+      rows = rows.filter((r) => {
+        const byCard = cardCategories.includes(String(r.category || ""));
+        const byEvent = eventCategories.length ? personHasKind(r, eventCategories) : false;
+        if (cardCategories.length && eventCategories.length) return byCard || byEvent;
+        if (cardCategories.length) return byCard;
+        return byEvent;
+      });
     }
     if (tags.length) {
       rows = rows.filter((r) => matchesTags(r, tags, { match: tagMatch }));
@@ -2160,10 +2172,6 @@ async function personEventsSeqNotableOnly(client) {
  * The schema check below still runs, so both must hold. The value must be exactly
  * "on": no trim, no case folding, so " on ", "ON" and "on\n" count as off.
  */
-export function multiEventWritesEnabled(env = process.env) {
-  return env.ET_MULTI_EVENT_WRITES === "on";
-}
-
 const FOLD_WHEN_OFF = new Set(FOLD_WHEN_OFF_KINDS);
 
 /**
@@ -3211,7 +3219,7 @@ async function countsUncached() {
     ), 0)::int AS n FROM people`),
     ...kindQueries,
   ]);
-  const [postCount, opCount, grouped, opTags, centralCount] = await Promise.all([
+  const [postCount, opCount, grouped, opTags, centralCount, endorsementCards] = await Promise.all([
     p.query("SELECT COUNT(*)::int AS n FROM source_posts"),
     p.query("SELECT COUNT(*)::int AS n FROM operations"),
     p.query(
@@ -3242,15 +3250,13 @@ async function countsUncached() {
         WHERE jsonb_typeof(central_casting) = 'array'
           AND jsonb_array_length(central_casting) > 0`,
     ),
+    p.query("SELECT COUNT(*)::int AS n FROM people WHERE category = 'endorsement'"),
   ]);
   const byCategory = {};
   for (const row of grouped.rows) {
     if (row.category === "endorsement") continue;
     byCategory[row.category] = row.n;
   }
-  const endorsementCards = await p.query(
-    "SELECT COUNT(*)::int AS n FROM people WHERE category = 'endorsement'",
-  );
   byCategory.endorsement = endorsementCards.rows[0].n;
   if (!grouped.rows.length) {
     const fallback = await p.query(

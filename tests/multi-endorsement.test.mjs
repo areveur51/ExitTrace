@@ -7,7 +7,7 @@ import { categoryById, categoryByPath, PROMOTE_CATEGORY_IDS } from "../app/lib/c
 import { rankDimension } from "../app/lib/dashboard.mjs";
 import { listPathForPerson } from "../app/lib/display-check.mjs";
 import { peopleList, personDetail } from "../app/lib/html.mjs";
-import { mergeCites } from "../app/lib/promote.mjs";
+import { mergePersonEvent, foldKindsToSeq0 } from "../app/lib/promote.mjs";
 import { personMenuDate } from "../app/lib/menu-date.mjs";
 import {
   attachPersonEvent,
@@ -23,9 +23,12 @@ import {
   counts,
   countPeople,
   getPerson,
+  hydrateFileMemory,
+  importSeed,
   listPeople,
   loadFileStore,
   maxEventHeadcountByKind,
+  mergeGoldPeople,
   savePerson,
   setMemory,
   syncPersonEvents,
@@ -559,26 +562,42 @@ test("a person with category endorsement renders and lists on /endorsement", asy
   assert.equal(kept.event_date, "2017-05-09");
 });
 
-function stableJson(value) {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-test("flag-off attach keeps the stored endorsement byte for byte except merged cites", () => {
-  const first = {
+test("flag-off fold is mergePersonEvent onto the stored seq 0 row", () => {
+  const stored = {
     kind: "endorsement",
+    seq: 0,
     event_date: "2024-03-01",
     comments: "first",
-    position: "Senator",
-    organization: "Senate",
     sources: [AP("first", "2024-03-01")],
   };
+  const incoming = {
+    kind: "endorsement",
+    seq: 1,
+    event_date: "2026-11-02",
+    comments: "second",
+    position: "Senator",
+    sources: [AP("second", "2026-11-02")],
+    media: [{ src: "/media/people/byte-fold/support/clip.jpg", alt: "Clip" }],
+    headcount: 4,
+    age_at_event: 62,
+    screenshot: "/media/screenshots/people/byte-fold.jpg",
+    screenshot_credit: "X post",
+  };
+  const expected = mergePersonEvent(stored, incoming);
+  const folded = foldKindsToSeq0([incoming, stored]);
+  const got = folded.find((ev) => ev.kind === "endorsement");
+  assert.equal(folded.filter((ev) => ev.kind === "endorsement").length, 1);
+  assert.deepEqual(got, expected);
+  assert.equal(got.event_date, "2024-03-01");
+  assert.equal(got.comments, "first");
+  assert.equal(got.position, "Senator");
+  assert.equal(got.headcount, 4);
+  assert.equal(got.age_at_event, 62);
+  assert.equal(got.screenshot, "/media/screenshots/people/byte-fold.jpg");
+  assert.ok(got.media.some((item) => item.src.endsWith("clip.jpg")));
+  assert.ok(got.sources.some((source) => source.url.includes("/first")));
+  assert.ok(got.sources.some((source) => source.url.includes("/second")));
+
   const base = projectPerson({
     id: "byte-fold",
     name: "Byte Fold",
@@ -586,31 +605,19 @@ test("flag-off attach keeps the stored endorsement byte for byte except merged c
     event_date: "2017-05-09",
     events: [
       { kind: "firings", event_date: "2017-05-09", comments: "Removed.", sources: [AP("fired", "2017-05-09")] },
-      first,
+      stored,
     ],
   });
-  const incoming = AP("second", "2026-11-02");
-  const expected = projectPerson({
+  const storedOnPerson = base.events.find((ev) => ev.kind === "endorsement");
+  const attached = attachPersonEvent(base, incoming);
+  const viaMerge = projectPerson({
     ...base,
-    events: base.events.map((ev) =>
-      ev.kind === "endorsement" ? { ...ev, sources: mergeCites(ev.sources, [incoming]).sources } : ev,
-    ),
+    events: base.events.map((ev) => (ev.kind === "endorsement" ? mergePersonEvent(storedOnPerson, incoming) : ev)),
   });
-  const actual = attachPersonEvent(base, {
-    kind: "endorsement",
-    event_date: "2026-11-02",
-    comments: "second",
-    position: "Other",
-    organization: "Other",
-    sources: [incoming],
-  });
-  assert.equal(actual.existed, true);
-  assert.equal(stableJson(actual.person.events), stableJson(expected.events));
-  const ev = actual.person.events.find((row) => row.kind === "endorsement");
-  assert.equal(ev.event_date, "2024-03-01");
-  assert.equal(ev.comments, "first");
-  assert.equal(ev.position, "Senator");
-  assert.equal(ev.organization, "Senate");
+  assert.deepEqual(
+    attached.person.events.find((ev) => ev.kind === "endorsement"),
+    viaMerge.events.find((ev) => ev.kind === "endorsement"),
+  );
 });
 
 test("a save after the switch turns off keeps the stored seq 0 endorsement", async () => {
@@ -673,6 +680,68 @@ test("a save after the switch turns off keeps the stored seq 0 endorsement", asy
   });
 });
 
+test("seed import, file hydrate, and gold merge fold endorsements when the switch is off", async () => {
+  const two = (id) => ({
+    id,
+    name: id,
+    category: "endorsement",
+    event_date: "2024-03-01",
+    events: [
+      { kind: "endorsement", seq: 0, event_date: "2024-03-01", comments: "first", sources: [AP("first", "2024-03-01")] },
+      {
+        kind: "endorsement",
+        seq: 1,
+        event_date: "2026-11-02",
+        comments: "second",
+        position: "Senator",
+        media: [{ src: "/media/people/byte-fold/support/clip.jpg", alt: "Clip" }],
+        headcount: 4,
+        age_at_event: 62,
+        screenshot: "/media/screenshots/people/byte-fold.jpg",
+        sources: [AP("second", "2026-11-02")],
+      },
+    ],
+  });
+  const folded = (events, label) => {
+    const rows = events.filter((ev) => ev.kind === "endorsement");
+    assert.equal(rows.length, 1, label);
+    assert.equal(rows[0].event_date, "2024-03-01", label);
+    assert.equal(rows[0].comments, "first", label);
+    assert.equal(rows[0].position, "Senator", label);
+    assert.ok(rows[0].sources.some((source) => source.url.includes("/second")), label);
+    return rows[0];
+  };
+  await withWrites(undefined, async () => {
+    setMemory({ people: [], dog_comms: [] });
+    await importSeed(null, { people: [two("seed-fold")], dog_comms: [], operations: [] });
+    const mem = await getPerson("seed-fold");
+    const memEvent = folded(mem.events, "import");
+    const client = fakeClient();
+    await syncPersonEvents(client, mem);
+    const inserts = client.calls.filter((call) => /INSERT INTO person_events/.test(call.text) && call.params[1] === "endorsement");
+    assert.equal(inserts.length, 1);
+    assert.equal(inserts[0].params[2], 0);
+    assert.equal(inserts[0].params[3], memEvent.event_date);
+    assert.equal(inserts[0].params[10], memEvent.comments);
+    assert.equal(inserts[0].params[4], JSON.stringify(memEvent.sources));
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "et-hydrate-"));
+    try {
+      fs.writeFileSync(path.join(dir, "store.json"), `${JSON.stringify({ people: [two("file-fold")] })}\n`);
+      const hydrated = hydrateFileMemory(dir, { people: [], dog_comms: [] });
+      folded(hydrated.people.find((row) => row.id === "file-fold").events, "hydrate");
+      const goldOnly = two("gold-fold");
+      const merged = mergeGoldPeople(
+        [{ ...goldOnly, events: [goldOnly.events[0]] }],
+        [two("gold-fold")],
+      );
+      folded(merged.find((row) => row.id === "gold-fold").events, "gold");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 test("/endorsement and the dashboard count the card category, not every endorsement event", async () => {
   const card = projectPerson({
     id: "card-endorse",
@@ -700,6 +769,7 @@ test("/endorsement and the dashboard count the card category, not every endorsem
   assert.doesNotMatch(page.body, /Extra Endorse/);
   const census = await counts();
   assert.equal(census.byCategory.endorsement, 1);
+  assert.equal(await countPeople("endorsement"), 1);
   const reason = rankDimension([card, extra], "reason");
   assert.equal(reason.find((row) => row.key === "endorsement")?.count, 1);
 });

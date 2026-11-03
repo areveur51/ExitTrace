@@ -53,7 +53,7 @@ function requestPage(pathname) {
 }
 
 for (const path of DOG_PATHS) {
-  test(`dog comms ${path} renders byte-identical to the v1.2.35 golden (asset token normalized)`, async () => {
+  test(`dog comms ${path} renders byte-identical to the checked-in golden (asset token normalized)`, async () => {
     setMemory({ people: DOG_PEOPLE, dog_comms: DOG_POSTS });
     const page = await requestPage(path);
     assert.equal(page.status, 200);

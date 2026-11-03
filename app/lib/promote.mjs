@@ -30,6 +30,7 @@ import { mergeClearances, normalizeClearances } from "./clearances.mjs";
 import { mergeNicknames, normalizeNicknames } from "./nicknames.mjs";
 import { partitionCiteUrls } from "./official.mjs";
 import { normalizeScreenshotCredit, normalizeScreenshotHref } from "./screenshot.mjs";
+import { multiEventWritesEnabled } from "./multi-event-writes.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 export const CITE_FLOOR = 2;
@@ -429,7 +430,7 @@ function keptEventDate(prior, incoming) {
   return prior.event_date || incoming.event_date || null;
 }
 
-function mergePersonEvent(prior, ev) {
+export function mergePersonEvent(prior, ev) {
   const merged = {
     kind: prior.kind,
     event_date: keptEventDate(prior, ev),
@@ -456,8 +457,10 @@ function mergePersonEvent(prior, ev) {
 /**
  * Write-path fold when ET_MULTI_EVENT_WRITES is off.
  * The stored row is the lowest seq of that kind (seq 0 when one was already
- * stored). That row keeps its date, comments, and every other field. Each
- * later row contributes cites only. Kinds outside `kinds` are unchanged.
+ * stored). Later rows merge with mergePersonEvent, the same merge main uses:
+ * the stored date and non-empty fields stay, and blank fields, cites, media,
+ * headcount, age, and screenshot fill from the incoming row. Kinds outside
+ * `kinds` are unchanged.
  */
 export function foldKindsToSeq0(events, kinds = FOLD_WHEN_OFF_KINDS) {
   const fold = new Set(kinds);
@@ -474,12 +477,12 @@ export function foldKindsToSeq0(events, kinds = FOLD_WHEN_OFF_KINDS) {
   }
   for (const rows of buckets.values()) {
     const stored = rows.reduce((best, ev) => (notableSeq(ev) < notableSeq(best) ? ev : best));
-    const row = copyEventRow(stored);
-    delete row.seq;
-    for (const other of rows) {
-      if (other === stored) continue;
-      row.sources = mergeCites(row.sources, other.sources).sources;
-    }
+    const rest = rows
+      .filter((ev) => ev !== stored)
+      .slice()
+      .sort((a, b) => notableSeq(a) - notableSeq(b));
+    let row = stored;
+    for (const other of rest) row = mergePersonEvent(row, other);
     out.push(row);
   }
   return out;
@@ -679,10 +682,6 @@ export function resolveEventKind(person, kind) {
   return existing ? existing.kind : key;
 }
 
-function multiEventWritesOn(env = process.env) {
-  return env.ET_MULTI_EVENT_WRITES === "on";
-}
-
 /** Lowest seq of this kind, the stored row. -1 when the person has none. */
 function storedKindIndex(events, kind) {
   let at = -1;
@@ -693,7 +692,7 @@ function storedKindIndex(events, kind) {
   return at;
 }
 
-/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second repeatable event with a different date (or seq) is a new row. While ET_MULTI_EVENT_WRITES is off, a FOLD_WHEN_OFF_KINDS event merges cites into the stored seq 0 row instead of taking a new seq. */
+/** Gold annotate-only: existing event_date and cites stay; new cites merge. New kind is appended. A second repeatable event with a different date (or seq) is a new row. While ET_MULTI_EVENT_WRITES is off, a FOLD_WHEN_OFF_KINDS event is folded with foldKindsToSeq0. */
 export function attachPersonEvent(person, incoming) {
   const ev = normalizePersonEvent(incoming);
   if (!ev) {
@@ -701,15 +700,13 @@ export function attachPersonEvent(person, incoming) {
   }
   ev.kind = resolveEventKind(person, ev.kind);
   const events = personEvents(person);
-  if (FOLD_WHEN_OFF_KINDS.includes(ev.kind) && !multiEventWritesOn()) {
+  if (FOLD_WHEN_OFF_KINDS.includes(ev.kind) && !multiEventWritesEnabled()) {
     const storedAt = storedKindIndex(events, ev.kind);
     if (storedAt >= 0) {
-      const merged = mergeCites(events[storedAt].sources, ev.sources);
-      const next = events.slice();
-      next[storedAt] = { ...events[storedAt], sources: merged.sources };
+      const added = mergeCites(events[storedAt].sources, ev.sources).added;
       return {
-        person: projectPerson({ ...person, events: next }),
-        added: merged.added,
+        person: projectPerson({ ...person, events: foldKindsToSeq0(events.concat(ev)) }),
+        added,
         existed: true,
       };
     }
@@ -854,6 +851,7 @@ export function mergePersonAnnotate(gold, prior) {
     if (media.length) existing.media = media;
     applyEventShot(existing, ev);
   }
+  const folded = multiEventWritesEnabled() ? events : foldKindsToSeq0(events);
   return projectPerson({
     ...keep,
     photo: keep.photo || extra.photo || "",
@@ -867,7 +865,7 @@ export function mergePersonAnnotate(gold, prior) {
     summary: keep.summary || extra.summary || "",
     birth_date: keep.birth_date || extra.birth_date || null,
     country_of_origin: keep.country_of_origin || extra.country_of_origin || "",
-    events,
+    events: folded,
     career: mergeCareer(keep.career, extra.career),
     tags: [...(keep.tags || []), ...(extra.tags || [])],
     central_casting: mergeCentralCasting(keep.central_casting, extra.central_casting),
