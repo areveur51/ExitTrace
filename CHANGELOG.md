@@ -31,6 +31,13 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.41] - 2026-11-03
+
+### Added
+
+- Fact tag Felons (`/tags/felons`, stored id `felon`). It records a stored felony conviction or a stored guilty plea to a felony. The chip sits under Tags. Red folder stays out of that menu and remains the Comms entry only.
+- Professional relationship labels Former organizer and Candidate.
+
 ## [1.2.40] - 2026-11-01
 
 ### Added

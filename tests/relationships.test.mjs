@@ -7,6 +7,7 @@ import {
   RELATIONSHIP_LABELS,
   RelationshipError,
   prepareRelationship,
+  relationshipGroup,
   relationshipView,
 } from "../app/lib/relationships.mjs";
 
@@ -471,6 +472,28 @@ test("Personal chef is a closed professional label and flips to Principal", () =
   );
 });
 
+test("Former organizer and Candidate are closed professional labels", () => {
+  const row = prepareRelationship({
+    left_id: "abdul-el-sayed",
+    left_name: "Abdul El-Sayed",
+    left_calls_right: "Former organizer",
+    left_note: "Hourly organizer for his U.S. Senate campaign.",
+    right_id: "mariam-odeh",
+    right_name: "Mariam Odeh",
+    right_calls_left: "Candidate",
+    right_note: "Hourly organizer for his U.S. Senate campaign.",
+    kind: "professional",
+    sources: [CNN, FOX_CITE],
+  });
+  assert.equal(row.id, "abdul-el-sayed--mariam-odeh--professional");
+  assert.equal(row.a_calls_b, "Former organizer");
+  assert.equal(row.b_calls_a, "Candidate");
+  assert.equal(relationshipGroup(row.kind), "Professional");
+  const named = { ...row, person_a_name: "Abdul El-Sayed", person_b_name: "Mariam Odeh" };
+  assert.equal(relationshipView(named, "abdul-el-sayed").label, "Former organizer");
+  assert.equal(relationshipView(named, "mariam-odeh").label, "Candidate");
+});
+
 test("person_relationships stays out of the lab publication SQL", () => {
   const sql = fs.readFileSync(new URL("../scripts/bootstrap-db.sql", import.meta.url), "utf8");
   const at = sql.indexOf("person_relationships is excluded from exittrace_lab_pub");
@@ -481,7 +504,7 @@ test("person_relationships stays out of the lab publication SQL", () => {
   assert.match(tail, /'Son'/);
   assert.match(tail, /'Father'/);
   assert.match(tail, /'Personal chef'/);
-  for (const label of ["Half-sister", "Half-brother", "Judge", "Litigant", "Cousin", "Daughter", "Mother", "Sister"]) {
+  for (const label of ["Half-sister", "Half-brother", "Judge", "Litigant", "Cousin", "Daughter", "Mother", "Sister", "Former organizer", "Candidate"]) {
     assert.ok(RELATIONSHIP_LABELS.includes(label), label);
     assert.match(tail, new RegExp(`'${label}'`));
   }

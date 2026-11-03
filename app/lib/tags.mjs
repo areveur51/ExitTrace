@@ -124,6 +124,13 @@ export const ATTRIBUTE_TAGS = [
       "People with a stored record of a fraud charge, plea, conviction, indictment or official fraud finding.",
   },
   {
+    id: "felon",
+    nav: "Felons",
+    path: "/tags/felons",
+    lede:
+      "People with a stored felony conviction or a stored guilty plea to a felony.",
+  },
+  {
     id: "red_folder",
     nav: "Red folder",
     path: "/tags/red-folder",
@@ -292,6 +299,10 @@ export const TAG_DESCRIPTIONS = Object.freeze({
   fraud: {
     kind: "rule",
     text: "A card gets this tag when it stores a fraud charge, plea, conviction, indictment, or official fraud finding for the person.",
+  },
+  felon: {
+    kind: "rule",
+    text: "A card gets this tag when it stores a felony conviction or a guilty plea to a felony for the person.",
   },
   no_one_above_the_law: {
     kind: "rule",

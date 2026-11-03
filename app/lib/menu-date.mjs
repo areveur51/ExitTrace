@@ -135,6 +135,7 @@ export function personMenuDate(row, menu = {}) {
     tag === "masks" ||
     tag === "former_intel_agency_personnel" ||
     tag === "fraud" ||
+    tag === "felon" ||
     tag === "red_folder"
   ) {
     return "";
