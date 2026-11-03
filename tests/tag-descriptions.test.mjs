@@ -42,7 +42,7 @@ function menuTagPaths() {
 
 test("every Tags-menu tag has exactly one description in the shared map", () => {
   const paths = menuTagPaths();
-  assert.equal(paths.length, 18);
+  assert.equal(paths.length, 19);
   assert.deepEqual(paths, MENU_ATTRIBUTE_TAGS.map((t) => t.path));
   assert.deepEqual(Object.keys(TAG_DESCRIPTIONS).sort(), MENU_ATTRIBUTE_TAGS.map((t) => t.id).sort());
   for (const tag of MENU_ATTRIBUTE_TAGS) {

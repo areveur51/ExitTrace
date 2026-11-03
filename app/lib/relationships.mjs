@@ -24,6 +24,8 @@ export const RELATIONSHIP_LABELS = [
   "Daughter",
   "Mother",
   "Sister",
+  "Former organizer",
+  "Candidate",
 ];
 
 export const CITE_FLOOR = 2;
