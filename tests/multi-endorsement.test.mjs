@@ -443,10 +443,33 @@ test("other event kinds stay as they are, and a switched-off save folds endorsem
     const inserts = writes.filter((call) => /INSERT INTO person_events/.test(call.text));
     assert.deepEqual(inserts.map((call) => `${call.params[1]}:${call.params[2]}`).sort(), ["endorsement:0", "firings:0"]);
     const folded = inserts.find((call) => call.params[1] === "endorsement");
-    assert.equal(folded.params[3], "2026-11-02", "the first endorsement in write order keeps its date");
-    assert.equal(folded.params[10], NOV);
+    assert.equal(folded.params[3], "2026-02-12", "the stored seq 0 date stays");
+    assert.equal(folded.params[10], FEB, "the stored seq 0 comments stay");
     assert.match(folded.params[4], /truthsocial\.com/);
     assert.match(folded.params[4], /x\.com\/realDonaldTrump/);
+    const example = attachPersonEvent(
+      attachPersonEvent(firingOnly(), {
+        kind: "endorsement",
+        event_date: "2024-03-01",
+        comments: "first",
+        sources: [AP("first", "2024-03-01")],
+      }).person,
+      {
+        kind: "endorsement",
+        event_date: "2026-11-02",
+        comments: "second",
+        sources: [AP("second", "2026-11-02")],
+      },
+    ).person;
+    const again = fakeClient();
+    await syncPersonEvents(again, example);
+    const kept = again.calls.find((call) => /INSERT INTO person_events/.test(call.text) && call.params[1] === "endorsement");
+    assert.equal(kept.params[2], 0);
+    assert.equal(kept.params[3], "2024-03-01");
+    assert.equal(kept.params[10], "first");
+    assert.match(kept.params[4], /first/);
+    assert.match(kept.params[4], /second/);
+    assert.doesNotMatch(kept.params[10], /second/);
   });
   const one = oneEndorsement();
   await withWrites(undefined, async () => {

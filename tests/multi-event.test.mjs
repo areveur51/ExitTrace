@@ -69,7 +69,10 @@ const RF_B = {
 };
 
 test("multi-event: notable, red_folder, and endorsement repeat; every other kind stays one per kind", () => {
-  assert.deepEqual([...REPEATABLE_EVENT_KINDS], ["notable", "red_folder", "endorsement"]);
+  assert.deepEqual(
+    [...REPEATABLE_EVENT_KINDS].sort(),
+    [...KIND_EVENT_SECTIONS.map((s) => s.kind), ...NON_SECTION_REPEATABLE_KINDS].sort(),
+  );
   assert.equal(isRepeatableKind("red_folder"), true);
   assert.equal(isRepeatableKind("endorsement"), true);
   assert.equal(isRepeatableKind("firings"), false);

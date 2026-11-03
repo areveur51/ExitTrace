@@ -192,6 +192,14 @@ const REPEATABLE_SET = new Set(REPEATABLE_EVENT_KINDS);
  */
 export const NON_SECTION_REPEATABLE_KINDS = Object.freeze(["endorsement"]);
 
+/**
+ * Repeatable kinds that fold to one seq 0 row when ET_MULTI_EVENT_WRITES is off.
+ * A later release can add a kind here (for example an indictment kind) without
+ * a new fold. notable and red_folder stay out: a seq above 0 of those kinds
+ * is still refused while the switch is off.
+ */
+export const FOLD_WHEN_OFF_KINDS = Object.freeze(["endorsement"]);
+
 export function isRepeatableKind(kind) {
   return REPEATABLE_SET.has(String(kind || "").trim());
 }
@@ -446,29 +454,33 @@ function mergePersonEvent(prior, ev) {
 }
 
 /**
- * Write-path fold for endorsement when ET_MULTI_EVENT_WRITES is off.
- * Same rule main uses for a non-repeatable kind: the first endorsement in
- * the list keeps its date and comments, and later ones merge their cites
- * into that row. The result has no seq above 0. Other kinds are unchanged.
+ * Write-path fold when ET_MULTI_EVENT_WRITES is off.
+ * The stored row is the lowest seq of that kind (seq 0 when one was already
+ * stored). That row keeps its date, comments, and every other field. Each
+ * later row contributes cites only. Kinds outside `kinds` are unchanged.
  */
-export function foldEndorsementsToSeq0(events) {
+export function foldKindsToSeq0(events, kinds = FOLD_WHEN_OFF_KINDS) {
+  const fold = new Set(kinds);
   const out = [];
-  let kept = -1;
+  const buckets = new Map();
   for (const ev of events || []) {
-    if (String(ev?.kind || "").trim() !== "endorsement") {
+    const kind = String(ev?.kind || "").trim();
+    if (!fold.has(kind)) {
       out.push(ev);
       continue;
     }
-    if (kept < 0) {
-      const row = copyEventRow(ev);
-      delete row.seq;
-      kept = out.length;
-      out.push(row);
-      continue;
+    if (!buckets.has(kind)) buckets.set(kind, []);
+    buckets.get(kind).push(ev);
+  }
+  for (const rows of buckets.values()) {
+    const stored = rows.reduce((best, ev) => (notableSeq(ev) < notableSeq(best) ? ev : best));
+    const row = copyEventRow(stored);
+    delete row.seq;
+    for (const other of rows) {
+      if (other === stored) continue;
+      row.sources = mergeCites(row.sources, other.sources).sources;
     }
-    const merged = mergePersonEvent(out[kept], ev);
-    delete merged.seq;
-    out[kept] = merged;
+    out.push(row);
   }
   return out;
 }

@@ -16,7 +16,8 @@ import {
   mergeCites,
   mergePersonAnnotate,
   eventSeq,
-  foldEndorsementsToSeq0,
+  FOLD_WHEN_OFF_KINDS,
+  foldKindsToSeq0,
   personEvents,
   personHasKind,
   projectPerson,
@@ -2138,19 +2139,22 @@ export function multiEventWritesEnabled(env = process.env) {
   return env.ET_MULTI_EVENT_WRITES === "on";
 }
 
+const FOLD_WHEN_OFF = new Set(FOLD_WHEN_OFF_KINDS);
+
 /**
- * Postgres write shape. With the switch off, endorsements fold to one seq 0
- * event (the same fold main does) so a save that succeeds on main still
- * succeeds. seq > 0 is written only when the switch is on. notable and
- * red_folder are not folded; a seq > 0 row of those kinds still hits the guard.
+ * Postgres write shape. With the switch off, each FOLD_WHEN_OFF_KINDS kind
+ * folds to the stored seq 0 row (its date, comments, and other fields stay;
+ * later rows merge cites only) so a save that succeeds on main still succeeds.
+ * seq > 0 is written only when the switch is on. Kinds outside that set are
+ * not folded; a seq > 0 notable or red_folder still hits the guard.
  */
 function personForEventWrite(person, env = process.env) {
   const normalized = normalizePerson(person);
   if (multiEventWritesEnabled(env)) return normalized;
-  if (!(normalized.events || []).some((ev) => String(ev?.kind || "").trim() === "endorsement")) {
+  if (!(normalized.events || []).some((ev) => FOLD_WHEN_OFF.has(String(ev?.kind || "").trim()))) {
     return normalized;
   }
-  return normalizePerson({ ...normalized, events: foldEndorsementsToSeq0(normalized.events) });
+  return normalizePerson({ ...normalized, events: foldKindsToSeq0(normalized.events) });
 }
 
 // person_events.seq is INTEGER (int4).

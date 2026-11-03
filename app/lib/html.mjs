@@ -3207,19 +3207,18 @@ function personSourceItems(row, { events = [], centralCastingClips = [], cite } 
   const items = [];
   const groups = [];
   const seen = new Set();
+  const labelCounts = new Map();
   const push = (source, label, groupId = label) => {
     const before = items.length;
     pushPersonSource(items, seen, source);
     if (items.length === before) return;
     let group = groups[groups.length - 1];
     if (!group || group.id !== groupId) {
-      let seen = 0;
-      for (const prev of groups) {
-        if (prev.baseLabel === label) seen += 1;
-      }
+      const n = (labelCounts.get(label) || 0) + 1;
+      labelCounts.set(label, n);
       // A repeated same-date heading would be identical. Number the later ones.
-      const shown = seen === 0 ? label : `${label} (${seen + 1})`;
-      group = { id: groupId, baseLabel: label, label: shown, items: [] };
+      const shown = n === 1 ? label : `${label} (${n})`;
+      group = { id: groupId, label: shown, items: [] };
       groups.push(group);
     }
     group.items.push(items[items.length - 1]);
