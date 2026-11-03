@@ -229,18 +229,32 @@ export function annotateUnsealedPerson(person) {
   return { person: { ...person, events: nextEvents }, changed: true };
 }
 
+/** Slot for one indictment event. A missing seq is 0, the stored default. */
+function indictmentSlot(ev) {
+  const kind = String(ev?.kind || "").trim();
+  const raw = ev?.seq;
+  const seq = Number.isInteger(raw) && raw >= 0 ? raw : 0;
+  return { kind, seq, key: `${kind}:${seq}` };
+}
+
 export function planUnsealedAnnotations(people) {
   const plans = [];
   for (const person of people || []) {
     const result = annotateUnsealedPerson(person);
     if (!result.changed) continue;
-    const before = new Map(
-      (person.events || []).map((ev) => [ev.kind, ev.unsealed === true]),
-    );
+    const before = new Map();
+    for (const ev of person.events || []) {
+      if (!isIndictmentKeepKind(ev?.kind)) continue;
+      const slot = indictmentSlot(ev);
+      before.set(slot.key, ev.unsealed === true);
+    }
+    const seen = new Set();
     for (const ev of result.person.events || []) {
-      if (ev?.unsealed === true && !before.get(ev.kind)) {
-        plans.push({ id: person.id, kind: ev.kind });
-      }
+      if (ev?.unsealed !== true || !isIndictmentKeepKind(ev.kind)) continue;
+      const slot = indictmentSlot(ev);
+      if (before.get(slot.key) || seen.has(slot.key)) continue;
+      seen.add(slot.key);
+      plans.push({ id: person.id, kind: slot.kind, seq: slot.seq });
     }
   }
   return plans;

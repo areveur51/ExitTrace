@@ -35,7 +35,7 @@ import {
   normalizeClearances,
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
-import { asEventDate, eventsOfKind, personEvents } from "./promote.mjs";
+import { asEventDate, eventKey, eventSeq, eventsOfKind, personEvents } from "./promote.mjs";
 import { renderEventGraph } from "./event-graph.mjs";
 import { hostOf, isUnofficialOrCommentarySocial } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -2705,8 +2705,12 @@ function kindEventSection(ev, sourceNumbers, { title, kind, className }) {
   });
 }
 
-/** Repeatable-kind blocks in page order: every Notable, then every Red Folder. */
-/** One person-page block per repeatable kind; tests/multi-event.test.mjs pins it to REPEATABLE_EVENT_KINDS. */
+/**
+ * Dedicated blocks for repeatable kinds that are not timeline rows.
+ * notable and red_folder render here, one block per event. Indictment kinds
+ * are repeatable too, but they stay on the timeline (eventTagRow) so each
+ * entry keeps its own Unsealed badge and a single indictment still renders once.
+ */
 export const KIND_EVENT_SECTIONS = Object.freeze([
   Object.freeze({ kind: "notable", title: (ev) => notableSectionTitle(ev), className: "detail-notable detail-supporting" }),
   Object.freeze({ kind: "red_folder", title: () => RED_FOLDER_EVENT_LABEL, className: "detail-red-folder detail-supporting" }),
@@ -3110,7 +3114,9 @@ function compareTimelineEvents(a, b) {
     if (!db) return -1;
     return da.localeCompare(db);
   }
-  return String(a?.kind || "").localeCompare(String(b?.kind || ""));
+  const k = String(a?.kind || "").localeCompare(String(b?.kind || ""));
+  if (k !== 0) return k;
+  return eventSeq(a) - eventSeq(b);
 }
 
 /** Event date ascending. Undated events stay last. Kind is the tie-break. */
@@ -3208,13 +3214,13 @@ function personSourceItems(row, { events = [], centralCastingClips = [], cite } 
   const items = [];
   const groups = [];
   const seen = new Set();
-  const push = (source, label) => {
+  const push = (source, label, groupId = label) => {
     const before = items.length;
     pushPersonSource(items, seen, source);
     if (items.length === before) return;
     let group = groups[groups.length - 1];
-    if (!group || group.label !== label) {
-      group = { label, items: [] };
+    if (!group || group.id !== groupId) {
+      group = { id: groupId, label, items: [] };
       groups.push(group);
     }
     group.items.push(items[items.length - 1]);
@@ -3228,7 +3234,9 @@ function personSourceItems(row, { events = [], centralCastingClips = [], cite } 
   }
   for (const ev of events) {
     const label = eventSourceLabel(ev);
-    for (const source of ev?.sources || []) push(eventSourceForList(source), label);
+    // Two events of one kind can share a date, so the visible label is not an id.
+    const groupId = eventKey(ev);
+    for (const source of ev?.sources || []) push(eventSourceForList(source), label, groupId);
   }
   for (const section of relationshipSections(row?.relationships, row?.id)) {
     for (const line of section.lines) {

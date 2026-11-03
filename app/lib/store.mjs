@@ -2128,7 +2128,7 @@ async function personEventsSeqNotableOnly(client) {
 
 /**
  * ET_MULTI_EVENT_WRITES=on is the operator switch for seq > 0 person_events rows
- * (a second notable, a second red_folder). Off by default; set it only after F7 of
+ * (a second notable, red_folder, or indictment). Off by default; set it only after F7 of
  * docs/MIGRATION.md, when lab AND Render both have PRIMARY KEY (person_id, kind, seq).
  * The schema check below still runs, so both must hold. The value must be exactly
  * "on": no trim, no case folding, so " on ", "ON" and "on\n" count as off.
@@ -2142,7 +2142,7 @@ const EVENT_SEQ_MAX = 2147483647;
 
 /**
  * A seq > 0 event needs PRIMARY KEY (person_id, kind, seq) on this database.
- * A seq > 0 event of a kind other than notable (red_folder) also needs the
+ * A seq > 0 event of a kind other than notable (red_folder, either indictment kind) also needs the
  * multi-event migration (F3 up-lab / F5 up-render-b), which drops
  * person_events_seq_notable_only. A seq above int4 is refused here, before any
  * query. No catalog query when every event is seq 0.
@@ -2394,6 +2394,8 @@ export async function appendPersonSources(id, incoming, kind) {
     throw new PromoteError(`person not found: ${id}`, "person_not_found");
   }
   const targetKind = kind || person.category;
+  // Date-desc order, so this is the newest event of that kind. Pass its seq
+  // so a repeatable kind (a second indictment) gets the cites on that row.
   const event = person.events.find((ev) => ev.kind === targetKind) || person.events[0];
   if (!event) {
     const merged = mergeCites(person.sources, incoming);
@@ -2404,6 +2406,7 @@ export async function appendPersonSources(id, incoming, kind) {
   }
   const attached = attachPersonEvent(person, {
     kind: event.kind,
+    seq: event.seq,
     event_date: event.event_date,
     sources: incoming,
   });
