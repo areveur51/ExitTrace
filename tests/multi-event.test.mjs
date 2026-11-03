@@ -236,6 +236,12 @@ test("multi-event: ET_MULTI_EVENT_WRITES is off by default and seq > 0 needs bot
     const c = migrated();
     await assert.rejects(syncPersonEvents(c, two), { code: "multi_event_writes_off" });
     assert.equal(c.calls.filter((x) => /DELETE|INSERT/.test(x.text)).length, 0);
+    assert.equal(isRepeatableKind("indictment_civilian"), false);
+    assert.equal(isRepeatableKind("indictment_non_civilian"), false);
+    assert.equal(isRepeatableKind("notable"), true);
+    assert.equal(isRepeatableKind("red_folder"), true);
+    assert.equal(eventSeq({ kind: "indictment_civilian", seq: 4 }), 0);
+    assert.equal(eventKey({ kind: "indictment_civilian", seq: 4 }), "indictment_civilian");
   } finally {
     process.env.ET_MULTI_EVENT_WRITES = saved;
   }

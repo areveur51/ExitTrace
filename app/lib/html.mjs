@@ -27,6 +27,7 @@ import {
 } from "./event-attrs.mjs";
 import { coronaStatusLabel } from "./corona-status.mjs";
 import { careerLine, visibleCareer } from "./career.mjs";
+import { relationshipSections } from "./relationships.mjs";
 import { standardizePosition } from "./position-format.mjs";
 import {
   clearanceMetaLabel,
@@ -85,6 +86,7 @@ import {
 } from "./themes.mjs";
 import {
   MENU_ATTRIBUTE_TAGS,
+  PAGE_ATTRIBUTE_TAGS,
   attributeTagHref,
   EPSTEIN_CLIENTS_CATEGORY,
   IDENTITY_TAGS,
@@ -252,10 +254,11 @@ function keymapItems(activePath) {
 /**
  * Comms section of the keymap menu (same section pattern as Tags).
  * Order: KIND_COMMS clip catalogs (Dog, Red Folder, Eagle, Ronald, Shot), then
- * Boot (person), Corona, then Central Casting. Shortcut keys are unchanged.
+ * Boot (person), Corona, then Central Casting. Left Eye follows, shortcut y.
+ * A fact tag with menu "comms" uses its keymapKey when it has one.
  */
 export function keymapCommsItems() {
-  return [
+  const keyed = [
     ...KIND_COMM_IDS.map((id) => {
       const spec = KIND_COMMS[id];
       return { key: spec.keymapKey, href: spec.path, label: spec.navLabel };
@@ -264,6 +267,12 @@ export function keymapCommsItems() {
     { key: "o", href: "/corona-comms", label: categoryByPath("/corona-comms")?.nav || "Corona" },
     { key: CENTRAL_CASTING_KEYMAP, href: CENTRAL_CASTING_PATH, label: "Central Casting" },
   ];
+  const facts = PAGE_ATTRIBUTE_TAGS.filter((tag) => tag.menu === "comms").map((tag) => ({
+    href: tag.path,
+    label: tag.nav,
+    ...(tag.keymapKey ? { key: tag.keymapKey } : {}),
+  }));
+  return [...keyed, ...facts];
 }
 
 export function themeSwitcher() {
@@ -496,9 +505,9 @@ export function tagDescriptionBlock(id) {
   return tagDescriptionHtml(tagDescription(id));
 }
 
-/** Fact-tag index. Same rows as the catalog Tags menu. */
+/** Fact-tag index. Tags-menu rows, plus a fact tag whose chip sits under Comms. */
 export function tagsIndexBody() {
-  const chips = MENU_ATTRIBUTE_TAGS.map(
+  const chips = PAGE_ATTRIBUTE_TAGS.map(
     (tag) => `<a class="keychip keymap-tag" href="${esc(attributeTagHref(tag))}">${esc(tag.nav)}</a>`,
   ).join("");
   return `<nav class="keymap-group tag-index" aria-label="Fact tags"><p class="keymap-section">Tags</p>${chips}</nav>`;
@@ -2014,7 +2023,7 @@ function personSupportingMediaHtml(row, seen) {
     // It is not orphaned and must not be cleaned up.
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
     // Red Folder media stays on its own Red Folder block, with its captions.
-    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || VOTE_FACT_KINDS.has(kind)) continue;
+    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || kind === "black_eye" || kind === "no_one_above_the_law" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     // Dedupe (normalize, then collapse dog post groups) before the display cap.
     const media = normalizeEventMedia(ev.media);
@@ -2869,12 +2878,44 @@ function voteNoEventSection(ev) {
   });
 }
 
+/** Stored report of a black eye. It does not replace the card category or date. */
+function blackEyeEventSection(ev, sourceNumbers) {
+  const cites = eventCiteParts(ev, sourceNumbers);
+  return personEventSection({
+    headHtml: eventHeadHtml("Left Eye", ev?.event_date),
+    kind: "black_eye",
+    bodyHtml: commitProseHtml(ev?.comments),
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    className: "detail-black-eye detail-supporting",
+    tag: "section",
+  });
+}
+
+/** Named on a stored graphic. It does not replace the card category or date. */
+function noOneAboveTheLawEventSection(ev, sourceNumbers) {
+  const cites = eventCiteParts(ev, sourceNumbers);
+  const position = String(ev?.position || "").trim();
+  const positionHtml = position ? metaLine("Position", position) : "";
+  return personEventSection({
+    headHtml: eventHeadHtml("No One Is Above The Law", ev?.event_date),
+    kind: "no_one_above_the_law",
+    bodyHtml: `${positionHtml}${commitProseHtml(ev?.comments)}`,
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    className: "detail-no-one-above-the-law detail-supporting",
+    tag: "section",
+  });
+}
+
 /** Vote and endorsement cards oldest first; notables newest date first at the bottom. */
 function specialEventNodes(row, sourceNumbers) {
   const render = {
     endorsement: endorsementEventSection,
     harassment_records: harassmentEventSection,
     ukraine_aid_flags: ukraineEventSection,
+    black_eye: blackEyeEventSection,
+    no_one_above_the_law: noOneAboveTheLawEventSection,
   };
   for (const kind of VOTE_NO_KINDS) render[kind] = voteNoEventSection;
   const nodes = personEvents(row)
@@ -3161,6 +3202,8 @@ function eventSourceLabel(ev) {
   else if (kind === "endorsement") title = "Endorsement";
   else if (kind === "red_folder") title = RED_FOLDER_EVENT_LABEL;
   else if (kind === "shot") title = "Shot";
+  else if (kind === "black_eye") title = "Left Eye";
+  else if (kind === "no_one_above_the_law") title = "No One Is Above The Law";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
   const when = date ? formatDate(date) : "";
   return when ? `${when} · ${title}` : title;
@@ -3194,6 +3237,12 @@ function personSourceItems(row, { events = [], centralCastingClips = [], cite } 
     // Two events of one kind can share a date, so the visible label is not an id.
     const groupId = eventKey(ev);
     for (const source of ev?.sources || []) push(eventSourceForList(source), label, groupId);
+  }
+  for (const section of relationshipSections(row?.relationships, row?.id)) {
+    for (const line of section.lines) {
+      const label = `Relationship · ${line.otherName}`;
+      for (const source of line.sources || []) push(source, label);
+    }
   }
   for (const url of row?.central_casting || []) push(url, "Central casting");
   for (const clip of centralCastingClipsFor(row, centralCastingClips)) {
@@ -3291,6 +3340,48 @@ function personTagChips(row) {
   return `<p class="person-tags"><span class="person-tags-label">Tags</span> ${chips.join("")}</p>`;
 }
 
+function relationshipRefLinks(sources, sourceNumbers) {
+  if (!sourceNumbers) return "";
+  const refs = [];
+  const seen = new Set();
+  for (const source of sources || []) {
+    const url = String(source?.url || "").trim();
+    if (!url) continue;
+    const key = canonicalPublicUrl(url) || url;
+    const n = sourceNumbers.get(key);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    refs.push(`<a class="source-ref" href="#source-${n}">[${n}]</a>`);
+  }
+  return refs.join(" ");
+}
+
+/** Frost panel under the header. One tight row per person. A note drops to the next line. No rail dot. */
+export function relationshipsHtml(row, sourceNumbers) {
+  const sections = relationshipSections(row?.relationships, row?.id);
+  if (!sections.length) return "";
+  const groups = sections
+    .map((section) => {
+      const lines = section.lines
+        .map((line) => {
+          const years = line.years ? `<span class="event-facts">${esc(line.years)}</span>` : "";
+          const note = line.note ? `<p class="event-oneline">${esc(line.note)}</p>` : "";
+          const refs = relationshipRefLinks(line.sources, sourceNumbers);
+          const refLine = refs ? `<p class="relationship-line">${refs}</p>` : "";
+          const headRefs = note ? "" : refLine;
+          const footRefs = note ? refLine : "";
+          return `<div class="relationship-row">
+            <header class="person-event-head"><span class="relationship-who"><a href="/people/${esc(line.otherId)}">${esc(line.otherName)}</a>${years}${headRefs}</span><h3 class="event-h">${esc(line.label)}</h3></header>
+            ${note}${footRefs}
+          </div>`;
+        })
+        .join("");
+      return `<div class="relationship-group"><p class="identity-label">${esc(section.label)}</p>${lines}</div>`;
+    })
+    .join("");
+  return `<section class="person-relationships" aria-label="Relationships"><h3 class="career-h">Relationships</h3>${groups}</section>`;
+}
+
 export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   const seen = detailMediaSeen();
@@ -3302,7 +3393,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),
-      afterHtml: `${careerHistory(filled)}${eventTimeline(filled, timeline, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${personSourcesHtml(sourceBundle.groups)}${personSupportingMediaHtml(filled, seen)}`,
+      afterHtml: `${relationshipsHtml(filled, sourceNumbers)}${careerHistory(filled)}${eventTimeline(filled, timeline, centralCastingClips, epsteinLegs, seen, sourceNumbers)}${personSourcesHtml(sourceBundle.groups)}${personSupportingMediaHtml(filled, seen)}`,
       active: true,
       extraClass: "person-pane",
     })}

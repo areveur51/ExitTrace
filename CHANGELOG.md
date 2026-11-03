@@ -31,11 +31,39 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
-## [1.2.37] - 2026-10-27
+## [1.2.41] - 2026-11-03
 
 ### Added
 
-- A person can have more than one indictment on the timeline. `indictment_civilian` and `indictment_non_civilian` are repeatable kinds, keyed by `seq` on `person_events` (primary key `(person_id, kind, seq)`), the same way `notable` and `red_folder` already are. A second indictment with a different date is its own entry, in date order, with its own text and Unsealed badge. The same date still folds when a cite overlaps or the comments match. A person keeps one indictment classification: a later event filed as the other indictment kind is stored as the kind already on the person. The card headline stays the newest catalog event. Catalog lists still show the person once, dated by the newest indictment of that kind. One indictment still renders as one entry. Every other kind stays one event per kind. No schema change and no data migration; existing `seq` 0 rows are not rewritten. A `seq` above 0 still needs `ET_MULTI_EVENT_WRITES=on` and the migrated primary key. How to revert is in `docs/UNDO.md`.
+- A person can have more than one indictment on the timeline when `ET_MULTI_EVENT_WRITES` is exactly `on`. `indictment_civilian` and `indictment_non_civilian` are then repeatable kinds, keyed by `seq` on `person_events` (primary key `(person_id, kind, seq)`), the same way `notable` and `red_folder` already are. A second indictment with a different date is its own entry, in date order, with its own text and Unsealed badge. The same date still folds when a cite overlaps or the comments match. A person keeps one indictment classification: a later event filed as the other indictment kind is stored as the kind already on the person. The card headline stays the newest catalog event. Catalog lists still show the person once, dated by the newest indictment of that kind. One indictment still renders as one entry. Every other kind stays one event per kind. With the switch off, including when it is unset, an indictment kind is not repeatable: a second indictment folds into the stored event with the same merge as any other non-repeatable kind (stored date and non-empty fields stay, cites merge), and no `seq` above 0 is written. No schema change and no data migration; existing `seq` 0 rows are not rewritten. How to revert is in `docs/UNDO.md`.
+
+## [1.2.40] - 2026-11-01
+
+### Added
+
+- Fact tag No One Is Above The Law (`/tags/no-one-is-above-the-law`, stored id `no_one_above_the_law`). The chip sits under Tags. The menu label is Above the Law because the full name does not fit the rail. A person card shows the full name in its Tags row. It records a person named on a stored graphic under that line. The event does not replace the card category or date.
+
+## [1.2.39] - 2026-11-01
+
+### Changed
+
+- The Comms chip is Left Eye, with shortcut y. A person card shows that same name in its Tags row. The stored id stays `black_eye` and the page stays `/tags/black-eye`. The chip is not repeated under Tags.
+
+## [1.2.38] - 2026-10-31
+
+### Added
+
+- Fact tag The Left Eye (`/tags/black-eye`, stored id `black_eye`). The chip sits in the Comms menu, with no shortcut key, and is not repeated under Tags. The tag index still lists it. It records a stored report of a black eye.
+
+### Fixed
+
+- The relationship label check kept on boot includes Half-sister, Half-brother, Judge, Litigant, Cousin, Daughter, Mother, and Sister, matching the labels already stored.
+
+## [1.2.37] - 2026-10-28
+
+### Added
+
+- Person cards show a Relationships section under the identity header and above the event rail. Family comes before Professional. One stored connection draws both cards. The section is not a timeline commit.
 
 ## [1.2.36] - 2026-10-26
 

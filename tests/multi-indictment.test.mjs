@@ -121,6 +121,7 @@ async function withWritesOn(fn) {
 }
 
 test("two indictments: write, sync, and render as separate dated entries", async () => {
+  await withWritesOn(async () => {
   const person = indictmentPerson();
   const indictments = eventsOfKind(person.events, "indictment_civilian");
   assert.deepEqual(indictments.map((ev) => [ev.event_date, ev.seq, ev.unsealed === true]), [
@@ -193,6 +194,7 @@ test("two indictments: write, sync, and render as separate dated entries", async
   assert.equal(after.length, 2);
   assert.ok(after.find((ev) => ev.seq === 1).sources.some((source) => source.url === extra.url));
   assert.equal(after.find((ev) => ev.seq === 0).sources.some((source) => source.url === extra.url), false);
+  });
 });
 
 test("one indictment still renders as one entry at seq 0", async () => {
@@ -217,7 +219,9 @@ test("one indictment still renders as one entry at seq 0", async () => {
     events: [{ ...stored.events[0], seq: 0 }],
   });
   assert.equal(personDetail(plain), personDetail(explicit));
-  assert.equal(eventsOfKind(plain.events, "indictment_civilian")[0].seq, 0);
+  const one = eventsOfKind(plain.events, "indictment_civilian")[0];
+  assert.equal(eventSeq(one), 0);
+  assert.equal("seq" in one, false);
   assert.equal(plain.event_date, "2026-04-28");
   const html = personDetail(plain);
   const articles = indictmentArticles(html);
@@ -244,7 +248,7 @@ test("one indictment still renders as one entry at seq 0", async () => {
   });
 });
 
-test("a non-repeatable kind is still one event, and the same indictment folds", () => {
+test("a non-repeatable kind is still one event, and the same indictment folds", async () => {
   const firing = projectPerson({
     id: "one-firing",
     name: "One Firing",
@@ -289,21 +293,46 @@ test("a non-repeatable kind is still one event, and the same indictment folds", 
   assert.equal(folded.existed, true);
   assert.equal(folded.person.events.filter((ev) => String(ev.kind).startsWith("indictment_")).length, 1);
   assert.equal(folded.person.events[0].kind, "indictment_civilian");
-  assert.equal(folded.person.events[0].seq, 0);
+  assert.equal(eventSeq(folded.person.events[0]), 0);
+  assert.equal("seq" in folded.person.events[0], false);
   assert.equal(indictmentArticles(personDetail(folded.person)).length, 1);
 
-  const separate = attachPersonEvent(kept, {
-    kind: "indictment_non_civilian",
+  const off = attachPersonEvent(kept, {
+    kind: "indictment_civilian",
     event_date: "2026-09-25",
     comments: DC,
+    unsealed: true,
     sources: [AP("dc", "2026-09-25")],
   });
-  assert.equal(separate.existed, false);
-  assert.equal(separate.person.events.some((ev) => ev.kind === "indictment_non_civilian"), false);
-  assert.equal(eventsOfKind(separate.person.events, "indictment_civilian").length, 2);
+  assert.equal(off.existed, true);
+  const only = off.person.events.filter((ev) => ev.kind === "indictment_civilian");
+  assert.equal(only.length, 1);
+  assert.equal(only[0].event_date, "2026-04-28");
+  assert.equal(only[0].comments, EDNC);
+  assert.equal(only[0].unsealed, true);
+  assert.equal("seq" in only[0], false);
+  assert.equal(eventSeq(only[0]), 0);
+  assert.ok(only[0].sources.some((source) => source.url.includes("/ednc")));
+  assert.ok(only[0].sources.some((source) => source.url.includes("/dc")));
+  assert.equal(indictmentArticles(personDetail(off.person)).length, 1);
+
+  await withWritesOn(async () => {
+    const separate = attachPersonEvent(kept, {
+      kind: "indictment_non_civilian",
+      event_date: "2026-09-25",
+      comments: DC,
+      sources: [AP("dc", "2026-09-25")],
+    });
+    assert.equal(separate.existed, false);
+    assert.equal(separate.person.events.some((ev) => ev.kind === "indictment_non_civilian"), false);
+    assert.equal(eventsOfKind(separate.person.events, "indictment_civilian").length, 2);
+  });
 });
 
 test("two indictments on one day stay separate, in seq order, with their own Unsealed flag", () => {
+  const prevWrites = process.env.ET_MULTI_EVENT_WRITES;
+  process.env.ET_MULTI_EVENT_WRITES = "on";
+  try {
   const person = projectPerson({
     id: "same-day",
     name: "Same Day",
@@ -338,9 +367,16 @@ test("two indictments on one day stay separate, in seq order, with their own Uns
   assert.equal(headings.filter((heading) => heading === "Apr 28, 2026 · Indictments — non-civilians").length, 2);
   const list = peopleList([person]);
   assert.equal((list.match(/class="tui-title">Same Day/g) || []).length, 1);
+  } finally {
+    if (prevWrites === undefined) delete process.env.ET_MULTI_EVENT_WRITES;
+    else process.env.ET_MULTI_EVENT_WRITES = prevWrites;
+  }
 });
 
 test("unsealed annotate and gap-upsert keep each indictment seq", () => {
+  const prevWrites = process.env.ET_MULTI_EVENT_WRITES;
+  process.env.ET_MULTI_EVENT_WRITES = "on";
+  try {
   const person = projectPerson({
     id: "unseal-one",
     name: "Unseal One",
@@ -410,9 +446,14 @@ test("unsealed annotate and gap-upsert keep each indictment seq", () => {
   const script = fs.readFileSync(path.join(ROOT, "scripts", "annotate-unsealed-indictments.mjs"), "utf8");
   assert.match(script, /AND seq = \$3/);
   assert.match(script, /plan\.seq/);
+  } finally {
+    if (prevWrites === undefined) delete process.env.ET_MULTI_EVENT_WRITES;
+    else process.env.ET_MULTI_EVENT_WRITES = prevWrites;
+  }
 });
 
 test("catalog list orders people by the newest indictment and does not duplicate a card", async () => {
+  await withWritesOn(async () => {
   const early = projectPerson({
     id: "early-indict",
     name: "Early Indict",
@@ -437,4 +478,5 @@ test("catalog list orders people by the newest indictment and does not duplicate
   assert.equal((html.match(/class="tui-title">/g) || []).length, 2);
   const opened = await listPeople({ category: "indictment_civilian", unsealed: true });
   assert.deepEqual(opened.map((row) => row.id), ["multi-indict"]);
+  });
 });

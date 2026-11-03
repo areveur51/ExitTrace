@@ -488,6 +488,7 @@ body.tui-home .home-stage {
 .person-detail .event-tag-row,
 .person-detail .detail-supporting,
 .person-detail .career-history,
+.person-detail .person-relationships,
 .person-detail .person-sources {
   padding: 0.95rem 1.05rem;
   background: rgba(10, 16, 24, 0.78);
@@ -771,6 +772,7 @@ body.tui-home .home-stage {
 .person-detail .event-timeline,
 .person-detail .detail-supporting,
 .person-detail .career-history,
+.person-detail .person-relationships,
 .person-detail .person-sources {
   margin: 0;
   border-top: 0;
@@ -1088,6 +1090,84 @@ ol.cite-list .cite-outlet { overflow-wrap: anywhere; }
   color: var(--brick);
 }
 .career-line { color: var(--muted); }
+
+.person-detail .person-relationships {
+  padding: 0.45rem 0.75rem 0.2rem;
+}
+.person-detail .person-relationships .career-h {
+  margin-bottom: 0.08rem;
+}
+.person-detail .person-relationships .identity-label {
+  margin: 0.2rem 0 0;
+}
+.person-detail .person-relationships .relationship-group + .relationship-group {
+  margin-top: 0.2rem;
+}
+.person-detail .person-relationships .relationship-row {
+  padding: 0.12rem 0 0.14rem;
+}
+.person-detail .person-relationships .relationship-row + .relationship-row {
+  margin-top: 0;
+  border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
+}
+.person-detail .person-relationships .relationship-row .person-event-head {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.15rem 0.55rem;
+  min-height: 0;
+}
+.person-detail .person-relationships .relationship-who {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.4rem;
+  min-width: 0;
+}
+.person-detail .person-relationships .relationship-who > a {
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+.person-detail .person-relationships .event-h {
+  flex: 0 0 auto;
+  padding: 0.04rem 0.4rem;
+  font-size: 0.62rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.person-detail .person-relationships .event-facts {
+  display: inline;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.15;
+}
+.person-detail .person-relationships .event-facts::before {
+  content: "·";
+  margin-right: 0.35rem;
+  color: var(--amber);
+}
+.person-detail .person-relationships .event-oneline,
+.person-detail .person-relationships .relationship-line {
+  display: inline;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+.person-detail .person-relationships .relationship-who > .relationship-line {
+  flex: 0 1 auto;
+}
+.person-detail .person-relationships .event-oneline + .relationship-line {
+  margin-left: 0.3rem;
+}
 
 .tui-group { margin: 0 0 0.85rem; }
 .tui-group-h {
@@ -2421,6 +2501,7 @@ html[data-theme="glass"] .detail .person-header,
 html[data-theme="glass"] .detail .detail-media,
 html[data-theme="glass"] .detail .detail-copy,
 html[data-theme="glass"] .detail .career-history,
+html[data-theme="glass"] .detail .person-relationships,
 html[data-theme="glass"] .detail .event-timeline,
 html[data-theme="glass"] .detail .person-sources,
 html[data-theme="glass"] .detail .detail-official-post,
@@ -2588,6 +2669,9 @@ html[data-theme="glass"] .dash-stats {
   .person-detail .career-history,
   .person-detail .person-sources {
     padding: 0.75rem 0.8rem;
+  }
+  .person-detail .person-relationships {
+    padding: 0.4rem 0.65rem 0.2rem;
   }
   .person-detail .event-graph-card .person-event-head {
     align-items: center;

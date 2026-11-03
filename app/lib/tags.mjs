@@ -133,6 +133,20 @@ export const ATTRIBUTE_TAGS = [
     href: "/red-folder-comms",
     menu: false,
   },
+  {
+    id: "black_eye",
+    nav: "Left Eye",
+    path: "/tags/black-eye",
+    menu: "comms",
+    keymapKey: "y",
+    lede: "People with a stored report of a black eye.",
+  },
+  {
+    id: "no_one_above_the_law",
+    nav: "No One Is Above The Law",
+    path: "/tags/no-one-is-above-the-law",
+    lede: "People named on a stored graphic under the line that no one is above the law.",
+  },
 ];
 
 export const ATTRIBUTE_TAG_IDS = ATTRIBUTE_TAGS.map((t) => t.id);
@@ -142,8 +156,11 @@ export function attributeTagHref(tag) {
   return tag?.href || tag?.path || "";
 }
 
-/** Fact tags listed in the Tags menu and on /tags. A `menu: false` tag is reached through its href. */
-export const MENU_ATTRIBUTE_TAGS = ATTRIBUTE_TAGS.filter((t) => t.menu !== false);
+/** Fact tags with their own page. A Comms chip stays. A menu:false tag is reached through its href. */
+export const PAGE_ATTRIBUTE_TAGS = ATTRIBUTE_TAGS.filter((t) => t.menu !== false);
+
+/** Fact tags listed in the Tags menu. A Comms chip is not repeated there. */
+export const MENU_ATTRIBUTE_TAGS = PAGE_ATTRIBUTE_TAGS.filter((t) => t.menu !== "comms");
 
 /** Ids of the Tags-menu tags, in menu order (home tag search reads these). */
 export const MENU_ATTRIBUTE_TAG_IDS = MENU_ATTRIBUTE_TAGS.map((t) => t.id);
@@ -275,6 +292,10 @@ export const TAG_DESCRIPTIONS = Object.freeze({
   fraud: {
     kind: "rule",
     text: "A card gets this tag when it stores a fraud charge, plea, conviction, indictment, or official fraud finding for the person.",
+  },
+  no_one_above_the_law: {
+    kind: "rule",
+    text: "A card gets this tag when the person is named on a stored graphic under the line that no one is above the law.",
   },
 });
 
@@ -583,6 +604,7 @@ export function attributeTagByPath(pathname) {
 const TAG_SHORT_LABELS = Object.freeze({
   big_beautiful_bill_act: "Big Beautiful Bill",
   secure_the_border_act: "Secure the Border",
+  no_one_above_the_law: "Above the Law",
 });
 
 /** Short label for a fact tag (object or id): the menu label, else its `nav`. Empty for an unknown id. */

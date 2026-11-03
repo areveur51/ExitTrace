@@ -215,6 +215,9 @@ test("parked source posts rematch onto indictment KEEP kinds; parent lists the u
 });
 
 test("per-kind tags: arrest + indictment stay one person; a second indictment is its own event", async () => {
+  const prevWrites = process.env.ET_MULTI_EVENT_WRITES;
+  process.env.ET_MULTI_EVENT_WRITES = "on";
+  try {
   setMemory(goldSeed());
   await importSourcePostsText(fs.readFileSync(FIXTURE, "utf8"));
   const arrest = await applyIdentifiedPerson({
@@ -291,6 +294,10 @@ test("per-kind tags: arrest + indictment stay one person; a second indictment is
   assert.match(detail.body, /Casey Vale/);
   assert.match(detail.body, /Indictments — civilians/);
   assert.match(detail.body, /Arrests/);
+  } finally {
+    if (prevWrites === undefined) delete process.env.ET_MULTI_EVENT_WRITES;
+    else process.env.ET_MULTI_EVENT_WRITES = prevWrites;
+  }
 });
 
 test("indictment person cards keep 40×52 local thumbs", () => {

@@ -341,6 +341,9 @@ test("migration collapses same-slug rows and keeps distinct same-name people apa
 });
 
 test("do not double-tag the same indictment as civilian and non-civilian", async () => {
+  const prevWrites = process.env.ET_MULTI_EVENT_WRITES;
+  process.env.ET_MULTI_EVENT_WRITES = "on";
+  try {
   setMemory(goldSeed());
   await applyIdentifiedPerson({
     ...NEW_PERSON_LOCK,
@@ -368,6 +371,10 @@ test("do not double-tag the same indictment as civilian and non-civilian", async
   assert.ok(first.sources.some((s) => s.url === CITES[0]));
   assert.equal(first.sources.some((s) => s.url === MORE[0]), false);
   assert.ok(second.sources.some((s) => s.url === MORE[0]));
+  } finally {
+    if (prevWrites === undefined) delete process.env.ET_MULTI_EVENT_WRITES;
+    else process.env.ET_MULTI_EVENT_WRITES = prevWrites;
+  }
 });
 
 test("corona_comms skip-as-dup: tag lands on the existing card, never a second card", async () => {

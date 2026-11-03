@@ -186,8 +186,23 @@ export const REPEATABLE_EVENT_KINDS = Object.freeze([
 ]);
 const REPEATABLE_SET = new Set(REPEATABLE_EVENT_KINDS);
 
-export function isRepeatableKind(kind) {
-  return REPEATABLE_SET.has(String(kind || "").trim());
+/**
+ * These kinds repeat only while ET_MULTI_EVENT_WRITES is exactly "on".
+ * Off (the default), isRepeatableKind is false and they take the same
+ * one-event merge as every other non-repeatable kind. notable and red_folder
+ * stay repeatable either way; a seq above 0 of those kinds is still refused
+ * by the write guard while the switch is off.
+ */
+const FLAG_GATED_REPEATABLE_KINDS = new Set([
+  "indictment_civilian",
+  "indictment_non_civilian",
+]);
+
+export function isRepeatableKind(kind, env = process.env) {
+  const key = String(kind || "").trim();
+  if (!REPEATABLE_SET.has(key)) return false;
+  if (FLAG_GATED_REPEATABLE_KINDS.has(key) && env.ET_MULTI_EVENT_WRITES !== "on") return false;
+  return true;
 }
 
 /** Integer seq ≥ 0, or null when missing / invalid. */
