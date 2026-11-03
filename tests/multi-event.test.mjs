@@ -281,6 +281,40 @@ test("multi-event: section kinds and non-section repeatable kinds cover REPEATAB
   assert.ok(Object.isFrozen(NON_SECTION_REPEATABLE_KINDS));
 });
 
+test("multi-event: two same-date notables number their source groups in seq order", () => {
+  const row = projectPerson({
+    id: "same-date-notable",
+    name: "Same Date",
+    category: "notable",
+    event_date: "2020-01-01",
+    events: [
+      {
+        kind: "notable",
+        seq: 0,
+        event_date: "2020-01-01",
+        comments: "First same day.",
+        sources: [AP("same-0", "2020-01-01")],
+      },
+      {
+        kind: "notable",
+        seq: 1,
+        event_date: "2020-01-01",
+        comments: "Second same day.",
+        sources: [AP("same-1", "2020-01-01")],
+      },
+    ],
+  });
+  const html = personDetail(row);
+  const headings = [...html.matchAll(/<h4 class="source-group-h">([^<]+)<\/h4>/g)].map((match) => match[1]);
+  assert.deepEqual(headings, ["Jan 1, 2020 · Notable event", "Jan 1, 2020 · Notable event (2)"]);
+  const groups = [...html.matchAll(/<section class="source-group">([\s\S]*?)<\/section>/g)].map((match) => match[1]);
+  assert.equal(groups.length, 2);
+  assert.match(groups[0], /same-0/);
+  assert.doesNotMatch(groups[0], /same-1/);
+  assert.match(groups[1], /same-1/);
+  assert.doesNotMatch(groups[1], /same-0/);
+});
+
 test("multi-event: syncPersonEvents writes one companion row per (kind, seq)", async () => {
   const two = attachPersonEvent(attachPersonEvent(projectPerson(melania()), RF_A).person, RF_B).person;
   const c = fakeClient({ pkHasSeq: true, notableOnly: false });

@@ -4,7 +4,7 @@ Each release is its own section. None of these sections run DDL. The `person_eve
 
 ## 1.2.41 (repeatable endorsements)
 
-This release is app code only. It adds `endorsement` to `REPEATABLE_EVENT_KINDS` in `app/lib/promote.mjs`. It does not run DDL, it does not migrate rows, and it does not rewrite existing `person_events` rows. An endorsement that was already stored is still `seq` 0 until someone saves that person with a second endorsement while `ET_MULTI_EVENT_WRITES` is exactly `on`.
+This release is app code only. It adds `endorsement` to `REPEATABLE_EVENT_KINDS` in `app/lib/promote.mjs`, and it adds the person category `endorsement` (label Endorsement, list `/endorsement`, keymap `j`). `people.category` is text. The death-date check allows any non-death category, so this release adds no DDL and no migration file. See [MIGRATION.md](MIGRATION.md). It does not migrate rows and it does not rewrite existing `person_events` rows. An endorsement that was already stored is still `seq` 0 until someone saves that person with a second endorsement while `ET_MULTI_EVENT_WRITES` is exactly `on`. Revert removes the category from the app. A row already stored with `category = endorsement` stays in the database; the reverted app has no list page for it.
 
 There is no migration file for this release. The database already allows any kind to repeat. See [MIGRATION.md](MIGRATION.md). Revert does not need a schema rollback.
 

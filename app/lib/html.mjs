@@ -237,6 +237,7 @@ function keymapItems(activePath) {
     { key: "r", href: "/resignations" },
     { key: "g", href: "/government" },
     { key: "a", href: "/arrests" },
+    { key: "j", href: "/endorsement" },
     { key: "i", href: "/indictments" },
     { key: "d", href: "/deaths" },
     { key: "m", href: "/group-operations" },
@@ -3138,9 +3139,9 @@ function nicknameTimelineEvents(row) {
   }));
 }
 
-/** Rows on the person timeline. Notable stays at the bottom. dog_comms stays a tag, not a row. */
+/** Rows on the person timeline. Notable and Endorsement stay in their own sections. dog_comms stays a tag, not a row. */
 function isPersonTimelineKind(kind) {
-  if (!kind || kind === "notable" || kind === "dog_comms") return false;
+  if (!kind || kind === "notable" || kind === "endorsement" || kind === "dog_comms") return false;
   if (kind === "shot" || kind === "nickname") return true;
   return isDisplayedEventKind(kind);
 }
@@ -3212,7 +3213,13 @@ function personSourceItems(row, { events = [], centralCastingClips = [], cite } 
     if (items.length === before) return;
     let group = groups[groups.length - 1];
     if (!group || group.id !== groupId) {
-      group = { id: groupId, label, items: [] };
+      let seen = 0;
+      for (const prev of groups) {
+        if (prev.baseLabel === label) seen += 1;
+      }
+      // A repeated same-date heading would be identical. Number the later ones.
+      const shown = seen === 0 ? label : `${label} (${seen + 1})`;
+      group = { id: groupId, baseLabel: label, label: shown, items: [] };
       groups.push(group);
     }
     group.items.push(items[items.length - 1]);
@@ -4299,6 +4306,7 @@ const ADD_CATEGORIES = [
   { id: "death_ceo", label: "Deaths — CEOs" },
   { id: "arrests", label: "Arrests" },
   { id: "notable", label: "Notable event" },
+  { id: "endorsement", label: "Endorsement" },
   { id: "corona_comms", label: "Corona Comms" },
   { id: "indictment_civilian", label: "Indictments — civilians" },
   { id: "indictment_non_civilian", label: "Indictments — non-civilians" },

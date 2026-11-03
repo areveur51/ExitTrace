@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { categoryById, categoryByPath, PROMOTE_CATEGORY_IDS } from "../app/lib/categories.mjs";
+import { listPathForPerson } from "../app/lib/display-check.mjs";
 import { peopleList, personDetail } from "../app/lib/html.mjs";
 import { personMenuDate } from "../app/lib/menu-date.mjs";
 import {
@@ -279,6 +281,11 @@ test("several endorsements are separate dated entries, oldest first, each with i
   assert.match(sameSections[0], /Truth Social endorsement/);
   assert.match(sameSections[1], /A second post that same day/);
   assert.match(sameSections[2], /datetime="2026-11-02"/);
+  const sameHeads = [...sameHtml.matchAll(/<h4 class="source-group-h">([^<]+)<\/h4>/g)].map((match) => match[1]);
+  assert.deepEqual(
+    sameHeads.filter((heading) => heading.includes("Endorsement")),
+    ["Feb 12, 2026 · Endorsement", "Feb 12, 2026 · Endorsement (2)", "Nov 2, 2026 · Endorsement"],
+  );
 
   setMemory({ people: [person] });
   await savePerson(person);
@@ -448,6 +455,61 @@ test("other event kinds stay as they are, and a switched-off save folds endorsem
     const inserts = client.calls.filter((call) => /INSERT INTO person_events/.test(call.text));
     assert.deepEqual(inserts.map((call) => `${call.params[1]}:${call.params[2]}`).sort(), ["endorsement:0", "firings:0"]);
   });
+});
+
+test("a person with category endorsement renders and lists on /endorsement", async () => {
+  const cat = categoryById("endorsement");
+  assert.equal(cat.kind, "person");
+  assert.equal(cat.title, "Endorsement");
+  assert.equal(cat.nav, "Endorsement");
+  assert.equal(cat.path, "/endorsement");
+  assert.equal(categoryByPath("/endorsement").id, "endorsement");
+  assert.equal(PROMOTE_CATEGORY_IDS.includes("endorsement"), true);
+  assert.equal(listPathForPerson("endorsement"), "/endorsement");
+  const person = projectPerson({
+    id: "ada-endorse",
+    name: "Ada Endorse",
+    category: "endorsement",
+    event_date: "2026-02-12",
+    events: [
+      {
+        kind: "endorsement",
+        event_date: "2026-02-12",
+        comments: FEB,
+        sources: [TRUTH],
+      },
+    ],
+  });
+  assert.equal(person.category, "endorsement");
+  assert.equal(person.event_date, "2026-02-12");
+  const detail = personDetail(person);
+  assert.equal(endorsementSections(detail).length, 1);
+  assert.match(detail, /Truth Social endorsement/);
+  assert.doesNotMatch(detail, /class="event-tag-row"/);
+  setMemory({ people: [person] });
+  const listed = await listPeople("endorsement");
+  assert.equal(listed.filter((row) => row.id === "ada-endorse").length, 1);
+  assert.match(peopleList(listed), /Ada Endorse/);
+  assert.match(peopleList(listed), /· Endorsement ·/);
+  const page = await requestPage("/endorsement");
+  assert.equal(page.status, 200);
+  assert.equal((page.body.match(/href="\/people\/ada-endorse"/g) || []).length, 1);
+  assert.match(page.body, /data-key="j"/);
+  const card = await requestPage("/people/ada-endorse");
+  assert.equal(card.status, 200);
+  assert.match(card.body, /Truth Social endorsement/);
+  const kept = projectPerson({
+    id: "ada-firing",
+    name: "Ada Firing",
+    category: "firings",
+    event_date: "2017-05-09",
+    events: [
+      { kind: "firings", event_date: "2017-05-09", comments: "Removed.", sources: [AP("fired", "2017-05-09")] },
+      { kind: "endorsement", event_date: "2026-11-02", comments: NOV, sources: [XPOST] },
+    ],
+  });
+  assert.equal(kept.category, "firings");
+  assert.equal(kept.event_date, "2017-05-09");
 });
 
 test("an endorsement escapes script text and does not link a javascript cite", () => {

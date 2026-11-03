@@ -98,6 +98,11 @@ test("parent catalog kinds are the KEEP union; children stay one kind", () => {
   assert.equal(categoryByPath("/group-operations/violent-crime").id, "violent_crime");
   assert.equal(categoryByPath("/group-operations/fraud").id, "fraud");
   assert.equal(categoryByPath("/corona-comms").id, "corona_comms");
+  assert.equal(categoryByPath("/endorsement").id, "endorsement");
+  assert.equal(categoryByPath("/endorsement").nav, "Endorsement");
+  assert.equal(categoryByPath("/endorsement").title, "Endorsement");
+  assert.equal(listPathForPerson("endorsement"), "/endorsement");
+  assert.deepEqual(catalogListKinds("endorsement"), ["endorsement"]);
   assert.equal(categoryByPath("/dog-comms").id, "dog_comms");
   assert.equal(categoryByPath("/red-folder-comms").id, "red_folder_comms");
   assert.equal(categoryByPath("/central-casting").id, "central_casting");
