@@ -185,6 +185,13 @@ export const REPEATABLE_EVENT_KINDS = Object.freeze([
 ]);
 const REPEATABLE_SET = new Set(REPEATABLE_EVENT_KINDS);
 
+/**
+ * Repeatable kinds that are not a KIND_EVENT_SECTIONS block. They render in
+ * specialEventNodes, so a single entry is still one section. Together with
+ * KIND_EVENT_SECTIONS this is every REPEATABLE_EVENT_KINDS entry, once.
+ */
+export const NON_SECTION_REPEATABLE_KINDS = Object.freeze(["endorsement"]);
+
 export function isRepeatableKind(kind) {
   return REPEATABLE_SET.has(String(kind || "").trim());
 }
@@ -436,6 +443,34 @@ function mergePersonEvent(prior, ev) {
   if (keptHeadlineExclude(prior, ev)) merged.headline_exclude = true;
   applyEventShot(merged, prior, ev);
   return merged;
+}
+
+/**
+ * Write-path fold for endorsement when ET_MULTI_EVENT_WRITES is off.
+ * Same rule main uses for a non-repeatable kind: the first endorsement in
+ * the list keeps its date and comments, and later ones merge their cites
+ * into that row. The result has no seq above 0. Other kinds are unchanged.
+ */
+export function foldEndorsementsToSeq0(events) {
+  const out = [];
+  let kept = -1;
+  for (const ev of events || []) {
+    if (String(ev?.kind || "").trim() !== "endorsement") {
+      out.push(ev);
+      continue;
+    }
+    if (kept < 0) {
+      const row = copyEventRow(ev);
+      delete row.seq;
+      kept = out.length;
+      out.push(row);
+      continue;
+    }
+    const merged = mergePersonEvent(out[kept], ev);
+    delete merged.seq;
+    out[kept] = merged;
+  }
+  return out;
 }
 
 function copyEventRow(ev) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { endorsementEventHtml, peopleList, personDetail } from "../app/lib/html.mjs";
+import { peopleList, personDetail } from "../app/lib/html.mjs";
 import { personMenuDate } from "../app/lib/menu-date.mjs";
 import {
   attachPersonEvent,
@@ -167,7 +167,6 @@ test("zero endorsements: no Endorsement entry, and the tag does not appear from 
   assert.equal(personMenuDate(person, { tag: "endorsements" }), "");
   const html = personDetail(person);
   assert.equal(endorsementSections(html).length, 0);
-  assert.equal(endorsementEventHtml(person), "");
   assert.doesNotMatch(html, /data-kind="endorsement"/);
   assert.equal(person.category, "firings");
   assert.equal(person.event_date, "2017-05-09");
@@ -210,9 +209,6 @@ test("one endorsement still renders as one entry and matches a seq 0 row", () =>
   assert.match(sections[0], /href="#source-2"/);
   assert.match(html, /truthsocial\.com\/@realDonaldTrump\/posts\/example-feb/);
   assert.equal((html.match(/<h3 class="event-h">Endorsement<\/h3>/g) || []).length, 1);
-  const helper = endorsementEventHtml(plain);
-  assert.equal(endorsementSections(helper).length, 1);
-  assert.match(helper, /datetime="2026-02-12"/);
   const groups = sourceGroups(html).filter((group) => group.includes("Endorsement"));
   assert.equal(groups.length, 1);
   assert.match(groups[0], /Feb 12, 2026 · Endorsement/);
@@ -250,10 +246,6 @@ test("several endorsements are separate dated entries, oldest first, each with i
   assert.match(html, /x\.com\/realDonaldTrump\/status\/1985000000000000001/);
   assert.ok(html.indexOf('data-kind="firings"') < html.indexOf(sections[0]));
   assert.ok(html.indexOf(sections[0]) < html.indexOf(sections[1]));
-  const helper = endorsementSections(endorsementEventHtml(person));
-  assert.equal(helper.length, 2);
-  assert.match(helper[0], /datetime="2026-02-12"/);
-  assert.match(helper[1], /datetime="2026-11-02"/);
   const groups = sourceGroups(html);
   const feb = groups.filter((group) => group.includes("Feb 12, 2026 · Endorsement"));
   const nov = groups.filter((group) => group.includes("Nov 2, 2026 · Endorsement"));
@@ -380,7 +372,7 @@ test("the endorsements tag and its list count people, not endorsement rows", asy
   assert.equal(endorsementSections(absent.body).length, 0);
 });
 
-test("other event kinds do not become repeatable, and endorsement seq still needs the write switch", async () => {
+test("other event kinds stay as they are, and a switched-off save folds endorsements", async () => {
   assert.equal(isRepeatableKind("endorsement"), true);
   assert.equal(isRepeatableKind("firings"), false);
   assert.equal(isRepeatableKind("indictment_civilian"), false);
@@ -438,8 +430,16 @@ test("other event kinds do not become repeatable, and endorsement seq still need
   const two = severalEndorsements();
   await withWrites(undefined, async () => {
     const client = fakeClient();
-    await assert.rejects(syncPersonEvents(client, two), { code: "multi_event_writes_off" });
-    assert.equal(client.calls.filter((call) => /DELETE|INSERT/.test(call.text)).length, 0);
+    await syncPersonEvents(client, two);
+    const writes = client.calls.filter((call) => /DELETE FROM person_events|INSERT INTO person_events/.test(call.text));
+    assert.equal(writes.length > 0, true, "the folded save runs");
+    const inserts = writes.filter((call) => /INSERT INTO person_events/.test(call.text));
+    assert.deepEqual(inserts.map((call) => `${call.params[1]}:${call.params[2]}`).sort(), ["endorsement:0", "firings:0"]);
+    const folded = inserts.find((call) => call.params[1] === "endorsement");
+    assert.equal(folded.params[3], "2026-11-02", "the first endorsement in write order keeps its date");
+    assert.equal(folded.params[10], NOV);
+    assert.match(folded.params[4], /truthsocial\.com/);
+    assert.match(folded.params[4], /x\.com\/realDonaldTrump/);
   });
   const one = oneEndorsement();
   await withWrites(undefined, async () => {
@@ -448,4 +448,40 @@ test("other event kinds do not become repeatable, and endorsement seq still need
     const inserts = client.calls.filter((call) => /INSERT INTO person_events/.test(call.text));
     assert.deepEqual(inserts.map((call) => `${call.params[1]}:${call.params[2]}`).sort(), ["endorsement:0", "firings:0"]);
   });
+});
+
+test("an endorsement escapes script text and does not link a javascript cite", () => {
+  const row = projectPerson({
+    id: "hostile-endorse",
+    name: "Hostile Endorse",
+    category: "firings",
+    event_date: "2017-05-09",
+    events: [
+      {
+        kind: "firings",
+        event_date: "2017-05-09",
+        comments: "Removed.",
+        sources: [AP("fired", "2017-05-09")],
+      },
+      {
+        kind: "endorsement",
+        event_date: "2026-02-12",
+        comments: "Endorsed <script>alert(1)</script>",
+        sources: [
+          {
+            url: "javascript:alert(1)",
+            publisher: "Desk",
+            title: "bad",
+            date: "2026-02-12",
+          },
+        ],
+      },
+    ],
+  });
+  const html = personDetail(row);
+  assert.match(html, /Endorsed &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(html, /javascript:alert\(1\)/);
+  assert.doesNotMatch(html, /<script/i);
+  assert.doesNotMatch(html, /href\s*=\s*["']?\s*javascript:/i);
+  assert.equal((html.match(/<a\b[^>]*href="https:\/\/apnews\.com/g) || []).length > 0, true);
 });

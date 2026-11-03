@@ -16,6 +16,7 @@ import {
   mergeCites,
   mergePersonAnnotate,
   eventSeq,
+  foldEndorsementsToSeq0,
   personEvents,
   personHasKind,
   projectPerson,
@@ -2137,6 +2138,21 @@ export function multiEventWritesEnabled(env = process.env) {
   return env.ET_MULTI_EVENT_WRITES === "on";
 }
 
+/**
+ * Postgres write shape. With the switch off, endorsements fold to one seq 0
+ * event (the same fold main does) so a save that succeeds on main still
+ * succeeds. seq > 0 is written only when the switch is on. notable and
+ * red_folder are not folded; a seq > 0 row of those kinds still hits the guard.
+ */
+function personForEventWrite(person, env = process.env) {
+  const normalized = normalizePerson(person);
+  if (multiEventWritesEnabled(env)) return normalized;
+  if (!(normalized.events || []).some((ev) => String(ev?.kind || "").trim() === "endorsement")) {
+    return normalized;
+  }
+  return normalizePerson({ ...normalized, events: foldEndorsementsToSeq0(normalized.events) });
+}
+
 // person_events.seq is INTEGER (int4).
 const EVENT_SEQ_MAX = 2147483647;
 
@@ -2206,7 +2222,7 @@ function laterVoteCompanion(incoming, kept) {
 }
 
 export async function syncPersonEvents(client, row) {
-  const person = normalizePerson(row);
+  const person = personForEventWrite(row);
   await assertMultiNotableReady(client, person);
   await client.query("DELETE FROM person_events WHERE person_id = $1", [person.id]);
   const bySlot = new Map();
@@ -2292,11 +2308,12 @@ const UPDATE_PERSON_SQL = `UPDATE people SET
      WHERE id = $1`;
 
 async function commitPersonWrite(client, person, sql) {
+  const writable = personForEventWrite(person);
   await client.query("BEGIN");
   try {
-    await assertMultiNotableReady(client, person);
-    await client.query(sql, personValues(person));
-    await syncPersonEvents(client, person);
+    await assertMultiNotableReady(client, writable);
+    await client.query(sql, personValues(writable));
+    await syncPersonEvents(client, writable);
     await client.query("COMMIT");
   } catch (err) {
     try {

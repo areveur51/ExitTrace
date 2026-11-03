@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { KIND_EVENT_SECTIONS, personDetail, kindEventsHtml } from "../app/lib/html.mjs";
 import {
+  NON_SECTION_REPEATABLE_KINDS,
   REPEATABLE_EVENT_KINDS,
   attachPersonEvent,
   eventKey,
@@ -263,19 +264,21 @@ test("multi-event: the guard accepts only the exact key (person_id, kind, seq) o
   assert.match(catalog[0], /WITH ORDINALITY[\s\S]*ORDER BY k\.ord/, "the key is read in key order");
 });
 
-test("multi-event: dedicated sections are the repeatable kinds that are not the Endorsement section (O'Brien)", () => {
-  const kinds = KIND_EVENT_SECTIONS.map((s) => s.kind);
-  assert.deepEqual(kinds, ["notable", "red_folder"]);
-  assert.equal(new Set(kinds).size, kinds.length, "no kind twice");
+test("multi-event: section kinds and non-section repeatable kinds cover REPEATABLE_EVENT_KINDS once (O'Brien)", () => {
+  const sectionKinds = KIND_EVENT_SECTIONS.map((s) => s.kind);
+  const outside = [...NON_SECTION_REPEATABLE_KINDS];
+  assert.equal(new Set(sectionKinds).size, sectionKinds.length, "no section kind twice");
+  assert.equal(new Set(outside).size, outside.length, "no outside kind twice");
+  for (const kind of sectionKinds) assert.equal(outside.includes(kind), false, kind);
+  assert.deepEqual([...sectionKinds, ...outside].sort(), [...REPEATABLE_EVENT_KINDS].sort());
   for (const s of KIND_EVENT_SECTIONS) {
     assert.equal(isRepeatableKind(s.kind), true, s.kind);
     assert.equal(typeof s.title, "function", s.kind);
     assert.match(s.className, /\bdetail-supporting\b/, s.kind);
   }
-  // Endorsement repeats in specialEventNodes. A second block would draw it twice.
-  assert.equal(isRepeatableKind("endorsement"), true);
-  assert.equal(kinds.includes("endorsement"), false);
+  for (const kind of outside) assert.equal(isRepeatableKind(kind), true, kind);
   assert.ok(Object.isFrozen(KIND_EVENT_SECTIONS));
+  assert.ok(Object.isFrozen(NON_SECTION_REPEATABLE_KINDS));
 });
 
 test("multi-event: syncPersonEvents writes one companion row per (kind, seq)", async () => {

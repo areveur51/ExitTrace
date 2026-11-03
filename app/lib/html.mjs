@@ -2706,11 +2706,10 @@ function kindEventSection(ev, sourceNumbers, { title, kind, className }) {
 }
 
 /**
- * Dedicated blocks for repeatable kinds that are not the Endorsement section.
- * notable and red_folder render here, one block per event. endorsement is
- * repeatable too, but it stays in specialEventNodes (endorsementEventSection)
- * so each entry is the existing Endorsement section and a single endorsement
- * still renders once. tests/multi-event.test.mjs pins that split.
+ * Dedicated blocks for repeatable kinds that are not NON_SECTION_REPEATABLE_KINDS.
+ * notable and red_folder render here, one block per event. endorsement stays in
+ * specialEventNodes (endorsementEventSection) so a single endorsement still
+ * renders once. tests/multi-event.test.mjs pins the split.
  */
 export const KIND_EVENT_SECTIONS = Object.freeze([
   Object.freeze({ kind: "notable", title: (ev) => notableSectionTitle(ev), className: "detail-notable detail-supporting" }),
@@ -2748,16 +2747,6 @@ function endorsementEventSection(ev, sourceNumbers) {
     className: "detail-endorsement detail-supporting",
     tag: "section",
   });
-}
-
-export function endorsementEventHtml(row, sourceNumbers) {
-  return personEvents(row)
-    .filter((ev) => String(ev?.kind || "").trim() === "endorsement")
-    .slice()
-    .sort(compareTimelineEvents)
-    .map((ev) => endorsementEventSection(ev, sourceNumbers))
-    .filter(Boolean)
-    .join("");
 }
 
 /** Recorded yea on the motion to refer H. Res. 1100. It does not replace the card category or date. */
