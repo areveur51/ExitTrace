@@ -75,10 +75,14 @@ test("multi-event: notable, red_folder, and endorsement repeat; every other kind
   );
   assert.equal(isRepeatableKind("red_folder"), true);
   assert.equal(isRepeatableKind("endorsement"), true);
+  assert.equal(isRepeatableKind("indictment_civilian"), true);
+  assert.equal(isRepeatableKind("indictment_non_civilian"), true);
   assert.equal(isRepeatableKind("firings"), false);
-  assert.equal(isRepeatableKind("indictment_civilian"), false);
   assert.equal(eventKey({ kind: "red_folder", seq: 2 }), "red_folder:2");
   assert.equal(eventKey({ kind: "endorsement", seq: 1 }), "endorsement:1");
+  assert.equal(eventKey({ kind: "indictment_civilian", seq: 1 }), "indictment_civilian:1");
+  assert.equal(eventKey({ kind: "indictment_civilian", seq: "1" }), "indictment_civilian:1");
+  assert.equal(eventSeq({ kind: "indictment_civilian", seq: "1" }), 1);
   assert.equal(eventKey({ kind: "firings", seq: 2 }), "firings");
   assert.equal(eventSeq({ kind: "endorsement", seq: 1 }), 1);
   assert.equal(eventSeq({ kind: "firings", seq: 3 }), 0, "a non-repeatable kind never stores seq > 0");

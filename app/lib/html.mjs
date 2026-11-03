@@ -2710,7 +2710,8 @@ function kindEventSection(ev, sourceNumbers, { title, kind, className }) {
  * Dedicated blocks for repeatable kinds that are not NON_SECTION_REPEATABLE_KINDS.
  * notable and red_folder render here, one block per event. endorsement stays in
  * specialEventNodes (endorsementEventSection) so a single endorsement still
- * renders once. tests/multi-event.test.mjs pins the split.
+ * renders once. Indictment kinds stay on the event timeline. tests/multi-event.test.mjs
+ * pins the split.
  */
 export const KIND_EVENT_SECTIONS = Object.freeze([
   Object.freeze({ kind: "notable", title: (ev) => notableSectionTitle(ev), className: "detail-notable detail-supporting" }),

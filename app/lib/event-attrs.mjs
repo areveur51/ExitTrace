@@ -1,5 +1,6 @@
 /** One event schema for harvest leads and dashboard slices. No parallel copy. */
 
+import { eventKey, eventSeq } from "./promote.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 import {
   DEATH_KEEP_IDS,
@@ -229,18 +230,33 @@ export function annotateUnsealedPerson(person) {
   return { person: { ...person, events: nextEvents }, changed: true };
 }
 
+/** Slot for one indictment event. seq comes from eventSeq, which parses "1" as 1. */
+function indictmentSlot(ev) {
+  return {
+    kind: String(ev?.kind || "").trim(),
+    seq: eventSeq(ev),
+    key: eventKey(ev),
+  };
+}
+
 export function planUnsealedAnnotations(people) {
   const plans = [];
   for (const person of people || []) {
     const result = annotateUnsealedPerson(person);
     if (!result.changed) continue;
-    const before = new Map(
-      (person.events || []).map((ev) => [ev.kind, ev.unsealed === true]),
-    );
+    const before = new Map();
+    for (const ev of person.events || []) {
+      if (!isIndictmentKeepKind(ev?.kind)) continue;
+      const slot = indictmentSlot(ev);
+      before.set(slot.key, ev.unsealed === true);
+    }
+    const seen = new Set();
     for (const ev of result.person.events || []) {
-      if (ev?.unsealed === true && !before.get(ev.kind)) {
-        plans.push({ id: person.id, kind: ev.kind });
-      }
+      if (ev?.unsealed !== true || !isIndictmentKeepKind(ev.kind)) continue;
+      const slot = indictmentSlot(ev);
+      if (before.get(slot.key) || seen.has(slot.key)) continue;
+      seen.add(slot.key);
+      plans.push({ id: person.id, kind: slot.kind, seq: slot.seq });
     }
   }
   return plans;

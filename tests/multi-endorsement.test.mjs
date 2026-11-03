@@ -409,7 +409,8 @@ test("the endorsements tag and its list count people, not endorsement rows", asy
 test("other event kinds stay as they are, and a switched-off save folds endorsements", async () => {
   assert.equal(isRepeatableKind("endorsement"), true);
   assert.equal(isRepeatableKind("firings"), false);
-  assert.equal(isRepeatableKind("indictment_civilian"), false);
+  assert.equal(isRepeatableKind("indictment_civilian"), true);
+  assert.equal(isRepeatableKind("indictment_non_civilian"), true);
   assert.equal(isRepeatableKind("harassment_records"), false);
   assert.equal(isRepeatableKind("red_folder"), true);
   assert.equal(eventSeq({ kind: "endorsement", seq: 1 }), 1);
@@ -440,8 +441,20 @@ test("other event kinds stay as they are, and a switched-off save folds endorsem
     sources: [AP("indict-b", "2024-10-01")],
   });
   assert.equal(indicted.existed, true);
-  assert.equal(indicted.person.events.filter((ev) => ev.kind === "indictment_civilian").length, 1);
-  assert.equal(indicted.person.events.find((ev) => ev.kind === "indictment_civilian").event_date, "2024-08-01");
+  const indictments = indicted.person.events.filter((ev) => ev.kind === "indictment_civilian");
+  assert.equal(indictments.length, 1);
+  assert.equal(indictments[0].event_date, "2024-08-01");
+  assert.equal(indictments[0].comments, "First indictment.");
+  assert.equal(indictments[0].seq, 0);
+  assert.ok(indictments[0].sources.some((source) => source.url.includes("indict-a")));
+  assert.ok(indictments[0].sources.some((source) => source.url.includes("indict-b")));
+  assert.equal(
+    indictments[0].event_date,
+    mergePersonEvent(
+      { kind: "indictment_civilian", event_date: "2024-08-01", comments: "First indictment.", sources: [AP("indict-a", "2024-08-01")] },
+      { kind: "indictment_civilian", event_date: "2024-10-01", comments: "Second indictment.", sources: [AP("indict-b", "2024-10-01")] },
+    ).event_date,
+  );
 
   let red = attachPersonEvent(base, {
     kind: "red_folder",
@@ -618,6 +631,42 @@ test("flag-off fold is mergePersonEvent onto the stored seq 0 row", () => {
     attached.person.events.find((ev) => ev.kind === "endorsement"),
     viaMerge.events.find((ev) => ev.kind === "endorsement"),
   );
+
+  const first = {
+    kind: "indictment_civilian",
+    event_date: "2026-04-28",
+    comments: "Eastern District of North Carolina indictment.",
+    sources: [AP("ednc", "2026-04-28")],
+  };
+  const second = {
+    kind: "indictment_civilian",
+    event_date: "2026-09-25",
+    comments: "D.C. case.",
+    unsealed: true,
+    sources: [AP("dc", "2026-09-25")],
+  };
+  const noSeq = foldKindsToSeq0([first, second]).find((ev) => ev.kind === "indictment_civilian");
+  assert.equal(foldKindsToSeq0([first, second]).filter((ev) => ev.kind === "indictment_civilian").length, 1);
+  assert.deepEqual(noSeq, mergePersonEvent(first, second));
+  assert.equal(noSeq.event_date, "2026-04-28");
+  assert.equal(noSeq.comments, "Eastern District of North Carolina indictment.");
+  assert.equal(noSeq.unsealed, true);
+  assert.equal(noSeq.seq, 0);
+  const held = projectPerson({
+    id: "no-seq-indict",
+    name: "No Seq",
+    category: "indictment_civilian",
+    event_date: "2026-04-28",
+    events: [first],
+  });
+  const attachedIndictment = attachPersonEvent(held, second);
+  assert.equal(attachedIndictment.existed, true);
+  assert.deepEqual(
+    attachedIndictment.person.events.find((ev) => ev.kind === "indictment_civilian"),
+    projectPerson({ ...held, events: [mergePersonEvent(held.events.find((ev) => ev.kind === "indictment_civilian"), second)] }).events.find(
+      (ev) => ev.kind === "indictment_civilian",
+    ),
+  );
 });
 
 test("a save after the switch turns off keeps the stored seq 0 endorsement", async () => {
@@ -677,6 +726,52 @@ test("a save after the switch turns off keeps the stored seq 0 endorsement", asy
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+test("a save after the switch turns off keeps the stored seq 0 indictment", async () => {
+  let built;
+  await withWrites("on", async () => {
+    built = attachPersonEvent(
+      attachPersonEvent(firingOnly(), {
+        kind: "indictment_civilian",
+        event_date: "2026-04-28",
+        comments: "first",
+        sources: [AP("first", "2026-04-28")],
+      }).person,
+      {
+        kind: "indictment_civilian",
+        event_date: "2026-09-25",
+        comments: "second",
+        unsealed: true,
+        sources: [AP("second", "2026-09-25")],
+      },
+    ).person;
+    setMemory({ people: [built] });
+    await savePerson(built);
+    const on = await getPerson(built.id);
+    assert.equal(on.events.filter((ev) => ev.kind === "indictment_civilian").length, 2);
+  });
+  await withWrites(undefined, async () => {
+    const current = await getPerson(built.id);
+    await savePerson({ ...current, role: "Director" });
+    const off = await getPerson(built.id);
+    const kept = off.events.filter((ev) => ev.kind === "indictment_civilian");
+    assert.equal(kept.length, 1);
+    assert.equal(kept[0].event_date, "2026-04-28");
+    assert.equal(kept[0].comments, "first");
+    assert.equal(kept[0].unsealed, true);
+    assert.equal(kept[0].seq, 0);
+    assert.equal(off.role, "Director");
+    assert.ok(kept[0].sources.some((source) => String(source.url).includes("/first")));
+    assert.ok(kept[0].sources.some((source) => String(source.url).includes("/second")));
+    const client = fakeClient();
+    await syncPersonEvents(client, built);
+    const row = client.calls.find((call) => /INSERT INTO person_events/.test(call.text) && call.params[1] === "indictment_civilian");
+    assert.equal(row.params[2], 0);
+    assert.equal(row.params[3], "2026-04-28");
+    assert.equal(row.params[10], "first");
+    assert.equal(row.params[15], true);
   });
 });
 

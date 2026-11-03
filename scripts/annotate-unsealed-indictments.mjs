@@ -15,6 +15,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { planUnsealedAnnotations } from "../app/lib/event-attrs.mjs";
+import { eventSeq, parseEventSeq } from "../app/lib/promote.mjs";
 import { databaseUrl, loadDotEnv, resolveRoot } from "../app/lib/env.mjs";
 import {
   closeStore,
@@ -33,10 +34,13 @@ const { dataDir } = resolveRoot(ROOT);
 const seedPath = path.join(dataDir, "seed.json");
 const bootstrapSql = fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sql"), "utf8");
 
-function setUnsealedTrue(events, kind) {
+/** One indictment event. A missing seq is 0, so a single stored indictment still matches. */
+function setUnsealedTrue(events, kind, seq = 0) {
+  const want = parseEventSeq(seq) ?? 0;
   let changed = false;
   const next = (events || []).map((ev) => {
     if (!ev || ev.kind !== kind || ev.unsealed === true) return ev;
+    if (eventSeq(ev) !== want) return ev;
     changed = true;
     return { ...ev, unsealed: true };
   });
@@ -51,7 +55,7 @@ async function applyPlans(plans) {
     for (const plan of plans) {
       const row = (mem.people || []).find((person) => person.id === plan.id);
       if (!row) continue;
-      const result = setUnsealedTrue(row.events, plan.kind);
+      const result = setUnsealedTrue(row.events, plan.kind, plan.seq);
       if (!result.changed) continue;
       row.events = result.events;
       patched += 1;
@@ -62,7 +66,7 @@ async function applyPlans(plans) {
   for (const plan of plans) {
     const current = await pool.query("SELECT events FROM people WHERE id = $1", [plan.id]);
     if (!current.rows[0]) continue;
-    const result = setUnsealedTrue(current.rows[0].events || [], plan.kind);
+    const result = setUnsealedTrue(current.rows[0].events || [], plan.kind, plan.seq);
     if (!result.changed) continue;
     await pool.query("UPDATE people SET events = $2::jsonb WHERE id = $1", [
       plan.id,
@@ -73,8 +77,9 @@ async function applyPlans(plans) {
           SET unsealed = TRUE
         WHERE person_id = $1
           AND kind = $2
+          AND seq = $3
           AND unsealed IS DISTINCT FROM TRUE`,
-      [plan.id, plan.kind],
+      [plan.id, plan.kind, parseEventSeq(plan.seq) ?? 0],
     );
     patched += 1;
   }
@@ -95,7 +100,7 @@ console.log(
   `unsealed annotate ${apply ? "apply" : "dry-run"} planned=${plans.length}`,
 );
 for (const plan of plans) {
-  console.log(`  ${plan.id} ${plan.kind}`);
+  console.log(`  ${plan.id} ${plan.kind} seq=${plan.seq ?? 0}`);
 }
 
 if (apply && plans.length) {
