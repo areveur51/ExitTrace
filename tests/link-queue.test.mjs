@@ -116,7 +116,7 @@ test("queue page lists a post and the add page links to it", () => {
   assert.match(closed, /does not store the post queue/);
 });
 
-test("only the lab database stores the post queue", () => {
+test("lab and public both store the post queue", () => {
   const prev = process.env.DATABASE_URL;
   try {
     delete process.env.DATABASE_URL;
@@ -124,7 +124,7 @@ test("only the lab database stores the post queue", () => {
     process.env.DATABASE_URL = "postgres://local@127.0.0.1:5433/exittrace";
     assert.equal(linkQueueWritable(), true);
     process.env.DATABASE_URL = "postgres://local@db.example/exittrace";
-    assert.equal(linkQueueWritable(), false);
+    assert.equal(linkQueueWritable(), true);
   } finally {
     if (prev === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = prev;
@@ -155,10 +155,10 @@ test("consecutive post submits are outside the add rate limit", () => {
   }
 });
 
-test("public boot does not create the lab post queue table", () => {
+test("public boot creates the post queue table", () => {
   const server = fs.readFileSync(path.join(ROOT, "app", "server.mjs"), "utf8");
-  assert.match(server, /if \(linkQueueWritable\(\)\) \{/);
   assert.match(server, /scripts", "link-queue.sql"/);
+  assert.doesNotMatch(server, /if \(linkQueueWritable\(\)\) \{/);
 });
 
 test("link_queue is not a published table", () => {

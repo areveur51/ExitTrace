@@ -55,10 +55,16 @@ async function main() {
   await client.connect();
   try {
     if (cmd === "list") {
+      const includeDone = arg === "--all";
       const result = await client.query(
-        `SELECT id, platform, status_id, url, status, reason, created_at
-         FROM link_queue
-         ORDER BY created_at ASC, id ASC`,
+        includeDone
+          ? `SELECT id, platform, status_id, url, status, reason, created_at
+             FROM link_queue
+             ORDER BY created_at ASC, id ASC`
+          : `SELECT id, platform, status_id, url, status, reason, created_at
+             FROM link_queue
+             WHERE status <> 'done'
+             ORDER BY created_at ASC, id ASC`,
       );
       process.stdout.write(`${JSON.stringify(result.rows.map(rowOut))}\n`);
       return;
@@ -90,7 +96,10 @@ async function main() {
     if (cmd === "done") {
       if (!/^\d+$/.test(String(arg || ""))) throw new Error("done needs a queue id");
       const result = await client.query(
-        `DELETE FROM link_queue WHERE id = $1::bigint AND status = 'processing' RETURNING id`,
+        `UPDATE link_queue
+            SET status = 'done', reason = ''
+          WHERE id = $1::bigint AND status = 'processing'
+          RETURNING id`,
         [arg],
       );
       if (!result.rowCount) throw new Error("queue row was not claimed");
@@ -112,7 +121,7 @@ async function main() {
       process.stdout.write("held\n");
       return;
     }
-    throw new Error("usage: list | claim | done <id> | hold <id> <reason>");
+    throw new Error("usage: list [--all] | claim | done <id> | hold <id> <reason>");
   } catch (err) {
     try {
       await client.query("ROLLBACK");

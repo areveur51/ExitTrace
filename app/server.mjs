@@ -100,7 +100,8 @@ import {
   queueBody,
   tuiCount,
 } from "./lib/html.mjs";
-import { describeEnqueue, enqueuePostLinks, linkQueueWritable, listLinkQueue, removeLinkQueue } from "./lib/link-queue.mjs";
+import { applyQueueRows, describeEnqueue, enqueuePostLinks, linkQueueWritable, listLinkQueue, removeLinkQueue } from "./lib/link-queue.mjs";
+import { queueSyncToken } from "./lib/queue-sync.mjs";
 import { AddError, queueAddRequest } from "./lib/add-request.mjs";
 import { orderPeopleByMenuDate, personMenuDate } from "./lib/menu-date.mjs";
 import {
@@ -165,15 +166,11 @@ const seedPath = path.join(dataDir, "seed.json");
 const APP_VERSION = JSON.parse(
   fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
 ).version;
-const bootstrapParts = [
+const bootstrapSql = [
   fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sql"), "utf8"),
   fs.readFileSync(path.join(ROOT, "scripts", "mention-queue.sql"), "utf8"),
-];
-// The post queue table is lab-only. Public boot must not create it.
-if (linkQueueWritable()) {
-  bootstrapParts.push(fs.readFileSync(path.join(ROOT, "scripts", "link-queue.sql"), "utf8"));
-}
-const bootstrapSql = bootstrapParts.join("\n");
+  fs.readFileSync(path.join(ROOT, "scripts", "link-queue.sql"), "utf8"),
+].join("\n");
 
 const MIME = {
   ".css": "text/css; charset=utf-8",
@@ -413,13 +410,24 @@ function queuePage({ error, notice, rows }) {
     heading: "Posts",
     query: "queue posts",
     countLabel: "queue",
-    lede: "Paste an X or Truth Social post. The lab watcher reads this queue, then adds the card or operation.",
+    lede: "Paste an X or Truth Social post. Lab and public share this queue. The lab watcher reads it, then adds the card or operation.",
     body: queueBody({ error, notice, rows, writable: linkQueueWritable() }),
   });
 }
 
 function wantsJson(req) {
   return String(req.headers?.accept || "").includes("application/json");
+}
+
+function queueSyncAuthorized(req) {
+  const token = queueSyncToken();
+  if (!token) return false;
+  const header = String(req.headers?.authorization || "");
+  const want = `Bearer ${token}`;
+  const left = Buffer.from(header);
+  const right = Buffer.from(want);
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
 }
 
 function sendQueue(req, res, { error, notice, rows, status = 200 }) {
@@ -784,6 +792,24 @@ async function handle(req, res) {
     }
   }
 
+  if (p === "/api/queue/sync" && req.method === "POST") {
+    if (!linkQueueWritable() || !queueSyncAuthorized(req)) {
+      return sendJson(res, 403, { ok: false, error: "Queue sync is not authorized." });
+    }
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      return sendJson(res, 400, { ok: false, error: "Bad request." });
+    }
+    try {
+      const result = await applyQueueRows(body?.rows || []);
+      return sendJson(res, 200, { ok: true, applied: result.applied });
+    } catch {
+      return sendJson(res, 500, { ok: false, error: "Could not sync the queue." });
+    }
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") {
     send(res, 405, "Method not allowed\n", { "Content-Type": "text/plain; charset=utf-8" });
     return;
@@ -1072,10 +1098,15 @@ async function handle(req, res) {
     return sendHtml(res, addPage({ mode }));
   }
 
-  if (p === "/queue") {
-    if (!linkQueueWritable()) {
-      return sendHtml(res, queuePage({ rows: [] }));
+  if (p === "/api/queue") {
+    try {
+      return sendJson(res, 200, { rows: await listLinkQueue({ includeDone: true }) });
+    } catch {
+      return sendJson(res, 500, { rows: [], error: "The queue is not ready." });
     }
+  }
+
+  if (p === "/queue") {
     try {
       return sendHtml(res, queuePage({ rows: await listLinkQueue() }));
     } catch {

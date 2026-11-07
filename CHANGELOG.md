@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.46] - 2026-11-07
+
+### Added
+
+- Lab and public share the Posts queue. A post pasted on either copy is merged onto the other. The lab watcher still reads the lab queue. `GET /api/queue` lists the rows. Processed posts stay as `done` so they are not queued again.
+
 ## [1.2.45] - 2026-11-07
 
 ### Fixed
