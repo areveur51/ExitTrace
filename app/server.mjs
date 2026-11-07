@@ -165,11 +165,15 @@ const seedPath = path.join(dataDir, "seed.json");
 const APP_VERSION = JSON.parse(
   fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
 ).version;
-const bootstrapSql = [
+const bootstrapParts = [
   fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sql"), "utf8"),
   fs.readFileSync(path.join(ROOT, "scripts", "mention-queue.sql"), "utf8"),
-  fs.readFileSync(path.join(ROOT, "scripts", "link-queue.sql"), "utf8"),
-].join("\n");
+];
+// The post queue table is lab-only. Public boot must not create it.
+if (linkQueueWritable()) {
+  bootstrapParts.push(fs.readFileSync(path.join(ROOT, "scripts", "link-queue.sql"), "utf8"));
+}
+const bootstrapSql = bootstrapParts.join("\n");
 
 const MIME = {
   ".css": "text/css; charset=utf-8",
