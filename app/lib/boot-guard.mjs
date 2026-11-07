@@ -160,6 +160,10 @@ export function stripBootDataWrites(sql) {
  * replicated), logical_heal still runs (it manages the subscription and gets
  * the same flag, so it never re-probes and never writes rows), and every row
  * writer is skipped. The subscriber probe runs once per boot.
+ *
+ * If that DDL fails on a subscriber (for example ADD CONSTRAINT 23514), the
+ * process still returns so server.listen can run. The existing schema stays.
+ * A publisher still throws.
  */
 export async function bootDatabase(pool, deps) {
   const {
@@ -175,7 +179,13 @@ export async function bootDatabase(pool, deps) {
   const subscriber = await isLogicalSubscriberDb(pool, { log });
   if (subscriber) {
     log(skipLine("bootstrap row backfills (@boot-data-write sections)"));
-    await ensureSchema(pool, stripBootDataWrites(bootstrapSql));
+    try {
+      await ensureSchema(pool, stripBootDataWrites(bootstrapSql));
+    } catch (err) {
+      logError(
+        `${LOG} subscriber schema failed (${errLabel(err)}); listening with the existing schema`,
+      );
+    }
   } else {
     await ensureSchema(pool, bootstrapSql);
   }

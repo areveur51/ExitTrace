@@ -43,6 +43,7 @@ function subscriberPool(client) {
 
 async function bootSubscriber(client) {
   const lines = [];
+  const errors = [];
   const result = await bootDatabase(subscriberPool(client), {
     bootstrapSql: BOOTSTRAP,
     seed: { people: [], dog_comms: [] },
@@ -55,8 +56,9 @@ async function bootSubscriber(client) {
       throw new Error("migrateUniquePeople ran on a subscriber");
     },
     log: (line) => lines.push(String(line)),
+    logError: (line) => errors.push(String(line)),
   });
-  return { result, lines };
+  return { result, lines, errors };
 }
 
 async function constraintNames(client) {
@@ -133,16 +135,19 @@ test(
       const holder = await connectScratch(target);
       await holder.query("BEGIN");
       await holder.query("LOCK TABLE person_relationships IN ACCESS EXCLUSIVE MODE");
-      let locked = null;
+      let lockedBoot;
       try {
-        await bootSubscriber(client);
-      } catch (err) {
-        locked = err;
+        lockedBoot = await bootSubscriber(client);
       } finally {
         await holder.query("ROLLBACK");
         await holder.end();
       }
-      assert.equal(locked && locked.code, "55P03");
+      assert.equal(lockedBoot.result.subscriber, true);
+      assert.ok(
+        lockedBoot.errors.some((line) =>
+          /subscriber schema failed \(55P03\); listening with the existing schema/.test(line),
+        ),
+      );
       names = await constraintNames(client);
       assert.ok(names.includes("person_relationships_a_label"));
       assert.ok(names.includes("person_relationships_b_label"));

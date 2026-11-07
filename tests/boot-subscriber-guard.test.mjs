@@ -116,6 +116,36 @@ test("subscriber (pg_subscription count > 0) skips every boot writer", async () 
   assert.match(skipLine("migrateUniquePeople"), /^\[exittrace\] boot: subscriber DB, skipping migrateUniquePeople$/);
 });
 
+test("subscriber schema 23514 is logged by SQLSTATE and boot still returns", async () => {
+  const pool = fakePool({ sub: 1 });
+  const ctx = bootDeps();
+  ctx.deps.ensureSchema = async () => {
+    ctx.ran.ensureSchema.push("threw");
+    throw pgError("23514", "postgres://u:s3cret@db.example/x check constraint");
+  };
+  const result = await bootDatabase(pool, ctx.deps);
+  assert.equal(result.subscriber, true);
+  assert.equal(ctx.ran.importSeed, 0);
+  assert.equal(ctx.ran.migrateUniquePeople, 0);
+  assert.equal(ctx.ran.heal, 1);
+  assert.deepEqual(ctx.ran.ensureSchema, ["threw"]);
+  assert.ok(
+    ctx.errors.some((l) => /subscriber schema failed \(23514\); listening with the existing schema/.test(l)),
+  );
+  for (const line of [...ctx.lines, ...ctx.errors]) {
+    assert.doesNotMatch(line, /s3cret|postgres:\/\//);
+  }
+});
+
+test("publisher schema failure still throws", async () => {
+  const ctx = bootDeps();
+  ctx.deps.ensureSchema = async () => {
+    throw pgError("23514", "postgres://u:s3cret@db.example/x check constraint");
+  };
+  await assert.rejects(() => bootDatabase(fakePool({ sub: 0 }), ctx.deps), /23514|check constraint/);
+  assert.equal(ctx.ran.importSeed, 0);
+});
+
 test("publisher (count 0) runs every boot writer with the full bootstrap SQL", async () => {
   const pool = fakePool({ sub: 0 });
   const ctx = bootDeps();
