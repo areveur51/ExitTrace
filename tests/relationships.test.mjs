@@ -212,9 +212,26 @@ test("a relationship cite must be two official news or government URLs", () => {
   throwsCode({ left_calls_right: "A".repeat(RELATIONSHIP_LABEL_MAX + 1) }, "relationship_label");
   throwsCode({ left_calls_right: "Aide\n" }, "relationship_label");
   throwsCode({ left_calls_right: "Aide\u0000" }, "relationship_label");
+  throwsCode({ left_calls_right: "Aide\u0009" }, "relationship_label");
+  throwsCode({ right_calls_left: "Aide\u0009" }, "relationship_label");
+  throwsCode({ left_calls_right: "Aide\u007F" }, "relationship_label");
+  throwsCode({ right_calls_left: "Aide\u007F" }, "relationship_label");
   throwsCode({ left_calls_right: "Aide <script>" }, "relationship_label");
   throwsCode({ right_calls_left: "Senator>" }, "relationship_label");
+  const trimmed = prepareRelationship(input({
+    left_calls_right: "  Campaign aide  ",
+    right_calls_left: "  Neighbor  ",
+  }));
+  assert.equal(trimmed.a_calls_b, "Neighbor");
+  assert.equal(trimmed.b_calls_a, "Campaign aide");
   for (const ch of ["\u0080", "\u0085", "\u009F", "\u2028", "\u2029"]) {
+    const embedded = `Aide${ch}x`;
+    throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", left_calls_right: embedded }, "relationship_label");
+    throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", right_calls_left: embedded }, "relationship_label");
+    throwsCode({ left_id: "bea-beta", right_id: "ada-alpha", left_calls_right: embedded }, "relationship_label");
+    throwsCode({ left_id: "bea-beta", right_id: "ada-alpha", right_calls_left: embedded }, "relationship_label");
+  }
+  for (const ch of ["\u202A", "\u202B", "\u202C", "\u202D", "\u202E", "\u2066", "\u2067", "\u2068", "\u2069"]) {
     const embedded = `Aide${ch}x`;
     throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", left_calls_right: embedded }, "relationship_label");
     throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", right_calls_left: embedded }, "relationship_label");

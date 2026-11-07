@@ -62,9 +62,10 @@ function requirePersonName(raw) {
 
 function requireLabel(raw) {
   const text = String(raw ?? "");
-  // C0, DEL, C1 (U+0080–U+009F, including U+0085), U+2028, and U+2029.
-  // Checked before trim so a trailing line separator is not stored as the rest of the label.
-  if (/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/.test(text) || /[<>]/.test(text)) {
+  // C0, DEL, tab, C1 (U+0080–U+009F, including U+0085), U+2028, and U+2029.
+  // Bidi formatting controls: embeddings and overrides U+202A–U+202E, isolates U+2066–U+2069.
+  // LRM, RLM, and ALM stay allowed. Checked before trim so a trailing separator is not stored.
+  if (/[\u0000-\u001F\u007F-\u009F\u2028-\u202E\u2066-\u2069]/.test(text) || /[<>]/.test(text)) {
     throw new RelationshipError("relationship label is not stored", "relationship_label");
   }
   const label = text.trim();
