@@ -6,6 +6,7 @@ import { canonicalPublicUrl } from "./urls.mjs";
 
 export const RELATIONSHIP_KINDS = ["former_spouse", "parent_child", "professional"];
 
+/** Examples already stored on cards. Membership is not required. */
 export const RELATIONSHIP_LABELS = [
   "Ex-husband",
   "Ex-wife",
@@ -30,6 +31,8 @@ export const RELATIONSHIP_LABELS = [
 
 export const CITE_FLOOR = 2;
 export const NOTE_MAX = 240;
+/** Card text. Not a limit on how many relationship rows or events a person has. */
+export const RELATIONSHIP_LABEL_MAX = 80;
 
 const GROUP_ORDER = ["Family", "Professional"];
 
@@ -58,9 +61,19 @@ function requirePersonName(raw) {
 }
 
 function requireLabel(raw) {
-  const label = requiredText(raw);
-  if (!RELATIONSHIP_LABELS.includes(label)) {
-    throw new RelationshipError("relationship label is not in the closed list", "relationship_label");
+  const text = String(raw ?? "");
+  // C0, DEL, tab, C1 (U+0080–U+009F, including U+0085), U+2028, and U+2029.
+  // Bidi formatting controls: embeddings and overrides U+202A–U+202E, isolates U+2066–U+2069.
+  // LRM, RLM, and ALM stay allowed. Checked before trim so a trailing separator is not stored.
+  if (/[\u0000-\u001F\u007F-\u009F\u2028-\u202E\u2066-\u2069]/.test(text) || /[<>]/.test(text)) {
+    throw new RelationshipError("relationship label is not stored", "relationship_label");
+  }
+  const label = text.trim();
+  if (!label) {
+    throw new RelationshipError("relationship label is required", "relationship_label");
+  }
+  if (label.length > RELATIONSHIP_LABEL_MAX) {
+    throw new RelationshipError("relationship label is too long", "relationship_label");
   }
   return label;
 }

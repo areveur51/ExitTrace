@@ -7,8 +7,9 @@
  * ET_SCRATCH_PG_URL must be a plain loopback URL (tests/scratch-pg.mjs: no query,
  * fragment or user, no routing PG* env, and the server's address, port and
  * database are checked after connect). Never lab, never Render. The test skips
- * unless that variable is set; the test job's postgres
- * service sets it (see docs/github-auto-deploy.md, "Boot on a subscriber").
+ * during `npm test`. The test job starts a loopback cluster afterward and sets
+ * the variable for this file only, because a Docker-published port would not
+ * report inet_server_addr() as loopback.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";

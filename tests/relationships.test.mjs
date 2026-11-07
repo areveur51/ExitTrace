@@ -4,6 +4,7 @@ import fs from "node:fs";
 import test from "node:test";
 import { personDetail, personRow } from "../app/lib/html.mjs";
 import {
+  RELATIONSHIP_LABEL_MAX,
   RELATIONSHIP_LABELS,
   RelationshipError,
   prepareRelationship,
@@ -206,7 +207,37 @@ test("a relationship cite must be two official news or government URLs", () => {
   throwsCode({ start_year: 999 }, "relationship_year");
   throwsCode({ end_year: 2101 }, "relationship_year");
   throwsCode({ kind: "spouse" }, "relationship_kind");
-  throwsCode({ left_calls_right: "Husband" }, "relationship_label");
+  throwsCode({ left_calls_right: "" }, "relationship_label");
+  throwsCode({ left_calls_right: "   " }, "relationship_label");
+  throwsCode({ left_calls_right: "A".repeat(RELATIONSHIP_LABEL_MAX + 1) }, "relationship_label");
+  throwsCode({ left_calls_right: "Aide\n" }, "relationship_label");
+  throwsCode({ left_calls_right: "Aide\u0000" }, "relationship_label");
+  throwsCode({ left_calls_right: "Aide\u0009" }, "relationship_label");
+  throwsCode({ right_calls_left: "Aide\u0009" }, "relationship_label");
+  throwsCode({ left_calls_right: "Aide\u007F" }, "relationship_label");
+  throwsCode({ right_calls_left: "Aide\u007F" }, "relationship_label");
+  throwsCode({ left_calls_right: "Aide <script>" }, "relationship_label");
+  throwsCode({ right_calls_left: "Senator>" }, "relationship_label");
+  const trimmed = prepareRelationship(input({
+    left_calls_right: "  Campaign aide  ",
+    right_calls_left: "  Neighbor  ",
+  }));
+  assert.equal(trimmed.a_calls_b, "Neighbor");
+  assert.equal(trimmed.b_calls_a, "Campaign aide");
+  for (const ch of ["\u0080", "\u0085", "\u009F", "\u2028", "\u2029"]) {
+    const embedded = `Aide${ch}x`;
+    throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", left_calls_right: embedded }, "relationship_label");
+    throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", right_calls_left: embedded }, "relationship_label");
+    throwsCode({ left_id: "bea-beta", right_id: "ada-alpha", left_calls_right: embedded }, "relationship_label");
+    throwsCode({ left_id: "bea-beta", right_id: "ada-alpha", right_calls_left: embedded }, "relationship_label");
+  }
+  for (const ch of ["\u202A", "\u202B", "\u202C", "\u202D", "\u202E", "\u2066", "\u2067", "\u2068", "\u2069"]) {
+    const embedded = `Aide${ch}x`;
+    throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", left_calls_right: embedded }, "relationship_label");
+    throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", right_calls_left: embedded }, "relationship_label");
+    throwsCode({ left_id: "bea-beta", right_id: "ada-alpha", left_calls_right: embedded }, "relationship_label");
+    throwsCode({ left_id: "bea-beta", right_id: "ada-alpha", right_calls_left: embedded }, "relationship_label");
+  }
   throwsCode({ left_name: "" }, "relationship_person");
   throwsCode({ right_id: "" }, "relationship_person");
   const bounds = prepareRelationship(input({ start_year: 1000, end_year: 2100 }));
@@ -440,7 +471,7 @@ test("Family sits above Professional, and a death card keeps one rail circle", (
   assert.equal(deadlineEntries.length, 1);
 });
 
-test("Personal chef is a closed professional label and flips to Principal", () => {
+test("Personal chef flips to Principal, and Cook is a custom label", () => {
   const row = prepareRelationship({
     left_id: "barack-obama",
     left_name: "Barack Obama",
@@ -456,23 +487,93 @@ test("Personal chef is a closed professional label and flips to Principal", () =
   assert.equal(row.a_calls_b, "Personal chef");
   assert.equal(row.b_calls_a, "Principal");
   assert.equal(row.start_year, null);
-  assert.throws(
-    () =>
-      prepareRelationship({
-        left_id: "barack-obama",
-        left_name: "Barack Obama",
-        left_calls_right: "Cook",
-        right_id: "tafari-campbell",
-        right_name: "Tafari Campbell",
-        right_calls_left: "Principal",
-        kind: "professional",
-        sources: [CNN, FOX_CITE],
-      }),
-    (err) => err instanceof RelationshipError && err.code === "relationship_label",
-  );
+  const cook = prepareRelationship({
+    left_id: "barack-obama",
+    left_name: "Barack Obama",
+    left_calls_right: "Cook",
+    right_id: "tafari-campbell",
+    right_name: "Tafari Campbell",
+    right_calls_left: "Principal",
+    kind: "professional",
+    sources: [CNN, FOX_CITE],
+  });
+  assert.equal(cook.a_calls_b, "Cook");
+  assert.equal(cook.b_calls_a, "Principal");
+  const atMax = prepareRelationship(input({ left_calls_right: "A".repeat(RELATIONSHIP_LABEL_MAX) }));
+  assert.equal(atMax.b_calls_a, "A".repeat(RELATIONSHIP_LABEL_MAX));
 });
 
-test("Former organizer and Candidate are closed professional labels", () => {
+test("custom labels keep their card when the pair is reversed", () => {
+  const forward = prepareRelationship({
+    left_id: "ada-alpha",
+    left_name: "Ada Alpha",
+    left_calls_right: "Campaign aide",
+    right_id: "bea-beta",
+    right_name: "Bea Beta",
+    right_calls_left: "Senator",
+    kind: "professional",
+    sources: [CNN, FOX_CITE],
+  });
+  const reverse = prepareRelationship({
+    left_id: "bea-beta",
+    left_name: "Bea Beta",
+    left_calls_right: "Senator",
+    right_id: "ada-alpha",
+    right_name: "Ada Alpha",
+    right_calls_left: "Campaign aide",
+    kind: "professional",
+    sources: [CNN, FOX_CITE],
+  });
+  assert.equal(forward.a_calls_b, "Campaign aide");
+  assert.equal(forward.b_calls_a, "Senator");
+  assert.deepEqual(
+    [reverse.a_calls_b, reverse.b_calls_a, reverse.id],
+    [forward.a_calls_b, forward.b_calls_a, forward.id],
+  );
+  const other = prepareRelationship({
+    left_id: "ada-alpha",
+    left_name: "Ada Alpha",
+    left_calls_right: "Neighbor",
+    right_id: "cy-gamma",
+    right_name: "Cy Gamma",
+    right_calls_left: "Roommate",
+    kind: "professional",
+    sources: [CNN, FOX_CITE],
+  });
+  assert.notEqual(other.id, forward.id);
+  assert.equal(other.a_calls_b, "Neighbor");
+  assert.equal(other.b_calls_a, "Roommate");
+  const card = personDetail({
+    ...guilfoyle(null),
+    id: "ada-alpha",
+    name: "Ada Alpha",
+    relationships: [
+      { ...forward, person_a_name: "Ada Alpha", person_b_name: "Bea Beta" },
+      { ...other, person_a_name: "Ada Alpha", person_b_name: "Cy Gamma" },
+    ],
+    events: [
+      { kind: "resignations", event_date: "2020-01-02", position: "Aide", organization: "Office", sources: [CNN, FOX_CITE] },
+      { kind: "notable", seq: 1, event_date: "2021-06-01", position: "Hearing", organization: "Office", sources: [CNN, FOX_CITE] },
+    ],
+  });
+  assert.match(card, /Campaign aide/);
+  assert.match(card, /Neighbor/);
+  assert.match(card, /2020-01-02/);
+  assert.match(card, /2021-06-01/);
+  const marked = personDetail({
+    ...guilfoyle({ ...forward, a_calls_b: "Aide & counsel", person_a_name: "Ada Alpha", person_b_name: "Bea Beta" }),
+    id: "ada-alpha",
+    name: "Ada Alpha",
+  });
+  assert.match(marked, /Aide &amp; counsel/);
+  assert.doesNotMatch(marked, /Aide & counsel/);
+  for (const label of RELATIONSHIP_LABELS) {
+    assert.equal(label.length <= RELATIONSHIP_LABEL_MAX, true, label);
+    assert.doesNotMatch(label, /[<>\u0000-\u001F]/);
+  }
+});
+
+test("Former organizer and Candidate still store on the professional edge", () => {
   const row = prepareRelationship({
     left_id: "abdul-el-sayed",
     left_name: "Abdul El-Sayed",
@@ -501,13 +602,11 @@ test("person_relationships stays out of the lab publication SQL", () => {
   const tail = sql.slice(at);
   assert.match(tail, /CREATE TABLE IF NOT EXISTS person_relationships/);
   assert.match(tail, /parent_child/);
-  assert.match(tail, /'Son'/);
-  assert.match(tail, /'Father'/);
-  assert.match(tail, /'Personal chef'/);
-  for (const label of ["Half-sister", "Half-brother", "Judge", "Litigant", "Cousin", "Daughter", "Mother", "Sister", "Former organizer", "Candidate"]) {
-    assert.ok(RELATIONSHIP_LABELS.includes(label), label);
-    assert.match(tail, new RegExp(`'${label}'`));
-  }
   assert.doesNotMatch(tail, /ALTER PUBLICATION/i);
   assert.doesNotMatch(sql, /ADD TABLE person_relationships/i);
+  assert.match(tail, /DROP CONSTRAINT IF EXISTS person_relationships_a_label/);
+  assert.match(tail, /DROP CONSTRAINT IF EXISTS person_relationships_b_label/);
+  assert.doesNotMatch(tail, /ADD CONSTRAINT person_relationships_a_label/);
+  assert.doesNotMatch(tail, /ADD CONSTRAINT person_relationships_b_label/);
+  assert.match(tail, /lock_timeout', '5s'/);
 });

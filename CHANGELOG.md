@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.44] - 2026-11-07
+
+### Fixed
+
+- Boot drops `person_relationships_a_label` and `person_relationships_b_label` and does not add them again. Those checks listed allowed `a_calls_b` and `b_calls_a` strings. They did not limit how many relationship rows or events a card can have. Stored rows are unchanged. The drops wait at most 5 seconds for their lock. A relationship label may be custom text up to 80 characters. Empty text, ASCII and C1 controls, Unicode line and paragraph separators, bidi formatting controls, and angle brackets are refused. The kind, year, note-length, pair-order, and unique checks stay.
+
 ## [1.2.43] - 2026-11-07
 
 ### Fixed
