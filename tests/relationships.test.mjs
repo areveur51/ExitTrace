@@ -510,4 +510,7 @@ test("person_relationships stays out of the lab publication SQL", () => {
   }
   assert.doesNotMatch(tail, /ALTER PUBLICATION/i);
   assert.doesNotMatch(sql, /ADD TABLE person_relationships/i);
+  assert.match(tail, /DROP CONSTRAINT IF EXISTS person_relationships_a_label/);
+  assert.doesNotMatch(tail, /ADD CONSTRAINT person_relationships_a_label/);
+  assert.match(tail, /ADD CONSTRAINT person_relationships_b_label/);
 });

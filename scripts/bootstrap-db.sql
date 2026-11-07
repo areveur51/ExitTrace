@@ -694,7 +694,6 @@ CREATE TABLE IF NOT EXISTS person_relationships (
   b_note TEXT NOT NULL DEFAULT '',
   sources JSONB NOT NULL DEFAULT '[]'::jsonb,
   CONSTRAINT person_relationships_kind CHECK (kind IN ('former_spouse', 'parent_child', 'professional')),
-  CONSTRAINT person_relationships_a_label CHECK (a_calls_b IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef', 'Half-sister', 'Half-brother', 'Judge', 'Litigant', 'Cousin', 'Daughter', 'Mother', 'Sister', 'Former organizer', 'Candidate')),
   CONSTRAINT person_relationships_b_label CHECK (b_calls_a IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef', 'Half-sister', 'Half-brother', 'Judge', 'Litigant', 'Cousin', 'Daughter', 'Mother', 'Sister', 'Former organizer', 'Candidate')),
   CONSTRAINT person_relationships_start_year CHECK (start_year IS NULL OR (start_year >= 1000 AND start_year <= 2100)),
   CONSTRAINT person_relationships_end_year CHECK (end_year IS NULL OR (end_year >= 1000 AND end_year <= 2100)),
@@ -712,9 +711,11 @@ ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_
 ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_kind
   CHECK (kind IN ('former_spouse', 'parent_child', 'professional'));
 
+-- a_calls_b is not a closed list. person_relationships_a_label named allowed
+-- strings; it did not limit how many relationship rows or events a card has.
+-- Existing databases drop it. Do not add it again: adding that CHECK fails
+-- (23514) when a stored a_calls_b is outside the old list. Rows stay.
 ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_a_label;
-ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_a_label
-  CHECK (a_calls_b IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef', 'Half-sister', 'Half-brother', 'Judge', 'Litigant', 'Cousin', 'Daughter', 'Mother', 'Sister', 'Former organizer', 'Candidate'));
 
 ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_b_label;
 ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_b_label
