@@ -2,6 +2,10 @@
  * Worf: on a logical-replication SUBSCRIBER (pg_subscription non-empty) every
  * boot writer to a replicated table skips itself. Fail closed when the check
  * errors. A publisher (lab, count 0) keeps its current boot writes.
+ *
+ * This file uses a fake pool. It does not apply SQL to PostgreSQL. The
+ * populated subscriber boot is tests/relationship-a-label.test.mjs, and it
+ * runs only when ET_SCRATCH_PG_URL points at a local throwaway cluster.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";

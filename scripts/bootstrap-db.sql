@@ -681,6 +681,19 @@ CREATE INDEX IF NOT EXISTS epstein_flight_legs_passenger_idx
 
 -- person_relationships is excluded from exittrace_lab_pub.
 -- One edge draws both cards. Years and notes may be blank. Not an event.
+-- a_calls_b and b_calls_a are card text. person_relationships_a_label and
+-- person_relationships_b_label listed allowed strings. They did not limit how
+-- many relationship rows or events a card has. The upgrade below drops both
+-- and does not add them again: ADD CONSTRAINT scans stored text and fails
+-- (23514) when a value is outside the old list. Rows stay.
+-- lock_timeout 5s covers this table's create-if-missing and its upgrade,
+-- including those drops. Past 5s the schema query errors (55P03) and rolls
+-- back. The default lock wait is restored after this table.
+DO $$
+BEGIN
+  PERFORM set_config('lock_timeout', '5s', true);
+END $$;
+
 CREATE TABLE IF NOT EXISTS person_relationships (
   id TEXT PRIMARY KEY,
   person_a TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
@@ -694,8 +707,6 @@ CREATE TABLE IF NOT EXISTS person_relationships (
   b_note TEXT NOT NULL DEFAULT '',
   sources JSONB NOT NULL DEFAULT '[]'::jsonb,
   CONSTRAINT person_relationships_kind CHECK (kind IN ('former_spouse', 'parent_child', 'professional')),
-  CONSTRAINT person_relationships_a_label CHECK (a_calls_b IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef', 'Half-sister', 'Half-brother', 'Judge', 'Litigant', 'Cousin', 'Daughter', 'Mother', 'Sister', 'Former organizer', 'Candidate')),
-  CONSTRAINT person_relationships_b_label CHECK (b_calls_a IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef', 'Half-sister', 'Half-brother', 'Judge', 'Litigant', 'Cousin', 'Daughter', 'Mother', 'Sister', 'Former organizer', 'Candidate')),
   CONSTRAINT person_relationships_start_year CHECK (start_year IS NULL OR (start_year >= 1000 AND start_year <= 2100)),
   CONSTRAINT person_relationships_end_year CHECK (end_year IS NULL OR (end_year >= 1000 AND end_year <= 2100)),
   CONSTRAINT person_relationships_year_order CHECK (end_year IS NULL OR start_year IS NULL OR end_year >= start_year),
@@ -713,12 +724,7 @@ ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_kind
   CHECK (kind IN ('former_spouse', 'parent_child', 'professional'));
 
 ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_a_label;
-ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_a_label
-  CHECK (a_calls_b IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef', 'Half-sister', 'Half-brother', 'Judge', 'Litigant', 'Cousin', 'Daughter', 'Mother', 'Sister', 'Former organizer', 'Candidate'));
-
 ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_b_label;
-ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_b_label
-  CHECK (b_calls_a IN ('Ex-husband', 'Ex-wife', 'Spouse', 'Former spouse', 'Son', 'Father', 'Speechwriter', 'Principal', 'Personal chef', 'Half-sister', 'Half-brother', 'Judge', 'Litigant', 'Cousin', 'Daughter', 'Mother', 'Sister', 'Former organizer', 'Candidate'));
 
 ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_a_note_len;
 ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_a_note_len
@@ -727,3 +733,8 @@ ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_a_note_len
 ALTER TABLE person_relationships DROP CONSTRAINT IF EXISTS person_relationships_b_note_len;
 ALTER TABLE person_relationships ADD CONSTRAINT person_relationships_b_note_len
   CHECK (char_length(b_note) <= 240);
+
+DO $$
+BEGIN
+  PERFORM set_config('lock_timeout', '0', true);
+END $$;
