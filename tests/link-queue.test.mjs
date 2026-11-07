@@ -155,6 +155,12 @@ test("consecutive post submits are outside the add rate limit", () => {
   }
 });
 
+test("public boot does not create the lab post queue table", () => {
+  const server = fs.readFileSync(path.join(ROOT, "app", "server.mjs"), "utf8");
+  assert.match(server, /if \(linkQueueWritable\(\)\) \{/);
+  assert.match(server, /scripts", "link-queue.sql"/);
+});
+
 test("link_queue is not a published table", () => {
   assert.equal(PUBLISHED_TABLES.includes("link_queue"), false);
   assert.equal(RENDER_ONLY_TABLES.includes("link_queue"), false);
