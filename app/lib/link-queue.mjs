@@ -14,19 +14,16 @@ export function resetLinkQueueForTests() {
   memorySeq = 1;
 }
 
-/** Unset DATABASE_URL is the test path. Only the lab database stores this queue. */
+/** Unset DATABASE_URL is the test path. Lab and public both store this queue. */
 export function linkQueueWritable() {
   const raw = String(process.env.DATABASE_URL || "").trim();
   if (!raw) return true;
-  let parsed;
   try {
-    parsed = new URL(raw);
+    new URL(raw);
+    return true;
   } catch {
     return false;
   }
-  const host = parsed.hostname;
-  const port = parsed.port || "5432";
-  return (host === "127.0.0.1" || host === "localhost") && port === "5433";
 }
 
 export function splitPostLinks(raw) {
@@ -101,15 +98,81 @@ function mapRow(row) {
   };
 }
 
-export async function listLinkQueue() {
+export async function listLinkQueue({ includeDone = false } = {}) {
   const pool = await getPool();
-  if (!pool) return memoryRows.map(mapRow);
+  if (!pool) {
+    const rows = memoryRows.map(mapRow);
+    return includeDone ? rows : rows.filter((row) => row.status !== "done");
+  }
   const result = await pool.query(
-    `SELECT id, platform, status_id, url, status, reason, created_at
-     FROM link_queue
-     ORDER BY created_at ASC, id ASC`,
+    includeDone
+      ? `SELECT id, platform, status_id, url, status, reason, created_at
+         FROM link_queue
+         ORDER BY created_at ASC, id ASC`
+      : `SELECT id, platform, status_id, url, status, reason, created_at
+         FROM link_queue
+         WHERE status <> 'done'
+         ORDER BY created_at ASC, id ASC`,
   );
   return result.rows.map(mapRow);
+}
+
+export async function applyQueueRows(rows) {
+  const accepted = (rows || [])
+    .map((row) => ({
+      platform: row.platform,
+      statusId: String(row.statusId || ""),
+      url: String(row.url || ""),
+      status: ["pending", "processing", "held", "done"].includes(row.status)
+        ? row.status
+        : "pending",
+      reason: String(row.reason || "").slice(0, 400),
+      createdAt: row.createdAt || row.created_at || null,
+    }))
+    .filter((row) => (row.platform === "x" || row.platform === "truth") && row.statusId && row.url);
+  const pool = await getPool();
+  let applied = 0;
+  if (!pool) {
+    for (const row of accepted) {
+      const index = memoryRows.findIndex(
+        (item) => item.platform === row.platform && item.statusId === row.statusId,
+      );
+      if (index < 0) {
+        memoryRows.push({
+          id: memorySeq++,
+          platform: row.platform,
+          statusId: row.statusId,
+          url: row.url,
+          status: row.status,
+          reason: row.reason,
+          created_at: row.createdAt || new Date().toISOString(),
+        });
+      } else {
+        memoryRows[index] = {
+          ...memoryRows[index],
+          url: row.url,
+          status: row.status,
+          reason: row.reason,
+        };
+      }
+      applied += 1;
+    }
+    return { applied };
+  }
+  for (const row of accepted) {
+    const result = await pool.query(
+      `INSERT INTO link_queue (platform, status_id, url, status, reason, created_at)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()))
+       ON CONFLICT (platform, status_id) DO UPDATE SET
+         url = EXCLUDED.url,
+         status = EXCLUDED.status,
+         reason = EXCLUDED.reason
+       RETURNING id`,
+      [row.platform, row.statusId, row.url, row.status, row.reason, row.createdAt],
+    );
+    if (result.rowCount) applied += 1;
+  }
+  return { applied };
 }
 
 export async function enqueuePostLinks(raw) {
@@ -183,13 +246,14 @@ export async function removeLinkQueue(rawId) {
       (row) => String(row.id) === id && row.status !== "processing",
     );
     if (index < 0) return false;
-    memoryRows.splice(index, 1);
+    memoryRows[index] = { ...memoryRows[index], status: "done", reason: "" };
     return true;
   }
   const result = await pool.query(
-    `DELETE FROM link_queue
-     WHERE id = $1::bigint AND status IN ('pending', 'held')
-     RETURNING id`,
+    `UPDATE link_queue
+        SET status = 'done', reason = ''
+      WHERE id = $1::bigint AND status IN ('pending', 'held')
+      RETURNING id`,
     [id],
   );
   return result.rowCount > 0;
