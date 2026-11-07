@@ -1907,7 +1907,8 @@ pre {
   letter-spacing: 0.04em;
 }
 .tui-form input,
-.tui-form select {
+.tui-form select,
+.tui-form textarea {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--rule);
@@ -1916,10 +1917,26 @@ pre {
   font: inherit;
   padding: 0.45rem 0.55rem;
 }
+.tui-form textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
 .tui-form input:focus,
-.tui-form select:focus {
+.tui-form select:focus,
+.tui-form textarea:focus {
   outline: 1px solid var(--cyan);
   box-shadow: var(--glow-cyan);
+}
+.queue-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.queue-list li {
+  margin: 0 0 0.85rem;
+}
+.queue-list a {
+  overflow-wrap: anywhere;
 }
 .add-submit {
   border: 1px solid var(--rule);
@@ -2372,6 +2389,7 @@ html[data-theme="glass"] .pager-btn,
 html[data-theme="glass"] .pager-pages a,
 html[data-theme="glass"] .tui-form input,
 html[data-theme="glass"] .tui-form select,
+html[data-theme="glass"] .tui-form textarea,
 html[data-theme="glass"] .identity-filter-select,
 html[data-theme="glass"] .add-submit,
 html[data-theme="glass"] pre {
@@ -2454,6 +2472,7 @@ html[data-theme="glass"] .form-error {
 }
 html[data-theme="glass"] .tui-form input:focus,
 html[data-theme="glass"] .tui-form select:focus,
+html[data-theme="glass"] .tui-form textarea:focus,
 html[data-theme="glass"] .identity-filter-select:focus {
   outline: 1px solid var(--amber);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 40%, transparent);

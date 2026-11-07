@@ -243,6 +243,7 @@ function keymapItems(activePath) {
     { key: "b", href: "/dashboard", label: "Dashboard" },
     { key: "u", href: "/unsorted" },
     { key: "w", href: "/downloads", label: "Downloads" },
+    { key: "q", href: "/queue", label: "Posts" },
   ].map((item) => ({
     ...item,
     label: item.label || categoryByPath(item.href)?.nav || item.href,
@@ -675,6 +676,11 @@ export function breadcrumbItems({
     else if (String(label || "").toLowerCase() === "queued") {
       items.push({ href: p, label: "Queued" });
     }
+    return items;
+  }
+  if (p === "/queue") {
+    items.push({ href: "/add", label: "Add" });
+    items.push({ href: "/queue", label: "Posts" });
     return items;
   }
   if (p === "/downloads") {
@@ -4308,6 +4314,17 @@ export function addCiteRule() {
   return `<p class="cite-rule">One card per person. Each tagged event needs two or more verified official news or official government social citations. Unofficial or commentary social is extra only — it is not a cite. Wikipedia is not a cite. This form does not invent cites or copy a post date into the event date. A new person insert is fail-closed: country of origin, position, organization, reason of event, event date, two official cites, and an eligible portrait. Birth date is optional — unknown stores as null and is not invented from age or month-year. Military inserts also require branch (the existing event field). Country of origin and branch are not guessed. Origin is not the event country. If the person already exists, the new kind is attached — a second row is not created. A new person requires an eligible portrait: Wikimedia, an official government image, a curated news still, or a photo supplied for this card. The card is not created without one. A portrait over 400 KB or 1600 pixels on a side is stored as a compressed JPEG. Do not invent a face. Existing gold photos are not overwritten. Net worth is a published Forbes or Bloomberg estimate when one exists; otherwise USD stays blank with a short note that none was located. Existing gold net-worth is not overwritten. Group operations are a separate operation card — not a person. Operations need a name, event date, agencies, summary, a signed tag, and two official DOJ/gov/news-org cites. Victim and arrest counts stay blank unless a cite states them. Named children are not stored. A host process looks up published sources and applies the row.</p>`;
 }
 
+function addModeNav(active) {
+  const chip = (href, key, label, on) =>
+    `<a class="keychip" href="${href}"${on ? ' aria-current="page"' : ""} data-key="${key}"><span class="br">[</span>${key}<span class="br">]</span> ${label}</a>`;
+  return `<nav class="add-modes" aria-label="Add mode">
+    ${chip("/add", "p", "Person", active === "person")}
+    ${chip("/add?mode=operation", "g", "Operation", active === "operation")}
+    ${chip("/add?mode=dog", "o", "Dog comms", active === "dog")}
+    ${chip("/queue", "q", "Posts", active === "posts")}
+  </nav>`;
+}
+
 export function addBody({
   mode = "person",
   queued,
@@ -4317,11 +4334,7 @@ export function addBody({
   const person = mode === "person" || (!mode && mode !== "dog" && mode !== "operation");
   const dog = mode === "dog";
   const operation = mode === "operation";
-  const tabs = `<nav class="add-modes" aria-label="Add mode">
-    <a class="keychip" href="/add"${person ? ' aria-current="page"' : ""} data-key="p"><span class="br">[</span>p<span class="br">]</span> Person</a>
-    <a class="keychip" href="/add?mode=operation"${operation ? ' aria-current="page"' : ""} data-key="g"><span class="br">[</span>g<span class="br">]</span> Operation</a>
-    <a class="keychip" href="/add?mode=dog"${dog ? ' aria-current="page"' : ""} data-key="o"><span class="br">[</span>o<span class="br">]</span> Dog comms</a>
-  </nav>`;
+  const tabs = addModeNav(person ? "person" : dog ? "dog" : "operation");
   if (queued) {
     return `${tabs}
     ${boxFrame(
@@ -4497,6 +4510,211 @@ export function addBody({
       ${addCiteRule()}`,
       { active: true, extraClass: "add-box" },
     )}`;
+}
+
+function queueWhen(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const part = (type) => parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")} ET`;
+}
+
+const QUEUE_STATUS = {
+  pending: "Queued",
+  processing: "Working",
+  held: "Held",
+};
+
+function queueRowsHtml(rows) {
+  if (!rows.length) return `<p>The queue is empty.</p>`;
+  return `<ul class="queue-list">${rows
+    .map((row) => {
+      const label = QUEUE_STATUS[row.status] || row.status;
+      const reason = row.reason ? `<p class="hint">${esc(row.reason)}</p>` : "";
+      const remove =
+        row.status === "processing"
+          ? ""
+          : `<form class="queue-remove" method="post" action="/queue">
+              <input type="hidden" name="action" value="remove">
+              <input type="hidden" name="id" value="${esc(row.id)}">
+              <button type="submit" class="keychip">Remove</button>
+            </form>`;
+      return `<li>
+        <p><a href="${esc(row.url)}">${esc(row.url)}</a></p>
+        <p>${esc(label)} · ${esc(queueWhen(row.createdAt))}</p>
+        ${reason}
+        ${remove}
+      </li>`;
+    })
+    .join("")}</ul>`;
+}
+
+export function queueBody({ error, notice, rows = [], writable = true } = {}) {
+  const message =
+    error ||
+    notice ||
+    (writable ? "" : "This copy does not store the post queue. Queue posts on the lab.");
+  const composer = writable
+    ? `<p id="queue-note" class="queued-msg" role="status">${esc(message)}</p>
+      <form class="tui-form add-form queue-add" method="post" action="/queue">
+        <label class="field">
+          <span>X or Truth Social post</span>
+          <textarea name="urls" placeholder="https://x.com/…/status/…&#10;https://truthsocial.com/@…/posts/…"></textarea>
+        </label>
+        <p class="hint">One post per line. Submit stays available, so the next post can be pasted while the last one is stored. The same status is kept once.</p>
+        <button type="submit" class="keychip add-submit"><span class="br">[</span>Enter<span class="br">]</span> Queue</button>
+      </form>
+      ${queueClientScript()}`
+    : `<p id="queue-note" class="queued-msg" role="status">${esc(message)}</p>`;
+  const list = writable
+    ? boxFrame("Queue", `<div id="queue-rows">${queueRowsHtml(rows)}</div>`, { extraClass: "add-box" })
+    : "";
+  return `${addModeNav("posts")}
+    ${boxFrame("Queue a post", composer, { active: true, extraClass: "add-box" })}
+    ${list}`;
+}
+
+function queueClientScript() {
+  return `<script>
+(function () {
+  var form = document.querySelector("form.queue-add");
+  var mount = document.getElementById("queue-rows");
+  var note = document.getElementById("queue-note");
+  if (!form || !mount) return;
+  var box = form.querySelector("textarea");
+  var seen = 0;
+  function label(status) {
+    if (status === "processing") return "Working";
+    if (status === "held") return "Held";
+    return "Queued";
+  }
+  function when(value) {
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return "";
+    var parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(date);
+    function part(type) {
+      var found = parts.find(function (item) { return item.type === type; });
+      return found ? found.value : "";
+    }
+    return part("year") + "-" + part("month") + "-" + part("day") + " " + part("hour") + ":" + part("minute") + " ET";
+  }
+  function draw(rows) {
+    mount.textContent = "";
+    if (!rows || !rows.length) {
+      var empty = document.createElement("p");
+      empty.textContent = "The queue is empty.";
+      mount.appendChild(empty);
+      return;
+    }
+    var ul = document.createElement("ul");
+    ul.className = "queue-list";
+    rows.forEach(function (row) {
+      var li = document.createElement("li");
+      var linkP = document.createElement("p");
+      var anchor = document.createElement("a");
+      anchor.href = row.url;
+      anchor.textContent = row.url;
+      linkP.appendChild(anchor);
+      li.appendChild(linkP);
+      var meta = document.createElement("p");
+      meta.textContent = label(row.status) + " · " + when(row.createdAt);
+      li.appendChild(meta);
+      if (row.reason) {
+        var hint = document.createElement("p");
+        hint.className = "hint";
+        hint.textContent = row.reason;
+        li.appendChild(hint);
+      }
+      if (row.status !== "processing") {
+        var remove = document.createElement("form");
+        remove.method = "post";
+        remove.action = "/queue";
+        remove.className = "queue-remove";
+        var action = document.createElement("input");
+        action.type = "hidden";
+        action.name = "action";
+        action.value = "remove";
+        var id = document.createElement("input");
+        id.type = "hidden";
+        id.name = "id";
+        id.value = row.id;
+        var button = document.createElement("button");
+        button.type = "submit";
+        button.className = "keychip";
+        button.textContent = "Remove";
+        remove.appendChild(action);
+        remove.appendChild(id);
+        remove.appendChild(button);
+        remove.addEventListener("submit", function (event) {
+          event.preventDefault();
+          send(new URLSearchParams({ action: "remove", id: row.id }));
+        });
+        li.appendChild(remove);
+      }
+      ul.appendChild(li);
+    });
+    mount.appendChild(ul);
+  }
+  function send(body, restore) {
+    var ticket = ++seen;
+    fetch("/queue", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json"
+      },
+      body: body
+    }).then(function (res) {
+      return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+    }).then(function (result) {
+      if (ticket < seen) return;
+      if (!result.ok) {
+        if (restore && box && !box.value) box.value = restore;
+        if (note) note.textContent = "Could not queue that post.";
+        return;
+      }
+      if (note) note.textContent = result.data.error || result.data.notice || "";
+      if (result.data.rows) draw(result.data.rows);
+    }).catch(function () {
+      if (ticket < seen) return;
+      if (restore && box && !box.value) box.value = restore;
+      if (note) note.textContent = "Could not queue that post.";
+    });
+  }
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var urls = box.value;
+    if (!String(urls || "").trim()) return;
+    box.value = "";
+    box.focus();
+    send(new URLSearchParams({ urls: urls }), urls);
+  });
+  mount.addEventListener("submit", function (event) {
+    var remove = event.target;
+    if (!remove || !remove.classList || !remove.classList.contains("queue-remove")) return;
+    event.preventDefault();
+    var data = new FormData(remove);
+    send(new URLSearchParams(data));
+  });
+})();
+</script>`;
 }
 
 

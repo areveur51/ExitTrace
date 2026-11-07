@@ -6,8 +6,8 @@ import { ASSET_VERSION } from "../app/lib/html.mjs";
 import { setMemory } from "../app/lib/store.mjs";
 import { DOG_PATHS, DOG_PEOPLE, DOG_POSTS } from "./fixtures/dog-comms-golden/fixture.mjs";
 
-// Golden HTML re-captured at v1.2.35 (PR #240, supporting-media masonry) on top of the
-// #238 merge 94e78bf4. Dog comms must render byte-identical except for the asset cache-bust
+// Golden HTML re-captured for the footer Posts chip (v1.2.42), on the v1.2.35
+// capture (PR #240). Dog comms must render byte-identical except for the asset cache-bust
 // token on /styles.css and /app.js: `?v=<package version>-<sha1(styles.css, app.js)[0:10]>`,
 // which changes with every version bump or CSS/JS edit. One bounded normalizer (fixed
 // paths, bounded digit/hex classes, no greedy match) maps exactly that token to `?v=X"` on
