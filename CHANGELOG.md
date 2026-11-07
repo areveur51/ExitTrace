@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.42] - 2026-11-07
+
+### Added
+
+- Posts page (`/queue`). The footer keymap chip is Posts. Paste one X or Truth Social post per line. Submit stays available, so the next post can be pasted while the last one is stored. The same status is kept once. The lab database stores this queue. The public copy does not.
+
 ## [1.2.41] - 2026-11-03
 
 ### Added

@@ -97,8 +97,10 @@ import {
   searchBody,
   sourcePostDetail,
   sourcePostList,
+  queueBody,
   tuiCount,
 } from "./lib/html.mjs";
+import { describeEnqueue, enqueuePostLinks, linkQueueWritable, listLinkQueue, removeLinkQueue } from "./lib/link-queue.mjs";
 import { AddError, queueAddRequest } from "./lib/add-request.mjs";
 import { orderPeopleByMenuDate, personMenuDate } from "./lib/menu-date.mjs";
 import {
@@ -166,6 +168,7 @@ const APP_VERSION = JSON.parse(
 const bootstrapSql = [
   fs.readFileSync(path.join(ROOT, "scripts", "bootstrap-db.sql"), "utf8"),
   fs.readFileSync(path.join(ROOT, "scripts", "mention-queue.sql"), "utf8"),
+  fs.readFileSync(path.join(ROOT, "scripts", "link-queue.sql"), "utf8"),
 ].join("\n");
 
 const MIME = {
@@ -397,6 +400,34 @@ function addPage({ mode, queued, error, values }) {
       : "Queue a person, an operation, or an official government dog-comm. Cites are not invented here.",
     body: addBody({ mode, queued, error, values }),
   });
+}
+
+function queuePage({ error, notice, rows }) {
+  return layout({
+    title: "Posts",
+    path: "/queue",
+    heading: "Posts",
+    query: "queue posts",
+    countLabel: "queue",
+    lede: "Paste an X or Truth Social post. The lab watcher reads this queue, then adds the card or operation.",
+    body: queueBody({ error, notice, rows, writable: linkQueueWritable() }),
+  });
+}
+
+function wantsJson(req) {
+  return String(req.headers?.accept || "").includes("application/json");
+}
+
+function sendQueue(req, res, { error, notice, rows, status = 200 }) {
+  if (wantsJson(req)) {
+    return sendJson(res, status, {
+      ok: !error,
+      error: error || "",
+      notice: notice || "",
+      rows: rows || [],
+    });
+  }
+  return sendHtml(res, queuePage({ error, notice, rows }));
 }
 
 function safeId(raw) {
@@ -714,6 +745,41 @@ async function handle(req, res) {
     }
   }
 
+  if (p === "/queue" && req.method === "POST") {
+    let fields = {};
+    try {
+      fields = parseForm(await readBody(req));
+    } catch {
+      send(res, 400, "Bad request\n", { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+    try {
+      if (!linkQueueWritable()) {
+        return sendQueue(req, res, {
+          error: "This copy does not store the post queue.",
+          rows: [],
+          status: 403,
+        });
+      }
+      if (fields.action === "remove") {
+        const removed = await removeLinkQueue(fields.id);
+        const rows = await listLinkQueue();
+        return sendQueue(req, res, {
+          notice: removed ? "Removed from the queue." : "That post is not in the queue.",
+          rows,
+        });
+      }
+      const result = await enqueuePostLinks(fields.urls || fields.url || "");
+      const rows = await listLinkQueue();
+      if (result.empty) {
+        return sendQueue(req, res, { error: "Paste a post link.", rows });
+      }
+      return sendQueue(req, res, { notice: describeEnqueue(result), rows });
+    } catch {
+      return sendQueue(req, res, { error: "Could not queue that post.", rows: [] });
+    }
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") {
     send(res, 405, "Method not allowed\n", { "Content-Type": "text/plain; charset=utf-8" });
     return;
@@ -1000,6 +1066,17 @@ async function handle(req, res) {
     const rawMode = url.searchParams.get("mode");
     const mode = rawMode === "dog" || rawMode === "operation" ? rawMode : "person";
     return sendHtml(res, addPage({ mode }));
+  }
+
+  if (p === "/queue") {
+    if (!linkQueueWritable()) {
+      return sendHtml(res, queuePage({ rows: [] }));
+    }
+    try {
+      return sendHtml(res, queuePage({ rows: await listLinkQueue() }));
+    } catch {
+      return sendHtml(res, queuePage({ error: "The queue is not ready.", rows: [] }));
+    }
   }
 
   if (p === GROKIPEDIA_PATH || p.startsWith(`${GROKIPEDIA_PATH}/`)) {
