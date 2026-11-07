@@ -6,6 +6,7 @@ import { canonicalPublicUrl } from "./urls.mjs";
 
 export const RELATIONSHIP_KINDS = ["former_spouse", "parent_child", "professional"];
 
+/** Examples already stored on cards. Membership is not required. */
 export const RELATIONSHIP_LABELS = [
   "Ex-husband",
   "Ex-wife",
@@ -30,6 +31,8 @@ export const RELATIONSHIP_LABELS = [
 
 export const CITE_FLOOR = 2;
 export const NOTE_MAX = 240;
+/** Card text. Not a limit on how many relationship rows or events a person has. */
+export const RELATIONSHIP_LABEL_MAX = 80;
 
 const GROUP_ORDER = ["Family", "Professional"];
 
@@ -58,9 +61,16 @@ function requirePersonName(raw) {
 }
 
 function requireLabel(raw) {
-  const label = requiredText(raw);
-  if (!RELATIONSHIP_LABELS.includes(label)) {
-    throw new RelationshipError("relationship label is not in the closed list", "relationship_label");
+  const text = String(raw ?? "");
+  if (/[\u0000-\u001F\u007F]/.test(text) || /[<>]/.test(text)) {
+    throw new RelationshipError("relationship label is not stored", "relationship_label");
+  }
+  const label = text.trim();
+  if (!label) {
+    throw new RelationshipError("relationship label is required", "relationship_label");
+  }
+  if (label.length > RELATIONSHIP_LABEL_MAX) {
+    throw new RelationshipError("relationship label is too long", "relationship_label");
   }
   return label;
 }
