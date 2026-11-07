@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,6 +18,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - name: Start throwaway loopback Postgres
+        # Distro postgresql package. postgres --version is the engine this job ran.
+        # It is not the Render server version.
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql
@@ -22,6 +27,7 @@ jobs:
           "$PG/initdb" -D "$RUNNER_TEMP/et-scratch-pg" --auth=trust --username=postgres --encoding=UTF8 --locale=C
           printf "\nlisten_addresses = '127.0.0.1'\nport = 54329\nunix_socket_directories = '/tmp'\n" >> "$RUNNER_TEMP/et-scratch-pg/postgresql.conf"
           "$PG/pg_ctl" -D "$RUNNER_TEMP/et-scratch-pg" -l "$RUNNER_TEMP/et-scratch-pg.log" -w start
+          "$PG/postgres" --version
           "$PG/createdb" -h 127.0.0.1 -p 54329 -U postgres scratchboot
           "$PG/createdb" -h 127.0.0.1 -p 54329 -U postgres scratchrel
       - name: Real Postgres scratch tests

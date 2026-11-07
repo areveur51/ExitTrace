@@ -214,6 +214,13 @@ test("a relationship cite must be two official news or government URLs", () => {
   throwsCode({ left_calls_right: "Aide\u0000" }, "relationship_label");
   throwsCode({ left_calls_right: "Aide <script>" }, "relationship_label");
   throwsCode({ right_calls_left: "Senator>" }, "relationship_label");
+  for (const ch of ["\u0080", "\u0085", "\u009F", "\u2028", "\u2029"]) {
+    const embedded = `Aide${ch}x`;
+    throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", left_calls_right: embedded }, "relationship_label");
+    throwsCode({ left_id: "ada-alpha", right_id: "bea-beta", right_calls_left: embedded }, "relationship_label");
+    throwsCode({ left_id: "bea-beta", right_id: "ada-alpha", left_calls_right: embedded }, "relationship_label");
+    throwsCode({ left_id: "bea-beta", right_id: "ada-alpha", right_calls_left: embedded }, "relationship_label");
+  }
   throwsCode({ left_name: "" }, "relationship_person");
   throwsCode({ right_id: "" }, "relationship_person");
   const bounds = prepareRelationship(input({ start_year: 1000, end_year: 2100 }));

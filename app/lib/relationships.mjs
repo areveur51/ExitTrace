@@ -62,7 +62,9 @@ function requirePersonName(raw) {
 
 function requireLabel(raw) {
   const text = String(raw ?? "");
-  if (/[\u0000-\u001F\u007F]/.test(text) || /[<>]/.test(text)) {
+  // C0, DEL, C1 (U+0080–U+009F, including U+0085), U+2028, and U+2029.
+  // Checked before trim so a trailing line separator is not stored as the rest of the label.
+  if (/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/.test(text) || /[<>]/.test(text)) {
     throw new RelationshipError("relationship label is not stored", "relationship_label");
   }
   const label = text.trim();

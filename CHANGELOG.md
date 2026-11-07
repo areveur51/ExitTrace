@@ -35,7 +35,7 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 ### Fixed
 
-- Boot drops `person_relationships_a_label` and `person_relationships_b_label` and does not add them again. Those checks listed allowed `a_calls_b` and `b_calls_a` strings. They did not limit how many relationship rows or events a card can have. Stored rows are unchanged. The drops wait at most 5 seconds for their lock. A relationship label may be custom text up to 80 characters. Empty text, control characters, and angle brackets are refused. The kind, year, note-length, pair-order, and unique checks stay.
+- Boot drops `person_relationships_a_label` and `person_relationships_b_label` and does not add them again. Those checks listed allowed `a_calls_b` and `b_calls_a` strings. They did not limit how many relationship rows or events a card can have. Stored rows are unchanged. The drops wait at most 5 seconds for their lock. A relationship label may be custom text up to 80 characters. Empty text, ASCII and C1 controls, Unicode line and paragraph separators, and angle brackets are refused. The kind, year, note-length, pair-order, and unique checks stay.
 
 ## [1.2.43] - 2026-11-07
 
