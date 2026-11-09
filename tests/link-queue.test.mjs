@@ -33,6 +33,22 @@ test("parsePostLink keeps the status and drops the tracking query", () => {
     "https://x.com/Example/status/2118863959113761145",
   );
   assert.equal(
+    parsePostLink("https://x.com/i/status/2118841658510918075").url,
+    "https://x.com/i/status/2118841658510918075",
+  );
+  assert.equal(
+    parsePostLink("https://x.com/i/web/status/2118841658510918075").statusId,
+    "2118841658510918075",
+  );
+  assert.equal(
+    parsePostLink("https://x.com/gop__ls/status/2118841658510918075/photo/1").url,
+    "https://x.com/gop__ls/status/2118841658510918075",
+  );
+  assert.equal(
+    parsePostLink("https://twitter.com/statuses/2118841658510918075").statusId,
+    "2118841658510918075",
+  );
+  assert.equal(
     parsePostLink("https://www.truthsocial.com/@realDonaldTrump/posts/115544/").url,
     "https://truthsocial.com/@realDonaldTrump/posts/115544",
   );
@@ -49,28 +65,55 @@ test("parsePostLink keeps the status and drops the tracking query", () => {
   assert.equal(parsePostLink("https://facebook.com/user/status/2118841658510918075"), null);
 });
 
-test("memory queue accepts a post once and can remove it", async () => {
+test("memory queue accepts a post once, blocks pending duplicates, and revives done", async () => {
   const prev = process.env.DATABASE_URL;
   delete process.env.DATABASE_URL;
   setPoolForTests(null);
   resetLinkQueueForTests();
   try {
     const first = await enqueuePostLinks(
-      "https://x.com/gop__ls/status/2118841658510918075?s=46\nnot a link\nhttps://x.com/gop__ls/status/2118841658510918075",
+      "https://x.com/gop__ls/status/2118841658510918075?s=46\nnot a link",
     );
     assert.deepEqual(first, {
       queued: 1,
-      duplicate: 1,
+      duplicate: 0,
       rejected: 1,
       limited: false,
       empty: false,
     });
     assert.match(describeEnqueue(first), /Queued 1 post/);
+    const pendingDup = await enqueuePostLinks(
+      "https://x.com/gop__ls/status/2118841658510918075",
+    );
+    assert.equal(pendingDup.queued, 0);
+    assert.equal(pendingDup.duplicate, 1);
     const rows = await listLinkQueue();
     assert.equal(rows.length, 1);
+    assert.equal(rows[0].status, "pending");
     assert.equal(rows[0].url, "https://x.com/gop__ls/status/2118841658510918075");
     assert.equal(await removeLinkQueue(rows[0].id), true);
     assert.equal((await listLinkQueue()).length, 0);
+    assert.equal((await listLinkQueue({ includeDone: true })).length, 1);
+    assert.equal((await listLinkQueue({ includeDone: true }))[0].status, "done");
+    const revived = await enqueuePostLinks(
+      "https://x.com/gop__ls/status/2118841658510918075",
+    );
+    assert.equal(revived.queued, 1);
+    assert.equal(revived.duplicate, 0);
+    const live = await listLinkQueue();
+    assert.equal(live.length, 1);
+    assert.equal(live[0].status, "pending");
+    assert.equal(live[0].url, "https://x.com/gop__ls/status/2118841658510918075");
+    const stillDup = await enqueuePostLinks(
+      "https://x.com/gop__ls/status/2118841658510918075",
+    );
+    assert.equal(stillDup.queued, 0);
+    assert.equal(stillDup.duplicate, 1);
+    const second = await enqueuePostLinks(
+      "https://x.com/Example/status/2118863959113761145",
+    );
+    assert.equal(second.queued, 1);
+    assert.equal((await listLinkQueue()).length, 2);
     const again = await enqueuePostLinks("   ");
     assert.equal(again.empty, true);
   } finally {
@@ -102,7 +145,10 @@ test("queue page lists a post and the add page links to it", () => {
   });
   assert.match(html, /name="urls"/);
   assert.match(html, /form class="tui-form add-form queue-add"/);
-  assert.match(html, /Submit stays available/);
+  assert.match(html, /autocomplete="off"/);
+  assert.match(html, /Submit locks while a post is stored/);
+  assert.match(html, /box\.value === restore/);
+  assert.match(html, /inflight/);
   assert.match(html, /href="\/queue"/);
   assert.match(html, /2118841658510918075/);
   assert.match(html, /Queued/);

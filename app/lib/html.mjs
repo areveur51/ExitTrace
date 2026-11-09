@@ -4565,12 +4565,12 @@ export function queueBody({ error, notice, rows = [], writable = true } = {}) {
     (writable ? "" : "This copy does not store the post queue. Queue posts on the lab.");
   const composer = writable
     ? `<p id="queue-note" class="queued-msg" role="status">${esc(message)}</p>
-      <form class="tui-form add-form queue-add" method="post" action="/queue">
+      <form class="tui-form add-form queue-add" method="post" action="/queue" autocomplete="off">
         <label class="field">
           <span>X or Truth Social post</span>
-          <textarea name="urls" placeholder="https://x.com/…/status/…&#10;https://truthsocial.com/@…/posts/…"></textarea>
+          <textarea name="urls" placeholder="https://x.com/…/status/…&#10;https://truthsocial.com/@…/posts/…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url"></textarea>
         </label>
-        <p class="hint">One post per line. Submit stays available, so the next post can be pasted while the last one is stored. The same status is kept once.</p>
+        <p class="hint">One post per line. Submit locks while a post is stored, then opens for the next paste. The same live status is kept once.</p>
         <button type="submit" class="keychip add-submit"><span class="br">[</span>Enter<span class="br">]</span> Queue</button>
       </form>
       ${queueClientScript()}`
@@ -4591,7 +4591,9 @@ function queueClientScript() {
   var note = document.getElementById("queue-note");
   if (!form || !mount) return;
   var box = form.querySelector("textarea");
+  var submit = form.querySelector("button[type=submit]");
   var seen = 0;
+  var inflight = 0;
   function label(status) {
     if (status === "processing") return "Working";
     if (status === "held") return "Held";
@@ -4614,6 +4616,11 @@ function queueClientScript() {
       return found ? found.value : "";
     }
     return part("year") + "-" + part("month") + "-" + part("day") + " " + part("hour") + ":" + part("minute") + " ET";
+  }
+  function setBusy(on) {
+    if (!submit) return;
+    submit.disabled = !!on;
+    submit.setAttribute("aria-busy", on ? "true" : "false");
   }
   function draw(rows) {
     mount.textContent = "";
@@ -4674,13 +4681,16 @@ function queueClientScript() {
   }
   function send(body, restore) {
     var ticket = ++seen;
+    inflight += 1;
+    setBusy(true);
     fetch("/queue", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json"
       },
-      body: body
+      body: body,
+      cache: "no-store"
     }).then(function (res) {
       return res.json().then(function (data) { return { ok: res.ok, data: data }; });
     }).then(function (result) {
@@ -4692,14 +4702,21 @@ function queueClientScript() {
       }
       if (note) note.textContent = result.data.error || result.data.notice || "";
       if (result.data.rows) draw(result.data.rows);
+      // Mobile autofill can restore the last submit; clear again after success.
+      if (box && restore && box.value === restore) box.value = "";
+      if (box) box.focus();
     }).catch(function () {
       if (ticket < seen) return;
       if (restore && box && !box.value) box.value = restore;
       if (note) note.textContent = "Could not queue that post.";
+    }).finally(function () {
+      inflight = Math.max(0, inflight - 1);
+      if (inflight === 0) setBusy(false);
     });
   }
   form.addEventListener("submit", function (event) {
     event.preventDefault();
+    if (inflight > 0) return;
     var urls = box.value;
     if (!String(urls || "").trim()) return;
     box.value = "";

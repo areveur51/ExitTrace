@@ -48,12 +48,19 @@ export function parsePostLink(raw) {
   let host = parsed.hostname.toLowerCase();
   if (host.startsWith("www.")) host = host.slice(4);
   if (X_HOSTS.has(host)) {
-    const match = parsed.pathname.match(new RegExp(`^/${HANDLE}/status/${STATUS_ID}/?$`));
+    // Handle form, mobile share (/i/status, /i/web/status), legacy /statuses/ID,
+    // and trailing /photo/N or /video/N from the share sheet.
+    const match =
+      parsed.pathname.match(new RegExp(`^/${HANDLE}/status/${STATUS_ID}(?:/(?:photo|video)/\\d+)?/?$`)) ||
+      parsed.pathname.match(new RegExp(`^/i/(?:web/)?status/${STATUS_ID}/?$`)) ||
+      parsed.pathname.match(new RegExp(`^/statuses/${STATUS_ID}/?$`));
     if (!match) return null;
+    const statusId = match[2] || match[1];
+    const handle = match[2] ? match[1] : "i";
     return {
       platform: "x",
-      statusId: match[2],
-      url: `https://x.com/${match[1]}/status/${match[2]}`,
+      statusId,
+      url: `https://x.com/${handle}/status/${statusId}`,
     };
   }
   if (host === "truthsocial.com") {
@@ -203,11 +210,21 @@ export async function enqueuePostLinks(raw) {
   let queued = 0;
   if (!pool) {
     for (const link of accepted) {
-      const exists = memoryRows.some(
+      const index = memoryRows.findIndex(
         (row) => row.platform === link.platform && row.statusId === link.statusId,
       );
-      if (exists) {
-        duplicate += 1;
+      if (index >= 0) {
+        if (memoryRows[index].status === "done") {
+          memoryRows[index] = {
+            ...memoryRows[index],
+            url: link.url,
+            status: "pending",
+            reason: "",
+          };
+          queued += 1;
+        } else {
+          duplicate += 1;
+        }
         continue;
       }
       memoryRows.push({
@@ -224,10 +241,18 @@ export async function enqueuePostLinks(raw) {
     return { queued, duplicate, rejected, limited, empty: false };
   }
   for (const link of accepted) {
+    // New row inserts. A finished (done) row is revived so the same post can
+    // be queued again after the watcher finishes. Live pending/processing/held
+    // rows stay blocked as true duplicates.
     const result = await pool.query(
       `INSERT INTO link_queue (platform, status_id, url)
        VALUES ($1, $2, $3)
-       ON CONFLICT (platform, status_id) DO NOTHING
+       ON CONFLICT (platform, status_id) DO UPDATE SET
+         url = EXCLUDED.url,
+         status = 'pending',
+         reason = '',
+         claimed_at = NULL
+       WHERE link_queue.status = 'done'
        RETURNING id`,
       [link.platform, link.statusId, link.url],
     );
