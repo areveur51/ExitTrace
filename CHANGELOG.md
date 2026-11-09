@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.47] - 2026-11-09
+
+### Fixed
+
+- Posts queue on mobile: stop double-submit from overwriting a successful add with "already queued", turn off autofill on the paste box, accept mobile X share URLs (`/i/status`, `/i/web/status`, `/photo/N`), and revive a finished (`done`) row when the same post is pasted again.
+
 ## [1.2.46] - 2026-11-07
 
 ### Added
