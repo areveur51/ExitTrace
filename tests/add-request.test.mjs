@@ -7,11 +7,13 @@ import { test } from "node:test";
 import { fileURLToPath } from "url";
 import {
   AddError,
+  mergeProcessOverlay,
   processAddRequest,
   queueAddRequest,
 } from "../app/lib/add-request.mjs";
+import { isOfficialCiteUrl, isOfficialPublisherUrl } from "../app/lib/official.mjs";
 import { MISSING_NET_WORTH_NOTE } from "../app/lib/net-worth.mjs";
-import { addBody } from "../app/lib/html.mjs";
+import { addBody, personDetail } from "../app/lib/html.mjs";
 import { handle } from "../app/server.mjs";
 import {
   countDogComms,
@@ -764,4 +766,180 @@ test("add-process attaches a new kind on the existing person", async () => {
   assert.equal(person.events.length, 2);
   assert.ok(person.events.some((ev) => ev.kind === "arrests"));
   assert.ok(person.events.some((ev) => ev.kind === "resignations"));
+});
+
+test("operator-lead is proven only by the gated CLI overlay, never a request payload", async () => {
+  const ignored = mergeProcessOverlay(
+    {
+      kind: "person",
+      subject: "Casey Vale",
+      category: "arrests",
+      event_date: "2024-06-15",
+      operator_lead: true,
+      cite_urls: [CITES[0]],
+    },
+    { cite_urls: [CITES[0]] },
+  );
+  assert.equal(ignored.operator_lead, false);
+
+  setMemory(goldSeed());
+  const held = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  await assert.rejects(
+    () =>
+      processAddRequest({
+        id: held.request.id,
+        overlay: { cite_urls: [CITES[0]] },
+      }),
+    (err) => err instanceof AddError && err.code === "cites_floor",
+  );
+  assert.equal(await countPeople(), 72);
+
+  const again = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const created = await processAddRequest({
+    id: again.request.id,
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: [CITES[0]], operator_lead: true },
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.standing, "developing");
+  assert.equal(created.person.sources.length, 1);
+  assert.equal(created.person.sources[0].url, CITES[0]);
+  assert.equal(isOfficialCiteUrl(created.person.sources[0].url), true);
+});
+
+test("operator-lead keeps an off-list source type truthful on the card", async () => {
+  setMemory(goldSeed());
+  const offList = "https://www.youtube.com/watch?v=fy-rDEFLSzA";
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  await assert.rejects(
+    () =>
+      processAddRequest({
+        id: queued.request.id,
+        overlay: { cite_urls: [offList] },
+      }),
+    (err) => err instanceof AddError && err.code === "cites_floor",
+  );
+
+  const again = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const created = await processAddRequest({
+    id: again.request.id,
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: [offList], operator_lead: true },
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.standing, "developing");
+  assert.equal(created.person.sources.length, 1);
+  assert.equal(created.person.sources[0].url, offList);
+  assert.equal(isOfficialPublisherUrl(offList), false);
+  assert.equal(isOfficialPublisherUrl(created.person.sources[0].url), false);
+});
+
+test("mention-dig ingest deletes operator_lead so a payload cannot set the bypass", () => {
+  const src = fs.readFileSync(path.join(ROOT, "app/lib/mention-dig.mjs"), "utf8");
+  assert.equal(src.includes("delete overlay.operator_lead;"), true);
+  assert.equal(src.includes("delete overlay.standing;"), true);
+});
+
+test("a stored request row with operator_lead true still hits cites_floor without the CLI overlay", async () => {
+  setMemory(goldSeed());
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const mem = getMemory();
+  const stored = (mem.add_requests || []).find((row) => row.id === queued.request.id);
+  assert.ok(stored);
+  stored.operator_lead = true;
+  await assert.rejects(
+    () =>
+      processAddRequest({
+        id: queued.request.id,
+        overlay: { cite_urls: [CITES[0]] },
+      }),
+    (err) => err instanceof AddError && err.code === "cites_floor",
+  );
+  assert.equal(await countPeople(), 72);
+});
+
+test("an operator-lead card with only off-list cites stores and renders them as off-list", async () => {
+  setMemory(goldSeed());
+  const offList = "https://www.youtube.com/watch?v=fy-rDEFLSzA";
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const created = await processAddRequest({
+    id: queued.request.id,
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: [offList], operator_lead: true },
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.person.sources.length, 1);
+  assert.equal(created.person.sources[0].url, offList);
+  assert.equal(isOfficialPublisherUrl(offList), false);
+  assert.equal(isOfficialCiteUrl(offList), false);
+  const page = personDetail(created.person);
+  assert.match(page, /fy-rDEFLSzA/);
+  assert.equal(isOfficialPublisherUrl(created.person.sources[0].url), false);
+  assert.doesNotMatch(page, /official cite/i);
+});
+
+test("reprocess reapplies an applied request and respects the clear rule", async () => {
+  setMemory(goldSeed());
+  const queued = await queueAddRequest({
+    kind: "person",
+    subject: "Casey Vale",
+    category: "arrests",
+    event_date: "2024-06-15",
+  });
+  const created = await processAddRequest({
+    id: queued.request.id,
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: [CITES[0]], operator_lead: true },
+  });
+  assert.equal(created.action, "created");
+  assert.equal(created.standing, "developing");
+
+  const replay = await processAddRequest({ id: queued.request.id });
+  assert.equal(replay.replayed, true);
+  const replayed = await getPerson(created.person.id);
+  assert.equal(replayed.events.find((ev) => ev.kind === "arrests").standing, "developing");
+
+  const again = await processAddRequest({
+    id: queued.request.id,
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: [CITES[0]], operator_lead: true },
+    reprocess: true,
+  });
+  assert.notEqual(again.replayed, true);
+  const afterOne = await getPerson(created.person.id);
+  assert.equal(afterOne.events.find((ev) => ev.kind === "arrests").standing, "developing");
+
+  const cleared = await processAddRequest({
+    id: queued.request.id,
+    overlay: { ...NEW_PERSON_LOCK, cite_urls: CITES, operator_lead: true },
+    reprocess: true,
+  });
+  assert.notEqual(cleared.replayed, true);
+  const afterTwo = await getPerson(created.person.id);
+  assert.equal(Object.hasOwn(afterTwo.events.find((ev) => ev.kind === "arrests"), "standing"), false);
 });

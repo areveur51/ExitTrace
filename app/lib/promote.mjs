@@ -28,11 +28,16 @@ import { mergeCareer, personCareer } from "./career.mjs";
 import { mergeCentralCasting } from "./kind-comms.mjs";
 import { mergeClearances, normalizeClearances } from "./clearances.mjs";
 import { mergeNicknames, normalizeNicknames } from "./nicknames.mjs";
-import { partitionCiteUrls } from "./official.mjs";
+import { isOfficialCiteUrl, partitionCiteUrls } from "./official.mjs";
 import { normalizeScreenshotCredit, normalizeScreenshotHref } from "./screenshot.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
 
 export const CITE_FLOOR = 2;
+
+export function standingForOfficialCount(n) {
+  return n < CITE_FLOOR ? "developing" : undefined;
+}
+
 export const MATCH_WINDOW_DAYS = 3;
 
 export class PromoteError extends Error {
@@ -41,6 +46,25 @@ export class PromoteError extends Error {
     this.name = "PromoteError";
     this.code = code;
   }
+}
+
+/** Shared cite floor and developing/full standing. stored is official cites when any exist, otherwise extras. */
+export function citeStanding({ official = [], extra = [], operatorLead = false } = {}) {
+  const officialList = Array.isArray(official) ? official : [];
+  const extraList = Array.isArray(extra) ? extra : [];
+  if (
+    (officialList.length < CITE_FLOOR && !operatorLead)
+    || (operatorLead && officialList.length + extraList.length === 0)
+  ) {
+    throw new PromoteError(
+      operatorLead ? "need at least 1 cite" : `need at least ${CITE_FLOOR} official cites`,
+      "cites_floor",
+    );
+  }
+  return {
+    stored: officialList.length ? officialList : extraList,
+    standing: standingForOfficialCount(officialList.length) || "full",
+  };
 }
 
 export function personSlug(name) {
@@ -382,6 +406,7 @@ export function normalizePersonEvent(raw, fallback = {}) {
   const rollCall = keptRollCall(kind, raw, fallback);
   if (rollCall) event.roll_call = rollCall;
   if (keptHeadlineExclude(raw, fallback)) event.headline_exclude = true;
+  assignStandingFromSources(event, event.sources, raw, fallback);
   applyEventShot(event, raw, fallback);
   return event;
 }
@@ -393,6 +418,36 @@ export function normalizePersonEvent(raw, fallback = {}) {
  */
 export function isHeadlineExcluded(ev) {
   return ev?.headline_exclude === true;
+}
+
+/** Literal developing only. person_events.status stays corona-only. */
+export function isDevelopingStanding(value) {
+  return (value?.standing ?? value) === "developing";
+}
+
+export function eventStandingFromSources(sources) {
+  const seen = new Set();
+  for (const source of sources || []) {
+    const url =
+      typeof source === "string"
+        ? source
+        : source?.url || source?.canonical || source?.raw || "";
+    if (!url || !isOfficialCiteUrl(url)) continue;
+    seen.add(canonicalPublicUrl(url) || url);
+  }
+  return standingForOfficialCount(seen.size);
+}
+
+function shouldRecomputeStanding(...events) {
+  return events.some(
+    (ev) => isDevelopingStanding(ev) || ev?.standing === "full" || ev?.operator_lead === true,
+  );
+}
+
+function assignStandingFromSources(target, sources, ...signals) {
+  if (!shouldRecomputeStanding(...signals)) return;
+  const standing = eventStandingFromSources(sources);
+  if (standing) target.standing = standing;
 }
 
 function keptHeadlineExclude(...events) {
@@ -430,11 +485,12 @@ function mergePersonEvent(prior, ev) {
   const rollCall = keptRollCall(prior.kind, prior, ev);
   if (rollCall) merged.roll_call = rollCall;
   if (keptHeadlineExclude(prior, ev)) merged.headline_exclude = true;
+  assignStandingFromSources(merged, merged.sources, prior, ev);
   applyEventShot(merged, prior, ev);
   return merged;
 }
 
-function copyEventRow(ev) {
+export function copyEventRow(ev) {
   const row = {
     kind: ev.kind,
     event_date: ev.event_date,
@@ -452,6 +508,7 @@ function copyEventRow(ev) {
   const rollCall = keptRollCall(ev.kind, ev);
   if (rollCall) row.roll_call = rollCall;
   if (isHeadlineExcluded(ev)) row.headline_exclude = true;
+  assignStandingFromSources(row, row.sources, ev);
   applyEventShot(row, ev);
   return row;
 }
@@ -878,12 +935,8 @@ export function validateIdentifiedPersonInput(input = {}) {
   }
   const parsedCites = parseCiteUrls(input.cite_urls);
   const { official, extra } = partitionCiteUrls(parsedCites);
-  if (official.length < CITE_FLOOR) {
-    throw new PromoteError(
-      `need at least ${CITE_FLOOR} published-news or official gov/news-org social cite URLs`,
-      "cites_floor",
-    );
-  }
+  const operatorLead = input.operator_lead === true;
+  const { stored, standing } = citeStanding({ official, extra, operatorLead });
   const slug = personSlug(subject);
   if (!slug) {
     throw new PromoteError("subject did not yield a person id", "invalid_subject");
@@ -898,8 +951,9 @@ export function validateIdentifiedPersonInput(input = {}) {
     subject,
     event_date,
     category,
-    cite_urls: official,
+    cite_urls: stored,
     extra_urls: extra,
+    ...(operatorLead ? { operator_lead: true, standing } : {}),
     slug,
     summary: String(input.summary || "").trim(),
     role: String(input.role || attrs.position || "").trim(),
@@ -1023,6 +1077,9 @@ export function incomingPersonEvent(input, sources) {
   if (media.length) event.media = media;
   if (input.screenshot) event.screenshot = input.screenshot;
   if (input.screenshot_credit) event.screenshot_credit = input.screenshot_credit;
+  if (input.standing === "developing" || input.standing === "full") {
+    event.standing = input.standing;
+  }
   return event;
 }
 

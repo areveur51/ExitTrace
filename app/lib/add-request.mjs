@@ -21,6 +21,8 @@ import {
 import {
   CITE_FLOOR,
   PromoteError,
+  eventStandingFromSources,
+  isDevelopingStanding,
   parseCiteUrls,
   parseEventDate,
   personSlug,
@@ -460,25 +462,17 @@ export function validateProcessPersonInput(input = {}) {
   }
   let parsed;
   try {
-    parsed = validateIdentifiedPersonInput(input);
+    parsed = validateIdentifiedPersonInput({
+      ...input,
+      operator_lead: input.operator_lead === true,
+    });
   } catch (err) {
     if (err instanceof PromoteError) {
       throw new AddError(err.message, err.code);
     }
     throw err;
   }
-  const { official, extra } = officialCiteUrls(
-    Array.isArray(input.cite_urls) && input.cite_urls.length
-      ? input.cite_urls
-      : parsed.cite_urls.map((c) => c.raw),
-  );
-  if (official.length < CITE_FLOOR) {
-    throw new AddError(
-      `need at least ${CITE_FLOOR} published-news or official gov/news-org social cite URLs`,
-      "cites_floor",
-    );
-  }
-  return { ...parsed, cite_urls: official, extra_urls: extra };
+  return parsed;
 }
 
 export function validateProcessOperationInput(input = {}) {
@@ -666,7 +660,7 @@ function stripHandleSafe(raw) {
 export function mergeProcessOverlay(request, overlay = {}) {
   const citeFromOverlay = Array.isArray(overlay.cite_urls) ? overlay.cite_urls : [];
   const citeFromRequest = Array.isArray(request.cite_urls) ? request.cite_urls : [];
-  return {
+  const out = {
     ...request,
     subject: String(overlay.subject || request.subject || "").trim(),
     category: String(overlay.category || request.category || "").trim(),
@@ -740,8 +734,11 @@ export function mergeProcessOverlay(request, overlay = {}) {
       overlay.net_worth_note || request.net_worth_note || "",
     ).trim(),
     mediaDir: overlay.mediaDir || request.mediaDir,
+    operator_lead: overlay.operator_lead === true,
     cite_urls: citeFromOverlay.length ? citeFromOverlay : citeFromRequest,
   };
+  delete out.standing;
+  return out;
 }
 
 export async function queueAddRequest(input) {
@@ -823,6 +820,7 @@ async function applyQueuedPerson(merged) {
       net_worth_source: merged.net_worth_source,
       net_worth_note: merged.net_worth_note,
       mediaDir: merged.mediaDir,
+      operator_lead: parsed.operator_lead === true,
     });
   } else {
     result = await applyIdentifiedPerson({
@@ -838,9 +836,10 @@ async function applyQueuedPerson(merged) {
       net_worth_source: merged.net_worth_source,
       net_worth_note: merged.net_worth_note,
       mediaDir: merged.mediaDir,
+      operator_lead: parsed.operator_lead === true,
     });
   }
-  return { ...result, extra_urls };
+  return { ...result, extra_urls, standing: parsed.standing };
 }
 
 async function applyQueuedOperation(merged) {
@@ -933,6 +932,24 @@ async function snapshotForKind(kind, sourceUrl) {
       text: post.text || "",
     },
   };
+}
+
+export function applyRedFolderSnapshotStanding(snapshot, planned, citeUrls) {
+  const snap = snapshot && typeof snapshot === "object" ? { ...snapshot } : {};
+  const planActive = Boolean(planned && !planned.skipped);
+  const snapDeveloping = isDevelopingStanding(snap);
+  const plannedDeveloping = isDevelopingStanding(planned);
+  if (planActive) {
+    if (!plannedDeveloping && !snapDeveloping) return snap;
+    if (plannedDeveloping) snap.standing = "developing";
+    else delete snap.standing;
+    return snap;
+  }
+  if (!snapDeveloping) return snap;
+  const next = eventStandingFromSources(citeUrls);
+  if (next) snap.standing = next;
+  else delete snap.standing;
+  return snap;
 }
 
 async function applyQueuedRedFolder(merged) {
@@ -1085,7 +1102,7 @@ async function applyQueuedCentralCasting(merged) {
   };
 }
 
-export async function processAddRequest({ id, next, overlay } = {}) {
+export async function processAddRequest({ id, next, overlay, reprocess = false } = {}) {
   let request = null;
   if (id) request = await getAddRequest(id);
   else if (next) request = await nextPendingAddRequest();
@@ -1095,7 +1112,7 @@ export async function processAddRequest({ id, next, overlay } = {}) {
       "request_not_found",
     );
   }
-  if (request.status === "applied" && request.result) {
+  if (!reprocess && request.status === "applied" && request.result) {
     return { ...request.result, request, replayed: true };
   }
   const merged = mergeProcessOverlay(request, overlay || {});
@@ -1127,6 +1144,7 @@ export async function processAddRequest({ id, next, overlay } = {}) {
         central_casting_id: result.central_casting?.id || "",
         added_cites: result.added_cites || 0,
         extra_urls: result.extra_urls || [],
+        standing: result.standing || "",
         people: result.people,
         dog_comms: result.dog_comms,
         red_folder_comms: result.red_folder_comms,

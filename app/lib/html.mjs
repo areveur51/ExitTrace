@@ -35,7 +35,7 @@ import {
   normalizeClearances,
 } from "./clearances.mjs";
 import { isTrumpNickname, nicknameCatalogDate, normalizeNicknames, trumpNicknameLabel } from "./nicknames.mjs";
-import { asEventDate, eventsOfKind, personEvents } from "./promote.mjs";
+import { asEventDate, eventsOfKind, isDevelopingStanding, personEvents } from "./promote.mjs";
 import { renderEventGraph } from "./event-graph.mjs";
 import { hostOf, isUnofficialOrCommentarySocial } from "./official.mjs";
 import { canonicalPublicUrl } from "./urls.mjs";
@@ -2599,6 +2599,24 @@ export function nicknameSections(row) {
     .join("");
 }
 
+
+export function developingStoryMarker() {
+  return `<p class="meta-line developing-story" data-standing="developing">Developing story</p>`;
+}
+
+export function personHasDevelopingStory(row) {
+  return (row?.events || []).some((ev) => isDevelopingStanding(ev));
+}
+
+export function commHasDevelopingStory(row, people = []) {
+  if (isDevelopingStanding(row?.snapshot)) return true;
+  return (people || []).some((person) =>
+    (person?.events || []).some(
+      (ev) => ev?.kind === "red_folder" && isDevelopingStanding(ev),
+    ),
+  );
+}
+
 export function personHeader(row, extras = {}) {
   const birth = row.birth_date
     ? `<p class="meta-line">Birth date · <time datetime="${esc(row.birth_date)}">${esc(formatDate(row.birth_date))}</time></p>`
@@ -2621,6 +2639,7 @@ export function personHeader(row, extras = {}) {
     ${classificationMediaSlot(framed)}
     <div class="detail-copy">
       <h2 class="detail-title">${esc(row.name || "—")}</h2>
+      ${personHasDevelopingStory(row) ? developingStoryMarker() : ""}
       <div class="identity-facts">${facts}</div>
       ${birth}
       ${nicknameMetaLine(row)}
@@ -3683,8 +3702,12 @@ function officialPostDetail(spec, row, { attributions, linkedPeople } = {}) {
       attributionHtml: attributionFrom(row, attributions, commsAttributionSurface(spec.id)),
     }),
   });
+  const developing =
+    spec.id === "red_folder" && commHasDevelopingStory(row, people)
+      ? developingStoryMarker()
+      : "";
   return `<article class="detail ${spec.detailClass}">
-    ${detailShell({
+    ${developing}${detailShell({
       title: "Metadata",
       mediaHtml: `<section class="detail-official-post" aria-label="Main post">${mediaHtml}</section>`,
       metaHtml: officialPostContextHtml(spec, row),

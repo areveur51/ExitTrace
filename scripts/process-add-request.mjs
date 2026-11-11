@@ -28,7 +28,7 @@ const bootstrapSql = fs.readFileSync(
 );
 
 function usage(exitCode = 0) {
-  console.log(`Usage: node scripts/process-add-request.mjs --id <ar-…> | --next | --queue
+  console.log(`Usage: node scripts/process-add-request.mjs --id <ar-…> | --next | --queue | --reprocess-id <ar-…>
   [--cite-url <https://…>] [--cite-url <https://…>]
   [--subject "…"] [--event-date YYYY-MM-DD] [--category <id>]
   [--source-url <https://…>] [--handle @Official] [--posted-at YYYY-MM-DD]
@@ -117,6 +117,7 @@ function parseArgs(argv) {
     };
     if (arg === "-h" || arg === "--help") usage(0);
     else if (arg === "--id") out.id = take();
+    else if (arg === "--reprocess-id") out.reprocess_id = take();
     else if (arg === "--next") out.next = true;
     else if (arg === "--queue") out.queue = true;
     else if (arg === "--cite-url" || arg === "--cite") out.cite_urls.push(take());
@@ -141,6 +142,7 @@ function parseArgs(argv) {
     else if (arg === "--country") out.country = take();
     else if (arg === "--branch") out.branch = take();
     else if (arg === "--comments") out.comments = take();
+    else if (arg === "--operator-lead") out.operator_lead = true;
     else if (arg === "--unsealed-evidence") out.unsealed_evidence = take();
     else if (arg === "--agencies") out.agencies = take();
     else if (arg === "--victim-count" || arg === "--victim_count") out.victim_count = take();
@@ -184,11 +186,16 @@ try {
   process.exit(1);
 }
 
-if (!args.id && !args.next && !args.queue) usage(1);
-if (args.queue && (args.id || args.next)) {
-  console.error("--queue cannot be combined with --id or --next");
+if (!args.id && !args.next && !args.queue && !args.reprocess_id) usage(1);
+if (args.queue && (args.id || args.next || args.reprocess_id)) {
+  console.error("--queue cannot be combined with --id, --next, or --reprocess-id");
   process.exit(1);
 }
+if (args.reprocess_id && (args.id || args.next)) {
+  console.error("--reprocess-id cannot be combined with --id or --next");
+  process.exit(1);
+}
+if (args.reprocess_id) args.id = args.reprocess_id;
 
 if (databaseUrl()) {
   const pool = await getPool();
@@ -221,6 +228,8 @@ const overlay = { ...args };
 delete overlay.id;
 delete overlay.next;
 delete overlay.queue;
+delete overlay.reprocess_id;
+delete overlay.reprocess;
 
 let result;
 try {
@@ -228,6 +237,7 @@ try {
     id: args.id || undefined,
     next: args.next,
     overlay,
+    reprocess: Boolean(args.reprocess_id),
   });
 } catch (err) {
   const message =

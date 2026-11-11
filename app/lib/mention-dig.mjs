@@ -325,14 +325,17 @@ export async function digMention(row = {}, envelope) {
     };
   }
   try {
+    const overlay = {
+      ...env,
+      subject,
+      category: subjectKind === "corona_comms" ? "corona_comms" : env.category || "",
+      cite_urls: postCatalog ? [] : cites,
+    };
+    delete overlay.operator_lead;
+    delete overlay.standing;
     const result = await processAddRequest({
       id: lead.id,
-      overlay: {
-        ...env,
-        subject,
-        category: subjectKind === "corona_comms" ? "corona_comms" : env.category || "",
-        cite_urls: postCatalog ? [] : cites,
-      },
+      overlay,
     });
     const kept = keptFromResult(result);
     if (!kept.slug) {
