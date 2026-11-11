@@ -811,12 +811,16 @@ export async function importSeed(p, seed) {
   const client = await p.connect();
   try {
     await client.query("BEGIN");
+    const skipTally = { count: 0 };
     for (const raw of seed.people) {
       const existing = await client.query("SELECT * FROM people WHERE id = $1", [raw.id]);
       const row = existing.rows[0]
         ? mergePersonAnnotate(normalizePerson(raw), normalizePerson(existing.rows[0]))
         : normalizePerson(raw);
-      await client.query(
+      await runBootPersonWrite(
+        row,
+        async () => {
+          await client.query(
         `INSERT INTO people (
            id, category, name, role, event_date, death_date, birth_date, country_of_origin,
            photo, photo_credit, screenshot, screenshot_credit, net_worth_usd, net_worth_note,
@@ -848,7 +852,10 @@ export async function importSeed(p, seed) {
            clearances = EXCLUDED.clearances`,
         personValues(row),
       );
-      await syncPersonEvents(client, row);
+          await syncPersonEvents(client, row);
+        },
+        { client, tally: skipTally },
+      );
     }
     for (const raw of seed.dog_comms) {
       const row = normalizeDog(raw);
@@ -2180,6 +2187,48 @@ export async function assertMultiNotableReady(client, person, env = process.env)
       `Second ${String(nonNotable.kind).trim()} event not saved: person_events still has CHECK person_events_seq_notable_only. The multi-event migration (scripts/migrations/2026-10-26-multi-event-up-lab.sql on lab, -up-render-b.sql on Render; docs/MIGRATION.md F3 / F5) must be applied on this database first.`,
       "multi_event_needs_migration",
     );
+  }
+}
+
+
+const BOOT_MULTI_EVENT_SKIP_CODE = "multi_event_writes_off";
+
+/** Fixed boot skip log line. Person id, the code, and the running skip count only. */
+export function bootMultiEventSkipLine(personId, skipCount) {
+  return `[exittrace] boot: skip person=${personId} code=${BOOT_MULTI_EVENT_SKIP_CODE} skips=${skipCount}`;
+}
+
+function isMultiEventWritesOffError(err) {
+  return err instanceof PromoteError && err.code === BOOT_MULTI_EVENT_SKIP_CODE;
+}
+
+/**
+ * Shared per-person guard for the importSeed loop and migrateUniquePeople.
+ * Catches only PromoteError with code multi_event_writes_off. Any other error
+ * still fails boot. The gate runs before writeFn, so a skip makes no write.
+ */
+export async function runBootPersonWrite(person, writeFn, { client, tally, log } = {}) {
+  const acc = tally || { count: 0 };
+  try {
+    if (client) {
+      await assertMultiNotableReady(client, person);
+    } else {
+      const normalized = normalizePerson(person);
+      const multi = (normalized.events || []).filter((ev) => eventSeq(ev) > 0);
+      if (multi.length && !multiEventWritesEnabled()) {
+        await assertMultiNotableReady(null, person);
+      }
+    }
+    await writeFn(person);
+    return { skipped: false, skips: acc.count };
+  } catch (err) {
+    if (isMultiEventWritesOffError(err)) {
+      acc.count += 1;
+      const id = person && person.id != null ? String(person.id) : "";
+      (log || console.log)(bootMultiEventSkipLine(id, acc.count));
+      return { skipped: true, skips: acc.count };
+    }
+    throw err;
   }
 }
 
@@ -3818,13 +3867,18 @@ export async function migrateUniquePeople() {
       merged += 1;
     }
   }
+  const skipTally = { count: 0 };
   for (const row of collapsed) {
     const existing = people.find((p) => p.id === row.id);
     if (!existing) {
-      await insertPerson(row);
+      await runBootPersonWrite(row, async () => {
+        await insertPerson(row);
+      }, { tally: skipTally });
       continue;
     }
-    await savePerson(row);
+    await runBootPersonWrite(row, async () => {
+      await savePerson(row);
+    }, { tally: skipTally });
   }
   return { people: collapsed.length, merged };
 }
