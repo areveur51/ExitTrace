@@ -116,12 +116,11 @@ function hasPersonOnList(html, person) {
   return html.includes(`href="${href}"`) && html.includes(name);
 }
 
-function hasPersonOnDetail(html, person) {
+// Name plus the person-detail article: always rendered, including blank portraits.
+// Do not treat a bare id as enough; that only appears in /media/people/<id>.
+export function hasPersonOnDetail(html, person) {
   const name = String(person.name || "").trim();
-  return (
-    html.includes(name) &&
-    (html.includes(`href="/people/${person.id}"`) || html.includes(person.id))
-  );
+  return html.includes(name) && html.includes('<article class="detail person-detail"');
 }
 
 function hasDogOnList(html, dog) {
