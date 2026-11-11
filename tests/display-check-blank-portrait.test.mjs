@@ -14,8 +14,9 @@ import {
   checkPersonDisplayed,
   fetchCatalogHtml,
   hasPersonOnDetail,
+  hasPersonOnList,
 } from "../app/lib/display-check.mjs";
-import { layout, personDetail } from "../app/lib/html.mjs";
+import { esc, layout, peopleList, personDetail } from "../app/lib/html.mjs";
 import { personSlug } from "../app/lib/promote.mjs";
 import {
   applyIdentifiedPerson,
@@ -142,4 +143,104 @@ test("checkPersonDisplayed rejects a person who is not on the page", async () =>
     () => checkPersonDisplayed({ id: "tom-o-brien", name: APOSTROPHE_NAME, category: "notable" }),
     (err) => err instanceof DisplayError && err.code === "detail_missing",
   );
+});
+
+const AMP_NAME = "Reed & Vale";
+const QUOTE_NAME = "John \x22Jack\x22 Vale";
+
+function listPage(rows) {
+  return peopleList(rows);
+}
+
+test("real personDetail/layout output keeps Tom O\x27Brien literal in the h1", () => {
+  const person = {
+    id: "tom-o-brien",
+    name: APOSTROPHE_NAME,
+    category: "death_celebrity",
+    photo: "",
+  };
+  const html = detailPage(person);
+  const h1At = html.indexOf("<h1");
+  assert.ok(h1At >= 0);
+  const h1Snippet = html.slice(h1At, html.indexOf("</h1>", h1At) + 5);
+  assert.equal(h1Snippet, "<h1 class=\x22vh\x22>Tom O\x27Brien</h1>");
+  assert.equal(html.includes("Tom O\x27Brien"), true);
+  assert.equal(html.includes("Tom O&apos;Brien"), false);
+  assert.equal(html.includes("Tom O&#39;Brien"), false);
+  assert.equal(hasPersonOnDetail(html, person), true);
+});
+
+test("hasPersonOnDetail and hasPersonOnList use esc() for &, quotes, and apostrophes", () => {
+  const people = [
+    { id: "tom-o-brien", name: APOSTROPHE_NAME, category: "death_celebrity", photo: "", event_date: "2024-06-15" },
+    { id: "reed-vale", name: AMP_NAME, category: "death_celebrity", photo: "", event_date: "2024-06-16" },
+    { id: "john-jack-vale", name: QUOTE_NAME, category: "death_celebrity", photo: "", event_date: "2024-06-17" },
+  ];
+  for (const person of people) {
+    const detail = detailPage(person);
+    const list = listPage([person]);
+    assert.equal(hasPersonOnDetail(detail, person), true, person.name + " detail");
+    assert.equal(hasPersonOnList(list, person), true, person.name + " list");
+    const encoded = esc(person.name);
+    assert.equal(detail.includes(encoded), true);
+    assert.equal(list.includes(encoded), true);
+    assert.equal(list.includes("href=\x22/people/" + person.id + "\x22"), true);
+  }
+  const ampDetail = detailPage(people[1]);
+  assert.equal(ampDetail.includes("Reed & Vale"), false);
+  assert.equal(ampDetail.includes("Reed &amp; Vale"), true);
+  const quoteDetail = detailPage(people[2]);
+  assert.equal(quoteDetail.includes(QUOTE_NAME), false);
+  assert.equal(quoteDetail.includes("John &quot;Jack&quot; Vale"), true);
+});
+
+test("a live list page for names with &, quotes, and apostrophes passes the display check", async () => {
+  setMemory({ people: [] });
+  const subjects = [
+    { subject: APOSTROPHE_NAME, event_date: "2024-06-15", cite_urls: CITES },
+    {
+      subject: AMP_NAME,
+      event_date: "2024-06-16",
+      cite_urls: [
+        "https://www.example.com/news/reed-vale-held",
+        "https://www.example.net/world/reed-vale-report",
+      ],
+    },
+    {
+      subject: QUOTE_NAME,
+      event_date: "2024-06-17",
+      cite_urls: [
+        "https://www.example.com/news/john-jack-vale-held",
+        "https://www.example.net/world/john-jack-vale-report",
+      ],
+    },
+  ];
+  const created = [];
+  for (const input of subjects) {
+    const row = await applyIdentifiedPerson(
+      withNewPersonLock({
+        subject: input.subject,
+        event_date: input.event_date,
+        category: "death_celebrity",
+        cite_urls: input.cite_urls,
+        photo: "",
+        photo_credit: "Should not be stored",
+        mediaDir: EMPTY_MEDIA,
+      }),
+    );
+    assert.equal(row.action, "created");
+    assert.equal(row.person.name, input.subject);
+    created.push(row.person);
+  }
+  for (const person of created) {
+    const shown = await checkPersonDisplayed(person);
+    assert.equal(shown.detail, "/people/" + person.id);
+    assert.match(shown.list, /^\/deaths\/celebrities/);
+    const list = await fetchCatalogHtml(shown.list);
+    assert.equal(list.status, 200);
+    assert.equal(hasPersonOnList(list.body, person), true, person.name);
+    const detail = await fetchCatalogHtml(shown.detail);
+    assert.equal(detail.status, 200);
+    assert.equal(hasPersonOnDetail(detail.body, person), true, person.name);
+  }
 });

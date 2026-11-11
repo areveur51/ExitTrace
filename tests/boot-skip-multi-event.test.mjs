@@ -8,7 +8,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { bootDatabase, SUBSCRIBER_COUNT_SQL } from "../app/lib/boot-guard.mjs";
-import { PromoteError, attachPersonEvent, eventSeq, eventsOfKind, projectPerson } from "../app/lib/promote.mjs";
+import { PromoteError, attachPersonEvent, collapseDuplicatePeople, eventSeq, eventsOfKind, projectPerson } from "../app/lib/promote.mjs";
 import {
   bootMultiEventSkipLine,
   getMemory,
@@ -273,3 +273,58 @@ test("the shared guard is used in importSeed and migrateUniquePeople only", () =
   assert.match(STORE_SRC, /err instanceof PromoteError && err.code === BOOT_MULTI_EVENT_SKIP_CODE/);
 });
 
+
+test("runBootPersonWrite makes no client query for a seq>0 person when the switch is off", async () => {
+  await withSwitchOff(async () => {
+    const person = twoNotables("boot-skip-keith", "Boot Skip Keith");
+    let queries = 0;
+    const client = {
+      async query() {
+        queries += 1;
+        throw new Error("boot guard must not query");
+      },
+    };
+    const logs = [];
+    const out = await runBootPersonWrite(
+      person,
+      async () => {
+        throw new Error("writeFn must not run on a skip");
+      },
+      { client, tally: { count: 0 }, log: (line) => logs.push(line) },
+    );
+    assert.equal(out.skipped, true);
+    assert.equal(queries, 0);
+    assert.deepEqual(logs, [bootMultiEventSkipLine("boot-skip-keith", 1)]);
+  });
+});
+
+test("migrateUniquePeople skips a seq>0 merge and leaves both source rows unchanged", async () => {
+  await withSwitchOff(async () => {
+    setPoolForTests(null);
+    const kept = singleNotable("boot-merge-keith", "Boot Merge Keith", "2026-03-04", "First notable event.");
+    const dup = singleNotable("boot-merge-keith-2026-10-05", "Boot Merge Keith", "2026-10-05", "Second notable event.");
+    setMemory({ people: [kept, dup] });
+    const beforeKept = structuredClone(await getPerson("boot-merge-keith"));
+    const beforeDup = structuredClone(await getPerson("boot-merge-keith-2026-10-05"));
+    const collapsed = collapseDuplicatePeople([beforeKept, beforeDup]);
+    assert.equal(collapsed.length, 1);
+    assert.equal(collapsed[0].id, "boot-merge-keith");
+    assert.ok(eventsOfKind(collapsed[0].events, "notable").some((ev) => eventSeq(ev) > 0));
+    const bootLines = [];
+    const captured = await captureLog(async () =>
+      bootDatabase(publisherPool(), bootDeps({
+        importSeedFn: async () => ({ people: 0, dog_comms: 0, operations: 0 }),
+        migrateFn: migrateUniquePeople,
+        logLines: bootLines,
+      })),
+    );
+    assert.equal(captured.result.subscriber, false);
+    const afterKept = await getPerson("boot-merge-keith");
+    const afterDup = await getPerson("boot-merge-keith-2026-10-05");
+    assert.deepEqual(afterKept, beforeKept);
+    assert.deepEqual(afterDup, beforeDup);
+    const skipLine = bootMultiEventSkipLine("boot-merge-keith", 1);
+    assert.ok(captured.lines.includes(skipLine), captured.lines.join("\n"));
+    setPoolForTests(null);
+  });
+});
