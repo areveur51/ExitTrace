@@ -150,7 +150,7 @@ export const EMPTY_PORTRAIT_HREF = `/empty-portrait.jpg?v=${createHash("sha1")
   .digest("hex")
   .slice(0, 10)}`;
 
-function esc(s) {
+export function esc(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -3380,6 +3380,8 @@ export function relationshipsHtml(row, sourceNumbers) {
   return `<section class="person-relationships" aria-label="Relationships"><h3 class="career-h">Relationships</h3>${groups}</section>`;
 }
 
+export const PERSON_DETAIL_MARKER = '<article class="detail person-detail"';
+
 export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], attributions } = {}) {
   const { row: filled, filled: keys, cite } = fillEmptyFromGrokipedia(row);
   const seen = detailMediaSeen();
@@ -3387,7 +3389,7 @@ export function personDetail(row, { centralCastingClips = [], epsteinLegs = [], 
   const timeline = personTimelineEvents(filled);
   const sourceBundle = personSourceItems(filled, { events, centralCastingClips, cite });
   const sourceNumbers = sourceNumberMap(sourceBundle.items);
-  return `<article class="detail person-detail">
+  return `${PERSON_DETAIL_MARKER}>
     ${detailShell({
       title: "Identity",
       mediaHtml: personHeader(filled, { filled: keys, cite, attributions, seen }),

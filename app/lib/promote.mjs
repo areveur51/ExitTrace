@@ -798,13 +798,19 @@ export function mergePersonAnnotate(gold, prior) {
   });
 }
 
-export function collapseDuplicatePeople(people) {
+/**
+ * Same collapse as collapseDuplicatePeople, plus the source ids that
+ * folded into each kept row. migrateUniquePeople uses this so a skipped
+ * merge does not delete its source rows.
+ */
+export function collapseDuplicatePeopleGroups(people) {
   const rows = (people || []).map((row) => projectPerson(row));
   const used = new Set();
   const out = [];
   for (let i = 0; i < rows.length; i++) {
     if (used.has(i)) continue;
     let keep = rows[i];
+    const sourceIds = [rows[i].id];
     for (let j = i + 1; j < rows.length; j++) {
       if (used.has(j)) continue;
       if (!shouldMergePeople(keep, rows[j])) continue;
@@ -814,10 +820,15 @@ export function collapseDuplicatePeople(people) {
           : [rows[j], keep];
       keep = mergePersonAnnotate(preferred, other);
       used.add(j);
+      sourceIds.push(rows[j].id);
     }
-    out.push(keep);
+    out.push({ row: keep, sourceIds });
   }
   return out;
+}
+
+export function collapseDuplicatePeople(people) {
+  return collapseDuplicatePeopleGroups(people).map((group) => group.row);
 }
 
 export function nextPersonId(people, slug, eventDate) {

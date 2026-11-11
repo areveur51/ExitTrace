@@ -10,6 +10,7 @@ import {
   citeRecords,
   incomingPersonEvent,
   collapseDuplicatePeople,
+  collapseDuplicatePeopleGroups,
   findGoldMatch,
   normalizeSubject,
   personSlug,
@@ -2148,16 +2149,13 @@ export function multiEventWritesEnabled(env = process.env) {
 const EVENT_SEQ_MAX = 2147483647;
 
 /**
- * A seq > 0 event needs PRIMARY KEY (person_id, kind, seq) on this database.
- * A seq > 0 event of a kind other than notable (red_folder) also needs the
- * multi-event migration (F3 up-lab / F5 up-render-b), which drops
- * person_events_seq_notable_only. A seq above int4 is refused here, before any
- * query. No catalog query when every event is seq 0.
+ * Sync pre-check for seq > 0 events: refuse an out-of-range seq, then refuse
+ * when ET_MULTI_EVENT_WRITES is not exactly "on". No catalog query.
  */
-export async function assertMultiNotableReady(client, person, env = process.env) {
+export function assertMultiEventWritesOn(person, env = process.env) {
   const normalized = normalizePerson(person);
   const multi = (normalized.events || []).filter((ev) => eventSeq(ev) > 0);
-  if (!multi.length) return;
+  if (!multi.length) return { normalized, multi };
   const tooBig = multi.find((ev) => eventSeq(ev) > EVENT_SEQ_MAX);
   if (tooBig) {
     throw new PromoteError(
@@ -2172,6 +2170,19 @@ export async function assertMultiNotableReady(client, person, env = process.env)
       "multi_event_writes_off",
     );
   }
+  return { normalized, multi };
+}
+
+/**
+ * A seq > 0 event needs PRIMARY KEY (person_id, kind, seq) on this database.
+ * A seq > 0 event of a kind other than notable (red_folder) also needs the
+ * multi-event migration (F3 up-lab / F5 up-render-b), which drops
+ * person_events_seq_notable_only. A seq above int4 is refused here, before any
+ * query. No catalog query when every event is seq 0.
+ */
+export async function assertMultiNotableReady(client, person, env = process.env) {
+  const { multi } = assertMultiEventWritesOn(person, env);
+  if (!multi.length) return;
   if (!(await personEventsKeyHasSeq(client))) {
     const kind = String(multi[0].kind || "").trim();
     throw new PromoteError(
@@ -2207,18 +2218,10 @@ function isMultiEventWritesOffError(err) {
  * Catches only PromoteError with code multi_event_writes_off. Any other error
  * still fails boot. The gate runs before writeFn, so a skip makes no write.
  */
-export async function runBootPersonWrite(person, writeFn, { client, tally, log } = {}) {
+export async function runBootPersonWrite(person, writeFn, { tally, log } = {}) {
   const acc = tally || { count: 0 };
   try {
-    if (client) {
-      await assertMultiNotableReady(client, person);
-    } else {
-      const normalized = normalizePerson(person);
-      const multi = (normalized.events || []).filter((ev) => eventSeq(ev) > 0);
-      if (multi.length && !multiEventWritesEnabled()) {
-        await assertMultiNotableReady(null, person);
-      }
-    }
+    assertMultiEventWritesOn(person);
     await writeFn(person);
     return { skipped: false, skips: acc.count };
   } catch (err) {
@@ -3858,17 +3861,38 @@ export async function searchCatalog(q, opts = {}) {
 
 export async function migrateUniquePeople() {
   const people = await listPeople();
-  const collapsed = collapseDuplicatePeople(people);
-  const keepIds = new Set(collapsed.map((row) => row.id));
+  const groups = collapseDuplicatePeopleGroups(people);
+  const skipTally = { count: 0 };
+  const accepted = [];
+  for (const group of groups) {
+    try {
+      assertMultiEventWritesOn(group.row);
+      accepted.push(group);
+    } catch (err) {
+      if (isMultiEventWritesOffError(err)) {
+        skipTally.count += 1;
+        const id = group.row && group.row.id != null ? String(group.row.id) : "";
+        console.log(bootMultiEventSkipLine(id, skipTally.count));
+        continue;
+      }
+      throw err;
+    }
+  }
+  const deleteIds = new Set();
+  for (const group of accepted) {
+    for (const id of group.sourceIds) {
+      if (id !== group.row.id) deleteIds.add(id);
+    }
+  }
   let merged = 0;
   for (const row of people) {
-    if (!keepIds.has(row.id)) {
+    if (deleteIds.has(row.id)) {
       await deletePerson(row.id);
       merged += 1;
     }
   }
-  const skipTally = { count: 0 };
-  for (const row of collapsed) {
+  for (const group of accepted) {
+    const row = group.row;
     const existing = people.find((p) => p.id === row.id);
     if (!existing) {
       await runBootPersonWrite(row, async () => {
@@ -3880,7 +3904,7 @@ export async function migrateUniquePeople() {
       await savePerson(row);
     }, { tally: skipTally });
   }
-  return { people: collapsed.length, merged };
+  return { people: groups.length, merged };
 }
 
 export async function closeStore() {

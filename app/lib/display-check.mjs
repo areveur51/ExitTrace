@@ -1,6 +1,7 @@
 /** After insert/promote, live list + detail HTML must show the row. Counts are not enough. */
 
 import { categoryById, isGroupOpsKeepKind } from "./categories.mjs";
+import { PERSON_DETAIL_MARKER, esc } from "./html.mjs";
 
 export class DisplayError extends Error {
   constructor(message, code = "display_failed") {
@@ -110,17 +111,17 @@ export async function fetchCatalogHtml(pathname) {
   });
 }
 
-function hasPersonOnList(html, person) {
+export function hasPersonOnList(html, person) {
   const href = `/people/${person.id}`;
-  const name = String(person.name || "").trim();
+  const name = esc(String(person.name || "").trim());
   return html.includes(`href="${href}"`) && html.includes(name);
 }
 
 // Name plus the person-detail article: always rendered, including blank portraits.
 // Do not treat a bare id as enough; that only appears in /media/people/<id>.
 export function hasPersonOnDetail(html, person) {
-  const name = String(person.name || "").trim();
-  return html.includes(name) && html.includes('<article class="detail person-detail"');
+  const name = esc(String(person.name || "").trim());
+  return html.includes(name) && html.includes(PERSON_DETAIL_MARKER);
 }
 
 function hasDogOnList(html, dog) {
