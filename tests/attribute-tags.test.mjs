@@ -33,8 +33,8 @@ function requestPage(pathname) {
 
 test("fact tags stay on the person and are not identity filters", () => {
   assert.deepEqual(
-    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "big_beautiful_bill_act", "save_act", "secure_the_border_act", "laken_riley_act", "save_america_act", "s_5271_photo_id", "former_intel_agency_personnel", "fraud", "red_folder", "nope"]),
-    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "big_beautiful_bill_act", "save_act", "secure_the_border_act", "laken_riley_act", "save_america_act", "s_5271_photo_id", "former_intel_agency_personnel", "fraud", "red_folder"],
+    normalizeTags(["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "big_beautiful_bill_act", "save_act", "secure_the_border_act", "laken_riley_act", "save_america_act", "s_5271_photo_id", "former_intel_agency_personnel", "refuse_illegal_orders", "fraud", "red_folder", "nope"]),
+    ["official", "clearance_revoked", "trump_nickname", "epstein_clients", "epstein_files", "masks", "epstein_transparency_act", "endorsements", "harassment_records", "ukraine_aid_flags", "big_beautiful_bill_act", "save_act", "secure_the_border_act", "laken_riley_act", "save_america_act", "s_5271_photo_id", "former_intel_agency_personnel", "refuse_illegal_orders", "fraud", "red_folder"],
   );
   assert.deepEqual(
     personTags({

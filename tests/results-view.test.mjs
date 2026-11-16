@@ -81,6 +81,11 @@ test("results view control is list/cards plus small/medium/large", () => {
   assert.match(html, /aria-labelledby="card-size-label"/);
   assert.match(html, />List</);
   assert.match(html, />Cards</);
+  assert.match(html, /data-results-sort-select/);
+  assert.match(html, /<option value="year" selected>Year</);
+  assert.match(html, /<option value="name">Name</);
+  assert.match(html, /<option value="occupation">Occupation</);
+  assert.match(html, /<option value="portrait">Portrait</);
   assert.match(html, /data-results-view-set="list"[^>]*>[\s\S]*class="ui-icon"/);
   assert.match(html, /data-card-size-set="s"[^>]*aria-label="Small"[^>]*>[\s\S]*ui-icon-solid/);
   assert.match(html, /aria-label="Small"/);
@@ -226,6 +231,9 @@ test("app.js persists results view and card size without a reload", () => {
   assert.match(css, /--result-card-min:\s*8\.25rem/);
   assert.match(css, /--result-card-min:\s*16rem/);
   assert.match(css, /\.results-controls/);
+  assert.match(css, /\.results-sort-select/);
+  assert.match(css, /\.results-controls-row--view \{[\s\S]*minmax\(0, 1fr\) minmax\(0, 1fr\);/);
+  assert.match(css, /html\[data-results-view="cards"\] \.results-controls-row--view \{[\s\S]*minmax\(0, 1fr\) minmax\(0, 1fr\) minmax\(0, 1fr\)/);
   assert.match(css, /@media \(min-width: 820px\)/);
   assert.match(css, /@media \(min-width: 1200px\)/);
   assert.doesNotMatch(css, /@media \(min-width: 1440px\)/);
@@ -257,7 +265,7 @@ test("operation cards share the result portrait slot and the sharp srcset", () =
   assert.doesNotMatch(html, /person-card/);
 });
 
-test("combined results-controls bar is view, card size, pager, then rows", () => {
+test("combined results-controls bar is view, card size, sort, pager, then rows", () => {
   const rows = [
     {
       id: "ada",
@@ -282,6 +290,7 @@ test("combined results-controls bar is view, card size, pager, then rows", () =>
   const iViewRow = section.indexOf("results-controls-row--view");
   const iView = section.indexOf("data-results-view-set");
   const iCard = section.indexOf("data-card-size-set");
+  const iSort = section.indexOf("data-results-sort-select");
   const iPageRow = section.indexOf("results-controls-row--page");
   const iPage = section.indexOf("pager-status-page");
   const iRows = section.indexOf("data-page-size-set");
@@ -289,10 +298,13 @@ test("combined results-controls bar is view, card size, pager, then rows", () =>
   assert.ok(iToolbar < iViewRow);
   assert.ok(iViewRow < iView);
   assert.ok(iView < iCard);
-  assert.ok(iCard < iPageRow);
+  assert.ok(iCard < iSort);
+  assert.ok(iSort < iPageRow);
   assert.ok(iPageRow < iPage);
   assert.ok(iPage < iRows);
   assert.ok(iRows < iList);
+  assert.match(section, /data-results-sort-select/);
+  assert.match(section, /<option value="year" selected>Year</);
   assert.match(section, /Page 2 of 15/);
   assert.match(section, /rel="prev"/);
   assert.match(section, /rel="next"/);
@@ -356,8 +368,10 @@ test("every catalog list route renders the combined bar; home and detail do not"
     assert.match(res.body, /data-card-size-set="s"/, pathname);
     assert.match(res.body, /data-card-size-set="m"/, pathname);
     assert.match(res.body, /data-card-size-set="l"/, pathname);
+    assert.match(res.body, /data-results-sort-select/, pathname);
     assert.match(res.body, /exittrace-results-view/, pathname);
     assert.match(res.body, /exittrace-card-size/, pathname);
+    assert.match(res.body, /exittrace-results-sort/, pathname);
   }
   const enumerated = [
     "/firings",

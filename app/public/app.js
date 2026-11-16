@@ -129,6 +129,32 @@ document.addEventListener("DOMContentLoaded", () => {
     sel.addEventListener("change", () => applyPageSize(sel.value));
   }
 
+  const RESULTS_SORTS = ["year", "name", "occupation", "portrait"];
+  const RESULTS_SORT_KEY = "exittrace-results-sort";
+  const sortSelects = document.querySelectorAll("[data-results-sort-select]");
+
+  function applyResultsSort(raw) {
+    const next = RESULTS_SORTS.includes(raw) ? raw : "year";
+    try {
+      localStorage.setItem(RESULTS_SORT_KEY, next);
+    } catch {
+      /* private mode / quota */
+    }
+    document.cookie = `${RESULTS_SORT_KEY}=${next}; Path=/; SameSite=Lax`;
+    for (const sel of sortSelects) {
+      sel.value = next;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("page");
+    if (next === "year") url.searchParams.delete("sort");
+    else url.searchParams.set("sort", next);
+    window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+  }
+
+  for (const sel of sortSelects) {
+    sel.addEventListener("change", () => applyResultsSort(sel.value));
+  }
+
   const RESULTS_VIEW_KEY = "exittrace-results-view";
   const CARD_SIZE_KEY = "exittrace-card-size";
   const RESULTS_VIEWS = ["list", "cards"];

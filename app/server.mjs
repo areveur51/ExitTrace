@@ -78,7 +78,6 @@ import {
   dashboardRankBody,
   kindDetail,
   kindList,
-  byDateDescThenName,
   commsCatalogItems,
   commsCatalogList,
   downloadsBody,
@@ -95,6 +94,9 @@ import {
   peopleList,
   personDetail,
   searchBody,
+  sortListedPeople,
+  sortListItems,
+  sortSearchItems,
   sourcePostDetail,
   sourcePostList,
   queueBody,
@@ -111,6 +113,7 @@ import {
   parseCookiePageSize,
   parsePage,
 } from "./lib/paginate.mjs";
+import { resolveResultsSort, resultsSortHref } from "./lib/results-sort.mjs";
 import { parseAgeBand } from "./lib/age.mjs";
 import { PAGE_ATTRIBUTE_TAGS, attributeTagById, attributeTagByPath, attributeTagHref, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
 import {
@@ -456,6 +459,40 @@ function countText(title, meta, pageCount) {
   });
 }
 
+function readListChrome(req, url) {
+  return {
+    pageSize: parseCookiePageSize(req.headers.cookie),
+    sort: resolveResultsSort(url.searchParams, req.headers.cookie),
+    page: parsePage(url.searchParams),
+  };
+}
+
+function listPager(meta, { basePath, noun = "rows", sort, pageSizes = PAGE_SIZES } = {}) {
+  return pager(meta, {
+    basePath: resultsSortHref(basePath, sort),
+    noun,
+    pageSizes,
+  });
+}
+
+async function windowSortedRows({ req, url, count, loadPage, loadAll, sortRows }) {
+  const { pageSize, sort, page } = readListChrome(req, url);
+  if (sort === "year") {
+    const total = await count();
+    const meta = paginate({ total, page, pageSize });
+    const rows = await loadPage(meta);
+    return { rows, meta, pageSize, sort };
+  }
+  const ordered = sortRows(await loadAll(), sort);
+  const meta = paginate({ total: ordered.length, page, pageSize });
+  return {
+    rows: ordered.slice(meta.offset, meta.offset + meta.limit),
+    meta,
+    pageSize,
+    sort,
+  };
+}
+
 /** Upper bounds for a comms list that mixes in tagged people (read whole, paged in memory). */
 const COMMS_MIXED_POST_CAP = 1000;
 const COMMS_TAGGED_PEOPLE_CAP = 500;
@@ -479,39 +516,47 @@ function postPersonIds(rows) {
  * read in parallel (both bounded), merged once, sorted, and paged in memory.
  */
 async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
-  const pageSize = parseCookiePageSize(req.headers.cookie);
+  const { pageSize, sort, page } = readListChrome(req, url);
   const tag = commsPersonTag(spec);
   if (!tag) {
-    const total = await countKindComms(spec.id);
-    const meta = paginate({
-      total,
-      page: parsePage(url.searchParams),
-      pageSize,
-    });
-    const rows = await listKindComms(spec.id, {
-      limit: meta.limit,
-      offset: meta.offset,
+    const { rows, meta } = await windowSortedRows({
+      req,
+      url,
+      count: () => countKindComms(spec.id),
+      loadPage: (meta) =>
+        listKindComms(spec.id, {
+          limit: meta.limit,
+          offset: meta.offset,
+        }),
+      loadAll: () => listKindComms(spec.id),
+      sortRows: (rows, nextSort) =>
+        sortListItems(
+          rows.map((row) => ({ date: row.posted_at, type: spec.id, row })),
+          nextSort,
+        ).map((item) => item.row),
     });
     const listHtml = spec.showLinkedPeople
-      ? commsCatalogList(spec.id, commsCatalogItems(rows, await getPeopleByIds(postPersonIds(rows))))
-      : kindList(spec.id, rows);
+      ? commsCatalogList(spec.id, commsCatalogItems(rows, await getPeopleByIds(postPersonIds(rows))), { sort })
+      : kindList(spec.id, rows, { sort });
     return layout({
       title,
       path: listPath,
       heading: title,
       query: title,
       pageSize,
+      sort,
       countLabel: countText(title, meta, rows.length),
       lede,
       body: `${listSection(
         listHtml,
-        pager(meta, { basePath: listPath, noun: "posts", pageSizes: PAGE_SIZES }),
+        listPager(meta, { basePath: listPath, noun: "posts", sort }),
         listHead({
           title,
           total: meta.total,
           index: 1,
           of: rows.length,
         }),
+        { sort },
       )}`,
     });
   }
@@ -520,10 +565,15 @@ async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
     listPeople({ tags: [tag], limit: COMMS_TAGGED_PEOPLE_CAP }),
   ]);
   const linked = spec.showLinkedPeople ? await getPeopleByIds(postPersonIds(posts)) : [];
-  const items = commsCatalogItems(posts, [...linked, ...tagged], tagged).sort(byDateDescThenName);
+  const items = sortListItems(
+    commsCatalogItems(posts, [...linked, ...tagged], tagged).map((item) =>
+      item.type === "person" ? item : { ...item, type: spec.id },
+    ),
+    sort,
+  );
   const meta = paginate({
     total: items.length,
-    page: parsePage(url.searchParams),
+    page,
     pageSize,
   });
   const pageItems = items.slice(meta.offset, meta.offset + meta.limit);
@@ -533,18 +583,20 @@ async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
     heading: title,
     query: title,
     pageSize,
+    sort,
     crumbLabel: title,
     countLabel: countText(title, meta, pageItems.length),
     lede,
     body: listSection(
-      commsCatalogList(spec.id, pageItems),
-      pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+      commsCatalogList(spec.id, pageItems, { sort }),
+      listPager(meta, { basePath: listPath, noun: "rows", sort }),
       listHead({
         title,
         total: meta.total,
         index: 1,
         of: pageItems.length,
       }),
+      { sort },
     ),
   });
 }
@@ -609,14 +661,15 @@ async function tagMembershipOrNull() {
 
 async function sendTagSearch(req, res, url, tagState, membership) {
   const { tags, match } = tagState;
-  const pageSize = parseCookiePageSize(req.headers.cookie);
+  const { pageSize, sort, page } = readListChrome(req, url);
   const matched = await listPeople({ tags, tagMatch: match });
   const flightDates =
     tags[0] === "epstein_clients" ? await earliestEpsteinFlights(matched.map((row) => row.id)) : null;
   // Same order as the first tag's /tags list.
   const { ordered, dateOf } = orderPeopleByMenuDate(matched, { tag: tags[0], flightDates });
-  const meta = paginate({ total: ordered.length, page: parsePage(url.searchParams), pageSize });
-  const rows = ordered.slice(meta.offset, meta.offset + meta.limit);
+  const sorted = sortListedPeople(ordered, sort, { dateOf });
+  const meta = paginate({ total: sorted.length, page, pageSize });
+  const rows = sorted.slice(meta.offset, meta.offset + meta.limit);
   const label = tags.map((id) => tagShortLabel(id)).join(match === "any" ? " or " : " + ");
   const basePath = tagSearchHref("/search", tagState);
   return sendHtml(
@@ -628,14 +681,16 @@ async function sendTagSearch(req, res, url, tagState, membership) {
       crumbLabel: label,
       query: label,
       pageSize,
+      sort,
       countLabel: countText(label, meta, rows.length),
       lede: match === "any"
         ? "People stored with at least one of the selected tags."
         : "People stored with every selected tag.",
       body: `${searchFormHtml({ state: tagState, membership })}${listSection(
-        peopleList(rows, { listDate: dateOf }),
-        pager(meta, { basePath, noun: "rows", pageSizes: PAGE_SIZES }),
+        peopleList(rows, { listDate: dateOf, sort }),
+        listPager(meta, { basePath, noun: "rows", sort }),
         listHead({ title: label, total: meta.total, index: 1, of: rows.length }),
+        { sort },
       )}`,
     }),
   );
@@ -1040,12 +1095,14 @@ async function handle(req, res) {
         new Set((await listPeople({ tags: tagSearch.tags, tagMatch: tagSearch.match })).map((row) => row.id));
       all = all.filter((item) => item.type === "person" && inSet.has(item.row?.id));
     }
+    const sort = resolveResultsSort(url.searchParams, req.headers.cookie);
+    const sorted = sortSearchItems(all, sort);
     const meta = paginate({
-      total: all.length,
+      total: sorted.length,
       page: parsePage(url.searchParams),
       pageSize: DOG_PAGE_SIZE,
     });
-    const windowed = all.slice(meta.offset, meta.offset + meta.limit);
+    const windowed = sorted.slice(meta.offset, meta.offset + meta.limit);
     const searchPath = tagSearch.tags.length
       ? tagSearchHref("/search", tagState)
       : q ? `/search?q=${encodeURIComponent(q)}` : "/search";
@@ -1057,12 +1114,13 @@ async function handle(req, res) {
         heading: "Search",
         crumbLabel: q || "Search",
         query: q || "search",
+        sort: q ? sort : undefined,
         countLabel: q ? countText(q, meta, windowed.length) : "local",
         lede: "Matches names, operation titles, roles, summaries, handles, and stored post text in the local catalog.",
         body: searchFormHtml({ state: tagState, membership }) + listSection(
-          searchBody(windowed, q),
+          searchBody(windowed, q, { sort }),
           q
-            ? pager(meta, { basePath: searchPath, noun: "results" })
+            ? pager(meta, { basePath: resultsSortHref(searchPath, sort), noun: "results" })
             : "",
           q
             ? listHead({
@@ -1072,6 +1130,7 @@ async function handle(req, res) {
                 of: windowed.length,
               })
             : "",
+          { sort },
         ),
       }),
     );
@@ -1136,13 +1195,14 @@ async function handle(req, res) {
       const field = parseMissingField(fieldToken);
       const invalid = Boolean(fieldToken) && fieldToken !== "all" && !field;
       const matched = invalid ? [] : peopleMissingField(people, field?.id || "all", range);
-      const pageSize = parseCookiePageSize(req.headers.cookie);
+      const { pageSize, sort, page } = readListChrome(req, url);
+      const sorted = sortListedPeople(matched, sort);
       const meta = paginate({
-        total: matched.length,
-        page: parsePage(url.searchParams),
+        total: sorted.length,
+        page,
         pageSize,
       });
-      const windowed = matched.slice(meta.offset, meta.offset + meta.limit);
+      const windowed = sorted.slice(meta.offset, meta.offset + meta.limit);
       const listPath = dashRangeHref(DASH_MISSING.path, range, field ? { field: field.id } : {});
       const heading = field ? `Missing · ${field.label}` : "Missing metadata";
       return sendHtml(
@@ -1153,18 +1213,20 @@ async function handle(req, res) {
           heading,
           query: heading,
           pageSize,
+          sort,
           dashRange: range,
           countLabel: countText(heading, meta, windowed.length),
           lede: "Unique people missing a stored field. Empty stays empty and is not guessed. Portrait means no local /media/people/ still.",
           body: `${dashboardMissingBody({ range, field })}${listSection(
-            peopleList(windowed),
-            pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+            peopleList(windowed, { sort }),
+            listPager(meta, { basePath: listPath, noun: "rows", sort }),
             listHead({
               title: heading,
               total: meta.total,
               index: 1,
               of: windowed.length,
             }),
+            { sort },
           )}`,
         }),
       );
@@ -1174,13 +1236,14 @@ async function handle(req, res) {
       const band = parseAgeBand(bandToken);
       const invalid = Boolean(bandToken) && bandToken !== "all" && !band;
       const matched = invalid ? [] : peopleInAgeBand(people, band?.id, range);
-      const pageSize = parseCookiePageSize(req.headers.cookie);
+      const { pageSize, sort, page } = readListChrome(req, url);
+      const sorted = sortListedPeople(matched, sort);
       const meta = paginate({
-        total: matched.length,
-        page: parsePage(url.searchParams),
+        total: sorted.length,
+        page,
         pageSize,
       });
-      const windowed = matched.slice(meta.offset, meta.offset + meta.limit);
+      const windowed = sorted.slice(meta.offset, meta.offset + meta.limit);
       const listPath = dashRangeHref(DASH_AGE.path, range, band ? { band: band.id } : {});
       const heading = band ? `Age · ${band.label}` : "Counts by Age";
       return sendHtml(
@@ -1191,18 +1254,20 @@ async function handle(req, res) {
           heading,
           query: heading,
           pageSize,
+          sort,
           dashRange: range,
           countLabel: countText(heading, meta, windowed.length),
           lede: "Unique people by age at a tagged event. Missing birth date is not guessed and is not listed.",
           body: `${dashboardAgeBody({ range, band })}${listSection(
-            peopleList(windowed),
-            pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+            peopleList(windowed, { sort }),
+            listPager(meta, { basePath: listPath, noun: "rows", sort }),
             listHead({
               title: heading,
               total: meta.total,
               index: 1,
               of: windowed.length,
             }),
+            { sort },
           )}`,
         }),
       );
@@ -1296,7 +1361,7 @@ async function handle(req, res) {
   }
   if (factTag) {
     const tags = [factTag.id];
-    const pageSize = parseCookiePageSize(req.headers.cookie);
+    const { pageSize, sort, page } = readListChrome(req, url);
     const matched = await listPeople({ tags });
     const flightDates =
       factTag.id === "epstein_clients"
@@ -1306,12 +1371,13 @@ async function handle(req, res) {
       tag: factTag.id,
       flightDates,
     });
+    const sorted = sortListedPeople(ordered, sort, { dateOf });
     const meta = paginate({
-      total: ordered.length,
-      page: parsePage(url.searchParams),
+      total: sorted.length,
+      page,
       pageSize,
     });
-    const rows = ordered.slice(meta.offset, meta.offset + meta.limit);
+    const rows = sorted.slice(meta.offset, meta.offset + meta.limit);
     return sendHtml(
       res,
       layout({
@@ -1320,19 +1386,21 @@ async function handle(req, res) {
         heading: factTag.nav,
         query: factTag.nav,
         pageSize,
+        sort,
         crumbLabel: factTag.nav,
         countLabel: countText(factTag.nav, meta, rows.length),
         intro: tagDescriptionBlock(factTag.id),
         lede: factTag.lede,
         body: `${listSection(
-          peopleList(rows, { listDate: dateOf }),
-          pager(meta, { basePath: factTag.path, noun: "rows", pageSizes: PAGE_SIZES }),
+          peopleList(rows, { listDate: dateOf, sort }),
+          listPager(meta, { basePath: factTag.path, noun: "rows", sort }),
           listHead({
             title: factTag.nav,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
+          { sort },
         )}`,
       }),
     );
@@ -1515,19 +1583,21 @@ async function handle(req, res) {
           : catalogListKinds(cat.id);
     const tags = parseTagFilter(url.searchParams, p);
     const unsealed = isIndictmentCategory(cat.id) && parseUnsealedFilter(url.searchParams);
-    const pageSize = parseCookiePageSize(req.headers.cookie);
     const listOpts = { category: kinds, tags, unsealed };
-    const total = await countPeople(listOpts);
-    const meta = paginate({
-      total,
-      page: parsePage(url.searchParams),
-      pageSize,
-    });
-    const rows = await listPeople({
-      ...listOpts,
-      limit: meta.limit,
-      offset: meta.offset,
-      cardOrder: gov,
+    const dateOf = kinds.length ? (row) => personMenuDate(row, { kinds }) : undefined;
+    const { rows, meta, pageSize, sort } = await windowSortedRows({
+      req,
+      url,
+      count: () => countPeople(listOpts),
+      loadPage: (pageMeta) =>
+        listPeople({
+          ...listOpts,
+          limit: pageMeta.limit,
+          offset: pageMeta.offset,
+          cardOrder: gov,
+        }),
+      loadAll: () => listPeople({ ...listOpts, cardOrder: gov }),
+      sortRows: (matched, nextSort) => sortListedPeople(matched, nextSort, { dateOf }),
     });
     const heading = gov ? "Officials" : cat.title;
     const listPath = filterPath(cat.path, { tags, unsealed });
@@ -1539,6 +1609,7 @@ async function handle(req, res) {
         heading,
         query: heading,
         pageSize,
+        sort,
         countLabel: countText(heading, meta, rows.length),
         lede: gov
           ? "People tagged official — government, appointed, military, or law-enforcement roles. One card per person; tags are not exclusive."
@@ -1546,17 +1617,17 @@ async function handle(req, res) {
         body: `${identityFilterNav(cat.path, { tags, unsealed })}${listSection(
           peopleList(rows, {
             showDeath: deaths,
-            ...(kinds.length
-              ? { listDate: (row) => personMenuDate(row, { kinds }) }
-              : {}),
+            sort,
+            ...(dateOf ? { listDate: dateOf } : {}),
           }),
-          pager(meta, { basePath: listPath, noun: "rows", pageSizes: PAGE_SIZES }),
+          listPager(meta, { basePath: listPath, noun: "rows", sort }),
           listHead({
             title: heading,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
+          { sort },
         )}`,
       }),
     );
@@ -1565,18 +1636,23 @@ async function handle(req, res) {
     const tags = isGroupOpsCategory(cat.id) && cat.id !== "group_ops_unspecified"
       ? catalogListKinds(cat.id)
       : [];
-    const pageSize = parseCookiePageSize(req.headers.cookie);
     const listOpts = { tags };
-    const total = await countOperations(listOpts);
-    const meta = paginate({
-      total,
-      page: parsePage(url.searchParams),
-      pageSize,
-    });
-    const rows = await listOperations({
-      ...listOpts,
-      limit: meta.limit,
-      offset: meta.offset,
+    const { rows, meta, pageSize, sort } = await windowSortedRows({
+      req,
+      url,
+      count: () => countOperations(listOpts),
+      loadPage: (pageMeta) =>
+        listOperations({
+          ...listOpts,
+          limit: pageMeta.limit,
+          offset: pageMeta.offset,
+        }),
+      loadAll: () => listOperations(listOpts),
+      sortRows: (matched, nextSort) =>
+        sortListItems(
+          matched.map((row) => ({ date: row.event_date, type: "operation", row })),
+          nextSort,
+        ).map((item) => item.row),
     });
     return sendHtml(
       res,
@@ -1586,33 +1662,40 @@ async function handle(req, res) {
         heading: cat.title,
         query: cat.title,
         pageSize,
+        sort,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: `${identityFilterNav(cat.path)}${listSection(
-          operationList(rows),
-          pager(meta, { basePath: cat.path, noun: "rows", pageSizes: PAGE_SIZES }),
+          operationList(rows, { sort }),
+          listPager(meta, { basePath: cat.path, noun: "rows", sort }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
+          { sort },
         )}`,
       }),
     );
   }
   if (cat && cat.kind === "source") {
-    const pageSize = parseCookiePageSize(req.headers.cookie);
-    const total = await countSourcePosts({ standalone: true });
-    const meta = paginate({
-      total,
-      page: parsePage(url.searchParams),
-      pageSize,
-    });
-    const rows = await listSourcePosts({
-      standalone: true,
-      limit: meta.limit,
-      offset: meta.offset,
+    const { rows, meta, pageSize, sort } = await windowSortedRows({
+      req,
+      url,
+      count: () => countSourcePosts({ standalone: true }),
+      loadPage: (pageMeta) =>
+        listSourcePosts({
+          standalone: true,
+          limit: pageMeta.limit,
+          offset: pageMeta.offset,
+        }),
+      loadAll: () => listSourcePosts({ standalone: true }),
+      sortRows: (matched, nextSort) =>
+        sortListItems(
+          matched.map((row) => ({ date: row.posted_at, type: "source", row })),
+          nextSort,
+        ).map((item) => item.row),
     });
     return sendHtml(
       res,
@@ -1622,17 +1705,19 @@ async function handle(req, res) {
         heading: cat.title,
         query: cat.title,
         pageSize,
+        sort,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: listSection(
-          sourcePostList(rows),
-          pager(meta, { basePath: cat.path, noun: "posts", pageSizes: PAGE_SIZES }),
+          sourcePostList(rows, { sort }),
+          listPager(meta, { basePath: cat.path, noun: "posts", sort }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
+          { sort },
         ),
       }),
     );
@@ -1642,15 +1727,16 @@ async function handle(req, res) {
     return;
   }
   if (cat && cat.kind === "central_casting") {
-    const pageSize = parseCookiePageSize(req.headers.cookie);
+    const { pageSize, sort, page } = readListChrome(req, url);
     const matched = await listCentralCastingPeople();
     const { ordered, dateOf } = orderPeopleByMenuDate(matched, { centralCasting: true });
+    const sorted = sortListedPeople(ordered, sort, { dateOf });
     const meta = paginate({
-      total: ordered.length,
-      page: parsePage(url.searchParams),
+      total: sorted.length,
+      page,
       pageSize,
     });
-    const rows = ordered.slice(meta.offset, meta.offset + meta.limit);
+    const rows = sorted.slice(meta.offset, meta.offset + meta.limit);
     return sendHtml(
       res,
       layout({
@@ -1659,17 +1745,19 @@ async function handle(req, res) {
         heading: cat.title,
         query: cat.title,
         pageSize,
+        sort,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: listSection(
-          peopleList(rows, { listDate: dateOf }),
-          pager(meta, { basePath: cat.path, noun: "rows", pageSizes: PAGE_SIZES }),
+          peopleList(rows, { listDate: dateOf, sort }),
+          listPager(meta, { basePath: cat.path, noun: "rows", sort }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
+          { sort },
         ),
       }),
     );

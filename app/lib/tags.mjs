@@ -117,6 +117,13 @@ export const ATTRIBUTE_TAGS = [
       "People with stored former employment at a U.S. intelligence agency.",
   },
   {
+    id: "refuse_illegal_orders",
+    nav: "Illegal orders",
+    path: "/tags/refuse-illegal-orders",
+    lede:
+      "People stored as appearing in the November 18, 2025 video that told members of the military they can refuse illegal orders.",
+  },
+  {
     id: "fraud",
     nav: "Fraud",
     path: "/tags/fraud",
@@ -153,6 +160,12 @@ export const ATTRIBUTE_TAGS = [
     nav: "No One Is Above The Law",
     path: "/tags/no-one-is-above-the-law",
     lede: "People named on a stored graphic under the line that no one is above the law.",
+  },
+  {
+    id: "political_violence",
+    nav: "Political violence",
+    path: "/tags/political-violence",
+    lede: "People named on a stored graphic as having called for political violence.",
   },
 ];
 
@@ -296,6 +309,10 @@ export const TAG_DESCRIPTIONS = Object.freeze({
     kind: "rule",
     text: "A card gets this tag only when it stores the person's former employment at a U.S. intelligence agency.",
   },
+  refuse_illegal_orders: {
+    kind: "rule",
+    text: "A card gets this tag when it stores the person's appearance in the November 18, 2025 video in which six members of Congress told members of the military and the intelligence community they can refuse illegal orders.",
+  },
   fraud: {
     kind: "rule",
     text: "A card gets this tag when it stores a fraud charge, plea, conviction, indictment, or official fraud finding for the person.",
@@ -307,6 +324,10 @@ export const TAG_DESCRIPTIONS = Object.freeze({
   no_one_above_the_law: {
     kind: "rule",
     text: "A card gets this tag when the person is named on a stored graphic under the line that no one is above the law.",
+  },
+  political_violence: {
+    kind: "rule",
+    text: "A card gets this tag when the person is named on a stored graphic as having called for political violence.",
   },
 });
 
@@ -616,6 +637,7 @@ const TAG_SHORT_LABELS = Object.freeze({
   big_beautiful_bill_act: "Big Beautiful Bill",
   secure_the_border_act: "Secure the Border",
   no_one_above_the_law: "Above the Law",
+  political_violence: "Pol. violence",
 });
 
 /** Short label for a fact tag (object or id): the menu label, else its `nav`. Empty for an unknown id. */
