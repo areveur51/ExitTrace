@@ -42,7 +42,7 @@ function menuTagPaths() {
 
 test("every Tags-menu tag has exactly one description in the shared map", () => {
   const paths = menuTagPaths();
-  assert.equal(paths.length, 19);
+  assert.equal(paths.length, MENU_ATTRIBUTE_TAGS.length);
   assert.deepEqual(paths, MENU_ATTRIBUTE_TAGS.map((t) => t.path));
   assert.deepEqual(Object.keys(TAG_DESCRIPTIONS).sort(), MENU_ATTRIBUTE_TAGS.map((t) => t.id).sort());
   for (const tag of MENU_ATTRIBUTE_TAGS) {
@@ -68,6 +68,7 @@ test("bill tags are bills; every other tag is a plain rule with no cites", () =>
     }
   }
   assert.match(tagDescription("former_intel_agency_personnel").text, /only when .*U\.S\. intelligence agency/);
+  assert.match(tagDescription("refuse_illegal_orders").text, /November 18, 2025 video/);
 });
 
 test("every bill description has 2-3 allowed cites: congress.gov, a clerk or senate roll page, and an outlet where verified", () => {

@@ -31,6 +31,14 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.47] - 2026-11-16
+
+### Added
+
+- Result lists have a Sort control (Year, Name, Occupation, Portrait). Year stays the default grouping. Name sorts people by last name and groups by that letter. Occupation groups by the card position line. Portrait groups stored portraits first.
+- Fact tag Political violence (`/tags/political-violence`, stored id `political_violence`). The chip sits under Tags. The menu label is Pol. violence because the full name does not fit the rail. A person card shows the full name in its Tags row. The event does not replace the card category or date.
+- Fact tag Illegal orders (`/tags/refuse-illegal-orders`, stored id `refuse_illegal_orders`). It records a stored appearance in the November 18, 2025 video that told members of the military they can refuse illegal orders. The chip sits under Tags.
+
 ## [1.2.46] - 2026-11-07
 
 ### Added

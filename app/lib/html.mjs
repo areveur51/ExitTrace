@@ -71,7 +71,20 @@ import {
   KIND_COMM_IDS,
   linkedPersonIds,
   mediaSpec,} from "./kind-comms.mjs";
-import { isPeopleMediaHref } from "./portrait.mjs";
+import { isPeopleMediaHref, isStoredPeoplePortrait } from "./portrait.mjs";
+import {
+  DEFAULT_RESULTS_SORT,
+  NAME_SORT_OTHER,
+  OCCUPATION_SORT_NONE,
+  PORTRAIT_SORT_HAS,
+  PORTRAIT_SORT_MISSING,
+  RESULTS_SORTS,
+  RESULTS_SORT_LABELS,
+  RESULTS_SORT_STORAGE_KEY,
+  comparePersonDirectoryNames,
+  normalizeResultsSort,
+  personLastName,
+} from "./results-sort.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
 import { findPostMediaBox } from "./post-shot.mjs";
 import {
@@ -292,6 +305,12 @@ function pageSizeBootScript() {
 </script>`;
 }
 
+function resultsSortBootScript() {
+  return `<script>
+(function(){try{var key=${JSON.stringify(RESULTS_SORT_STORAGE_KEY)};var allowed=${JSON.stringify(RESULTS_SORTS)};var params=new URLSearchParams(location.search);var q=params.get("sort");if(q&&allowed.indexOf(q)!==-1){localStorage.setItem(key,q);document.cookie=key+"="+q+"; Path=/; SameSite=Lax";return;}var raw=localStorage.getItem(key);if(!raw||allowed.indexOf(raw)===-1)return;document.cookie=key+"="+raw+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-results-sort");var guard=key+"-sync";if(rendered&&raw&&rendered!==raw&&sessionStorage.getItem(guard)!==raw){sessionStorage.setItem(guard,raw);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+</script>`;
+}
+
 function dashRangeBootScript() {
   return `<script>
 (function(){try{var key=${JSON.stringify(DASH_RANGE_STORAGE_KEY)};var path=location.pathname||"";if(path!=="/dashboard"&&path.indexOf("/dashboard/")!==0)return;var params=new URLSearchParams(location.search);var q=params.get("range");if(q){var token=q==="custom"?("custom:"+(params.get("from")||"")+":"+(params.get("to")||"")):q;localStorage.setItem(key,token);document.cookie=key+"="+encodeURIComponent(token)+"; Path=/; SameSite=Lax";return;}var raw=localStorage.getItem(key);if(!raw)return;document.cookie=key+"="+encodeURIComponent(raw)+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-dash-range");var guard=key+"-sync";if(rendered&&raw&&rendered!==raw&&sessionStorage.getItem(guard)!==raw){sessionStorage.setItem(guard,raw);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
@@ -305,6 +324,12 @@ export const RESULTS_VIEWS = ["list", "cards"];
 export const CARD_SIZES = ["s", "m", "l"];
 export const DEFAULT_RESULTS_VIEW = "list";
 export const DEFAULT_CARD_SIZE = "m";
+export {
+  DEFAULT_RESULTS_SORT,
+  RESULTS_SORTS,
+  RESULTS_SORT_LABELS,
+  RESULTS_SORT_STORAGE_KEY,
+};
 
 const CARD_SIZE_LABELS = { s: "Small", m: "Medium", l: "Large" };
 
@@ -332,8 +357,23 @@ function resultsViewBootScript() {
 </script>`;
 }
 
+export function resultsSortControl(active = DEFAULT_RESULTS_SORT) {
+  const current = normalizeResultsSort(active);
+  const options = RESULTS_SORTS.map((id) => {
+    const on = id === current;
+    return `<option value="${esc(id)}"${on ? " selected" : ""}>${esc(RESULTS_SORT_LABELS[id])}</option>`;
+  }).join("");
+  return `<nav class="results-sort" aria-label="Sort results">
+    <span class="results-sort-label" id="results-sort-label">Sort</span>
+    <label class="results-sort-select-wrap">
+      <span class="vh">Sort results</span>
+      <select class="results-sort-select" data-results-sort-select aria-labelledby="results-sort-label">${options}</select>
+    </label>
+  </nav>`;
+}
+
 /** Shared list ↔ cards control. Card size is in the markup and shown only in card view. */
-export function resultsViewControl({ pagerHtml = "" } = {}) {
+export function resultsViewControl({ pagerHtml = "", sort = DEFAULT_RESULTS_SORT } = {}) {
   const viewBtns = RESULTS_VIEWS.map((id) => {
     const on = id === DEFAULT_RESULTS_VIEW;
     const label = id === "cards" ? "Cards" : "List";
@@ -361,6 +401,7 @@ export function resultsViewControl({ pagerHtml = "" } = {}) {
         <span class="card-size-label" id="card-size-label">Card size</span>
         <div class="card-size-btns" role="group" aria-labelledby="card-size-label">${sizeBtns}</div>
       </div>
+      ${resultsSortControl(sort)}
     </div>
     ${pagingRow}
   </div>`;
@@ -755,6 +796,7 @@ export function layout({
   query,
   countLabel,
   pageSize,
+  sort,
   categoryId,
   crumbLabel,
   dashRange,
@@ -764,16 +806,19 @@ export function layout({
     pageSize != null && PAGE_SIZES.includes(Number(pageSize))
       ? ` data-page-size="${Number(pageSize)}"`
       : "";
+  const sortId = sort != null ? normalizeResultsSort(sort) : "";
+  const sortAttr = sortId ? ` data-results-sort="${esc(sortId)}"` : "";
   const rangeToken = dashRange ? serializeDashRange(resolveDashRange(dashRange)) : "";
   const rangeAttr = rangeToken ? ` data-dash-range="${esc(rangeToken)}"` : "";
   return `<!doctype html>
-<html lang="en" data-theme="${DEFAULT_THEME}"${sizeAttr}${rangeAttr}>
+<html lang="en" data-theme="${DEFAULT_THEME}"${sizeAttr}${sortAttr}${rangeAttr}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${esc(title)} · ExitTrace</title>
   ${themeBootScript()}
   ${pageSizeBootScript()}
+  ${resultsSortBootScript()}
   ${dashRangeBootScript()}
   ${resultsViewBootScript()}
   <link rel="stylesheet" href="/styles.css?v=${esc(ASSET_VERSION)}">
@@ -2029,7 +2074,7 @@ function personSupportingMediaHtml(row, seen) {
     // It is not orphaned and must not be cleaned up.
     // tests/vote-no-tags.test.mjs ("a passage card shows Final passage and Voted no, with cites escaped")
     // Red Folder media stays on its own Red Folder block, with its captions.
-    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || kind === "black_eye" || kind === "no_one_above_the_law" || VOTE_FACT_KINDS.has(kind)) continue;
+    if (kind === "notable" || kind === "red_folder" || kind === "shot" || kind === "endorsement" || kind === "black_eye" || kind === "no_one_above_the_law" || kind === "political_violence" || VOTE_FACT_KINDS.has(kind)) continue;
     const sources = Array.isArray(ev.sources) ? ev.sources : [];
     // Dedupe (normalize, then collapse dog post groups) before the display cap.
     const media = normalizeEventMedia(ev.media);
@@ -2148,29 +2193,181 @@ export function dogListRow(row, opts = {}) {
   return kindListRow("dog", row, opts);
 }
 
-function groupByYear(rows, dateKey, render) {
-  return groupByYearItems(
-    rows.map((row) => ({ date: row[dateKey], row })),
-    (item, opts) => render(item.row, opts),
-  );
+function listItemRow(item) {
+  return item?.row ?? item;
 }
 
-function groupByYearItems(items, render) {
+function listItemName(item) {
+  const row = listItemRow(item);
+  return String(row?.name || row?.handle || row?.poster_handle || "").trim();
+}
+
+function usesPersonLastName(item) {
+  const type = item?.type;
+  return !type || type === "person";
+}
+
+function listItemDirectoryName(item) {
+  const name = listItemName(item);
+  if (!usesPersonLastName(item)) return name;
+  return personLastName(name) || name;
+}
+
+function compareItemNames(a, b) {
+  if (usesPersonLastName(a) || usesPersonLastName(b)) {
+    return comparePersonDirectoryNames(listItemName(a), listItemName(b));
+  }
+  return listItemName(a).localeCompare(listItemName(b));
+}
+
+function listItemOccupation(item) {
+  const type = item?.type;
+  const row = listItemRow(item);
+  if (type === "operation") {
+    const tags = normalizeOperationTags(row?.tags);
+    return tags.map((id) => operationTagLabel(id)).filter(Boolean).join(", ");
+  }
+  if (type && type !== "person") {
+    if (type === "source") return "";
+    if (isCommsKind(type)) return commsKind(type).label || "";
+    return "";
+  }
+  return personCardPosition(row) || "";
+}
+
+function listItemHasPortrait(item) {
+  const type = item?.type;
+  const row = listItemRow(item);
+  if (type === "operation") {
+    const photo = String(operationPortraitFrom(row)?.photo || "").trim();
+    return Boolean(photo) && !/empty-portrait/i.test(photo);
+  }
+  if (type && type !== "person") {
+    const still = String(row?.still || "").trim();
+    return Boolean(still) && !/empty-portrait/i.test(still);
+  }
+  return isStoredPeoplePortrait(row?.photo);
+}
+
+function listItemDate(item, dateOf) {
+  if (typeof dateOf === "function") return String(dateOf(item) || "");
+  return String(item?.date || "");
+}
+
+export function resultsSortHeading(item, sort) {
+  const mode = normalizeResultsSort(sort);
+  if (mode === "name") {
+    const ch = listItemDirectoryName(item).charAt(0);
+    if (ch && /\p{L}/u.test(ch)) return ch.toLocaleUpperCase();
+    return NAME_SORT_OTHER;
+  }
+  if (mode === "occupation") {
+    return listItemOccupation(item) || OCCUPATION_SORT_NONE;
+  }
+  if (mode === "portrait") {
+    return listItemHasPortrait(item) ? PORTRAIT_SORT_HAS : PORTRAIT_SORT_MISSING;
+  }
+  return String(listItemDate(item)).slice(0, 4) || "Undated";
+}
+
+function compareListItems(a, b, sort, dateOf) {
+  const mode = normalizeResultsSort(sort);
+  if (mode === "name") return compareItemNames(a, b);
+  if (mode === "occupation") {
+    const oa = listItemOccupation(a);
+    const ob = listItemOccupation(b);
+    if (Boolean(oa) !== Boolean(ob)) return oa ? -1 : 1;
+    const byOcc = oa.localeCompare(ob);
+    if (byOcc) return byOcc;
+    return compareItemNames(a, b);
+  }
+  if (mode === "portrait") {
+    const pa = listItemHasPortrait(a);
+    const pb = listItemHasPortrait(b);
+    if (pa !== pb) return pa ? -1 : 1;
+    return compareItemNames(a, b);
+  }
+  const da = listItemDate(a, dateOf);
+  const db = listItemDate(b, dateOf);
+  if (da !== db) {
+    if (!da) return 1;
+    if (!db) return -1;
+    return db.localeCompare(da);
+  }
+  return compareItemNames(a, b);
+}
+
+export function sortListItems(items, sort, { dateOf } = {}) {
+  return (Array.isArray(items) ? items : []).slice().sort((a, b) => compareListItems(a, b, sort, dateOf));
+}
+
+export function sortListedPeople(rows, sort, { dateOf } = {}) {
+  const items = (Array.isArray(rows) ? rows : []).map((row) => ({
+    date: dateOf ? asEventDate(dateOf(row)) || "" : personListDate(row) || "",
+    type: "person",
+    row,
+  }));
+  return sortListItems(items, sort).map((item) => item.row);
+}
+
+export function sortSearchItems(items, sort) {
+  const people = [];
+  const operations = [];
+  const comms = [];
+  const sources = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    if (item.type === "source") sources.push(item);
+    else if (isCommsKind(item.type)) comms.push(item);
+    else if (item.type === "operation") operations.push(item);
+    else people.push(item);
+  }
+  return [
+    ...sortListItems(people, sort),
+    ...sortListItems(operations, sort),
+    ...sortListItems(comms, sort),
+    ...sortListItems(sources, sort),
+  ];
+}
+
+function sortHeadingKeys(mode, headings) {
+  const keys = [...headings];
+  if (mode === "year") {
+    return keys.sort((a, b) => {
+      if (a === "Undated") return 1;
+      if (b === "Undated") return -1;
+      return b.localeCompare(a);
+    });
+  }
+  if (mode === "portrait") {
+    return [PORTRAIT_SORT_HAS, PORTRAIT_SORT_MISSING].filter((h) => keys.includes(h));
+  }
+  if (mode === "occupation") {
+    return keys.sort((a, b) => {
+      if (a === OCCUPATION_SORT_NONE) return 1;
+      if (b === OCCUPATION_SORT_NONE) return -1;
+      return a.localeCompare(b);
+    });
+  }
+  return keys.sort((a, b) => {
+    if (a === NAME_SORT_OTHER) return 1;
+    if (b === NAME_SORT_OTHER) return -1;
+    return a.localeCompare(b);
+  });
+}
+
+function groupByHeadingItems(items, render, sort = DEFAULT_RESULTS_SORT) {
+  const mode = normalizeResultsSort(sort);
   const groups = new Map();
   for (const item of items) {
-    const y = String(item.date || "").slice(0, 4) || "Undated";
-    if (!groups.has(y)) groups.set(y, []);
-    groups.get(y).push(item);
+    const heading = resultsSortHeading(item, mode);
+    if (!groups.has(heading)) groups.set(heading, []);
+    groups.get(heading).push(item);
   }
-  const years = [...groups.keys()].sort((a, b) => {
-    if (a === "Undated") return 1;
-    if (b === "Undated") return -1;
-    return b.localeCompare(a);
-  });
+  const headings = sortHeadingKeys(mode, groups.keys());
   let first = true;
-  return years
-    .map((y) => {
-      const bucket = groups.get(y);
+  return headings
+    .map((heading) => {
+      const bucket = groups.get(heading);
       const html = bucket
         .map((item, i) => {
           const selected = first && i === 0;
@@ -2179,45 +2376,45 @@ function groupByYearItems(items, render) {
         })
         .join("");
       return `<section class="tui-group">
-      <h2 class="tui-group-h">${esc(y)}</h2>
+      <h2 class="tui-group-h">${esc(heading)}</h2>
       ${html}
     </section>`;
     })
     .join("");
 }
 
+function groupByYearItems(items, render, sort = DEFAULT_RESULTS_SORT) {
+  const mode = normalizeResultsSort(sort);
+  const ordered = sortListItems(items, mode);
+  return groupByHeadingItems(ordered, render, mode);
+}
+
 export function peopleTable(rows, { showDeath } = {}) {
   return peopleList(rows, { showDeath });
 }
 
-export function peopleList(rows, { showDeath, listDate } = {}) {
+export function peopleList(rows, { showDeath, listDate, sort } = {}) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
   const menuDate = typeof listDate === "function";
   const dateOf = (row) =>
     menuDate ? asEventDate(listDate(row)) || "" : personListDate(row) || "";
-  const ordered = rows.slice().sort((a, b) => {
-    const da = dateOf(a);
-    const db = dateOf(b);
-    if (da !== db) {
-      if (!da) return 1;
-      if (!db) return -1;
-      return db.localeCompare(da);
-    }
-    return String(a.name || "").localeCompare(String(b.name || ""));
-  });
+  const mode = normalizeResultsSort(sort);
+  const items = rows.map((row) => ({ date: dateOf(row), type: "person", row }));
   return `<div class="people-list tui-list">${groupByYearItems(
-    ordered.map((row) => ({ date: dateOf(row), row })),
+    items,
     (item, opts) =>
       personRow(item.row, {
         ...opts,
         showDeath: menuDate ? false : showDeath,
         date: menuDate ? dateOf(item.row) : undefined,
       }),
+    mode,
   )}</div>`;
 }
 
-export function catalogList(items, { showDeath } = {}) {
+export function catalogList(items, { showDeath, sort } = {}) {
   if (!items.length) return `<p class="empty">No rows on this page.</p>`;
+  const mode = normalizeResultsSort(sort);
   return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => {
     if (item.type === "source") return sourcePostRow(item.row, opts);
     if (item.type === "dog" || item.type === "red_folder" || isCommsKind(item.type)) {
@@ -2225,12 +2422,13 @@ export function catalogList(items, { showDeath } = {}) {
     }
     if (item.type === "operation") return operationRow(item.row, opts);
     return personRow(item.row, { ...opts, showDeath });
-  })}</div>`;
+  }, mode)}</div>`;
 }
 
-export function sourcePostList(rows) {
+export function sourcePostList(rows, { sort } = {}) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="people-list tui-list">${groupByYear(rows, "posted_at", sourcePostRow)}</div>`;
+  const items = rows.map((row) => ({ date: row.posted_at, type: "source", row }));
+  return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => sourcePostRow(item.row, opts), sort)}</div>`;
 }
 
 export function deathsIndexNav() {
@@ -2245,17 +2443,19 @@ export function groupOpsIndexNav() {
   return identityFilterNav("/group-operations", { tags: [] });
 }
 
-export function operationList(rows) {
+export function operationList(rows, { sort } = {}) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="people-list tui-list">${groupByYear(rows, "event_date", operationRow)}</div>`;
+  const items = rows.map((row) => ({ date: row.event_date, type: "operation", row }));
+  return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => operationRow(item.row, opts), sort)}</div>`;
 }
 
-export function kindList(kind, rows) {
+export function kindList(kind, rows, { sort } = {}) {
   const spec = commsKind(kind);
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="${spec.pageClass} tui-list">${groupByYear(rows, "posted_at", (row, opts) =>
-    kindListRow(kind, row, opts),
-  )}</div>`;
+  const items = rows.map((row) => ({ date: row.posted_at, type: kind, row }));
+  return `<div class="${spec.pageClass} tui-list">${groupByYearItems(items, (item, opts) =>
+    kindListRow(kind, item.row, opts),
+  sort)}</div>`;
 }
 
 /** Newest first, undated last, then name (or handle). One comparator for every mixed comms list. */
@@ -2312,15 +2512,18 @@ export function commsCatalogItems(posts, people, tagged = []) {
 }
 
 /** One list renderer for every comms page: person cards and post rows, grouped by year. */
-export function commsCatalogList(kind, items) {
+export function commsCatalogList(kind, items, { sort } = {}) {
   const spec = commsKind(kind);
   const rows = Array.isArray(items) ? items : [];
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
-  return `<div class="${esc(spec.pageClass)} tui-list">${groupByYearItems(rows, (item, opts) =>
+  const tagged = rows.map((item) =>
+    item.type === "person" ? item : { ...item, type: kind },
+  );
+  return `<div class="${esc(spec.pageClass)} tui-list">${groupByYearItems(tagged, (item, opts) =>
     item.type === "person"
       ? personRow(item.row, { ...opts, date: item.cardDate })
       : kindListRow(kind, item.row, opts),
-  )}</div>`;
+  sort)}</div>`;
 }
 
 export function shotCatalogList(posts, people) {
@@ -2418,11 +2621,11 @@ function compactBottomPager(listHtml, pagerHtml) {
   return `<nav class="pager pager--bottom" aria-label="Pagination (bottom)">${controls}</nav>`;
 }
 
-export function listSection(listHtml, pagerHtml, headHtml = "") {
+export function listSection(listHtml, pagerHtml, headHtml = "", { sort } = {}) {
   if (!wantsResultsControls(listHtml, pagerHtml)) {
     return `${headHtml}${pagerHtml}${listHtml}${pagerHtml}`;
   }
-  const toolbar = resultsViewControl({ pagerHtml: pagerHtml || "" });
+  const toolbar = resultsViewControl({ pagerHtml: pagerHtml || "", sort });
   return `${headHtml}${toolbar}${listHtml}${compactBottomPager(listHtml, pagerHtml)}`;
 }
 
@@ -2910,6 +3113,22 @@ function noOneAboveTheLawEventSection(ev, sourceNumbers) {
   });
 }
 
+/** Named on a stored graphic as having called for political violence. It does not replace the card category or date. */
+function politicalViolenceEventSection(ev, sourceNumbers) {
+  const cites = eventCiteParts(ev, sourceNumbers);
+  const position = String(ev?.position || "").trim();
+  const positionHtml = position ? metaLine("Position", position) : "";
+  return personEventSection({
+    headHtml: eventHeadHtml("Political violence", ev?.event_date),
+    kind: "political_violence",
+    bodyHtml: `${positionHtml}${commitProseHtml(ev?.comments)}`,
+    cites: cites.cites,
+    footHtml: cites.footHtml,
+    className: "detail-political-violence detail-supporting",
+    tag: "section",
+  });
+}
+
 /** Vote and endorsement cards oldest first; notables newest date first at the bottom. */
 function specialEventNodes(row, sourceNumbers) {
   const render = {
@@ -2918,6 +3137,7 @@ function specialEventNodes(row, sourceNumbers) {
     ukraine_aid_flags: ukraineEventSection,
     black_eye: blackEyeEventSection,
     no_one_above_the_law: noOneAboveTheLawEventSection,
+    political_violence: politicalViolenceEventSection,
   };
   for (const kind of VOTE_NO_KINDS) render[kind] = voteNoEventSection;
   const nodes = personEvents(row)
@@ -3204,6 +3424,7 @@ function eventSourceLabel(ev) {
   else if (kind === "shot") title = "Shot";
   else if (kind === "black_eye") title = "Left Eye";
   else if (kind === "no_one_above_the_law") title = "No One Is Above The Law";
+  else if (kind === "political_violence") title = "Political violence";
   else if (kind === "nickname") title = isTrumpNickname(ev) ? "Trump nickname" : "Nickname";
   const when = date ? formatDate(date) : "";
   return when ? `${when} · ${title}` : title;
@@ -3751,7 +3972,7 @@ export function dogDetail(row, options) {
   return kindDetail("dog", row, options);
 }
 
-export function searchBody(items, q) {
+export function searchBody(items, q, { sort } = {}) {
   if (!String(q || "").trim()) {
     return `<p class="empty">Type a name, role, handle, or stored post text. Search stays local.</p>`;
   }
@@ -3766,28 +3987,30 @@ export function searchBody(items, q) {
     if (item.type === "source") sources.push(item);
     else if (isCommsKind(item.type)) comms.push(item);
     else if (item.type === "operation") operations.push(item);
-    else people.push(item);
+    else people.push({ ...item, type: item.type || "person" });
   }
+  const mode = normalizeResultsSort(sort);
   let first = true;
-  const render = (item) => {
+  const render = (item, opts = {}) => {
     const selected = first;
-    first = false;
+    if (selected) first = false;
+    const rowOpts = { selected, ...opts };
     if (isCommsKind(item.type)) {
-      return kindListRow(item.type, item.row, { selected });
+      return kindListRow(item.type, item.row, rowOpts);
     }
-    if (item.type === "source") return sourcePostRow(item.row, { selected });
-    if (item.type === "operation") return operationRow(item.row, { selected });
-    return personRow(item.row, { selected, showDeath: isDeathCategory(item.row.category) });
+    if (item.type === "source") return sourcePostRow(item.row, rowOpts);
+    if (item.type === "operation") return operationRow(item.row, rowOpts);
+    return personRow(item.row, { ...rowOpts, showDeath: isDeathCategory(item.row.category) });
   };
   const blocks = [];
-  if (people.length) blocks.push(people.map(render).join(""));
-  if (operations.length) blocks.push(operations.map(render).join(""));
-  if (comms.length) blocks.push(comms.map(render).join(""));
+  if (people.length) blocks.push(groupByYearItems(people, render, mode));
+  if (operations.length) blocks.push(groupByYearItems(operations, render, mode));
+  if (comms.length) blocks.push(groupByYearItems(comms, render, mode));
   if (sources.length) {
     blocks.push(
       `<section class="tui-group unsorted-group">
       <h2 class="tui-group-h">Unsorted</h2>
-      ${sources.map(render).join("")}
+      ${sortListItems(sources, mode).map((item) => render(item)).join("")}
     </section>`,
     );
   }

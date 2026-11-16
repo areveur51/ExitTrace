@@ -3215,7 +3215,8 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
 }
 .results-controls-row > *,
 .results-controls .pager-main,
-.results-controls .page-size {
+.results-controls .page-size,
+.results-controls .results-sort {
   flex: 1 1 10.5rem;
   min-width: 0;
 }
@@ -3225,7 +3226,8 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
 }
 .results-controls .pager-main,
 .results-controls .page-size,
-.results-controls .results-view-mode {
+.results-controls .results-view-mode,
+.results-controls .results-sort {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3239,12 +3241,14 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
   min-width: 0;
 }
 .results-controls .pager-main,
-.results-controls .page-size {
+.results-controls .page-size,
+.results-controls .results-sort {
   margin: 0;
 }
 .results-controls .results-view-label,
 .results-controls .card-size-label,
 .results-controls .page-size-label,
+.results-controls .results-sort-label,
 .results-controls .pager-results-label,
 .results-controls .pager-status {
   flex: 1 1 100%;
@@ -3298,11 +3302,44 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
 .results-controls .page-size-btn,
 .results-controls .pager-btn,
 .results-controls .pager-pages a,
-.results-controls .page-size-select {
+.results-controls .page-size-select,
+.results-controls .results-sort-select {
   border-radius: 4px;
 }
 .results-controls .page-size-select-wrap {
   display: none;
+}
+.results-controls .results-sort-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+.results-controls .results-sort-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 44px;
+  min-width: 8.5rem;
+  padding: 0.25rem 1.85rem 0.25rem 0.7rem;
+  border: 1px solid var(--amber);
+  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--bg) 70%, transparent);
+  color: var(--amber);
+  font: inherit;
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--amber) 50%),
+    linear-gradient(135deg, var(--amber) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% - 2px),
+    calc(100% - 8px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+.results-controls .results-sort-select:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
 }
 html:not([data-results-view]) .results-controls .results-view-btn[aria-pressed="true"],
 html:not([data-card-size]) .results-controls .card-size-btn[aria-pressed="true"],
@@ -3331,13 +3368,21 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
     gap: 0;
     padding: 0;
   }
+  .results-controls-row--view {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  html[data-results-view="cards"] .results-controls-row--view {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
   .results-controls-row > *,
   .results-controls .pager-main,
-  .results-controls .page-size {
+  .results-controls .page-size,
+  .results-controls .results-sort {
     padding: 0.75rem 0.9rem;
   }
   .results-controls .card-size,
-  .results-controls .page-size {
+  .results-controls .page-size,
+  .results-controls .results-sort {
     border-left: 1px solid var(--results-rule);
   }
 }
@@ -3479,14 +3524,16 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
   }
   .results-controls-row > *,
   .results-controls .pager-main,
-  .results-controls .page-size {
+  .results-controls .page-size,
+  .results-controls .results-sort {
     flex: 0 0 auto;
     padding: 0.35rem 0.85rem;
   }
   .results-controls .results-view-mode,
   .results-controls .card-size,
   .results-controls .pager-main,
-  .results-controls .page-size {
+  .results-controls .page-size,
+  .results-controls .results-sort {
     flex-wrap: nowrap;
     align-items: center;
     gap: 0.45rem 0.65rem;
@@ -3494,6 +3541,7 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
   .results-controls .results-view-label,
   .results-controls .card-size-label,
   .results-controls .page-size-label,
+  .results-controls .results-sort-label,
   .results-controls .pager-status {
     flex: 0 0 auto;
     width: auto;
@@ -3531,19 +3579,24 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
   }
   .results-controls .card-size,
   .results-controls .pager-main,
-  .results-controls .page-size {
+  .results-controls .page-size,
+  .results-controls .results-sort {
     border-left: 1px solid var(--results-rule);
   }
-  .results-controls .page-size-select-wrap {
+  .results-controls .page-size-select-wrap,
+  .results-controls .results-sort-select-wrap {
     display: inline-flex;
     align-items: center;
     position: relative;
+    width: auto;
   }
-  .results-controls .page-size-select {
+  .results-controls .page-size-select,
+  .results-controls .results-sort-select {
     appearance: none;
     -webkit-appearance: none;
     min-height: 44px;
     min-width: 4.75rem;
+    width: auto;
     padding: 0.25rem 1.85rem 0.25rem 0.7rem;
     border: 1px solid var(--amber);
     border-radius: 4px;
@@ -3560,7 +3613,11 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
     background-size: 6px 6px, 6px 6px;
     background-repeat: no-repeat;
   }
-  .results-controls .page-size-select:focus {
+  .results-controls .results-sort-select {
+    min-width: 8.5rem;
+  }
+  .results-controls .page-size-select:focus,
+  .results-controls .results-sort-select:focus {
     outline: 2px solid var(--amber);
     outline-offset: 1px;
   }
@@ -3575,7 +3632,8 @@ html[data-theme="glass"] .results-controls .card-size-btn,
 html[data-theme="glass"] .results-controls .page-size-btn,
 html[data-theme="glass"] .results-controls .pager-btn,
 html[data-theme="glass"] .results-controls .pager-pages a,
-html[data-theme="glass"] .results-controls .page-size-select {
+html[data-theme="glass"] .results-controls .page-size-select,
+html[data-theme="glass"] .results-controls .results-sort-select {
   clip-path: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;

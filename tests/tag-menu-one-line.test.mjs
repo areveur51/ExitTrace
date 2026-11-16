@@ -43,8 +43,10 @@ test("the long tag names get short display labels; tag data and page titles keep
     ["secure_the_border_act", "Secure the Border Act", "Secure the Border", "/tags/secure-the-border-act"],
     ["s_5271_photo_id", "S. 5271", "S. 5271", "/tags/s-5271"],
     ["former_intel_agency_personnel", "Former intel", "Former intel", "/tags/former-intel-agency-personnel"],
+    ["refuse_illegal_orders", "Illegal orders", "Illegal orders", "/tags/refuse-illegal-orders"],
     ["harassment_records", "Harassment records", "Harassment records", "/tags/harassment-records"],
     ["clearance_revoked", "Revoked clearances", "Revoked clearances", "/tags/clearance-revoked"],
+    ["political_violence", "Political violence", "Pol. violence", "/tags/political-violence"],
   ];
   for (const [id, nav, label, href] of table) {
     const tag = byId[id];

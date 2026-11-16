@@ -128,12 +128,16 @@ export function personMenuDate(row, menu = {}) {
   if (tag === "no_one_above_the_law") {
     return newest(eventsOf(row, ["no_one_above_the_law"]).map((ev) => ev.event_date));
   }
+  if (tag === "political_violence") {
+    return newest(eventsOf(row, ["political_violence"]).map((ev) => ev.event_date));
+  }
   if (VOTE_NO_KINDS.has(tag)) {
     return newest(eventsOf(row, [tag]).map((ev) => ev.event_date));
   }
   if (
     tag === "masks" ||
     tag === "former_intel_agency_personnel" ||
+    tag === "refuse_illegal_orders" ||
     tag === "fraud" ||
     tag === "felon" ||
     tag === "red_folder"
