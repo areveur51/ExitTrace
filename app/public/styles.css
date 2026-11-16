@@ -3073,17 +3073,19 @@ html[data-results-view="cards"][data-card-size="l"] {
   --result-card-min: 16rem;
   --result-card-portrait-h: 13.5rem;
 }
-/* Column masonry. A short card sits under the card above it, not in a stretched row. */
-html[data-results-view="cards"] .tui-group,
-html[data-results-view="cards"] .tui-list.search-list {
+/* One column masonry for the whole result list. Group wrappers dissolve so
+   year/name/occupation/portrait headings cannot split the pack. */
+html[data-results-view="cards"] .tui-list {
   display: block;
   column-width: var(--result-card-min);
   column-gap: 0.65rem;
   column-fill: balance;
 }
-html[data-results-view="cards"] .tui-group-h,
-html[data-results-view="cards"] .tui-list.search-list > .tui-group {
-  column-span: all;
+html[data-results-view="cards"] .tui-group {
+  display: contents;
+}
+html[data-results-view="cards"] .tui-group-h {
+  display: none;
 }
 html[data-results-view="cards"] .tui-row,
 html[data-results-view="cards"] .tui-row.person-card,
@@ -3303,17 +3305,40 @@ html[data-theme="glass"][data-card-size="l"] [data-card-size-set="l"] {
 .results-controls .pager-btn,
 .results-controls .pager-pages a,
 .results-controls .page-size-select,
-.results-controls .results-sort-select {
+.results-controls .results-sort-select,
+.results-controls .results-sort-dir-btn {
   border-radius: 4px;
 }
 .results-controls .page-size-select-wrap {
   display: none;
 }
+.results-controls .results-sort-fields {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+}
 .results-controls .results-sort-select-wrap {
   display: inline-flex;
   align-items: center;
   position: relative;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+.results-controls .results-sort-dir {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+}
+.results-controls .results-sort-dir-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.25rem;
+  justify-content: center;
 }
 .results-controls .results-sort-select {
   appearance: none;
@@ -3348,7 +3373,8 @@ html[data-results-view="cards"] .results-controls [data-results-view-set="cards"
 html[data-card-size="s"] .results-controls [data-card-size-set="s"],
 html[data-card-size="m"] .results-controls [data-card-size-set="m"],
 html[data-card-size="l"] .results-controls [data-card-size-set="l"],
-.results-controls .page-size-btn[aria-pressed="true"] {
+.results-controls .page-size-btn[aria-pressed="true"],
+.results-controls .results-sort-dir-btn[aria-pressed="true"] {
   border-color: var(--amber);
   color: var(--amber);
   background: color-mix(in srgb, var(--amber) 12%, transparent);
@@ -3563,9 +3589,13 @@ html[data-card-size="l"] .results-controls [data-card-size-set="l"],
   }
   .results-controls .results-view-btns,
   .results-controls .card-size-btns,
-  .results-controls .pager-controls {
+  .results-controls .pager-controls,
+  .results-controls .results-sort-dir {
     width: auto;
     flex-wrap: nowrap;
+  }
+  .results-controls .results-sort-fields {
+    width: auto;
   }
   .results-controls .results-view-btn > span {
     position: absolute;
@@ -3633,7 +3663,8 @@ html[data-theme="glass"] .results-controls .page-size-btn,
 html[data-theme="glass"] .results-controls .pager-btn,
 html[data-theme="glass"] .results-controls .pager-pages a,
 html[data-theme="glass"] .results-controls .page-size-select,
-html[data-theme="glass"] .results-controls .results-sort-select {
+html[data-theme="glass"] .results-controls .results-sort-select,
+html[data-theme="glass"] .results-controls .results-sort-dir-btn {
   clip-path: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -3641,6 +3672,7 @@ html[data-theme="glass"] .results-controls .results-sort-select {
 html[data-theme="glass"] .results-controls .results-view-btn[aria-pressed="true"],
 html[data-theme="glass"] .results-controls .card-size-btn[aria-pressed="true"],
 html[data-theme="glass"] .results-controls .page-size-btn[aria-pressed="true"],
+html[data-theme="glass"] .results-controls .results-sort-dir-btn[aria-pressed="true"],
 html[data-theme="glass"]:not([data-results-view]) .results-controls .results-view-btn[aria-pressed="true"],
 html[data-theme="glass"]:not([data-card-size]) .results-controls .card-size-btn[aria-pressed="true"],
 html[data-theme="glass"][data-results-view="list"] .results-controls [data-results-view-set="list"],

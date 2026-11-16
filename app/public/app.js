@@ -131,7 +131,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const RESULTS_SORTS = ["year", "name", "occupation", "portrait"];
   const RESULTS_SORT_KEY = "exittrace-results-sort";
+  const RESULTS_SORT_DIR_KEY = "exittrace-results-sort-dir";
   const sortSelects = document.querySelectorAll("[data-results-sort-select]");
+  const sortDirButtons = document.querySelectorAll("[data-results-sort-dir-set]");
+
+  function defaultSortDir(sort) {
+    return sort === "name" || sort === "occupation" ? "asc" : "desc";
+  }
 
   function applyResultsSort(raw) {
     const next = RESULTS_SORTS.includes(raw) ? raw : "year";
@@ -148,11 +154,40 @@ document.addEventListener("DOMContentLoaded", () => {
     url.searchParams.delete("page");
     if (next === "year") url.searchParams.delete("sort");
     else url.searchParams.set("sort", next);
+    const dir = url.searchParams.get("dir");
+    if (dir === defaultSortDir(next)) url.searchParams.delete("dir");
+    window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function applyResultsSortDir(raw) {
+    const next = raw === "asc" || raw === "desc" ? raw : "desc";
+    try {
+      localStorage.setItem(RESULTS_SORT_DIR_KEY, next);
+    } catch {
+      /* private mode / quota */
+    }
+    document.cookie = `${RESULTS_SORT_DIR_KEY}=${next}; Path=/; SameSite=Lax`;
+    for (const btn of sortDirButtons) {
+      btn.setAttribute(
+        "aria-pressed",
+        btn.getAttribute("data-results-sort-dir-set") === next ? "true" : "false",
+      );
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("page");
+    const sort = RESULTS_SORTS.includes(url.searchParams.get("sort"))
+      ? url.searchParams.get("sort")
+      : document.documentElement.getAttribute("data-results-sort") || "year";
+    if (next === defaultSortDir(sort)) url.searchParams.delete("dir");
+    else url.searchParams.set("dir", next);
     window.location.assign(`${url.pathname}${url.search}${url.hash}`);
   }
 
   for (const sel of sortSelects) {
     sel.addEventListener("change", () => applyResultsSort(sel.value));
+  }
+  for (const btn of sortDirButtons) {
+    btn.addEventListener("click", () => applyResultsSortDir(btn.getAttribute("data-results-sort-dir-set")));
   }
 
   const RESULTS_VIEW_KEY = "exittrace-results-view";

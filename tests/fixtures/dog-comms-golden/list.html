@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="glass" data-page-size="17" data-results-sort="year">
+<html lang="en" data-theme="glass" data-page-size="17" data-results-sort="year" data-results-sort-dir="desc">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,7 +11,7 @@
 (function(){try{var key="exittrace-page-size";var allowed=[17,34,51];var raw=localStorage.getItem(key);var n=Number(raw);var size=allowed.indexOf(n)!==-1?String(n):null;if(size)document.cookie=key+"="+size+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-page-size");var guard=key+"-sync";if(rendered&&size&&rendered!==size&&sessionStorage.getItem(guard)!==size){sessionStorage.setItem(guard,size);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
 </script>
   <script>
-(function(){try{var key="exittrace-results-sort";var allowed=["year","name","occupation","portrait"];var params=new URLSearchParams(location.search);var q=params.get("sort");if(q&&allowed.indexOf(q)!==-1){localStorage.setItem(key,q);document.cookie=key+"="+q+"; Path=/; SameSite=Lax";return;}var raw=localStorage.getItem(key);if(!raw||allowed.indexOf(raw)===-1)return;document.cookie=key+"="+raw+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-results-sort");var guard=key+"-sync";if(rendered&&raw&&rendered!==raw&&sessionStorage.getItem(guard)!==raw){sessionStorage.setItem(guard,raw);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+(function(){try{var sortKey="exittrace-results-sort";var dirKey="exittrace-results-sort-dir";var sorts=["year","name","occupation","portrait"];var dirs=["desc","asc"];var params=new URLSearchParams(location.search);var qSort=params.get("sort");var qDir=params.get("dir");if(qSort&&sorts.indexOf(qSort)!==-1){localStorage.setItem(sortKey,qSort);document.cookie=sortKey+"="+qSort+"; Path=/; SameSite=Lax";}else{var rawSort=localStorage.getItem(sortKey);if(rawSort&&sorts.indexOf(rawSort)!==-1){document.cookie=sortKey+"="+rawSort+"; Path=/; SameSite=Lax";var renderedSort=document.documentElement.getAttribute("data-results-sort");var guardSort=sortKey+"-sync";if(renderedSort&&rawSort&&renderedSort!==rawSort&&sessionStorage.getItem(guardSort)!==rawSort){sessionStorage.setItem(guardSort,rawSort);location.replace(location.pathname+location.search+location.hash);return;}}}if(qDir&&dirs.indexOf(qDir)!==-1){localStorage.setItem(dirKey,qDir);document.cookie=dirKey+"="+qDir+"; Path=/; SameSite=Lax";}else{var rawDir=localStorage.getItem(dirKey);if(!rawDir||dirs.indexOf(rawDir)===-1)return;document.cookie=dirKey+"="+rawDir+"; Path=/; SameSite=Lax";var renderedDir=document.documentElement.getAttribute("data-results-sort-dir");var guardDir=dirKey+"-sync";if(renderedDir&&rawDir&&renderedDir!==rawDir&&sessionStorage.getItem(guardDir)!==rawDir){sessionStorage.setItem(guardDir,rawDir);location.replace(location.pathname+location.search+location.hash);}}}catch(e){}})();
 </script>
   <script>
 (function(){try{var key="exittrace-dash-range";var path=location.pathname||"";if(path!=="/dashboard"&&path.indexOf("/dashboard/")!==0)return;var params=new URLSearchParams(location.search);var q=params.get("range");if(q){var token=q==="custom"?("custom:"+(params.get("from")||"")+":"+(params.get("to")||"")):q;localStorage.setItem(key,token);document.cookie=key+"="+encodeURIComponent(token)+"; Path=/; SameSite=Lax";return;}var raw=localStorage.getItem(key);if(!raw)return;document.cookie=key+"="+encodeURIComponent(raw)+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-dash-range");var guard=key+"-sync";if(rendered&&raw&&rendered!==raw&&sessionStorage.getItem(guard)!==raw){sessionStorage.setItem(guard,raw);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
@@ -19,7 +19,7 @@
   <script>
 (function(){try{var viewKey="exittrace-results-view";var sizeKey="exittrace-card-size";var views=["list","cards"];var sizes=["s","m","l"];var view=localStorage.getItem(viewKey);var size=localStorage.getItem(sizeKey);if(views.indexOf(view)===-1)view="list";if(sizes.indexOf(size)===-1)size="m";document.documentElement.setAttribute("data-results-view",view);document.documentElement.setAttribute("data-card-size",size);}catch(e){try{document.documentElement.setAttribute("data-results-view","list");document.documentElement.setAttribute("data-card-size","m");}catch(e2){}}})();
 </script>
-  <link rel="stylesheet" href="/styles.css?v=1.2.45-809cc931dd">
+  <link rel="stylesheet" href="/styles.css?v=1.2.45-ac257e858c">
 </head>
 <body class="tui hud" data-toast="page loaded">
   <header class="tui-top">
@@ -48,10 +48,13 @@
       </div>
       <nav class="results-sort" aria-label="Sort results">
     <span class="results-sort-label" id="results-sort-label">Sort</span>
-    <label class="results-sort-select-wrap">
-      <span class="vh">Sort results</span>
-      <select class="results-sort-select" data-results-sort-select aria-labelledby="results-sort-label"><option value="year" selected>Year</option><option value="name">Name</option><option value="occupation">Occupation</option><option value="portrait">Portrait</option></select>
-    </label>
+    <div class="results-sort-fields">
+      <label class="results-sort-select-wrap">
+        <span class="vh">Sort results</span>
+        <select class="results-sort-select" data-results-sort-select aria-labelledby="results-sort-label"><option value="year" selected>Year</option><option value="name">Name</option><option value="occupation">Occupation</option><option value="portrait">Portrait</option></select>
+      </label>
+      <div class="results-sort-dir" role="group" aria-label="Sort direction"><button type="button" class="results-sort-dir-btn keychip" data-results-sort-dir-set="desc" aria-pressed="true" aria-label="Descending"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg></button><button type="button" class="results-sort-dir-btn keychip" data-results-sort-dir-set="asc" aria-pressed="false" aria-label="Ascending"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg></button></div>
+    </div>
   </nav>
     </div>
     <div class="results-controls-row results-controls-row--page"><nav class="pager" aria-label="Pagination">
@@ -142,6 +145,6 @@
       <button type="button" class="keychip" data-close-lightbox><span class="br">[</span>Esc<span class="br">]</span> Back</button>
     </figure>
   </div>
-  <script src="/app.js?v=1.2.45-809cc931dd" defer></script>
+  <script src="/app.js?v=1.2.45-ac257e858c" defer></script>
 </body>
 </html>

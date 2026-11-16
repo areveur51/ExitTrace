@@ -86,6 +86,10 @@ test("results view control is list/cards plus small/medium/large", () => {
   assert.match(html, /<option value="name">Name</);
   assert.match(html, /<option value="occupation">Occupation</);
   assert.match(html, /<option value="portrait">Portrait</);
+  assert.match(html, /data-results-sort-dir-set="desc"[^>]*aria-pressed="true"/);
+  assert.match(html, /data-results-sort-dir-set="asc"[^>]*aria-pressed="false"/);
+  assert.match(html, /aria-label="Descending"/);
+  assert.match(html, /aria-label="Ascending"/);
   assert.match(html, /data-results-view-set="list"[^>]*>[\s\S]*class="ui-icon"/);
   assert.match(html, /data-card-size-set="s"[^>]*aria-label="Small"[^>]*>[\s\S]*ui-icon-solid/);
   assert.match(html, /aria-label="Small"/);
@@ -215,9 +219,11 @@ test("app.js persists results view and card size without a reload", () => {
   assert.match(js, /46vw, 14rem/);
   assert.match(js, /92vw, 28rem/);
   assert.doesNotMatch(js, /results-view[\s\S]{0,400}location\.assign/);
-  assert.match(css, /html\[data-results-view="cards"\] \.tui-group/);
+  assert.match(css, /html\[data-results-view="cards"\] \.tui-list \{/);
   assert.match(css, /column-width:\s*var\(--result-card-min\)/);
-  assert.match(css, /column-span:\s*all/);
+  assert.match(css, /html\[data-results-view="cards"\] \.tui-group \{\s*display:\s*contents/);
+  assert.match(css, /html\[data-results-view="cards"\] \.tui-group-h \{\s*display:\s*none/);
+  assert.doesNotMatch(css, /column-span:\s*all/);
   assert.match(css, /break-inside:\s*avoid/);
   assert.match(css, /html\[data-results-view="cards"\] \.tui-row > \.row-media/);
   assert.match(css, /html\[data-results-view="cards"\] \.tui-row > \.row-media img/);
@@ -232,6 +238,7 @@ test("app.js persists results view and card size without a reload", () => {
   assert.match(css, /--result-card-min:\s*16rem/);
   assert.match(css, /\.results-controls/);
   assert.match(css, /\.results-sort-select/);
+  assert.match(css, /\.results-sort-dir-btn/);
   assert.match(css, /\.results-controls-row--view \{[\s\S]*minmax\(0, 1fr\) minmax\(0, 1fr\);/);
   assert.match(css, /html\[data-results-view="cards"\] \.results-controls-row--view \{[\s\S]*minmax\(0, 1fr\) minmax\(0, 1fr\) minmax\(0, 1fr\)/);
   assert.match(css, /@media \(min-width: 820px\)/);
@@ -291,6 +298,7 @@ test("combined results-controls bar is view, card size, sort, pager, then rows",
   const iView = section.indexOf("data-results-view-set");
   const iCard = section.indexOf("data-card-size-set");
   const iSort = section.indexOf("data-results-sort-select");
+  const iDir = section.indexOf("data-results-sort-dir-set");
   const iPageRow = section.indexOf("results-controls-row--page");
   const iPage = section.indexOf("pager-status-page");
   const iRows = section.indexOf("data-page-size-set");
@@ -299,11 +307,13 @@ test("combined results-controls bar is view, card size, sort, pager, then rows",
   assert.ok(iViewRow < iView);
   assert.ok(iView < iCard);
   assert.ok(iCard < iSort);
-  assert.ok(iSort < iPageRow);
+  assert.ok(iSort < iDir);
+  assert.ok(iDir < iPageRow);
   assert.ok(iPageRow < iPage);
   assert.ok(iPage < iRows);
   assert.ok(iRows < iList);
   assert.match(section, /data-results-sort-select/);
+  assert.match(section, /data-results-sort-dir-set="desc"/);
   assert.match(section, /<option value="year" selected>Year</);
   assert.match(section, /Page 2 of 15/);
   assert.match(section, /rel="prev"/);
@@ -369,9 +379,11 @@ test("every catalog list route renders the combined bar; home and detail do not"
     assert.match(res.body, /data-card-size-set="m"/, pathname);
     assert.match(res.body, /data-card-size-set="l"/, pathname);
     assert.match(res.body, /data-results-sort-select/, pathname);
+    assert.match(res.body, /data-results-sort-dir-set="desc"/, pathname);
     assert.match(res.body, /exittrace-results-view/, pathname);
     assert.match(res.body, /exittrace-card-size/, pathname);
     assert.match(res.body, /exittrace-results-sort/, pathname);
+    assert.match(res.body, /exittrace-results-sort-dir/, pathname);
   }
   const enumerated = [
     "/firings",
