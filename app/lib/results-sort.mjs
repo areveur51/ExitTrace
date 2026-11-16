@@ -3,6 +3,8 @@
 export const RESULTS_SORTS = ["year", "name", "occupation", "portrait"];
 export const DEFAULT_RESULTS_SORT = "year";
 export const RESULTS_SORT_STORAGE_KEY = "exittrace-results-sort";
+export const RESULTS_SORT_DIRS = ["desc", "asc"];
+export const RESULTS_SORT_DIR_STORAGE_KEY = "exittrace-results-sort-dir";
 export const RESULTS_SORT_LABELS = {
   year: "Year",
   name: "Name",
@@ -58,6 +60,20 @@ export function normalizeResultsSort(raw) {
   return RESULTS_SORTS.includes(id) ? id : DEFAULT_RESULTS_SORT;
 }
 
+/** Year and portrait default newest / has-portrait first. Name and occupation default A-Z. */
+export function defaultResultsSortDir(sort) {
+  const mode = normalizeResultsSort(sort);
+  if (mode === "name" || mode === "occupation") return "asc";
+  return "desc";
+}
+
+export function normalizeResultsSortDir(raw, sort) {
+  const id = String(raw || "")
+    .trim()
+    .toLowerCase();
+  return RESULTS_SORT_DIRS.includes(id) ? id : defaultResultsSortDir(sort);
+}
+
 export function parseResultsSort(searchParams) {
   if (!(searchParams instanceof URLSearchParams)) {
     return normalizeResultsSort(searchParams);
@@ -92,12 +108,48 @@ export function resolveResultsSort(searchParams, cookieHeader) {
   return parseCookieResultsSort(cookieHeader);
 }
 
-/** Keep pager and filter links on the same sort. Year stays off the URL. */
-export function resultsSortHref(basePath, sort) {
+function cookieValue(cookieHeader, name) {
+  const raw = String(cookieHeader || "");
+  if (!raw) return "";
+  for (const part of raw.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq < 0) continue;
+    if (trimmed.slice(0, eq).trim() !== name) continue;
+    try {
+      return decodeURIComponent(trimmed.slice(eq + 1).trim());
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+export function parseCookieResultsSortDir(cookieHeader) {
+  const raw = cookieValue(cookieHeader, RESULTS_SORT_DIR_STORAGE_KEY);
+  if (raw === "asc" || raw === "desc") return raw;
+  return "";
+}
+
+/** Query `dir=` wins when present. Cookie is the standing direction. Else the sort's default. */
+export function resolveResultsSortDir(searchParams, cookieHeader, sort) {
+  if (searchParams instanceof URLSearchParams && searchParams.has("dir")) {
+    return normalizeResultsSortDir(searchParams.get("dir"), sort);
+  }
+  const fromCookie = parseCookieResultsSortDir(cookieHeader);
+  if (fromCookie) return fromCookie;
+  return defaultResultsSortDir(sort);
+}
+
+/** Keep pager and filter links on the same sort and direction. Year and the sort's default dir stay off the URL. */
+export function resultsSortHref(basePath, sort, dir) {
   const raw = String(basePath || "/") || "/";
   const url = new URL(raw, "http://results.sort.invalid");
   const id = normalizeResultsSort(sort);
+  const direction = normalizeResultsSortDir(dir, id);
   if (id === DEFAULT_RESULTS_SORT) url.searchParams.delete("sort");
   else url.searchParams.set("sort", id);
+  if (direction === defaultResultsSortDir(id)) url.searchParams.delete("dir");
+  else url.searchParams.set("dir", direction);
   return `${url.pathname}${url.search}`;
 }

@@ -31,6 +31,16 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.48] - 2026-11-16
+
+### Added
+
+- Result lists have Descending and Ascending buttons next to Sort. Query `dir=` wins, then the standing cookie, then each sort's default (Year and Portrait newest/has-portrait first; Name and Occupation A-Z). Year and the sort's default direction stay off the URL.
+
+### Changed
+
+- Card view is one masonry for the whole result list. Group headings stay in list view and no longer split the card pack.
+
 ## [1.2.47] - 2026-11-16
 
 ### Added

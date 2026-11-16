@@ -113,7 +113,7 @@ import {
   parseCookiePageSize,
   parsePage,
 } from "./lib/paginate.mjs";
-import { resolveResultsSort, resultsSortHref } from "./lib/results-sort.mjs";
+import { resolveResultsSort, resolveResultsSortDir, resultsSortHref } from "./lib/results-sort.mjs";
 import { parseAgeBand } from "./lib/age.mjs";
 import { PAGE_ATTRIBUTE_TAGS, attributeTagById, attributeTagByPath, attributeTagHref, filterPath, parseTagFilter, parseUnsealedFilter } from "./lib/tags.mjs";
 import {
@@ -460,36 +460,39 @@ function countText(title, meta, pageCount) {
 }
 
 function readListChrome(req, url) {
+  const sort = resolveResultsSort(url.searchParams, req.headers.cookie);
   return {
     pageSize: parseCookiePageSize(req.headers.cookie),
-    sort: resolveResultsSort(url.searchParams, req.headers.cookie),
+    sort,
+    dir: resolveResultsSortDir(url.searchParams, req.headers.cookie, sort),
     page: parsePage(url.searchParams),
   };
 }
 
-function listPager(meta, { basePath, noun = "rows", sort, pageSizes = PAGE_SIZES } = {}) {
+function listPager(meta, { basePath, noun = "rows", sort, dir, pageSizes = PAGE_SIZES } = {}) {
   return pager(meta, {
-    basePath: resultsSortHref(basePath, sort),
+    basePath: resultsSortHref(basePath, sort, dir),
     noun,
     pageSizes,
   });
 }
 
 async function windowSortedRows({ req, url, count, loadPage, loadAll, sortRows }) {
-  const { pageSize, sort, page } = readListChrome(req, url);
-  if (sort === "year") {
+  const { pageSize, sort, dir, page } = readListChrome(req, url);
+  if (sort === "year" && dir === "desc") {
     const total = await count();
     const meta = paginate({ total, page, pageSize });
     const rows = await loadPage(meta);
-    return { rows, meta, pageSize, sort };
+    return { rows, meta, pageSize, sort, dir };
   }
-  const ordered = sortRows(await loadAll(), sort);
+  const ordered = sortRows(await loadAll(), sort, dir);
   const meta = paginate({ total: ordered.length, page, pageSize });
   return {
     rows: ordered.slice(meta.offset, meta.offset + meta.limit),
     meta,
     pageSize,
     sort,
+    dir,
   };
 }
 
@@ -516,7 +519,7 @@ function postPersonIds(rows) {
  * read in parallel (both bounded), merged once, sorted, and paged in memory.
  */
 async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
-  const { pageSize, sort, page } = readListChrome(req, url);
+  const { pageSize, sort, dir, page } = readListChrome(req, url);
   const tag = commsPersonTag(spec);
   if (!tag) {
     const { rows, meta } = await windowSortedRows({
@@ -529,15 +532,16 @@ async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
           offset: meta.offset,
         }),
       loadAll: () => listKindComms(spec.id),
-      sortRows: (rows, nextSort) =>
+      sortRows: (rows, nextSort, nextDir) =>
         sortListItems(
           rows.map((row) => ({ date: row.posted_at, type: spec.id, row })),
           nextSort,
+          { dir: nextDir },
         ).map((item) => item.row),
     });
     const listHtml = spec.showLinkedPeople
-      ? commsCatalogList(spec.id, commsCatalogItems(rows, await getPeopleByIds(postPersonIds(rows))), { sort })
-      : kindList(spec.id, rows, { sort });
+      ? commsCatalogList(spec.id, commsCatalogItems(rows, await getPeopleByIds(postPersonIds(rows))), { sort, dir })
+      : kindList(spec.id, rows, { sort, dir });
     return layout({
       title,
       path: listPath,
@@ -545,18 +549,19 @@ async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
       query: title,
       pageSize,
       sort,
+      sortDir: dir,
       countLabel: countText(title, meta, rows.length),
       lede,
       body: `${listSection(
         listHtml,
-        listPager(meta, { basePath: listPath, noun: "posts", sort }),
+        listPager(meta, { basePath: listPath, noun: "posts", sort, dir }),
         listHead({
           title,
           total: meta.total,
           index: 1,
           of: rows.length,
         }),
-        { sort },
+        { sort, dir },
       )}`,
     });
   }
@@ -570,6 +575,7 @@ async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
       item.type === "person" ? item : { ...item, type: spec.id },
     ),
     sort,
+    { dir },
   );
   const meta = paginate({
     total: items.length,
@@ -584,19 +590,20 @@ async function commsListHtml(req, url, spec, { path: listPath, title, lede }) {
     query: title,
     pageSize,
     sort,
+    sortDir: dir,
     crumbLabel: title,
     countLabel: countText(title, meta, pageItems.length),
     lede,
     body: listSection(
-      commsCatalogList(spec.id, pageItems, { sort }),
-      listPager(meta, { basePath: listPath, noun: "rows", sort }),
+      commsCatalogList(spec.id, pageItems, { sort, dir }),
+      listPager(meta, { basePath: listPath, noun: "rows", sort, dir }),
       listHead({
         title,
         total: meta.total,
         index: 1,
         of: pageItems.length,
       }),
-      { sort },
+      { sort, dir },
     ),
   });
 }
@@ -661,13 +668,13 @@ async function tagMembershipOrNull() {
 
 async function sendTagSearch(req, res, url, tagState, membership) {
   const { tags, match } = tagState;
-  const { pageSize, sort, page } = readListChrome(req, url);
+  const { pageSize, sort, dir, page } = readListChrome(req, url);
   const matched = await listPeople({ tags, tagMatch: match });
   const flightDates =
     tags[0] === "epstein_clients" ? await earliestEpsteinFlights(matched.map((row) => row.id)) : null;
   // Same order as the first tag's /tags list.
   const { ordered, dateOf } = orderPeopleByMenuDate(matched, { tag: tags[0], flightDates });
-  const sorted = sortListedPeople(ordered, sort, { dateOf });
+  const sorted = sortListedPeople(ordered, sort, { dateOf, dir });
   const meta = paginate({ total: sorted.length, page, pageSize });
   const rows = sorted.slice(meta.offset, meta.offset + meta.limit);
   const label = tags.map((id) => tagShortLabel(id)).join(match === "any" ? " or " : " + ");
@@ -682,15 +689,16 @@ async function sendTagSearch(req, res, url, tagState, membership) {
       query: label,
       pageSize,
       sort,
+      sortDir: dir,
       countLabel: countText(label, meta, rows.length),
       lede: match === "any"
         ? "People stored with at least one of the selected tags."
         : "People stored with every selected tag.",
       body: `${searchFormHtml({ state: tagState, membership })}${listSection(
-        peopleList(rows, { listDate: dateOf, sort }),
-        listPager(meta, { basePath, noun: "rows", sort }),
+        peopleList(rows, { listDate: dateOf, sort, dir }),
+        listPager(meta, { basePath, noun: "rows", sort, dir }),
         listHead({ title: label, total: meta.total, index: 1, of: rows.length }),
-        { sort },
+        { sort, dir },
       )}`,
     }),
   );
@@ -1096,7 +1104,8 @@ async function handle(req, res) {
       all = all.filter((item) => item.type === "person" && inSet.has(item.row?.id));
     }
     const sort = resolveResultsSort(url.searchParams, req.headers.cookie);
-    const sorted = sortSearchItems(all, sort);
+    const dir = resolveResultsSortDir(url.searchParams, req.headers.cookie, sort);
+    const sorted = sortSearchItems(all, sort, dir);
     const meta = paginate({
       total: sorted.length,
       page: parsePage(url.searchParams),
@@ -1115,12 +1124,13 @@ async function handle(req, res) {
         crumbLabel: q || "Search",
         query: q || "search",
         sort: q ? sort : undefined,
+        sortDir: q ? dir : undefined,
         countLabel: q ? countText(q, meta, windowed.length) : "local",
         lede: "Matches names, operation titles, roles, summaries, handles, and stored post text in the local catalog.",
         body: searchFormHtml({ state: tagState, membership }) + listSection(
-          searchBody(windowed, q, { sort }),
+          searchBody(windowed, q, { sort, dir }),
           q
-            ? pager(meta, { basePath: resultsSortHref(searchPath, sort), noun: "results" })
+            ? pager(meta, { basePath: resultsSortHref(searchPath, sort, dir), noun: "results" })
             : "",
           q
             ? listHead({
@@ -1130,7 +1140,7 @@ async function handle(req, res) {
                 of: windowed.length,
               })
             : "",
-          { sort },
+          { sort, dir },
         ),
       }),
     );
@@ -1195,8 +1205,8 @@ async function handle(req, res) {
       const field = parseMissingField(fieldToken);
       const invalid = Boolean(fieldToken) && fieldToken !== "all" && !field;
       const matched = invalid ? [] : peopleMissingField(people, field?.id || "all", range);
-      const { pageSize, sort, page } = readListChrome(req, url);
-      const sorted = sortListedPeople(matched, sort);
+      const { pageSize, sort, dir, page } = readListChrome(req, url);
+      const sorted = sortListedPeople(matched, sort, { dir });
       const meta = paginate({
         total: sorted.length,
         page,
@@ -1214,19 +1224,20 @@ async function handle(req, res) {
           query: heading,
           pageSize,
           sort,
+          sortDir: dir,
           dashRange: range,
           countLabel: countText(heading, meta, windowed.length),
           lede: "Unique people missing a stored field. Empty stays empty and is not guessed. Portrait means no local /media/people/ still.",
           body: `${dashboardMissingBody({ range, field })}${listSection(
-            peopleList(windowed, { sort }),
-            listPager(meta, { basePath: listPath, noun: "rows", sort }),
+            peopleList(windowed, { sort, dir }),
+            listPager(meta, { basePath: listPath, noun: "rows", sort, dir }),
             listHead({
               title: heading,
               total: meta.total,
               index: 1,
               of: windowed.length,
             }),
-            { sort },
+            { sort, dir },
           )}`,
         }),
       );
@@ -1236,8 +1247,8 @@ async function handle(req, res) {
       const band = parseAgeBand(bandToken);
       const invalid = Boolean(bandToken) && bandToken !== "all" && !band;
       const matched = invalid ? [] : peopleInAgeBand(people, band?.id, range);
-      const { pageSize, sort, page } = readListChrome(req, url);
-      const sorted = sortListedPeople(matched, sort);
+      const { pageSize, sort, dir, page } = readListChrome(req, url);
+      const sorted = sortListedPeople(matched, sort, { dir });
       const meta = paginate({
         total: sorted.length,
         page,
@@ -1255,19 +1266,20 @@ async function handle(req, res) {
           query: heading,
           pageSize,
           sort,
+          sortDir: dir,
           dashRange: range,
           countLabel: countText(heading, meta, windowed.length),
           lede: "Unique people by age at a tagged event. Missing birth date is not guessed and is not listed.",
           body: `${dashboardAgeBody({ range, band })}${listSection(
-            peopleList(windowed, { sort }),
-            listPager(meta, { basePath: listPath, noun: "rows", sort }),
+            peopleList(windowed, { sort, dir }),
+            listPager(meta, { basePath: listPath, noun: "rows", sort, dir }),
             listHead({
               title: heading,
               total: meta.total,
               index: 1,
               of: windowed.length,
             }),
-            { sort },
+            { sort, dir },
           )}`,
         }),
       );
@@ -1361,7 +1373,7 @@ async function handle(req, res) {
   }
   if (factTag) {
     const tags = [factTag.id];
-    const { pageSize, sort, page } = readListChrome(req, url);
+    const { pageSize, sort, dir, page } = readListChrome(req, url);
     const matched = await listPeople({ tags });
     const flightDates =
       factTag.id === "epstein_clients"
@@ -1371,7 +1383,7 @@ async function handle(req, res) {
       tag: factTag.id,
       flightDates,
     });
-    const sorted = sortListedPeople(ordered, sort, { dateOf });
+    const sorted = sortListedPeople(ordered, sort, { dateOf, dir });
     const meta = paginate({
       total: sorted.length,
       page,
@@ -1387,20 +1399,21 @@ async function handle(req, res) {
         query: factTag.nav,
         pageSize,
         sort,
+        sortDir: dir,
         crumbLabel: factTag.nav,
         countLabel: countText(factTag.nav, meta, rows.length),
         intro: tagDescriptionBlock(factTag.id),
         lede: factTag.lede,
         body: `${listSection(
-          peopleList(rows, { listDate: dateOf, sort }),
-          listPager(meta, { basePath: factTag.path, noun: "rows", sort }),
+          peopleList(rows, { listDate: dateOf, sort, dir }),
+          listPager(meta, { basePath: factTag.path, noun: "rows", sort, dir }),
           listHead({
             title: factTag.nav,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
-          { sort },
+          { sort, dir },
         )}`,
       }),
     );
@@ -1585,7 +1598,7 @@ async function handle(req, res) {
     const unsealed = isIndictmentCategory(cat.id) && parseUnsealedFilter(url.searchParams);
     const listOpts = { category: kinds, tags, unsealed };
     const dateOf = kinds.length ? (row) => personMenuDate(row, { kinds }) : undefined;
-    const { rows, meta, pageSize, sort } = await windowSortedRows({
+    const { rows, meta, pageSize, sort, dir } = await windowSortedRows({
       req,
       url,
       count: () => countPeople(listOpts),
@@ -1597,7 +1610,7 @@ async function handle(req, res) {
           cardOrder: gov,
         }),
       loadAll: () => listPeople({ ...listOpts, cardOrder: gov }),
-      sortRows: (matched, nextSort) => sortListedPeople(matched, nextSort, { dateOf }),
+      sortRows: (matched, nextSort, nextDir) => sortListedPeople(matched, nextSort, { dateOf, dir: nextDir }),
     });
     const heading = gov ? "Officials" : cat.title;
     const listPath = filterPath(cat.path, { tags, unsealed });
@@ -1610,6 +1623,7 @@ async function handle(req, res) {
         query: heading,
         pageSize,
         sort,
+        sortDir: dir,
         countLabel: countText(heading, meta, rows.length),
         lede: gov
           ? "People tagged official — government, appointed, military, or law-enforcement roles. One card per person; tags are not exclusive."
@@ -1618,16 +1632,17 @@ async function handle(req, res) {
           peopleList(rows, {
             showDeath: deaths,
             sort,
+            dir,
             ...(dateOf ? { listDate: dateOf } : {}),
           }),
-          listPager(meta, { basePath: listPath, noun: "rows", sort }),
+          listPager(meta, { basePath: listPath, noun: "rows", sort, dir }),
           listHead({
             title: heading,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
-          { sort },
+          { sort, dir },
         )}`,
       }),
     );
@@ -1637,7 +1652,7 @@ async function handle(req, res) {
       ? catalogListKinds(cat.id)
       : [];
     const listOpts = { tags };
-    const { rows, meta, pageSize, sort } = await windowSortedRows({
+    const { rows, meta, pageSize, sort, dir } = await windowSortedRows({
       req,
       url,
       count: () => countOperations(listOpts),
@@ -1648,10 +1663,11 @@ async function handle(req, res) {
           offset: pageMeta.offset,
         }),
       loadAll: () => listOperations(listOpts),
-      sortRows: (matched, nextSort) =>
+      sortRows: (matched, nextSort, nextDir) =>
         sortListItems(
           matched.map((row) => ({ date: row.event_date, type: "operation", row })),
           nextSort,
+          { dir: nextDir },
         ).map((item) => item.row),
     });
     return sendHtml(
@@ -1663,24 +1679,25 @@ async function handle(req, res) {
         query: cat.title,
         pageSize,
         sort,
+        sortDir: dir,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: `${identityFilterNav(cat.path)}${listSection(
-          operationList(rows, { sort }),
-          listPager(meta, { basePath: cat.path, noun: "rows", sort }),
+          operationList(rows, { sort, dir }),
+          listPager(meta, { basePath: cat.path, noun: "rows", sort, dir }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
-          { sort },
+          { sort, dir },
         )}`,
       }),
     );
   }
   if (cat && cat.kind === "source") {
-    const { rows, meta, pageSize, sort } = await windowSortedRows({
+    const { rows, meta, pageSize, sort, dir } = await windowSortedRows({
       req,
       url,
       count: () => countSourcePosts({ standalone: true }),
@@ -1691,10 +1708,11 @@ async function handle(req, res) {
           offset: pageMeta.offset,
         }),
       loadAll: () => listSourcePosts({ standalone: true }),
-      sortRows: (matched, nextSort) =>
+      sortRows: (matched, nextSort, nextDir) =>
         sortListItems(
           matched.map((row) => ({ date: row.posted_at, type: "source", row })),
           nextSort,
+          { dir: nextDir },
         ).map((item) => item.row),
     });
     return sendHtml(
@@ -1706,18 +1724,19 @@ async function handle(req, res) {
         query: cat.title,
         pageSize,
         sort,
+        sortDir: dir,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: listSection(
-          sourcePostList(rows, { sort }),
-          listPager(meta, { basePath: cat.path, noun: "posts", sort }),
+          sourcePostList(rows, { sort, dir }),
+          listPager(meta, { basePath: cat.path, noun: "posts", sort, dir }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
-          { sort },
+          { sort, dir },
         ),
       }),
     );
@@ -1727,10 +1746,10 @@ async function handle(req, res) {
     return;
   }
   if (cat && cat.kind === "central_casting") {
-    const { pageSize, sort, page } = readListChrome(req, url);
+    const { pageSize, sort, dir, page } = readListChrome(req, url);
     const matched = await listCentralCastingPeople();
     const { ordered, dateOf } = orderPeopleByMenuDate(matched, { centralCasting: true });
-    const sorted = sortListedPeople(ordered, sort, { dateOf });
+    const sorted = sortListedPeople(ordered, sort, { dateOf, dir });
     const meta = paginate({
       total: sorted.length,
       page,
@@ -1746,18 +1765,19 @@ async function handle(req, res) {
         query: cat.title,
         pageSize,
         sort,
+        sortDir: dir,
         countLabel: countText(cat.title, meta, rows.length),
         lede: cat.blurb,
         body: listSection(
-          peopleList(rows, { listDate: dateOf, sort }),
-          listPager(meta, { basePath: cat.path, noun: "rows", sort }),
+          peopleList(rows, { listDate: dateOf, sort, dir }),
+          listPager(meta, { basePath: cat.path, noun: "rows", sort, dir }),
           listHead({
             title: cat.title,
             total: meta.total,
             index: 1,
             of: rows.length,
           }),
-          { sort },
+          { sort, dir },
         ),
       }),
     );

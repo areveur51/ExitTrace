@@ -79,10 +79,13 @@ import {
   PORTRAIT_SORT_HAS,
   PORTRAIT_SORT_MISSING,
   RESULTS_SORTS,
+  RESULTS_SORT_DIRS,
   RESULTS_SORT_LABELS,
   RESULTS_SORT_STORAGE_KEY,
+  RESULTS_SORT_DIR_STORAGE_KEY,
   comparePersonDirectoryNames,
   normalizeResultsSort,
+  normalizeResultsSortDir,
   personLastName,
 } from "./results-sort.mjs";
 import { normalizeScreenshotHref } from "./screenshot.mjs";
@@ -307,7 +310,7 @@ function pageSizeBootScript() {
 
 function resultsSortBootScript() {
   return `<script>
-(function(){try{var key=${JSON.stringify(RESULTS_SORT_STORAGE_KEY)};var allowed=${JSON.stringify(RESULTS_SORTS)};var params=new URLSearchParams(location.search);var q=params.get("sort");if(q&&allowed.indexOf(q)!==-1){localStorage.setItem(key,q);document.cookie=key+"="+q+"; Path=/; SameSite=Lax";return;}var raw=localStorage.getItem(key);if(!raw||allowed.indexOf(raw)===-1)return;document.cookie=key+"="+raw+"; Path=/; SameSite=Lax";var rendered=document.documentElement.getAttribute("data-results-sort");var guard=key+"-sync";if(rendered&&raw&&rendered!==raw&&sessionStorage.getItem(guard)!==raw){sessionStorage.setItem(guard,raw);location.replace(location.pathname+location.search+location.hash);}}catch(e){}})();
+(function(){try{var sortKey=${JSON.stringify(RESULTS_SORT_STORAGE_KEY)};var dirKey=${JSON.stringify(RESULTS_SORT_DIR_STORAGE_KEY)};var sorts=${JSON.stringify(RESULTS_SORTS)};var dirs=${JSON.stringify(RESULTS_SORT_DIRS)};var params=new URLSearchParams(location.search);var qSort=params.get("sort");var qDir=params.get("dir");if(qSort&&sorts.indexOf(qSort)!==-1){localStorage.setItem(sortKey,qSort);document.cookie=sortKey+"="+qSort+"; Path=/; SameSite=Lax";}else{var rawSort=localStorage.getItem(sortKey);if(rawSort&&sorts.indexOf(rawSort)!==-1){document.cookie=sortKey+"="+rawSort+"; Path=/; SameSite=Lax";var renderedSort=document.documentElement.getAttribute("data-results-sort");var guardSort=sortKey+"-sync";if(renderedSort&&rawSort&&renderedSort!==rawSort&&sessionStorage.getItem(guardSort)!==rawSort){sessionStorage.setItem(guardSort,rawSort);location.replace(location.pathname+location.search+location.hash);return;}}}if(qDir&&dirs.indexOf(qDir)!==-1){localStorage.setItem(dirKey,qDir);document.cookie=dirKey+"="+qDir+"; Path=/; SameSite=Lax";}else{var rawDir=localStorage.getItem(dirKey);if(!rawDir||dirs.indexOf(rawDir)===-1)return;document.cookie=dirKey+"="+rawDir+"; Path=/; SameSite=Lax";var renderedDir=document.documentElement.getAttribute("data-results-sort-dir");var guardDir=dirKey+"-sync";if(renderedDir&&rawDir&&renderedDir!==rawDir&&sessionStorage.getItem(guardDir)!==rawDir){sessionStorage.setItem(guardDir,rawDir);location.replace(location.pathname+location.search+location.hash);}}}catch(e){}})();
 </script>`;
 }
 
@@ -327,8 +330,10 @@ export const DEFAULT_CARD_SIZE = "m";
 export {
   DEFAULT_RESULTS_SORT,
   RESULTS_SORTS,
+  RESULTS_SORT_DIRS,
   RESULTS_SORT_LABELS,
   RESULTS_SORT_STORAGE_KEY,
+  RESULTS_SORT_DIR_STORAGE_KEY,
 };
 
 const CARD_SIZE_LABELS = { s: "Small", m: "Medium", l: "Large" };
@@ -342,6 +347,8 @@ const UI_ICONS = {
   prev: `<path d="M14.5 5.5 8 12l6.5 6.5"/>`,
   next: `<path d="M9.5 5.5 16 12l-6.5 6.5"/>`,
   rows: `<path d="M4 7h16M4 12h16M4 17h16"/>`,
+  "sort-desc": `<path d="M12 5v14"/><path d="M6 13l6 6 6-6"/>`,
+  "sort-asc": `<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>`,
 };
 
 function uiIcon(name) {
@@ -357,23 +364,34 @@ function resultsViewBootScript() {
 </script>`;
 }
 
-export function resultsSortControl(active = DEFAULT_RESULTS_SORT) {
+export function resultsSortControl(active = DEFAULT_RESULTS_SORT, dir) {
   const current = normalizeResultsSort(active);
+  const direction = normalizeResultsSortDir(dir, current);
   const options = RESULTS_SORTS.map((id) => {
     const on = id === current;
     return `<option value="${esc(id)}"${on ? " selected" : ""}>${esc(RESULTS_SORT_LABELS[id])}</option>`;
   }).join("");
+  const dirBtns = RESULTS_SORT_DIRS.map((id) => {
+    const on = id === direction;
+    const label = id === "asc" ? "Ascending" : "Descending";
+    return `<button type="button" class="results-sort-dir-btn keychip" data-results-sort-dir-set="${id}" aria-pressed="${
+      on ? "true" : "false"
+    }" aria-label="${label}">${uiIcon(`sort-${id}`)}</button>`;
+  }).join("");
   return `<nav class="results-sort" aria-label="Sort results">
     <span class="results-sort-label" id="results-sort-label">Sort</span>
-    <label class="results-sort-select-wrap">
-      <span class="vh">Sort results</span>
-      <select class="results-sort-select" data-results-sort-select aria-labelledby="results-sort-label">${options}</select>
-    </label>
+    <div class="results-sort-fields">
+      <label class="results-sort-select-wrap">
+        <span class="vh">Sort results</span>
+        <select class="results-sort-select" data-results-sort-select aria-labelledby="results-sort-label">${options}</select>
+      </label>
+      <div class="results-sort-dir" role="group" aria-label="Sort direction">${dirBtns}</div>
+    </div>
   </nav>`;
 }
 
 /** Shared list ↔ cards control. Card size is in the markup and shown only in card view. */
-export function resultsViewControl({ pagerHtml = "", sort = DEFAULT_RESULTS_SORT } = {}) {
+export function resultsViewControl({ pagerHtml = "", sort = DEFAULT_RESULTS_SORT, dir } = {}) {
   const viewBtns = RESULTS_VIEWS.map((id) => {
     const on = id === DEFAULT_RESULTS_VIEW;
     const label = id === "cards" ? "Cards" : "List";
@@ -401,7 +419,7 @@ export function resultsViewControl({ pagerHtml = "", sort = DEFAULT_RESULTS_SORT
         <span class="card-size-label" id="card-size-label">Card size</span>
         <div class="card-size-btns" role="group" aria-labelledby="card-size-label">${sizeBtns}</div>
       </div>
-      ${resultsSortControl(sort)}
+      ${resultsSortControl(sort, dir)}
     </div>
     ${pagingRow}
   </div>`;
@@ -797,6 +815,7 @@ export function layout({
   countLabel,
   pageSize,
   sort,
+  sortDir,
   categoryId,
   crumbLabel,
   dashRange,
@@ -808,10 +827,12 @@ export function layout({
       : "";
   const sortId = sort != null ? normalizeResultsSort(sort) : "";
   const sortAttr = sortId ? ` data-results-sort="${esc(sortId)}"` : "";
+  const dirId = sort != null ? normalizeResultsSortDir(sortDir, sortId) : "";
+  const dirAttr = dirId ? ` data-results-sort-dir="${esc(dirId)}"` : "";
   const rangeToken = dashRange ? serializeDashRange(resolveDashRange(dashRange)) : "";
   const rangeAttr = rangeToken ? ` data-dash-range="${esc(rangeToken)}"` : "";
   return `<!doctype html>
-<html lang="en" data-theme="${DEFAULT_THEME}"${sizeAttr}${sortAttr}${rangeAttr}>
+<html lang="en" data-theme="${DEFAULT_THEME}"${sizeAttr}${sortAttr}${dirAttr}${rangeAttr}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -2270,47 +2291,56 @@ export function resultsSortHeading(item, sort) {
   return String(listItemDate(item)).slice(0, 4) || "Undated";
 }
 
-function compareListItems(a, b, sort, dateOf) {
+function compareListItems(a, b, sort, dateOf, dir) {
   const mode = normalizeResultsSort(sort);
-  if (mode === "name") return compareItemNames(a, b);
+  const direction = normalizeResultsSortDir(dir, mode);
+  const names = () => compareItemNames(a, b);
+  if (mode === "name") {
+    const cmp = names();
+    return direction === "desc" ? -cmp : cmp;
+  }
   if (mode === "occupation") {
     const oa = listItemOccupation(a);
     const ob = listItemOccupation(b);
     if (Boolean(oa) !== Boolean(ob)) return oa ? -1 : 1;
     const byOcc = oa.localeCompare(ob);
-    if (byOcc) return byOcc;
-    return compareItemNames(a, b);
+    if (byOcc) return direction === "desc" ? -byOcc : byOcc;
+    return names();
   }
   if (mode === "portrait") {
     const pa = listItemHasPortrait(a);
     const pb = listItemHasPortrait(b);
-    if (pa !== pb) return pa ? -1 : 1;
-    return compareItemNames(a, b);
+    if (pa !== pb) {
+      if (direction === "desc") return pa ? -1 : 1;
+      return pa ? 1 : -1;
+    }
+    return names();
   }
   const da = listItemDate(a, dateOf);
   const db = listItemDate(b, dateOf);
   if (da !== db) {
     if (!da) return 1;
     if (!db) return -1;
-    return db.localeCompare(da);
+    const byDate = da.localeCompare(db);
+    return direction === "desc" ? -byDate : byDate;
   }
-  return compareItemNames(a, b);
+  return names();
 }
 
-export function sortListItems(items, sort, { dateOf } = {}) {
-  return (Array.isArray(items) ? items : []).slice().sort((a, b) => compareListItems(a, b, sort, dateOf));
+export function sortListItems(items, sort, { dateOf, dir } = {}) {
+  return (Array.isArray(items) ? items : []).slice().sort((a, b) => compareListItems(a, b, sort, dateOf, dir));
 }
 
-export function sortListedPeople(rows, sort, { dateOf } = {}) {
+export function sortListedPeople(rows, sort, { dateOf, dir } = {}) {
   const items = (Array.isArray(rows) ? rows : []).map((row) => ({
     date: dateOf ? asEventDate(dateOf(row)) || "" : personListDate(row) || "",
     type: "person",
     row,
   }));
-  return sortListItems(items, sort).map((item) => item.row);
+  return sortListItems(items, sort, { dir }).map((item) => item.row);
 }
 
-export function sortSearchItems(items, sort) {
+export function sortSearchItems(items, sort, dir) {
   const people = [];
   const operations = [];
   const comms = [];
@@ -2322,40 +2352,48 @@ export function sortSearchItems(items, sort) {
     else people.push(item);
   }
   return [
-    ...sortListItems(people, sort),
-    ...sortListItems(operations, sort),
-    ...sortListItems(comms, sort),
-    ...sortListItems(sources, sort),
+    ...sortListItems(people, sort, { dir }),
+    ...sortListItems(operations, sort, { dir }),
+    ...sortListItems(comms, sort, { dir }),
+    ...sortListItems(sources, sort, { dir }),
   ];
 }
 
-function sortHeadingKeys(mode, headings) {
+function sortHeadingKeys(mode, headings, dir) {
   const keys = [...headings];
+  const direction = normalizeResultsSortDir(dir, mode);
   if (mode === "year") {
     return keys.sort((a, b) => {
       if (a === "Undated") return 1;
       if (b === "Undated") return -1;
-      return b.localeCompare(a);
+      const cmp = a.localeCompare(b);
+      return direction === "desc" ? -cmp : cmp;
     });
   }
   if (mode === "portrait") {
-    return [PORTRAIT_SORT_HAS, PORTRAIT_SORT_MISSING].filter((h) => keys.includes(h));
+    const order =
+      direction === "desc"
+        ? [PORTRAIT_SORT_HAS, PORTRAIT_SORT_MISSING]
+        : [PORTRAIT_SORT_MISSING, PORTRAIT_SORT_HAS];
+    return order.filter((h) => keys.includes(h));
   }
   if (mode === "occupation") {
     return keys.sort((a, b) => {
       if (a === OCCUPATION_SORT_NONE) return 1;
       if (b === OCCUPATION_SORT_NONE) return -1;
-      return a.localeCompare(b);
+      const cmp = a.localeCompare(b);
+      return direction === "desc" ? -cmp : cmp;
     });
   }
   return keys.sort((a, b) => {
     if (a === NAME_SORT_OTHER) return 1;
     if (b === NAME_SORT_OTHER) return -1;
-    return a.localeCompare(b);
+    const cmp = a.localeCompare(b);
+    return direction === "desc" ? -cmp : cmp;
   });
 }
 
-function groupByHeadingItems(items, render, sort = DEFAULT_RESULTS_SORT) {
+function groupByHeadingItems(items, render, sort = DEFAULT_RESULTS_SORT, dir) {
   const mode = normalizeResultsSort(sort);
   const groups = new Map();
   for (const item of items) {
@@ -2363,7 +2401,7 @@ function groupByHeadingItems(items, render, sort = DEFAULT_RESULTS_SORT) {
     if (!groups.has(heading)) groups.set(heading, []);
     groups.get(heading).push(item);
   }
-  const headings = sortHeadingKeys(mode, groups.keys());
+  const headings = sortHeadingKeys(mode, groups.keys(), dir);
   let first = true;
   return headings
     .map((heading) => {
@@ -2383,17 +2421,18 @@ function groupByHeadingItems(items, render, sort = DEFAULT_RESULTS_SORT) {
     .join("");
 }
 
-function groupByYearItems(items, render, sort = DEFAULT_RESULTS_SORT) {
+function groupByYearItems(items, render, sort = DEFAULT_RESULTS_SORT, dir) {
   const mode = normalizeResultsSort(sort);
-  const ordered = sortListItems(items, mode);
-  return groupByHeadingItems(ordered, render, mode);
+  const direction = normalizeResultsSortDir(dir, mode);
+  const ordered = sortListItems(items, mode, { dir: direction });
+  return groupByHeadingItems(ordered, render, mode, direction);
 }
 
 export function peopleTable(rows, { showDeath } = {}) {
   return peopleList(rows, { showDeath });
 }
 
-export function peopleList(rows, { showDeath, listDate, sort } = {}) {
+export function peopleList(rows, { showDeath, listDate, sort, dir } = {}) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
   const menuDate = typeof listDate === "function";
   const dateOf = (row) =>
@@ -2409,10 +2448,11 @@ export function peopleList(rows, { showDeath, listDate, sort } = {}) {
         date: menuDate ? dateOf(item.row) : undefined,
       }),
     mode,
+    dir,
   )}</div>`;
 }
 
-export function catalogList(items, { showDeath, sort } = {}) {
+export function catalogList(items, { showDeath, sort, dir } = {}) {
   if (!items.length) return `<p class="empty">No rows on this page.</p>`;
   const mode = normalizeResultsSort(sort);
   return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => {
@@ -2422,13 +2462,13 @@ export function catalogList(items, { showDeath, sort } = {}) {
     }
     if (item.type === "operation") return operationRow(item.row, opts);
     return personRow(item.row, { ...opts, showDeath });
-  }, mode)}</div>`;
+  }, mode, dir)}</div>`;
 }
 
-export function sourcePostList(rows, { sort } = {}) {
+export function sourcePostList(rows, { sort, dir } = {}) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
   const items = rows.map((row) => ({ date: row.posted_at, type: "source", row }));
-  return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => sourcePostRow(item.row, opts), sort)}</div>`;
+  return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => sourcePostRow(item.row, opts), sort, dir)}</div>`;
 }
 
 export function deathsIndexNav() {
@@ -2443,19 +2483,19 @@ export function groupOpsIndexNav() {
   return identityFilterNav("/group-operations", { tags: [] });
 }
 
-export function operationList(rows, { sort } = {}) {
+export function operationList(rows, { sort, dir } = {}) {
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
   const items = rows.map((row) => ({ date: row.event_date, type: "operation", row }));
-  return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => operationRow(item.row, opts), sort)}</div>`;
+  return `<div class="people-list tui-list">${groupByYearItems(items, (item, opts) => operationRow(item.row, opts), sort, dir)}</div>`;
 }
 
-export function kindList(kind, rows, { sort } = {}) {
+export function kindList(kind, rows, { sort, dir } = {}) {
   const spec = commsKind(kind);
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
   const items = rows.map((row) => ({ date: row.posted_at, type: kind, row }));
   return `<div class="${spec.pageClass} tui-list">${groupByYearItems(items, (item, opts) =>
     kindListRow(kind, item.row, opts),
-  sort)}</div>`;
+  sort, dir)}</div>`;
 }
 
 /** Newest first, undated last, then name (or handle). One comparator for every mixed comms list. */
@@ -2512,7 +2552,7 @@ export function commsCatalogItems(posts, people, tagged = []) {
 }
 
 /** One list renderer for every comms page: person cards and post rows, grouped by year. */
-export function commsCatalogList(kind, items, { sort } = {}) {
+export function commsCatalogList(kind, items, { sort, dir } = {}) {
   const spec = commsKind(kind);
   const rows = Array.isArray(items) ? items : [];
   if (!rows.length) return `<p class="empty">No rows on this page.</p>`;
@@ -2523,7 +2563,7 @@ export function commsCatalogList(kind, items, { sort } = {}) {
     item.type === "person"
       ? personRow(item.row, { ...opts, date: item.cardDate })
       : kindListRow(kind, item.row, opts),
-  sort)}</div>`;
+  sort, dir)}</div>`;
 }
 
 export function shotCatalogList(posts, people) {
@@ -2621,11 +2661,11 @@ function compactBottomPager(listHtml, pagerHtml) {
   return `<nav class="pager pager--bottom" aria-label="Pagination (bottom)">${controls}</nav>`;
 }
 
-export function listSection(listHtml, pagerHtml, headHtml = "", { sort } = {}) {
+export function listSection(listHtml, pagerHtml, headHtml = "", { sort, dir } = {}) {
   if (!wantsResultsControls(listHtml, pagerHtml)) {
     return `${headHtml}${pagerHtml}${listHtml}${pagerHtml}`;
   }
-  const toolbar = resultsViewControl({ pagerHtml: pagerHtml || "", sort });
+  const toolbar = resultsViewControl({ pagerHtml: pagerHtml || "", sort, dir });
   return `${headHtml}${toolbar}${listHtml}${compactBottomPager(listHtml, pagerHtml)}`;
 }
 
@@ -3972,7 +4012,7 @@ export function dogDetail(row, options) {
   return kindDetail("dog", row, options);
 }
 
-export function searchBody(items, q, { sort } = {}) {
+export function searchBody(items, q, { sort, dir } = {}) {
   if (!String(q || "").trim()) {
     return `<p class="empty">Type a name, role, handle, or stored post text. Search stays local.</p>`;
   }
@@ -3990,6 +4030,7 @@ export function searchBody(items, q, { sort } = {}) {
     else people.push({ ...item, type: item.type || "person" });
   }
   const mode = normalizeResultsSort(sort);
+  const direction = normalizeResultsSortDir(dir, mode);
   let first = true;
   const render = (item, opts = {}) => {
     const selected = first;
@@ -4003,14 +4044,14 @@ export function searchBody(items, q, { sort } = {}) {
     return personRow(item.row, { ...rowOpts, showDeath: isDeathCategory(item.row.category) });
   };
   const blocks = [];
-  if (people.length) blocks.push(groupByYearItems(people, render, mode));
-  if (operations.length) blocks.push(groupByYearItems(operations, render, mode));
-  if (comms.length) blocks.push(groupByYearItems(comms, render, mode));
+  if (people.length) blocks.push(groupByYearItems(people, render, mode, direction));
+  if (operations.length) blocks.push(groupByYearItems(operations, render, mode, direction));
+  if (comms.length) blocks.push(groupByYearItems(comms, render, mode, direction));
   if (sources.length) {
     blocks.push(
       `<section class="tui-group unsorted-group">
       <h2 class="tui-group-h">Unsorted</h2>
-      ${sortListItems(sources, mode).map((item) => render(item)).join("")}
+      ${sortListItems(sources, mode, { dir: direction }).map((item) => render(item)).join("")}
     </section>`,
     );
   }

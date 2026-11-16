@@ -13,14 +13,20 @@ import {
   PORTRAIT_SORT_HAS,
   PORTRAIT_SORT_MISSING,
   RESULTS_SORTS,
+  RESULTS_SORT_DIRS,
+  RESULTS_SORT_DIR_STORAGE_KEY,
   RESULTS_SORT_LABELS,
   RESULTS_SORT_STORAGE_KEY,
   comparePersonDirectoryNames,
+  defaultResultsSortDir,
   normalizeResultsSort,
+  normalizeResultsSortDir,
   parseCookieResultsSort,
+  parseCookieResultsSortDir,
   parseResultsSort,
   personLastName,
   resolveResultsSort,
+  resolveResultsSortDir,
   resultsSortHref,
 } from "../app/lib/results-sort.mjs";
 import { handle } from "../app/server.mjs";
@@ -114,8 +120,10 @@ function titleOrder(html) {
 
 test("sort ids, labels, and parsers", () => {
   assert.deepEqual(RESULTS_SORTS, ["year", "name", "occupation", "portrait"]);
+  assert.deepEqual(RESULTS_SORT_DIRS, ["desc", "asc"]);
   assert.equal(DEFAULT_RESULTS_SORT, "year");
   assert.equal(RESULTS_SORT_STORAGE_KEY, "exittrace-results-sort");
+  assert.equal(RESULTS_SORT_DIR_STORAGE_KEY, "exittrace-results-sort-dir");
   assert.equal(RESULTS_SORT_LABELS.year, "Year");
   assert.equal(RESULTS_SORT_LABELS.portrait, "Portrait");
   assert.equal(normalizeResultsSort("NAME"), "name");
@@ -137,14 +145,38 @@ test("sort ids, labels, and parsers", () => {
     resolveResultsSort(new URLSearchParams(""), "exittrace-results-sort=portrait"),
     "portrait",
   );
+  assert.equal(defaultResultsSortDir("year"), "desc");
+  assert.equal(defaultResultsSortDir("portrait"), "desc");
+  assert.equal(defaultResultsSortDir("name"), "asc");
+  assert.equal(defaultResultsSortDir("occupation"), "asc");
+  assert.equal(normalizeResultsSortDir("ASC", "year"), "asc");
+  assert.equal(normalizeResultsSortDir("nope", "name"), "asc");
+  assert.equal(normalizeResultsSortDir("", "year"), "desc");
+  assert.equal(parseCookieResultsSortDir("exittrace-results-sort-dir=asc"), "asc");
+  assert.equal(parseCookieResultsSortDir(""), "");
+  assert.equal(
+    resolveResultsSortDir(new URLSearchParams("dir=asc"), "exittrace-results-sort-dir=desc", "year"),
+    "asc",
+  );
+  assert.equal(
+    resolveResultsSortDir(new URLSearchParams(""), "exittrace-results-sort-dir=desc", "name"),
+    "desc",
+  );
+  assert.equal(resolveResultsSortDir(new URLSearchParams(""), "", "name"), "asc");
+  assert.equal(resolveResultsSortDir(new URLSearchParams(""), "", "year"), "desc");
 });
 
-test("resultsSortHref keeps year off the URL and preserves other query", () => {
+test("resultsSortHref keeps year and the sort's default dir off the URL", () => {
   assert.equal(resultsSortHref("/firings", "year"), "/firings");
+  assert.equal(resultsSortHref("/firings", "year", "desc"), "/firings");
+  assert.equal(resultsSortHref("/firings", "year", "asc"), "/firings?dir=asc");
   assert.equal(resultsSortHref("/firings", "name"), "/firings?sort=name");
+  assert.equal(resultsSortHref("/firings", "name", "asc"), "/firings?sort=name");
+  assert.equal(resultsSortHref("/firings", "name", "desc"), "/firings?sort=name&dir=desc");
   assert.equal(resultsSortHref("/firings?tags=civilian", "name"), "/firings?tags=civilian&sort=name");
   assert.equal(resultsSortHref("/firings?sort=occupation", "year"), "/firings");
   assert.equal(resultsSortHref("/search?q=comey", "portrait"), "/search?q=comey&sort=portrait");
+  assert.equal(resultsSortHref("/search?q=comey", "portrait", "asc"), "/search?q=comey&sort=portrait&dir=asc");
 });
 
 test("sort dropdown lists year, name, occupation, and portrait", () => {
@@ -154,9 +186,19 @@ test("sort dropdown lists year, name, occupation, and portrait", () => {
   assert.match(html, />Name</);
   assert.match(html, />Occupation</);
   assert.match(html, />Portrait</);
+  assert.match(html, /class="results-sort-fields"/);
+  assert.match(html, /data-results-sort-dir-set="desc"[^>]*aria-pressed="true"/);
+  assert.match(html, /data-results-sort-dir-set="asc"[^>]*aria-pressed="false"/);
+  assert.match(html, /aria-label="Descending"/);
+  assert.match(html, /aria-label="Ascending"/);
   const named = resultsSortControl("name");
   assert.match(named, /<option value="name" selected>Name</);
   assert.match(named, /<option value="year">Year</);
+  assert.match(named, /data-results-sort-dir-set="asc"[^>]*aria-pressed="true"/);
+  assert.match(named, /data-results-sort-dir-set="desc"[^>]*aria-pressed="false"/);
+  const namedDesc = resultsSortControl("name", "desc");
+  assert.match(namedDesc, /data-results-sort-dir-set="desc"[^>]*aria-pressed="true"/);
+  assert.match(namedDesc, /data-results-sort-dir-set="asc"[^>]*aria-pressed="false"/);
 });
 
 test("personLastName takes the last token and drops Jr./Sr./II", () => {
@@ -198,6 +240,36 @@ test("peopleList year keeps newest-year headings; other sorts regroup", () => {
   assert.equal(resultsSortHeading({ type: "person", row: { name: "7-Eleven" } }, "name"), NAME_SORT_OTHER);
 });
 
+test("peopleList dir reverses the primary key and keeps Undated, No occupation, and # last", () => {
+  const rows = [
+    ...samplePeople(),
+    {
+      id: "undated",
+      name: "Pat Quinn",
+      category: "firing",
+      event_date: "",
+      photo: "",
+      role: "",
+      events: [],
+    },
+  ];
+  const yearAsc = peopleList(rows, { sort: "year", dir: "asc" });
+  assert.deepEqual(headingOrder(yearAsc), ["2023", "2024", "2025", "2026", "Undated"]);
+  assert.deepEqual(titleOrder(yearAsc), ["No Face", "Ada Lovelace", "Mia Chen", "Zeta Ward", "Pat Quinn"]);
+
+  const namedDesc = peopleList(rows, { sort: "name", dir: "desc" });
+  assert.deepEqual(headingOrder(namedDesc), ["W", "Q", "L", "F", "C"]);
+  assert.deepEqual(titleOrder(namedDesc), ["Zeta Ward", "Pat Quinn", "Ada Lovelace", "No Face", "Mia Chen"]);
+
+  const occupationDesc = peopleList(rows, { sort: "occupation", dir: "desc" });
+  assert.deepEqual(headingOrder(occupationDesc), ["Director", "Analyst", "Actor", OCCUPATION_SORT_NONE]);
+  assert.deepEqual(titleOrder(occupationDesc), ["Zeta Ward", "Ada Lovelace", "Mia Chen", "No Face", "Pat Quinn"]);
+
+  const portraitAsc = peopleList(rows, { sort: "portrait", dir: "asc" });
+  assert.deepEqual(headingOrder(portraitAsc), [PORTRAIT_SORT_MISSING, PORTRAIT_SORT_HAS]);
+  assert.deepEqual(titleOrder(portraitAsc), ["No Face", "Ada Lovelace", "Pat Quinn", "Mia Chen", "Zeta Ward"]);
+});
+
 test("sortListedPeople reorders the full set before paging", () => {
   const rows = samplePeople();
   assert.deepEqual(
@@ -205,8 +277,20 @@ test("sortListedPeople reorders the full set before paging", () => {
     ["mia", "empty-face", "ada", "zeta"],
   );
   assert.deepEqual(
+    sortListedPeople(rows, "name", { dir: "desc" }).map((row) => row.id),
+    ["zeta", "ada", "empty-face", "mia"],
+  );
+  assert.deepEqual(
     sortListedPeople(rows, "portrait").map((row) => row.id),
     ["mia", "zeta", "empty-face", "ada"],
+  );
+  assert.deepEqual(
+    sortListedPeople(rows, "portrait", { dir: "asc" }).map((row) => row.id),
+    ["empty-face", "ada", "mia", "zeta"],
+  );
+  assert.deepEqual(
+    sortListedPeople(rows, "year", { dir: "asc" }).map((row) => row.id),
+    ["empty-face", "ada", "mia", "zeta"],
   );
 });
 
@@ -239,6 +323,27 @@ test("firings honors ?sort= and the results-sort cookie", async () => {
   assert.equal(portrait.status, 200);
   assert.match(portrait.body, /<option value="portrait" selected>Portrait</);
   assert.match(portrait.body, new RegExp(`<h2 class="tui-group-h">${PORTRAIT_SORT_HAS}</h2>`));
+
+  assert.match(year.body, /data-results-sort-dir="desc"/);
+  assert.doesNotMatch(year.body, /[?&]dir=/);
+  assert.match(year.body, /data-results-sort-dir-set="desc"[^>]*aria-pressed="true"/);
+  const yearAsc = await requestPage("/firings?dir=asc");
+  assert.equal(yearAsc.status, 200);
+  assert.match(yearAsc.body, /data-results-sort-dir="asc"/);
+  assert.match(yearAsc.body, /data-results-sort-dir-set="asc"[^>]*aria-pressed="true"/);
+  const years = headingOrder(yearAsc.body).filter((h) => /^\d{4}$/.test(h));
+  assert.ok(years.length > 1);
+  assert.deepEqual(years, years.slice().sort());
+  const namedDesc = await requestPage("/firings?sort=name&dir=desc");
+  assert.equal(namedDesc.status, 200);
+  const namesDesc = titleOrder(namedDesc.body);
+  assert.ok(namesDesc.length > 1);
+  assert.deepEqual(namesDesc, namesDesc.slice().sort(comparePersonDirectoryNames).reverse());
+  const cookieDir = await requestPage("/firings?sort=name", {
+    cookie: "exittrace-results-sort=name; exittrace-results-sort-dir=desc",
+  });
+  assert.equal(cookieDir.status, 200);
+  assert.match(cookieDir.body, /data-results-sort-dir="desc"/);
 });
 
 test("app.js reloads on sort change and styles.css has the sort control", () => {
@@ -246,8 +351,17 @@ test("app.js reloads on sort change and styles.css has the sort control", () => 
   const css = fs.readFileSync(path.join(ROOT, "app/public/styles.css"), "utf8");
   assert.match(js, /data-results-sort-select/);
   assert.match(js, /exittrace-results-sort/);
+  assert.match(js, /exittrace-results-sort-dir/);
   assert.match(js, /searchParams\.set\("sort"/);
   assert.match(js, /applyResultsSort/);
+  assert.match(js, /applyResultsSortDir/);
+  assert.match(js, /data-results-sort-dir-set/);
   assert.match(css, /\.results-sort-select/);
+  assert.match(css, /\.results-sort-dir-btn/);
+  assert.match(css, /\.results-sort-fields/);
   assert.match(css, /html\[data-results-view="cards"\] \.results-controls-row--view \{[\s\S]*minmax\(0, 1fr\) minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+  assert.match(css, /html\[data-results-view="cards"\] \.tui-list \{/);
+  assert.match(css, /html\[data-results-view="cards"\] \.tui-group \{\s*display:\s*contents/);
+  assert.match(css, /html\[data-results-view="cards"\] \.tui-group-h \{\s*display:\s*none/);
+  assert.doesNotMatch(css, /column-span:\s*all/);
 });
