@@ -111,6 +111,48 @@ test("queue page lists a post and the add page links to it", () => {
   assert.equal((html.match(/name="action" value="remove"/g) || []).length, 1);
   assert.match(addBody({ mode: "person" }), /href="\/queue"/);
   assert.match(queueBody(), /The queue is empty/);
+  const mixed = queueBody({
+    rows: [
+      {
+        id: "6",
+        url: "https://x.com/gop__ls/status/2118841658510918075",
+        status: "pending",
+        reason: "",
+        createdAt: "2026-11-06T23:03:12.220Z",
+      },
+      {
+        id: "7",
+        url: "https://x.com/example/status/2119164962660851974",
+        status: "done",
+        reason: "",
+        createdAt: "2026-11-07T01:00:00.000Z",
+      },
+      {
+        id: "8",
+        url: "https://x.com/held/status/2117989508864000292",
+        status: "held",
+        reason: "two people",
+        createdAt: "2026-11-07T02:00:00.000Z",
+      },
+    ],
+  });
+  assert.match(mixed, /2118841658510918075/);
+  assert.match(mixed, /Held/);
+  assert.doesNotMatch(mixed, /2119164962660851974/);
+  assert.doesNotMatch(mixed, />done ·/);
+  const onlyDone = queueBody({
+    rows: [
+      {
+        id: "9",
+        url: "https://x.com/example/status/2119164962660851974",
+        status: "done",
+        reason: "",
+        createdAt: "2026-11-07T01:00:00.000Z",
+      },
+    ],
+  });
+  assert.match(onlyDone, /The queue is empty/);
+  assert.doesNotMatch(onlyDone, /2119164962660851974/);
   const closed = queueBody({ writable: false });
   assert.doesNotMatch(closed, /name="urls"/);
   assert.match(closed, /does not store the post queue/);

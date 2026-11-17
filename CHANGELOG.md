@@ -31,6 +31,12 @@ The source of truth is the `version` field in `package.json`. An app tag is `v` 
 
 - Fact tag Federal investigation (`federal_investigation`). The site tracks final outcomes (arrests, deaths, resignations), not open investigations. `/tags/federal-investigation` now returns a 301 redirect to `/tags`, a new index of the remaining fact tags. Generic lab ops scripts `scripts/ops/et-retire-tag.mjs --tag <id>` (dry-run by default, lab loopback only) and `scripts/ops/et-retire-tag-undo.mjs` strip and restore a retired tag.
 
+## [1.2.49] - 2026-11-16
+
+### Changed
+
+- The Posts queue lists pending, working, and held rows. Processed (`done`) rows stay stored so the same post is not queued again, and they are omitted from the page.
+
 ## [1.2.48] - 2026-11-16
 
 ### Added

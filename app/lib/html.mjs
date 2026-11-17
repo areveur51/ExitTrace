@@ -4799,8 +4799,9 @@ const QUEUE_STATUS = {
 };
 
 function queueRowsHtml(rows) {
-  if (!rows.length) return `<p>The queue is empty.</p>`;
-  return `<ul class="queue-list">${rows
+  const live = (rows || []).filter((row) => row.status !== "done");
+  if (!live.length) return `<p>The queue is empty.</p>`;
+  return `<ul class="queue-list">${live
     .map((row) => {
       const label = QUEUE_STATUS[row.status] || row.status;
       const reason = row.reason ? `<p class="hint">${esc(row.reason)}</p>` : "";
@@ -4881,7 +4882,8 @@ function queueClientScript() {
   }
   function draw(rows) {
     mount.textContent = "";
-    if (!rows || !rows.length) {
+    rows = (rows || []).filter(function (row) { return row.status !== "done"; });
+    if (!rows.length) {
       var empty = document.createElement("p");
       empty.textContent = "The queue is empty.";
       mount.appendChild(empty);
