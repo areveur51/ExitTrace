@@ -57,6 +57,7 @@ export const OFFICIAL_GOV_HANDLES = new Set(
     "atfhq",
     "dea",
     "ustreasury",
+    "usmint",
     "irsnews",
     "uscensusbureau",
     "usedgov",
