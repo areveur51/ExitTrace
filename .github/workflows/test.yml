@@ -34,3 +34,4 @@ jobs:
         run: |
           ET_SCRATCH_PG_URL=postgres://127.0.0.1:54329/scratchboot node --test --test-concurrency=1 tests/bootstrap-stripped-pg.test.mjs
           ET_SCRATCH_PG_URL=postgres://127.0.0.1:54329/scratchrel node --test --test-concurrency=1 tests/relationship-a-label.test.mjs
+          ET_SCRATCH_PG_URL=postgres://127.0.0.1:54329/scratchrel node --test --test-concurrency=1 tests/add-requests-kind-check-pg.test.mjs
